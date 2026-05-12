@@ -8,7 +8,8 @@ import time
 st.set_page_config(page_title="Chrome Sector RS", layout="wide")
 st.title("🚀 Chrome Sector Relative Strength")
 
-# 2. Industry Database from Pine Script
+# 2. Cleaned Industry Database
+# Removed tickers identified as delisted (NOVA, IPG, SPR, NEP, AY, SKX, FL, etc.)
 INDUSTRIES = {
     "Nuclear": ["URA", "NLR", "CEG", "CCJ", "OKLO", "UUUU", "SMR"],
     "MAG7": ["AAPL", "GOOGL", "NVDA", "META", "MSFT", "AMZN", "TSLA"],
@@ -17,41 +18,41 @@ INDUSTRIES = {
     "CATHIE WOOD": ["ARKG", "ARKK", "ARKQ", "ARKW", "ARKF", "ARKX"],
     "CHINA": ["FUTU", "LI", "KWEB", "XPEV", "NIO", "PDD", "BIDU", "JD", "BABA"],
     "DATA CENTER / AI HOSTING": ["WGMI", "CRWV", "NBIS", "IREN", "WULF", "CORZ", "CIFR", "HUT", "BTDR"],
-    "ENERGY SOLAR": ["TAN", "SEDG", "ENPH", "FSLR", "ARRY", "SHLS", "CSIQ", "RUN", "NOVA"],
-    "COML SVCS-ADVRTSNG": ["OMC", "IPG", "DJT"],
-    "AEROSPACE/DEFENSE": ["ITA", "RTX", "LMT", "HON", "BA", "GD", "NOC", "TDG", "LHX", "HWM", "AXON", "HEI", "LDOS", "TDY", "TXT", "FTAI", "CW", "BWXT", "HII", "CR", "DRS", "LOAR", "AVAV", "HXL", "SPR", "KTOS", "MIR", "OSIS", "AIR", "MRCY"],
+    "ENERGY SOLAR": ["TAN", "SEDG", "ENPH", "FSLR", "ARRY", "SHLS", "CSIQ", "RUN"],
+    "COML SVCS-ADVRTSNG": ["OMC", "DJT"],
+    "AEROSPACE/DEFENSE": ["ITA", "RTX", "LMT", "HON", "BA", "GD", "NOC", "TDG", "LHX", "HWM", "AXON", "HEI", "LDOS", "TDY", "TXT", "FTAI", "CW", "BWXT", "HII", "CR", "DRS", "LOAR", "AVAV", "HXL", "KTOS", "MIR", "OSIS", "AIR", "MRCY"],
     "AGRICULTURAL OPRTIONS": ["ADM", "BG", "PPC", "CALM", "SEB"],
     "TRNSPRT-AIR FREIGHT": ["UPS", "FDX"],
     "TRANSPORTATION-SVCS": ["DASH", "EXPD", "CHRW", "CART", "GXO", "HUBG", "UBER", "PFGC", "SARO", "VNT", "VRRM", "CAAP"],
     "TRNSPRTTIN-AIRLNE": ["JETS", "DAL", "UAL", "LUV", "AAL", "ALK", "CPA", "SKYW"],
-    "ENERGY-ALT/OTHER": ["BIP", "TLN", "CWEN", "AY", "NEP", "BEPC"],
+    "ENERGY-ALT/OTHER": ["BIP", "TLN", "CWEN", "BEPC"],
     "MINING-METAL ORES": ["AA", "SCCO", "FCX", "CCJ", "CRS", "ATI", "MP", "TECK"],
-    "APPAREL-SHOES & REL": ["NKE", "DECK", "ONON", "RL", "SKX", "BIRK", "CROX", "LEVI", "VFC", "GIL", "PVH", "COLM", "KTB", "SHOO"],
-    "RETAIL-APPRL/SHOES/ACC": ["TJX", "ROST", "BURL", "TPR", "GAP", "ANF", "BBWI", "CPRI", "BOOT", "AEO", "URBN", "CRI", "BKE", "FL"],
+    "APPAREL-SHOES & REL": ["NKE", "DECK", "ONON", "RL", "BIRK", "CROX", "LEVI", "VFC", "GIL", "PVH", "COLM", "KTB", "SHOO"],
+    "RETAIL-APPRL/SHOES/ACC": ["TJX", "ROST", "BURL", "TPR", "GAP", "ANF", "BBWI", "CPRI", "BOOT", "AEO", "URBN", "CRI", "BKE"],
     "AUTO/TRCK-ORGNL EQP": ["ITW", "CMI", "APTV", "ITT", "DCI", "ALSN", "ALV", "GNTX", "LEA", "BC", "ATMU", "VC", "BWA"],
     "AUTO/TRCK-RPLC PRTS": ["LKQ", "DORM", "AAP"],
     "BEVERAGES-ALCOHOLIC": ["STZ", "TAP", "SAM"],
     "BEV-NON-ALCOHOLIC": ["KO", "MNST", "CCEP", "COKE", "BRBR", "CELH", "FIZZ"],
-    "MEDICAL-BIOMED/BTH": ["AMGN", "GILD", "MRNA", "ILMN", "SMMT", "PCVX", "BMRN", "TECH", "NUVL", "ELAN", "HALO", "BPMC", "RNA", "KRYS", "ADMA", "BBIO", "IMVT", "ACLX", "AXSM", "CRSP", "DNLI", "ALVO", "MRUS", "APGE", "DYN", "RYTM", "KYMR", "EWTX", "PTGX", "TWST", "SWTX", "TXG", "CGON", "JANX", "ARWR", "VERA", "NVAX", "CLDX"],
-    "MEDIA-RADIO/TV": ["FOX", "SIRI", "PARA", "NXST", "TGNA"],
+    "MEDICAL-BIOMED/BTH": ["AMGN", "GILD", "MRNA", "ILMN", "SMMT", "PCVX", "BMRN", "TECH", "NUVL", "ELAN", "HALO", "RNA", "KRYS", "ADMA", "BBIO", "IMVT", "ACLX", "AXSM", "CRSP", "DNLI", "ALVO", "APGE", "DYN", "RYTM", "KYMR", "EWTX", "PTGX", "TWST", "TXG", "CGON", "JANX", "ARWR", "VERA", "NVAX", "CLDX"],
+    "MEDIA-RADIO/TV": ["FOX", "SIRI", "NXST", "TGNA"],
     "TELCOM-SVC-CBL/SAT": ["CMCSA", "CHTR"],
-    "LEISRE-GAMNG/EQUIP": ["FLUT", "LVS", "MGM", "WYNN", "CZR", "LNW", "BYD", "IGT", "RSI", "DKNG", "CHDN", "PENN"],
+    "LEISRE-GAMNG/EQUIP": ["FLUT", "LVS", "MGM", "WYNN", "CZR", "LNW", "BYD", "RSI", "DKNG", "CHDN", "PENN"],
     "CHEMICALS-AG": ["NTR", "CTVA", "CF", "MOS", "FMC", "SMG"],
     "CHEMICALS-BASIC": ["DD", "ESI", "AVNT", "HUN", "IOSP", "DOW", "LYB", "WLK", "AVTR", "CE", "EMN", "CC"],
-    "CHEMICALS-SPECIALTY": ["LIN", "ECL", "APD", "ALB", "CHX", "CBT", "NEU", "KWR", "HWKN", "MTX", "TROX"],
-    "ENERGY COAL": ["HCC", "BTU", "ARLP", "CEIX", "AMR", "ARCH"],
-    "MEDIA-DIVERSIFIED": ["WMG", "EDR"],
-    "COMPTER-NETWRKING": ["ANET", "JNPR", "CSCO", "CALX"],
+    "CHEMICALS-SPECIALTY": ["LIN", "ECL", "APD", "ALB", "CHX", "CBT", "NEU", "KWR", "HWKN", "MTX", "TROX", "OLN", "FUL", "WDFC", "AZZ", "UFPT"],
+    "ENERGY COAL": ["HCC", "BTU", "ARLP", "AMR"],
+    "MEDIA-DIVERSIFIED": ["WMG"],
+    "COMPTER-NETWRKING": ["ANET", "CSCO", "CALX"],
     "COMPTR-DATA STRGE": ["DRAM", "WDC", "STX", "MU", "SNDK"],
     "CMP-HRDWRE/PERIP": ["DELL", "HPQ", "SMCI", "HPE", "ZBRA", "NATL"],
-    "CONTAINERS/PACKAGING": ["SW", "BALL", "PKG", "AVY", "AMCR", "OC", "CCK", "ATR", "GPK", "SLGN", "SON", "SEE", "GEF", "PTVE", "OI", "BERY"],
+    "CONTAINERS/PACKAGING": ["SW", "BALL", "PKG", "AVY", "AMCR", "OC", "CCK", "ATR", "GPK", "SLGN", "SON", "SEE", "GEF", "OI"],
     "OIL&GAS-DRILLING": ["SLB", "BKR", "NE", "VAL", "HP", "SDRL"],
-    "BLDG-CMENT/CNCRT": ["CRH", "MLM", "VMC", "EXP", "SUM", "KNF", "USLM"],
+    "BLDG-CMENT/CNCRT": ["CRH", "MLM", "VMC", "EXP", "KNF", "USLM"],
     "CMPTER-TECH SRVCS": ["PAYX", "MSCI", "VRSK", "ZS", "TYL", "GDDY", "J", "FDS", "AKAM", "DBX", "EXLS", "KD", "MARA", "EEFT", "DXC", "CORZ", "AVPT", "ACN", "CTSH", "CDW", "CACI", "PSN", "EPAM", "DOX", "KBR", "GLOB", "NSIT", "SAIC", "ASGN"],
-    "RETAIL-DPRTMNT STRS": ["DDS", "M", "JWN", "KSS"],
+    "RETAIL-DPRTMNT STRS": ["DDS", "M", "KSS"],
     "RETAIL-DISCNT&VARI": ["DG", "DLTR", "FIVE", "OLLI"],
     "RETAIL-DRUG STORES": ["CVS"],
-    "UTILITY-ELCTRIC PWR": ["NEE", "SO", "CEG", "DUK", "AEP", "SRE", "D", "VST", "PEG", "PCG", "EXC", "XEL", "ED", "EIX", "WEC", "ETR", "DTE", "FE", "PPL", "AEE", "ES", "CMS", "NRG", "CNP", "LNT", "AGR", "EVRG", "AES", "PNW", "OGE", "IDA", "POR", "ORA", "BKH", "TXNM", "ALE", "NWE", "MGEE"],
+    "UTILITY-ELCTRIC PWR": ["NEE", "SO", "CEG", "DUK", "AEP", "SRE", "D", "VST", "PEG", "PCG", "EXC", "XEL", "ED", "EIX", "WEC", "ETR", "DTE", "FE", "PPL", "AEE", "ES", "CMS", "NRG", "CNP", "LNT", "EVRG", "AES", "PNW", "OGE", "IDA", "POR", "ORA", "BKH", "TXNM", "NWE", "MGEE"],
     "ELECTRICAL POWER/EQPMT": ["ETN", "GEV", "AME", "ROK", "HUBB", "RRX", "GNRC", "AYI", "BDC", "ENS", "FLNC", "SMR", "ATKR", "PBW", "POWL", "BE", "ENVX"],
     "TELCOM-FIBR OPTCS": ["AAOI", "COHR", "CIEN", "FN", "LITE"],
     "ELEC-PARTS": ["APH", "GLW", "NVT", "CAMT", "TEL"],
@@ -59,61 +60,60 @@ INDUSTRIES = {
     "ELEC-SEMICNDCTR EQP": ["ASML", "KLAC", "AMAT", "LRCX", "ONTO", "NVMI", "TER", "AEIS", "MKSI", "ENTG", "ACLS"],
     "ELEC-CONTRACT MFG": ["SOLS", "VRT", "FLEX", "PLXS", "JBL"],
     "ELEC-MISC PRODUCTS": ["OLED", "LFUS", "VSH"],
-    "WHOLESALE-ELECT": ["SNX", "ARW", "AVT", "REZI"],
+    "WHOLESALE-ELECT": ["SNX", "ARW", "AVT", "REZI", "GWW", "FAST", "FERG", "GPC", "POOL", "AIT", "WCC", "MSM", "UGI"],
     "RETAIL-CNSMR ELEC": ["BBY", "GME"],
     "CONSUMER PROD-ELEC": ["SN", "ROKU", "WHR", "SPB", "AAPL"],
     "BLDG-HEAVY CONSTR": ["PWR", "EME", "FIX", "ACM", "TTEK", "MTZ", "APG", "FLR", "DY", "STRL", "ROAD", "GVA", "PRIM"],
     "BLDG-RSIDNT/COMML": ["BLD", "IBP", "EXPO", "IESC", "DHI", "LEN", "NVR", "PHM", "TOL", "MTH", "TMHC", "KBH", "SKY", "MHO", "TPH", "FTDR", "GRBK", "DFH", "CCS", "LGIH"],
     "BLDG-MBILE/MFG & RV": ["CVCO", "PATK"],
-    "POLLUTION CONTROL": ["WM", "RSG", "CLH", "CWST", "SRCL"],
+    "POLLUTION CONTROL": ["WM", "RSG", "CLH", "CWST"],
     "COMML SVCS-LEASING": ["URI", "AER", "UHAL", "WSC", "R", "AL", "HRI", "WD", "CAR", "MGRC", "PRG"],
-    "FINANCE-CARD/PMTPR": ["AXP", "DFS", "SYF", "AFRM", "FCFS", "SLM", "V", "MA", "PYPL", "GPN", "CPAY", "FOUR", "WEX", "PAY", "RELY"],
+    "FINANCE-CARD/PMTPR": ["AXP", "SYF", "AFRM", "FCFS", "SLM", "V", "MA", "PYPL", "GPN", "CPAY", "FOUR", "WEX", "PAY", "RELY"],
     "FINANCE-CONS LOAN": ["RKT", "OMF", "ENVA", "NNI"],
-    "FINANCE-CMRCL LOAN": ["COOP", "OBDC", "PFSI", "CACC"],
-    "FINANCE-BLANK CHECK": ["AACT", "AAM", "BCSF", "BFAC", "EQV", "HYAC", "LOCL", "MNTN", "MSDL", "NCDL", "OKLO", "PHYT", "PSBD", "RCFA", "RMI", "RRAC", "SBXC", "SBXD", "SEDA", "WEL"],
+    "FINANCE-CMRCL LOAN": ["OBDC", "PFSI", "CACC"],
+    "FINANCE-BLANK CHECK": ["BCSF", "LOCL", "MNTN", "MSDL", "NCDL", "OKLO", "PSBD", "RMI", "SBXD"],
     "FINANCIAL SVC-SPEC": ["BLK", "SPGI", "MCO", "EFX", "TRU", "ICLR", "BAH", "MEDP", "CRL", "FCN", "MMS", "CBZ", "NSP", "ICFI", "EVH", "FA"],
     "WHOLESALE-FOOD": ["SYY", "USFD"],
     "RETAIL-SPR/MINI MKTS": ["KR", "SFM", "ACI", "TBBB", "CASY"],
-    "FOOD-PACKAGED": ["KHC", "GIS", "CAG", "SMPL", "MDLZ", "KDP", "HSY", "K", "CPB", "SJM", "POST", "LANC", "FLO", "NOMD", "UTZ", "THS"],
+    "FOOD-PACKAGED": ["KHC", "GIS", "CAG", "SMPL", "MDLZ", "KDP", "HSY", "CPB", "SJM", "POST", "LANC", "FLO", "NOMD", "UTZ"],
     "FOOD-MEAT PRODUCTS": ["TSN", "HRL"],
     "FOOD-MISC PREP": ["PEP", "IFF", "MKC", "LW", "INGR", "DAR", "BCPC", "ASH", "JJSF", "SXT", "TR"],
     "FOOD-CONFECTIONERY": ["FRPT", "BROS"],
     "BLDG-WOOD PRDS": ["UFPI", "LPX", "TREX"],
     "UTILITY-GAS DSTRIBTN": ["TRGP", "CQP", "ATO", "NI", "MDU", "BIPC", "SWX", "NJR", "OGS", "SR", "CPK", "EE"],
-    "RTAIL-HME FRNSHNGS": ["TPX", "MBC", "WSM", "W", "RH"],
-    "RETL WHSLE BLDG PRDS": ["HD", "LOW", "BLDR", "FND", "CNM", "BECN", "BCC", "GMS"],
+    "RTAIL-HME FRNSHNGS": ["MBC", "WSM", "W", "RH"],
+    "RETL WHSLE BLDG PRDS": ["HD", "LOW", "BLDR", "FND", "CNM", "BCC"],
     "MEDCAL-HOSPITALS": ["HCA", "THC", "UHS"],
-    "MED-LONG-TRM CARE": ["CHE", "PACS", "SEM", "SGRY", "ARDT", "ENSG", "AMED", "ADUS"],
+    "MED-LONG-TRM CARE": ["CHE", "PACS", "SEM", "SGRY", "ARDT", "ENSG", "ADUS"],
     "MEDICAL-SERVICES": ["DVA", "SOLV", "EHC", "ACHC", "RDNT", "OPCH", "HIMS", "GH", "BTSG", "CON", "AZTA"],
     "LEISURE-LODGING": ["MAR", "HLT", "RCL", "CCL", "VIK", "H", "NCLH", "MTN", "WH", "CHH", "RRR", "TNL", "VAC"],
     "COSMETICS/PERSNL CRE": ["PG", "CL", "KMB", "KVUE", "EL", "CHD", "CLX", "ELF", "IPAR"],
     "SOAP & CLNG PREPARAT": ["REYN", "ENR"],
-    "DVRSIFIED OPRTIONS": ["MMM", "AGS", "HI", "RLX", "WMS", "AWI", "BRC", "YETI", "LCII"],
-    "MCHNRY-GEN INDSTRL": ["GE", "TT", "CARR", "JCI", "IR", "XYL", "DOV", "LII", "PNR", "IEX", "GGG", "NDSN", "LECO", "WWD", "AAON", "FLS", "MIDD", "MOD", "WTS", "BMI", "ZWS", "ESAB", "TKR", "GTLS", "GTES", "FELE", "KAI", "MWA", "NPO", "JBT", "CXT", "OII", "SYM"],
+    "DVRSIFIED OPRTIONS": ["MMM", "RLX", "WMS", "AWI", "BRC", "YETI", "LCII"],
+    "MCHNRY-GEN INDSTRL": ["GE", "TT", "CARR", "JCI", "IR", "XYL", "DOV", "LII", "PNR", "IEX", "GGG", "NDSN", "LECO", "WWD", "AAON", "FLS", "MIDD", "MOD", "WTS", "BMI", "ZWS", "ESAB", "TKR", "GTLS", "GTES", "FELE", "KAI", "MWA", "NPO", "CXT", "OII", "SYM"],
     "CHEMICALS-PAINTS": ["SHW", "PPG", "RPM", "AXTA"],
-    "CHEMICALS-SPECIALTY": ["CSWI", "OLN", "FUL", "WDFC", "AZZ", "UFPT"],
-    "COMPTR SFTWR-SCRITY": ["BUG", "FTNT", "PANW", "CRWD", "CHKP", "RBRK", "RPD"],
-    "COMPTR SFTWR-ENTR": ["IGV", "TWLO", "MSFT", "ORCL", "CRM", "IBM", "NOW", "ADP", "DOCN", "PLTR", "ADSK", "ROP", "TEAM", "SNOW", "VEEV", "HUBS", "PTC", "MDB", "MANH", "TOST", "MNDY", "WDAY", "SSNC", "GWRE", "BSY", "PEGA", "QTWO", "APPF", "BOX", "WK", "SQSP"],
-    "COMPTER SFTWR-DSGN": ["ADBE", "INTU", "SNPS", "CDNS", "ANSS", "IOT", "DT", "TRMB", "WIX"],
-    "CMPTR SFTWR-FINCL": ["FICO", "FIS", "SQ", "NU", "SHOP"],
+    "COMPTER SFTWR-SCRITY": ["BUG", "FTNT", "PANW", "CRWD", "CHKP", "RBRK", "RPD"],
+    "COMPTER SFTWR-ENTR": ["IGV", "TWLO", "MSFT", "ORCL", "CRM", "IBM", "NOW", "ADP", "DOCN", "PLTR", "ADSK", "ROP", "TEAM", "SNOW", "VEEV", "HUBS", "PTC", "MDB", "MANH", "TOST", "MNDY", "WDAY", "SSNC", "GWRE", "BSY", "PEGA", "QTWO", "APPF", "BOX", "WK"],
+    "COMPTER SFTWR-DSGN": ["ADBE", "INTU", "SNPS", "CDNS", "IOT", "DT", "TRMB", "WIX"],
+    "CMPTR SFTWR-FINCL": ["FICO", "FIS", "NU", "SHOP"],
     "CMP SFTWR-GAMING": ["EA", "TTWO", "RBLX"],
     "CMP SFTWR-DBASE": ["DDOG"],
     "COMPTR SFTWR-DSKTP": ["ZM", "SNAP", "Z"],
     "CMPTR SFTWR-MDCL": ["APP", "HQY"],
-    "INTERNET-CONTENT": ["GOOGL", "META", "NFLX", "SPOT", "PINS", "RDDT", "MMYT", "MTCH", "IAC", "YELP", "VZIO", "GRND"],
+    "INTERNET-CONTENT": ["GOOGL", "META", "NFLX", "SPOT", "PINS", "RDDT", "MMYT", "MTCH", "IAC", "YELP", "GRND"],
     "INTRNT-NETWK SLTNS": ["IT", "MSTR", "CSGP", "VRSN", "UPST", "BRZE", "CARG", "NET", "VLTO"],
-    "INSURANCE-BROKERS": ["MMC", "AON", "AJG", "WTW", "BRO", "RYAN", "CRVL", "GSHD"],
+    "INSURANCE-BROKERS": ["AON", "AJG", "WTW", "BRO", "RYAN", "CRVL", "GSHD"],
     "OIL&GAS INTEGRATED": ["XOM", "CVX", "OXY"],
-    "OIL&GAS-U S EXPL PRO": ["COP", "EOG", "FANG", "DVN", "EQT", "EXE", "CTRA", "MRO", "PR", "OVV", "APA", "CHRD", "MTDR", "NFG", "CIVI", "CNX", "CRC", "CRGY", "AR", "RRC", "MUR", "MGY", "SM", "NOG", "CRK", "GPOR", "XPRO"],
+    "OIL&GAS-U S EXPL PRO": ["COP", "EOG", "FANG", "DVN", "EQT", "EXE", "CTRA", "PR", "OVV", "APA", "CHRD", "MTDR", "NFG", "CNX", "CRC", "CRGY", "AR", "RRC", "MUR", "MGY", "SM", "NOG", "CRK", "GPOR", "XPRO"],
     "OIL&GAS-ROYALTY TRUST": ["VNOM", "HESM", "BSM"],
     "RETAIL-INTERNET": ["AMZN", "MELI", "CPNG", "LULU", "EBAY", "CHWY", "GLBE", "ETSY", "ACVA"],
     "FIN-INVEST BNK/BKRS": ["GS", "SCHW", "ICE", "CME", "IBKR", "BK", "COIN", "NDAQ", "TW", "STT", "CBOE", "HOOD", "LPLA", "JEF", "HLI", "MKTX", "XP", "EVR", "FRHC", "PJT", "MC", "PIPR", "VIRT", "LAZ", "SNEX"],
     "FNCE-INVSMNT MGT": ["BX", "MS", "KKR", "BN", "APO", "ARES", "OWL", "RJF", "TROW", "TPG", "PFG", "BAM", "NTRS", "CRBG", "CG", "MORN", "ARCC", "BEN", "SF", "HLNE", "SEIC", "IVZ", "STEP", "JHG", "FSK", "AMG", "CNS", "MAIN", "GBDC", "AB", "VCTR", "APAM", "HTGC", "IFS", "FHI", "GCMG", "AMP"],
-    "FINANC-PBL INV FDEQT": ["TPL", "BXSL", "STR"],
+    "FINANC-PBL INV FDEQT": ["TPL", "BXSL"],
     "INSURANCE-LIFE": ["PRU", "EQH", "PRI", "VOYA", "JXN", "LNC", "BHF", "PRVA"],
     "BANKS-MONEY CNTR": ["JPM", "BAC", "WFC", "C", "COF"],
     "BANKS-FOREIGN": ["UBS", "BAP"],
-    "BANKS-SUPR RGIONAL": ["PNC", "HBAN", "RF", "CFG", "KEY", "CMA", "ZION", "FITB", "TFC", "MTB", "ALLY", "WAL"],
+    "BANKS-SUPR RGIONAL": ["PNC", "HBAN", "RF", "CFG", "KEY", "ZION", "FITB", "TFC", "MTB", "ALLY", "WAL"],
     "BANKS-WST/STHWST": ["BOKF", "ONB", "TCBI", "WAFD", "PRK", "BKU", "IBOC", "BANF", "UCB", "AUB", "FIBK", "CATY", "FHB", "BOH", "CVBF"],
     "BANKS-SOUTHEAST": ["CADE", "FNB", "FBK", "SNV", "HOMB", "OZK", "ABCB"],
     "BANKS-MIDWEST": ["FFIN", "UMBF", "ASB", "FULT", "CBU", "SFNC", "FRME", "NBTB", "CBSH", "COLB", "GBCI", "UBSI", "HWC", "TOWN"],
@@ -139,7 +139,7 @@ INDUSTRIES = {
     "CMP SFTWR-SPC-ENTR": ["TTD"],
     "MEDICAL-ETHICAL DRGS": ["LLY", "JNJ", "ABBV", "MRK", "PFE", "VRTX", "REGN", "BMY", "ZTS", "ALNY", "BIIB", "RPRX", "UTHR", "VTRS", "INCY", "INSM", "SRPT", "NBIX", "CTLT", "ROIV", "ITCI", "RGEN", "VKTX", "EXEL", "JAZZ", "CYTK", "IONS", "BHVN", "RARE", "CORT", "MDGL", "OGN", "ALKS", "CRNX", "TGTX", "PHB", "PRGO", "APLS", "RVMD"],
     "MINING-GLD/SILVR/GMS": ["NEM", "RGLD"],
-    "INSRNCE-PRP/CAS/TITL": ["BRK.A", "BRK.B", "CB", "TRV", "ALL", "AIG", "ERIE", "WRB", "MKL", "L", "EG", "RNR", "AFG", "AIZ", "MTG", "SIGI", "THG", "KMPR", "HGTY", "MCY", "NMIH", "PLMR", "SPNT", "FNF", "ORI", "ESNT", "FAF", "RDN", "AGO"],
+    "INSRNCE-PRP/CAS/TITL": ["BRK.B", "CB", "TRV", "ALL", "AIG", "ERIE", "WRB", "MKL", "L", "EG", "RNR", "AFG", "AIZ", "MTG", "SIGI", "THG", "KMPR", "HGTY", "MCY", "NMIH", "PLMR", "SPNT", "FNF", "ORI", "ESNT", "FAF", "RDN", "AGO"],
     "MEDIA-BOOKS": ["WLY"],
     "MEDIA-NEWSPAPERS": ["NWS", "NYT"],
     "PAPER & PAPER PRODUC": ["IP", "SLVM"],
@@ -162,7 +162,6 @@ INDUSTRIES = {
     "MACHINERY-FARM": ["DE", "CNH", "TTC", "AGCO", "SITE", "FSS", "ACA"],
     "MCHNRY-CNSTR/MNG": ["CAT", "PCAR"],
     "UTILITY-WATER SUPPLY": ["AWK", "WTRG", "AWR", "CWT"],
-    "WHOLESALE-ELECT": ["GWW", "FAST", "FERG", "GPC", "POOL", "AIT", "WCC", "MSM", "UGI"],
     "TELCOM SVC-WIRLES": ["TMUS", "VZ", "T", "LBRDA", "USM", "TIGO", "TDS"],
     "ELEC-SEMICON FBLSS": ["ARM", "NVDA", "AVGO", "AMD", "QCOM", "ADI", "MRVL", "NXPI", "MPWR", "MCHP", "ON", "SWKS", "QRVO", "ALAB", "MTSI", "LSCC", "CRUS", "PI", "RMBS", "SITM", "ALGM", "SLAB", "POWI", "IPGP", "SMTC", "DIOD", "SYNA", "AMBA"],
     "ELEC-SEMICON MFG": ["TSM", "TXN", "INTC", "GFS", "AMKR", "TSEM", "FORM"]
@@ -175,174 +174,110 @@ with st.sidebar:
     lookback = st.slider("Lookback Period (Days)", 20, 250, 90)
     top_n = st.number_input("Top N for Group Avg", value=5, min_value=1)
     
-    # Add Bongo Cat at the bottom of sidebar
-    st.markdown("---")
-    st.markdown("""
-    <div style="text-align: center; padding: 20px 0;">
-        <div style="font-size: 80px;">🐱</div>
-        <p style="font-size: 12px; color: gray;">Bongo Cat</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Refresh Button to clear cache
+    if st.button("Clear Cache & Refresh"):
+        st.cache_data.clear()
 
-# 4. Data Processing Function with Rate Limit Handling
-def get_rs_data(tickers, benchmark_ticker, period, delay=0.1):
+# 4. Optimized Data Processing with Caching
+@st.cache_data(ttl=3600) # Cache data for 1 hour
+def get_rs_data_cached(tickers_tuple, benchmark_ticker, period):
+    tickers = list(tickers_tuple)
     try:
         all_tickers = tickers + [benchmark_ticker]
-        time.sleep(delay)  # Add delay to prevent rate limiting
-        
         data = yf.download(all_tickers, period="1y", interval="1d", progress=False)['Close']
         
-        # Filter out tickers with missing data
         valid_tickers = [t for t in tickers if t in data.columns and data[t].notna().sum() > 0]
-        
-        if len(valid_tickers) == 0:
-            return None, None
+        if not valid_tickers: return None, None
         
         rs_series = data[valid_tickers].div(data[benchmark_ticker], axis=0)
-        rs_perf = ((rs_series.iloc[-1] / rs_series.iloc[-period]) - 1) * 100
+        
+        # Calculate RS Performance
+        start_idx = -period if len(rs_series) >= period else 0
+        rs_perf = ((rs_series.iloc[-1] / rs_series.iloc[start_idx]) - 1) * 100
         ranks = rs_perf.rank(pct=True) * 99
         
         return rs_perf, ranks
-    except Exception as e:
+    except Exception:
         return None, None
 
-# 5. Load all data at startup
+# 5. UI Layout
 st.markdown("<h3 style='font-size: 16px; margin-bottom: 15px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
 
-# Create data for all industries
 all_data = []
 progress_bar = st.progress(0)
 status_text = st.empty()
 
-for idx, (industry_name, tickers) in enumerate(INDUSTRIES.items()):
-    status_text.text(f"Loading {industry_name}...")
-    perf, rs_scores = get_rs_data(tickers, benchmark, lookback)
+# Iterate through industries
+industry_items = list(INDUSTRIES.items())
+for idx, (industry_name, tickers) in enumerate(industry_items):
+    status_text.text(f"Processing {industry_name}...")
     
-    if rs_scores is None:
-        progress_bar.progress((idx + 1) / len(INDUSTRIES))
-        continue
+    # yfinance works best when we pass a tuple for caching
+    perf, rs_scores = get_rs_data_cached(tuple(tickers), benchmark, lookback)
     
-    # Get group average
-    top_n_scores = rs_scores.nlargest(int(top_n))
-    group_avg = top_n_scores.mean()
+    if rs_scores is not None:
+        top_n_scores = rs_scores.nlargest(int(top_n))
+        group_avg = top_n_scores.mean()
+        
+        df_tickers = pd.DataFrame({
+            "Ticker": rs_scores.index,
+            "RS Score": rs_scores.values
+        }).sort_values(by="RS Score", ascending=False)
+        
+        all_data.append({
+            "Industry": industry_name,
+            "Group RS": group_avg,
+            "Tickers": df_tickers
+        })
     
-    # Create sorted ticker list with RS scores
-    df_tickers = pd.DataFrame({
-        "Ticker": rs_scores.index,
-        "RS Score": rs_scores.values
-    }).sort_values(by="RS Score", ascending=False)
-    
-    all_data.append({
-        "Industry": industry_name,
-        "Group RS": group_avg,
-        "Tickers": df_tickers
-    })
-    
-    progress_bar.progress((idx + 1) / len(INDUSTRIES))
+    progress_bar.progress((idx + 1) / len(industry_items))
 
 status_text.empty()
 progress_bar.empty()
 
-# Convert to DataFrame for sorting
-df_main = pd.DataFrame([{
-    "Industry": item["Industry"],
-    "Group RS": item["Group RS"],
-} for item in all_data])
+# 6. Sorting and Display Logic
+if all_data:
+    df_main = pd.DataFrame([{"Industry": item["Industry"], "Group RS": item["Group RS"]} for item in all_data])
 
-# Add sorting options
-col1, col2 = st.columns([1, 1])
-with col1:
-    sort_by = st.selectbox("Sort by", ["Industry (A-Z)", "Group RS (High to Low)", "Group RS (Low to High)"])
-with col2:
-    sort_order = st.radio("Order", ["Ascending", "Descending"], horizontal=True)
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        sort_by = st.selectbox("Sort by", ["Group RS (High to Low)", "Industry (A-Z)", "Group RS (Low to High)"])
+    with col2:
+        sort_order = st.radio("Order", ["Descending", "Ascending"], horizontal=True)
 
-# Apply sorting
-if sort_by == "Industry (A-Z)":
-    df_main = df_main.sort_values("Industry", ascending=(sort_order == "Ascending"))
-elif sort_by == "Group RS (High to Low)":
-    df_main = df_main.sort_values("Group RS", ascending=(sort_order == "Ascending"))
-else:  # Low to High
-    df_main = df_main.sort_values("Group RS", ascending=(sort_order == "Descending"))
+    # Sort data
+    if "Industry" in sort_by:
+        df_main = df_main.sort_values("Industry", ascending=(sort_order == "Ascending"))
+    else:
+        df_main = df_main.sort_values("Group RS", ascending=(sort_order == "Ascending"))
 
-# Display combined table with ticker badges
-st.markdown("""
-<style>
-.ticker-badge {
-    display: inline-block;
-    margin: 3px;
-    padding: 5px 8px;
-    border: 1px solid #999;
-    border-radius: 4px;
-    font-size: 11px;
-    background-color: #3a3a3a;
-    color: white;
-    text-align: center;
-    min-width: 45px;
-}
-.ticker-name {
-    font-weight: bold;
-    display: block;
-}
-.ticker-rs {
-    font-size: 10px;
-    color: #aaa;
-}
-</style>
-""", unsafe_allow_html=True)
+    # HTML Table Construction (Same as your original logic, using df_main order)
+    st.markdown("""
+    <style>
+    .ticker-badge { display: inline-block; margin: 3px; padding: 5px 8px; border: 1px solid #555; border-radius: 4px; font-size: 11px; background-color: #1e1e1e; color: #eee; text-align: center; min-width: 50px; }
+    .ticker-name { font-weight: bold; display: block; color: #ffffff; }
+    .ticker-rs { font-size: 10px; color: #4ecdc4; }
+    </style>
+    """, unsafe_allow_html=True)
 
-# Create HTML table
-table_html = """
-<table style="width:100%; border-collapse: collapse; background-color: #2b2b2b; color: white;">
-<thead>
-<tr style="background-color: #1f77b4; height: 35px;">
-<th style="padding: 10px; text-align: left; font-size: 13px; border: 1px solid #555;">Industry</th>
-<th style="padding: 10px; text-align: center; font-size: 13px; border: 1px solid #555; width: 120px;">Group RS</th>
-<th style="padding: 10px; text-align: left; font-size: 13px; border: 1px solid #555;">Tickers (Highest → Lowest RS)</th>
-</tr>
-</thead>
-<tbody>
-"""
+    table_html = """<table style="width:100%; border-collapse: collapse; border: 1px solid #444;">
+    <thead><tr style="background-color: #1f77b4; color: white;">
+    <th style="padding: 10px; text-align: left;">Industry</th>
+    <th style="padding: 10px; text-align: center; width: 100px;">Group RS</th>
+    <th style="padding: 10px; text-align: left;">Tickers (Ranked)</th>
+    </tr></thead><tbody>"""
 
-# Find indices after sorting
-sorted_indices = df_main.index.tolist()
+    for i, row in df_main.iterrows():
+        item = next(d for d in all_data if d["Industry"] == row["Industry"])
+        ticker_html = "".join([f'<div class="ticker-badge"><span class="ticker-name">{r["Ticker"]}</span><span class="ticker-rs">{r["RS Score"]:.1f}</span></div>' for _, r in item["Tickers"].iterrows()])
+        
+        bg_color = "#262730" if i % 2 == 0 else "#0e1117"
+        table_html += f"""<tr style="background-color: {bg_color};">
+        <td style="padding: 10px; border-bottom: 1px solid #444; font-weight: bold;">{row['Industry']}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #444; text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.2f}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #444;">{ticker_html}</td></tr>"""
 
-# Generate table rows
-for idx, sorted_idx in enumerate(sorted_indices):
-    industry_name = df_main.loc[sorted_idx, "Industry"]
-    group_rs = df_main.loc[sorted_idx, "Group RS"]
-    
-    # Find the corresponding data
-    item = next((d for d in all_data if d["Industry"] == industry_name), None)
-    if not item:
-        continue
-    
-    df_tickers = item["Tickers"]
-    
-    # Generate ticker badges
-    ticker_html = ""
-    for _, row in df_tickers.iterrows():
-        ticker_html += f"""
-        <div class="ticker-badge">
-            <span class="ticker-name">{row['Ticker']}</span>
-            <span class="ticker-rs">{row['RS Score']:.1f}</span>
-        </div>
-        """
-    
-    # Alternate row colors
-    row_bg = "#3a3a3a" if idx % 2 == 0 else "#2b2b2b"
-    
-    table_html += f"""
-    <tr style="background-color: {row_bg}; height: auto;">
-    <td style="padding: 12px; border: 1px solid #555; font-size: 12px; font-weight: 500;">{industry_name}</td>
-    <td style="padding: 12px; text-align: center; border: 1px solid #555; font-size: 13px; font-weight: bold; color: #4ecdc4;">{group_rs:.2f}</td>
-    <td style="padding: 12px; border: 1px solid #555;">
-        <div style="display: flex; flex-wrap: wrap; gap: 5px;">
-            {ticker_html}
-        </div>
-    </td>
-    </tr>
-    """
-
-table_html += "</tbody></table>"
-
-st.markdown(table_html, unsafe_allow_html=True)
+    table_html += "</tbody></table>"
+    st.markdown(table_html, unsafe_allow_html=True)
+else:
+    st.warning("No data found. Please check your internet connection or benchmark symbol.")
