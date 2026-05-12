@@ -24,6 +24,15 @@ with st.sidebar:
     benchmark = st.selectbox("Benchmark", ["^GSPC", "^IXIC"], index=0) # ^GSPC is S&P 500
     lookback = st.slider("Lookback Period (Days)", 20, 250, 90)
     top_n = st.number_input("Top N for Group Avg", value=5)
+    
+    # Add Bongo Cat at the bottom of sidebar
+    st.markdown("---")
+    st.markdown("""
+    <div style="text-align: center; padding: 20px 0;">
+        <div style="font-size: 80px;">🐱</div>
+        <p style="font-size: 12px; color: gray;">Bongo Cat</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # 4. Data Processing Function
 def get_rs_data(tickers, benchmark_ticker, period):
