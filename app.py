@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import time
 
 # 1. Setup Streamlit Page
 st.set_page_config(page_title="Chrome Sector RS", layout="wide")
@@ -183,13 +184,21 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-# 4. Data Processing Function
-def get_rs_data(tickers, benchmark_ticker, period):
+# 4. Data Processing Function with Rate Limit Handling
+def get_rs_data(tickers, benchmark_ticker, period, delay=0.1):
     try:
         all_tickers = tickers + [benchmark_ticker]
+        time.sleep(delay)  # Add delay to prevent rate limiting
+        
         data = yf.download(all_tickers, period="1y", interval="1d", progress=False)['Close']
         
-        rs_series = data[tickers].div(data[benchmark_ticker], axis=0)
+        # Filter out tickers with missing data
+        valid_tickers = [t for t in tickers if t in data.columns and data[t].notna().sum() > 0]
+        
+        if len(valid_tickers) == 0:
+            return None, None
+        
+        rs_series = data[valid_tickers].div(data[benchmark_ticker], axis=0)
         rs_perf = ((rs_series.iloc[-1] / rs_series.iloc[-period]) - 1) * 100
         ranks = rs_perf.rank(pct=True) * 99
         
@@ -202,28 +211,37 @@ st.markdown("<h3 style='font-size: 16px; margin-bottom: 15px;'>📊 Relative Str
 
 # Create data for all industries
 all_data = []
-with st.spinner("Loading all industries..."):
-    for industry_name, tickers in INDUSTRIES.items():
-        perf, rs_scores = get_rs_data(tickers, benchmark, lookback)
-        
-        if rs_scores is None:
-            continue
-        
-        # Get group average
-        top_n_scores = rs_scores.nlargest(int(top_n))
-        group_avg = top_n_scores.mean()
-        
-        # Create sorted ticker list with RS scores
-        df_tickers = pd.DataFrame({
-            "Ticker": tickers,
-            "RS Score": rs_scores.values
-        }).sort_values(by="RS Score", ascending=False)
-        
-        all_data.append({
-            "Industry": industry_name,
-            "Group RS": group_avg,
-            "Tickers": df_tickers
-        })
+progress_bar = st.progress(0)
+status_text = st.empty()
+
+for idx, (industry_name, tickers) in enumerate(INDUSTRIES.items()):
+    status_text.text(f"Loading {industry_name}...")
+    perf, rs_scores = get_rs_data(tickers, benchmark, lookback)
+    
+    if rs_scores is None:
+        progress_bar.progress((idx + 1) / len(INDUSTRIES))
+        continue
+    
+    # Get group average
+    top_n_scores = rs_scores.nlargest(int(top_n))
+    group_avg = top_n_scores.mean()
+    
+    # Create sorted ticker list with RS scores
+    df_tickers = pd.DataFrame({
+        "Ticker": rs_scores.index,
+        "RS Score": rs_scores.values
+    }).sort_values(by="RS Score", ascending=False)
+    
+    all_data.append({
+        "Industry": industry_name,
+        "Group RS": group_avg,
+        "Tickers": df_tickers
+    })
+    
+    progress_bar.progress((idx + 1) / len(INDUSTRIES))
+
+status_text.empty()
+progress_bar.empty()
 
 # Convert to DataFrame for sorting
 df_main = pd.DataFrame([{
