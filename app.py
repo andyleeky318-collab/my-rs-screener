@@ -13,7 +13,8 @@ INDUSTRIES = {
     "Nuclear": ["CCJ", "BWXT", "SMR", "OKLO", "NNE"],
     "Software": ["MSFT", "ORCL", "PLTR", "CRM", "SNOW"],
     "Semiconductors": ["NVDA", "AMD", "AVGO", "SMCI", "TSM"],
-    "MAG7": ["AAPL", "AMZN", "GOOGL", "META", "MSFT", "NVDA", "TSLA"]
+    "MAG7": ["AAPL", "AMZN", "GOOGL", "META", "MSFT", "NVDA", "TSLA"],
+    "Memory": ["MU", "SNDK", "WDC", "STX"]
 }
 
 # 3. Sidebar Inputs
