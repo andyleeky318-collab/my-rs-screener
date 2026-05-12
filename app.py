@@ -169,10 +169,10 @@ INDUSTRIES = {
 
 # 3. Sidebar Inputs
 with st.sidebar:
-    st.header("Settings")
-    benchmark = st.selectbox("Benchmark", ["^GSPC", "^IXIC"], index=0) # ^GSPC is S&P 500
-    lookback = st.slider("Lookback Period (Days)", 20, 250, 90)
-    top_n = st.number_input("Top N for Group Avg", value=5)
+    st.header("Settings", anchor=False)
+    benchmark = st.selectbox("Benchmark", ["^GSPC", "^IXIC"], index=0, label_visibility="collapsed")
+    lookback = st.slider("Lookback Period (Days)", 20, 250, 90, label_visibility="collapsed")
+    top_n = st.number_input("Top N for Group Avg", value=5, label_visibility="collapsed")
     
     # Add Bongo Cat at the bottom of sidebar
     st.markdown("---")
@@ -204,56 +204,71 @@ def get_rs_data(tickers, benchmark_ticker, period):
         return None, None
 
 # 5. Main Display
-st.subheader("📊 All Industry Groups - Relative Strength Screener")
+st.markdown("""
+<style>
+    /* Smaller font sizes */
+    .industry-header {
+        font-size: 14px !important;
+        font-weight: bold;
+        color: white;
+        background-color: #1f77b4;
+        padding: 8px 12px;
+        border-radius: 4px;
+        margin-bottom: 8px;
+        margin-top: 12px;
+    }
+    .metric-row {
+        font-size: 12px;
+    }
+    /* Dark table styling */
+    .dataframe {
+        background-color: #2b2b2b !important;
+        color: white !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-# Create horizontal scrollable layout
+st.markdown("<h3 style='font-size: 16px; margin-bottom: 15px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
+
+# Create horizontal layout for all industries
 for industry_name, tickers in INDUSTRIES.items():
-    # Industry Header with background color
-    st.markdown(f"""
-    <div style="background-color: #1f77b4; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-        <h3 style="color: white; margin: 0;">{industry_name}</h3>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    with st.spinner(f"Loading {industry_name}..."):
-        try:
-            perf, rs_scores = get_rs_data(tickers, benchmark, lookback)
-            
-            if rs_scores is None:
-                st.error(f"Error loading {industry_name}")
-                continue
-            
-            # Calculate Group Average of Top N
-            top_n_scores = rs_scores.nlargest(int(top_n))
-            group_avg = top_n_scores.mean()
-            
-            # Display Group Average Metric
-            col1, col2, col3 = st.columns([2, 2, 6])
-            col1.metric("Group Avg RS", f"{group_avg:.2f}")
-            col2.metric("Total Tickers", len(tickers))
-            
-            # Build Results Table
-            df_results = pd.DataFrame({
-                "Ticker": tickers,
-                "RS Score": rs_scores.values,
-                "Perf (%)": perf.values
-            }).sort_values(by="RS Score", ascending=False)
-            
-            # Create styled dataframe with alternating row colors
-            def highlight_rows(row):
-                # Alternate between white and light grey
-                return ['background-color: #f0f0f0' if i % 2 == 0 else 'background-color: white' 
-                        for i in range(len(row))]
-            
-            styled_df = df_results.style\
-                .background_gradient(subset=["RS Score"], cmap="RdYlGn", vmin=0, vmax=100)\
-                .apply(highlight_rows)\
-                .format({"RS Score": "{:.2f}", "Perf (%)": "{:.2f}"})
-            
-            st.dataframe(styled_df, use_container_width=True, height=400)
-            
-            # Add separator
-            st.markdown("---")
-            
-        except Exception as e:
-            st.error(f"Error loading {industry_name}: {str(e)}")
+    # Collapsible section with dropdown
+    with st.expander(f"**{industry_name}** ({len(tickers)} tickers)", expanded=False):
+        # Display members list in sidebar format
+        st.markdown(f"<p style='font-size: 11px; color: #888;'>Members: {', '.join(tickers)}</p>", unsafe_allow_html=True)
+        
+        with st.spinner(f"Loading {industry_name}..."):
+            try:
+                perf, rs_scores = get_rs_data(tickers, benchmark, lookback)
+                
+                if rs_scores is None:
+                    st.error(f"Error loading {industry_name}")
+                    continue
+                
+                # Calculate Group Average of Top N
+                top_n_scores = rs_scores.nlargest(int(top_n))
+                group_avg = top_n_scores.mean()
+                
+                # Display Group Average Metric in smaller size
+                col1, col2, col3 = st.columns([2, 2, 6])
+                col1.markdown(f"<p style='font-size: 12px;'><b>Group Avg RS:</b> {group_avg:.2f}</p>", unsafe_allow_html=True)
+                col2.markdown(f"<p style='font-size: 12px;'><b>Total:</b> {len(tickers)}</p>", unsafe_allow_html=True)
+                
+                # Build Results Table
+                df_results = pd.DataFrame({
+                    "Ticker": tickers,
+                    "RS Score": rs_scores.values,
+                    "Perf (%)": perf.values
+                }).sort_values(by="RS Score", ascending=False)
+                
+                # Style dataframe with dark theme
+                styled_df = df_results.style\
+                    .background_gradient(subset=["RS Score"], cmap="RdYlGn", vmin=0, vmax=100)\
+                    .set_properties(**{'background-color': '#3a3a3a', 'color': 'white', 'border-color': '#555'})\
+                    .format({"RS Score": "{:.2f}", "Perf (%)": "{:.2f}"})\
+                    .set_uuid(f"table_{industry_name.replace(' ', '_')}")
+                
+                st.dataframe(styled_df, use_container_width=True, height=400)
+                
+            except Exception as e:
+                st.error(f"Error loading {industry_name}: {str(e)}")
