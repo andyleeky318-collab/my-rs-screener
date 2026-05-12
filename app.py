@@ -169,10 +169,10 @@ INDUSTRIES = {
 
 # 3. Sidebar Inputs
 with st.sidebar:
-    st.header("Settings", anchor=False)
-    benchmark = st.selectbox("Benchmark", ["^GSPC", "^IXIC"], index=0, label_visibility="collapsed")
-    lookback = st.slider("Lookback Period (Days)", 20, 250, 90, label_visibility="collapsed")
-    top_n = st.number_input("Top N for Group Avg", value=5, label_visibility="collapsed")
+    st.header("Settings")
+    benchmark = st.selectbox("Benchmark", ["^GSPC", "^IXIC"], index=0)
+    lookback = st.slider("Lookback Period (Days)", 20, 250, 90)
+    top_n = st.number_input("Top N for Group Avg", value=5, min_value=1)
     
     # Add Bongo Cat at the bottom of sidebar
     st.markdown("---")
@@ -186,89 +186,145 @@ with st.sidebar:
 # 4. Data Processing Function
 def get_rs_data(tickers, benchmark_ticker, period):
     try:
-        # Fetch data for all tickers + benchmark
         all_tickers = tickers + [benchmark_ticker]
         data = yf.download(all_tickers, period="1y", interval="1d", progress=False)['Close']
         
-        # Calculate RS: (Stock / Benchmark)
         rs_series = data[tickers].div(data[benchmark_ticker], axis=0)
-        
-        # Get the performance over the lookback period
         rs_perf = ((rs_series.iloc[-1] / rs_series.iloc[-period]) - 1) * 100
-        
-        # Normalize RS to 1-99
         ranks = rs_perf.rank(pct=True) * 99
         
         return rs_perf, ranks
     except Exception as e:
         return None, None
 
-# 5. Main Display
+# 5. Load all data at startup
+st.markdown("<h3 style='font-size: 16px; margin-bottom: 15px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
+
+# Create data for all industries
+all_data = []
+with st.spinner("Loading all industries..."):
+    for industry_name, tickers in INDUSTRIES.items():
+        perf, rs_scores = get_rs_data(tickers, benchmark, lookback)
+        
+        if rs_scores is None:
+            continue
+        
+        # Get group average
+        top_n_scores = rs_scores.nlargest(int(top_n))
+        group_avg = top_n_scores.mean()
+        
+        # Create sorted ticker list with RS scores
+        df_tickers = pd.DataFrame({
+            "Ticker": tickers,
+            "RS Score": rs_scores.values
+        }).sort_values(by="RS Score", ascending=False)
+        
+        all_data.append({
+            "Industry": industry_name,
+            "Group RS": group_avg,
+            "Tickers": df_tickers
+        })
+
+# Convert to DataFrame for sorting
+df_main = pd.DataFrame([{
+    "Industry": item["Industry"],
+    "Group RS": item["Group RS"],
+} for item in all_data])
+
+# Add sorting options
+col1, col2 = st.columns([1, 1])
+with col1:
+    sort_by = st.selectbox("Sort by", ["Industry (A-Z)", "Group RS (High to Low)", "Group RS (Low to High)"])
+with col2:
+    sort_order = st.radio("Order", ["Ascending", "Descending"], horizontal=True)
+
+# Apply sorting
+if sort_by == "Industry (A-Z)":
+    df_main = df_main.sort_values("Industry", ascending=(sort_order == "Ascending"))
+elif sort_by == "Group RS (High to Low)":
+    df_main = df_main.sort_values("Group RS", ascending=(sort_order == "Ascending"))
+else:  # Low to High
+    df_main = df_main.sort_values("Group RS", ascending=(sort_order == "Descending"))
+
+# Display combined table with ticker badges
 st.markdown("""
 <style>
-    /* Smaller font sizes */
-    .industry-header {
-        font-size: 14px !important;
-        font-weight: bold;
-        color: white;
-        background-color: #1f77b4;
-        padding: 8px 12px;
-        border-radius: 4px;
-        margin-bottom: 8px;
-        margin-top: 12px;
-    }
-    .metric-row {
-        font-size: 12px;
-    }
-    /* Dark table styling */
-    .dataframe {
-        background-color: #2b2b2b !important;
-        color: white !important;
-    }
+.ticker-badge {
+    display: inline-block;
+    margin: 3px;
+    padding: 5px 8px;
+    border: 1px solid #999;
+    border-radius: 4px;
+    font-size: 11px;
+    background-color: #3a3a3a;
+    color: white;
+    text-align: center;
+    min-width: 45px;
+}
+.ticker-name {
+    font-weight: bold;
+    display: block;
+}
+.ticker-rs {
+    font-size: 10px;
+    color: #aaa;
+}
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<h3 style='font-size: 16px; margin-bottom: 15px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
+# Create HTML table
+table_html = """
+<table style="width:100%; border-collapse: collapse; background-color: #2b2b2b; color: white;">
+<thead>
+<tr style="background-color: #1f77b4; height: 35px;">
+<th style="padding: 10px; text-align: left; font-size: 13px; border: 1px solid #555;">Industry</th>
+<th style="padding: 10px; text-align: center; font-size: 13px; border: 1px solid #555; width: 120px;">Group RS</th>
+<th style="padding: 10px; text-align: left; font-size: 13px; border: 1px solid #555;">Tickers (Highest → Lowest RS)</th>
+</tr>
+</thead>
+<tbody>
+"""
 
-# Create horizontal layout for all industries
-for industry_name, tickers in INDUSTRIES.items():
-    # Collapsible section with dropdown
-    with st.expander(f"**{industry_name}** ({len(tickers)} tickers)", expanded=False):
-        # Display members list in sidebar format
-        st.markdown(f"<p style='font-size: 11px; color: #888;'>Members: {', '.join(tickers)}</p>", unsafe_allow_html=True)
-        
-        with st.spinner(f"Loading {industry_name}..."):
-            try:
-                perf, rs_scores = get_rs_data(tickers, benchmark, lookback)
-                
-                if rs_scores is None:
-                    st.error(f"Error loading {industry_name}")
-                    continue
-                
-                # Calculate Group Average of Top N
-                top_n_scores = rs_scores.nlargest(int(top_n))
-                group_avg = top_n_scores.mean()
-                
-                # Display Group Average Metric in smaller size
-                col1, col2, col3 = st.columns([2, 2, 6])
-                col1.markdown(f"<p style='font-size: 12px;'><b>Group Avg RS:</b> {group_avg:.2f}</p>", unsafe_allow_html=True)
-                col2.markdown(f"<p style='font-size: 12px;'><b>Total:</b> {len(tickers)}</p>", unsafe_allow_html=True)
-                
-                # Build Results Table
-                df_results = pd.DataFrame({
-                    "Ticker": tickers,
-                    "RS Score": rs_scores.values,
-                    "Perf (%)": perf.values
-                }).sort_values(by="RS Score", ascending=False)
-                
-                # Style dataframe with dark theme
-                styled_df = df_results.style\
-                    .background_gradient(subset=["RS Score"], cmap="RdYlGn", vmin=0, vmax=100)\
-                    .set_properties(**{'background-color': '#3a3a3a', 'color': 'white', 'border-color': '#555'})\
-                    .format({"RS Score": "{:.2f}", "Perf (%)": "{:.2f}"})\
-                    .set_uuid(f"table_{industry_name.replace(' ', '_')}")
-                
-                st.dataframe(styled_df, use_container_width=True, height=400)
-                
-            except Exception as e:
-                st.error(f"Error loading {industry_name}: {str(e)}")
+# Find indices after sorting
+sorted_indices = df_main.index.tolist()
+
+# Generate table rows
+for idx, sorted_idx in enumerate(sorted_indices):
+    industry_name = df_main.loc[sorted_idx, "Industry"]
+    group_rs = df_main.loc[sorted_idx, "Group RS"]
+    
+    # Find the corresponding data
+    item = next((d for d in all_data if d["Industry"] == industry_name), None)
+    if not item:
+        continue
+    
+    df_tickers = item["Tickers"]
+    
+    # Generate ticker badges
+    ticker_html = ""
+    for _, row in df_tickers.iterrows():
+        ticker_html += f"""
+        <div class="ticker-badge">
+            <span class="ticker-name">{row['Ticker']}</span>
+            <span class="ticker-rs">{row['RS Score']:.1f}</span>
+        </div>
+        """
+    
+    # Alternate row colors
+    row_bg = "#3a3a3a" if idx % 2 == 0 else "#2b2b2b"
+    
+    table_html += f"""
+    <tr style="background-color: {row_bg}; height: auto;">
+    <td style="padding: 12px; border: 1px solid #555; font-size: 12px; font-weight: 500;">{industry_name}</td>
+    <td style="padding: 12px; text-align: center; border: 1px solid #555; font-size: 13px; font-weight: bold; color: #4ecdc4;">{group_rs:.2f}</td>
+    <td style="padding: 12px; border: 1px solid #555;">
+        <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+            {ticker_html}
+        </div>
+    </td>
+    </tr>
+    """
+
+table_html += "</tbody></table>"
+
+st.markdown(table_html, unsafe_allow_html=True)
