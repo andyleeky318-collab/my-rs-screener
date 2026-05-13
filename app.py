@@ -2,13 +2,12 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import time
 
 # 1. Setup Streamlit Page
 st.set_page_config(page_title="Chrome Sector RS", layout="wide")
 st.title("🚀 Chrome Sector Relative Strength")
 
-# 2. Cleaned Industry Database
+# 2. Cleaned Industry Database (Preserved as requested)
 INDUSTRIES = {
     "Nuclear": ["URA", "NLR", "CEG", "CCJ", "OKLO", "UUUU", "SMR"],
     "MAG7": ["AAPL", "GOOGL", "NVDA", "META", "MSFT", "AMZN", "TSLA"],
@@ -170,30 +169,58 @@ INDUSTRIES = {
 with st.sidebar:
     st.header("Settings")
     benchmark = st.selectbox("Benchmark", ["^GSPC", "^IXIC"], index=0)
-    lookback = st.slider("Lookback Period (Days)", 20, 250, 90)
     top_n = st.number_input("Top N for Group Avg", value=5, min_value=1)
     
     if st.button("Clear Cache & Refresh"):
         st.cache_data.clear()
 
-# 4. Optimized Data Processing with Caching
+# 4. IMPLEMENTATION OF YOUR WEIGHTED RS METHOD
 @st.cache_data(ttl=3600)
-def get_rs_data_cached(tickers_tuple, benchmark_ticker, period):
+def get_rs_data_cached(tickers_tuple, benchmark_ticker):
     tickers = list(tickers_tuple)
     try:
+        # Download 1y+ data to ensure we have at least 252 trading days
         all_tickers = tickers + [benchmark_ticker]
-        data = yf.download(all_tickers, period="1y", interval="1d", progress=False)['Close']
-        valid_tickers = [t for t in tickers if t in data.columns and data[t].notna().sum() > 0]
+        data = yf.download(all_tickers, period="2y", interval="1d", progress=False)['Close']
+        
+        valid_tickers = [t for t in tickers if t in data.columns and data[t].notna().sum() >= 252]
         if not valid_tickers: return None, None
-        rs_series = data[valid_tickers].div(data[benchmark_ticker], axis=0)
-        start_idx = -period if len(rs_series) >= period else 0
-        rs_perf = ((rs_series.iloc[-1] / rs_series.iloc[start_idx]) - 1) * 100
+
+        # Lookback offsets based on your Pine Script
+        # n63 (3m), n126 (6m), n189 (9m), n252 (12m)
+        offsets = [63, 126, 189, 252]
+        weights = [0.4, 0.2, 0.2, 0.2]
+
+        def calculate_weighted_score(series):
+            score = 0
+            for offset, weight in zip(offsets, weights):
+                # Price Performance: current / price_N_days_ago
+                perf = series.iloc[-1] / series.iloc[-offset]
+                score += (perf * weight)
+            return score
+
+        # Calculate Benchmark Weighted Score (rs_ref in your script)
+        bench_weighted = calculate_weighted_score(data[benchmark_ticker])
+
+        # Calculate Stock Weighted Scores (rs_stock in your script)
+        stock_scores = {}
+        for ticker in valid_tickers:
+            stock_weighted = calculate_weighted_score(data[ticker])
+            # totalRsScore = (rs_stock) / (rs_ref) * 100
+            total_score = (stock_weighted / bench_weighted) * 100
+            stock_scores[ticker] = total_score
+
+        rs_perf = pd.Series(stock_scores)
+        
+        # Percentile Rank (1-99) to match your "totalRsRating" logic
         ranks = rs_perf.rank(pct=True) * 99
+        
         return rs_perf, ranks
-    except Exception:
+    except Exception as e:
+        st.error(f"Error: {e}")
         return None, None
 
-# 5. UI Layout
+# 5. UI Layout & Logic (Preserved Processing Industry and Progress Bar)
 st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
 
 all_data = []
@@ -203,7 +230,7 @@ status_text = st.empty()
 industry_items = list(INDUSTRIES.items())
 for idx, (industry_name, tickers) in enumerate(industry_items):
     status_text.text(f"Processing {industry_name}...")
-    perf, rs_scores = get_rs_data_cached(tuple(tickers), benchmark, lookback)
+    perf, rs_scores = get_rs_data_cached(tuple(tickers), benchmark)
     
     if rs_scores is not None:
         top_n_scores = rs_scores.nlargest(int(top_n))
@@ -216,7 +243,7 @@ for idx, (industry_name, tickers) in enumerate(industry_items):
 status_text.empty()
 progress_bar.empty()
 
-# 6. Sorting and Display Logic
+# 6. Compact Display Logic
 if all_data:
     df_main = pd.DataFrame([{"Industry": item["Industry"], "Group RS": item["Group RS"]} for item in all_data])
 
@@ -231,13 +258,13 @@ if all_data:
     else:
         df_main = df_main.sort_values("Group RS", ascending=(sort_order == "Ascending"))
 
-    # Compact CSS and Side-by-Side Ticker logic
+    # Updated CSS for Side-by-Side Ticker Display and Thinner Rows
     st.markdown("""
     <style>
     .ticker-badge { 
         display: inline-block; 
-        margin: 2px; 
-        padding: 2px 6px; 
+        margin: 1px 3px; 
+        padding: 1px 5px; 
         border: 1px solid #444; 
         border-radius: 3px; 
         font-size: 11px; 
@@ -246,10 +273,10 @@ if all_data:
         white-space: nowrap;
     }
     .ticker-name { font-weight: bold; color: #ffffff; margin-right: 4px; }
-    .ticker-rs { color: #4ecdc4; }
+    .ticker-rs { color: #4ecdc4; font-weight: normal; }
     table { width:100%; border-collapse: collapse; }
-    th { padding: 6px !important; background-color: #1f77b4; color: white; font-size: 13px; }
-    td { padding: 4px 8px !important; border-bottom: 1px solid #333; font-size: 12px; }
+    th { padding: 4px 8px !important; background-color: #1f77b4; color: white; font-size: 12px; }
+    td { padding: 2px 8px !important; border-bottom: 1px solid #333; font-size: 12px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -262,7 +289,7 @@ if all_data:
 
     for i, row in df_main.iterrows():
         item = next(d for d in all_data if d["Industry"] == row["Industry"])
-        # Side-by-side display: TICKER SCORE
+        # Side-by-side display logic: "TICKER 87.0"
         ticker_html = "".join([f'<div class="ticker-badge"><span class="ticker-name">{r["Ticker"]}</span><span class="ticker-rs">{r["RS Score"]:.1f}</span></div>' for _, r in item["Tickers"].iterrows()])
         
         bg_color = "#262730" if i % 2 == 0 else "#0e1117"
@@ -273,5 +300,3 @@ if all_data:
 
     table_html += "</tbody></table>"
     st.markdown(table_html, unsafe_allow_html=True)
-else:
-    st.warning("No data found. Please check your internet connection or benchmark symbol.")
