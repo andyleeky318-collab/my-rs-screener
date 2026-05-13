@@ -7,7 +7,7 @@ import numpy as np
 st.set_page_config(page_title="Chrome Sector RS", layout="wide")
 st.title("🚀 Chrome Sector Relative Strength")
 
-# 2. Industry Database (Preserved)
+# 2. Cleaned Industry Database (Preserved as requested)
 INDUSTRIES = {
     "Nuclear": ["URA", "NLR", "CEG", "CCJ", "OKLO", "UUUU", "SMR"],
     "MAG7": ["AAPL", "GOOGL", "NVDA", "META", "MSFT", "AMZN", "TSLA"],
@@ -170,108 +170,133 @@ with st.sidebar:
     st.header("Settings")
     benchmark = st.selectbox("Benchmark", ["^GSPC", "^IXIC"], index=0)
     top_n = st.number_input("Top N for Group Avg", value=5, min_value=1)
+    
     if st.button("Clear Cache & Refresh"):
         st.cache_data.clear()
 
-# 4. Weighted RS Calculation (totalRsScore)
+# 4. IMPLEMENTATION OF YOUR WEIGHTED RS METHOD
 @st.cache_data(ttl=3600)
 def get_rs_data_cached(tickers_tuple, benchmark_ticker):
     tickers = list(tickers_tuple)
     try:
+        # Download 1y+ data to ensure we have at least 252 trading days
         all_tickers = tickers + [benchmark_ticker]
         data = yf.download(all_tickers, period="2y", interval="1d", progress=False)['Close']
-        valid_tickers = [t for t in tickers if t in data.columns and data[t].notna().sum() >= 252]
         
+        valid_tickers = [t for t in tickers if t in data.columns and data[t].notna().sum() >= 252]
         if not valid_tickers: return None, None
 
-        # Lookbacks from script: 63 (3m), 126 (6m), 189 (9m), 252 (12m)
+        # Lookback offsets based on your Pine Script
+        # n63 (3m), n126 (6m), n189 (9m), n252 (12m)
         offsets = [63, 126, 189, 252]
         weights = [0.4, 0.2, 0.2, 0.2]
 
-        def calc_weighted_score(col):
+        def calculate_weighted_score(series):
             score = 0
-            for off, w in zip(offsets, weights):
-                score += (col.iloc[-1] / col.iloc[-off]) * w
+            for offset, weight in zip(offsets, weights):
+                # Price Performance: current / price_N_days_ago
+                perf = series.iloc[-1] / series.iloc[-offset]
+                score += (perf * weight)
             return score
 
-        # rs_ref calculation
-        bench_weighted = calc_weighted_score(data[benchmark_ticker])
+        # Calculate Benchmark Weighted Score (rs_ref in your script)
+        bench_weighted = calculate_weighted_score(data[benchmark_ticker])
 
-        # rs_stock & totalRsScore calculation
+        # Calculate Stock Weighted Scores (rs_stock in your script)
         stock_scores = {}
-        for t in valid_tickers:
-            rs_stock = calc_weighted_score(data[t])
+        for ticker in valid_tickers:
+            stock_weighted = calculate_weighted_score(data[ticker])
             # totalRsScore = (rs_stock) / (rs_ref) * 100
-            stock_scores[t] = (rs_stock / bench_weighted) * 100
+            total_score = (stock_weighted / bench_weighted) * 100
+            stock_scores[ticker] = total_score
 
-        final_scores = pd.Series(stock_scores)
-        return final_scores
-    except Exception:
-        return None
+        rs_perf = pd.Series(stock_scores)
+        
+        # Percentile Rank (1-99) to match your "totalRsRating" logic
+        ranks = rs_perf.rank(pct=True) * 99
+        
+        return rs_perf, ranks
+    except Exception as e:
+        st.error(f"Error: {e}")
+        return None, None
 
-# 5. UI Layout and Processing
+# 5. UI Layout & Logic (Preserved Processing Industry and Progress Bar)
 st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
 
-all_results = []
+all_data = []
 progress_bar = st.progress(0)
 status_text = st.empty()
 
 industry_items = list(INDUSTRIES.items())
-for idx, (name, tickers) in enumerate(industry_items):
-    status_text.text(f"Processing {name}...")
-    scores = get_rs_data_cached(tuple(tickers), benchmark)
+for idx, (industry_name, tickers) in enumerate(industry_items):
+    status_text.text(f"Processing {industry_name}...")
+    perf, rs_scores = get_rs_data_cached(tuple(tickers), benchmark)
     
-    if scores is not None:
-        group_avg = scores.nlargest(int(top_n)).mean()
-        ticker_df = pd.DataFrame({"Ticker": scores.index, "Score": scores.values}).sort_values(by="Score", ascending=False)
-        all_results.append({"Industry": name, "GroupAvg": group_avg, "Tickers": ticker_df})
+    if rs_scores is not None:
+        top_n_scores = rs_scores.nlargest(int(top_n))
+        group_avg = top_n_scores.mean()
+        df_tickers = pd.DataFrame({"Ticker": rs_scores.index, "RS Score": rs_scores.values}).sort_values(by="RS Score", ascending=False)
+        all_data.append({"Industry": industry_name, "Group RS": group_avg, "Tickers": df_tickers})
     
     progress_bar.progress((idx + 1) / len(industry_items))
 
 status_text.empty()
 progress_bar.empty()
 
-# 6. Sorting and Table Display
-if all_results:
-    df_main = pd.DataFrame([{"Industry": r["Industry"], "GroupAvg": r["GroupAvg"]} for r in all_results])
-    
-    c1, c2 = st.columns(2)
-    with c1: sort_by = st.selectbox("Sort", ["Score (High)", "Name (A-Z)", "Score (Low)"])
-    with c2: order = st.radio("Order", ["Desc", "Asc"], horizontal=True)
+# 6. Compact Display Logic
+if all_data:
+    df_main = pd.DataFrame([{"Industry": item["Industry"], "Group RS": item["Group RS"]} for item in all_data])
 
-    if "Name" in sort_by:
-        df_main = df_main.sort_values("Industry", ascending=(order == "Asc"))
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        sort_by = st.selectbox("Sort by", ["Group RS (High to Low)", "Industry (A-Z)", "Group RS (Low to High)"])
+    with col2:
+        sort_order = st.radio("Order", ["Descending", "Ascending"], horizontal=True)
+
+    if "Industry" in sort_by:
+        df_main = df_main.sort_values("Industry", ascending=(sort_order == "Ascending"))
     else:
-        df_main = df_main.sort_values("GroupAvg", ascending=(order == "Asc"))
+        df_main = df_main.sort_values("Group RS", ascending=(sort_order == "Ascending"))
 
-    # Compact CSS with Inline Side-by-Side Badge
+    # Updated CSS for Side-by-Side Ticker Display and Thinner Rows
     st.markdown("""
     <style>
-    .badge { 
-        display: inline-block; margin: 1px 2px; padding: 1px 5px; 
-        border: 1px solid #444; border-radius: 3px; font-size: 11px; 
-        background: #1e1e1e; color: #eee; white-space: nowrap;
+    .ticker-badge { 
+        display: inline-block; 
+        margin: 1px 3px; 
+        padding: 1px 5px; 
+        border: 1px solid #444; 
+        border-radius: 3px; 
+        font-size: 11px; 
+        background-color: #1e1e1e; 
+        color: #eee; 
+        white-space: nowrap;
     }
-    .t-name { font-weight: bold; color: #fff; margin-right: 4px; }
-    .t-val { color: #4ecdc4; }
-    th { padding: 4px 8px !important; background: #1f77b4; color: white; font-size: 12px; }
+    .ticker-name { font-weight: bold; color: #ffffff; margin-right: 4px; }
+    .ticker-rs { color: #4ecdc4; font-weight: normal; }
+    table { width:100%; border-collapse: collapse; }
+    th { padding: 4px 8px !important; background-color: #1f77b4; color: white; font-size: 12px; }
     td { padding: 2px 8px !important; border-bottom: 1px solid #333; font-size: 12px; }
     </style>
     """, unsafe_allow_html=True)
 
-    table = """<table style="width:100%; border-collapse: collapse;">
-    <thead><tr><th align="left">Industry</th><th align="center">Avg Score</th><th align="left">Tickers (Ranked)</th></tr></thead>
-    <tbody>"""
+    table_html = """<table>
+    <thead><tr>
+    <th style="text-align: left;">Industry</th>
+    <th style="text-align: center; width: 80px;">Group RS</th>
+    <th style="text-align: left;">Tickers (Ranked)</th>
+    </tr></thead><tbody>"""
 
     for i, row in df_main.iterrows():
-        res = next(r for r in all_results if r["Industry"] == row["Industry"])
-        # Inline display: "TICKER 105.2"
-        badges = "".join([f'<div class="badge"><span class="t-name">{t["Ticker"]}</span><span class="t-val">{t["Score"]:.1f}</span></div>' for _, t in res["Tickers"].iterrows()])
+        item = next(d for d in all_data if d["Industry"] == row["Industry"])
+        # Side-by-side display logic: "TICKER 87.0"
+        ticker_html = "".join([f'<div class="ticker-badge"><span class="ticker-name">{r["Ticker"]}</span><span class="ticker-rs">{r["RS Score"]:.1f}</span></div>' for _, r in item["Tickers"].iterrows()])
         
-        bg = "#262730" if i % 2 == 0 else "#0e1117"
-        table += f"""<tr style="background: {bg};">
-        <td><b>{row['Industry']}</b></td>
-        <td align="center" style="color:#4ecdc4;"><b>{row['GroupAvg']:.2f}</b></td>
-        <td>{badges}</td></tr>"""
+        bg_color = "#262730" if i % 2 == 0 else "#0e1117"
+        table_html += f"""<tr style="background-color: {bg_color};">
+        <td style="font-weight: bold;">{row['Industry']}</td>
+        <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.2f}</td>
+        <td>{ticker_html}</td></tr>"""
 
-    st.markdown(table + "</tbody></table>", unsafe_allow_html=True)
+    table_html += "</tbody></table>"
+    st.markdown(table_html, unsafe_allow_html=True)
