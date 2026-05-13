@@ -5,9 +5,36 @@ import numpy as np
 
 # 1. Setup Streamlit Page
 st.set_page_config(page_title="Chrome Sector RS", layout="wide")
+
+# --- THEME & SETTINGS SIDEBAR ---
+with st.sidebar:
+    st.header("Settings")
+    theme_choice = st.radio("Display Mode", ["Dark", "Light"], index=0)
+    benchmark = st.selectbox("Benchmark", ["^GSPC", "^IXIC"], index=0)
+    top_n = st.number_input("Top N for Group Avg", value=5, min_value=1)
+    
+    if st.button("Clear Cache & Refresh"):
+        st.cache_data.clear()
+
+# Define Theme Colors based on selection
+if theme_choice == "Light":
+    bg_main = "#ffffff"
+    bg_alt = "#f0f2f6"
+    text_main = "#31333f"
+    border_col = "#dddddd"
+    badge_bg = "#eeeeee"
+    badge_txt = "#31333f"
+else:
+    bg_main = "#262730"
+    bg_alt = "#0e1117"
+    text_main = "#eeeeee"
+    border_col = "#444444"
+    badge_bg = "#1e1e1e"
+    badge_txt = "#eeeeee"
+
 st.title("🚀 Chrome Sector Relative Strength")
 
-# 2. Cleaned Industry Database (Preserved as requested)
+# 2. Industry Database (Original Version Preserved)
 INDUSTRIES = {
     "Nuclear": ["URA", "NLR", "CEG", "CCJ", "OKLO", "UUUU", "SMR"],
     "MAG7": ["AAPL", "GOOGL", "NVDA", "META", "MSFT", "AMZN", "TSLA"],
@@ -93,7 +120,7 @@ INDUSTRIES = {
     "COMPTER SFTWR-SCRITY": ["BUG", "FTNT", "PANW", "CRWD", "CHKP", "RBRK", "RPD"],
     "COMPTER SFTWR-ENTR": ["IGV", "TWLO", "MSFT", "ORCL", "CRM", "IBM", "NOW", "ADP", "DOCN", "PLTR", "ADSK", "ROP", "TEAM", "SNOW", "VEEV", "HUBS", "PTC", "MDB", "MANH", "TOST", "MNDY", "WDAY", "SSNC", "GWRE", "BSY", "PEGA", "QTWO", "APPF", "BOX", "WK"],
     "COMPTER SFTWR-DSGN": ["ADBE", "INTU", "SNPS", "CDNS", "IOT", "DT", "TRMB", "WIX"],
-    "CMPTR SFTWR-FINCL": ["FICO", "FIS", "NU", "SHOP"],
+    "CMPTER SFTWR-FINCL": ["FICO", "FIS", "NU", "SHOP"],
     "CMP SFTWR-GAMING": ["EA", "TTWO", "RBLX"],
     "CMP SFTWR-DBASE": ["DDOG"],
     "COMPTER SFTWR-DSKTP": ["ZM", "SNAP", "Z"],
@@ -165,22 +192,12 @@ INDUSTRIES = {
     "ELEC-SEMICON MFG": ["TSM", "TXN", "INTC", "GFS", "AMKR", "TSEM", "FORM"]
 }
 
-# 3. Sidebar Inputs
-with st.sidebar:
-    st.header("Settings")
-    benchmark = st.selectbox("Benchmark", ["^GSPC", "^IXIC"], index=0)
-    top_n = st.number_input("Top N for Group Avg", value=5, min_value=1)
-    
-    if st.button("Clear Cache & Refresh"):
-        st.cache_data.clear()
-
-# 4. UPDATED DATA FETCHING (Includes EMA logic)
+# 3. Data Logic
 @st.cache_data(ttl=3600)
 def get_rs_data_cached(tickers_tuple, benchmark_ticker):
     tickers = list(tickers_tuple)
     try:
         all_tickers = tickers + [benchmark_ticker]
-        # Download High, Low, and Close for EMA Cloud calculation
         data = yf.download(all_tickers, period="2y", interval="1d", progress=False)
         
         close_data = data['Close']
@@ -190,7 +207,6 @@ def get_rs_data_cached(tickers_tuple, benchmark_ticker):
         valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= 252]
         if not valid_tickers: return None, None, []
 
-        # RS Calculation Logic
         offsets = [63, 126, 189, 252]
         weights = [0.4, 0.2, 0.2, 0.2]
 
@@ -202,34 +218,28 @@ def get_rs_data_cached(tickers_tuple, benchmark_ticker):
             return score
 
         bench_weighted = calculate_weighted_score(close_data[benchmark_ticker])
-
         stock_scores = {}
-        inside_cloud_tickers = []
+        cloud_tickers = []
 
         for ticker in valid_tickers:
-            # RS Score
+            # RS Calculation
             stock_weighted = calculate_weighted_score(close_data[ticker])
-            total_score = (stock_weighted / bench_weighted) * 100
-            stock_scores[ticker] = total_score
+            stock_scores[ticker] = (stock_weighted / bench_weighted) * 100
 
-            # 21 EMA Cloud Logic
-            # EMA of Highs and Lows
+            # EMA Cloud Calculation
             ema_high = high_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
             ema_low = low_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
-            current_close = close_data[ticker].iloc[-1]
-
-            if ema_low <= current_close <= ema_high:
-                inside_cloud_tickers.append(ticker)
+            curr_close = close_data[ticker].iloc[-1]
+            if ema_low <= curr_close <= ema_high:
+                cloud_tickers.append(ticker)
 
         rs_perf = pd.Series(stock_scores)
         ranks = rs_perf.rank(pct=True) * 99
-        
-        return rs_perf, ranks, inside_cloud_tickers
-    except Exception as e:
-        st.error(f"Error: {e}")
+        return rs_perf, ranks, cloud_tickers
+    except:
         return None, None, []
 
-# 5. UI Layout & Logic
+# 4. UI Loop
 all_data = []
 progress_bar = st.progress(0)
 status_text = st.empty()
@@ -238,69 +248,68 @@ industry_items = list(INDUSTRIES.items())
 for idx, (industry_name, tickers) in enumerate(industry_items):
     status_text.text(f"Processing {industry_name}...")
     perf, rs_scores, cloud_tickers = get_rs_data_cached(tuple(tickers), benchmark)
-    
     if rs_scores is not None:
-        top_n_scores = rs_scores.nlargest(int(top_n))
-        group_avg = top_n_scores.mean()
+        group_avg = rs_scores.nlargest(int(top_n)).mean()
         df_tickers = pd.DataFrame({"Ticker": rs_scores.index, "RS Score": rs_scores.values}).sort_values(by="RS Score", ascending=False)
-        all_data.append({
-            "Industry": industry_name, 
-            "Group RS": group_avg, 
-            "Tickers": df_tickers,
-            "Cloud Tickers": cloud_tickers
-        })
-    
+        all_data.append({"Industry": industry_name, "Group RS": group_avg, "Tickers": df_tickers, "Cloud": cloud_tickers})
     progress_bar.progress((idx + 1) / len(industry_items))
 
 status_text.empty()
 progress_bar.empty()
 
-# 6. Compact Display Logic
+# 5. Table Rendering with Dynamic CSS
 if all_data:
-    df_main = pd.DataFrame([{"Industry": item["Industry"], "Group RS": item["Group RS"]} for item in all_data])
-
-    sort_by = st.selectbox("Sort by", ["Group RS (High to Low)", "Industry (A-Z)"])
+    df_main = pd.DataFrame([{"Industry": i["Industry"], "Group RS": i["Group RS"]} for i in all_data])
+    sort_by = st.selectbox("Sort", ["Group RS (High to Low)", "Industry (A-Z)"])
     df_main = df_main.sort_values("Group RS" if "RS" in sort_by else "Industry", ascending=("A-Z" in sort_by))
 
-    st.markdown("""
+    st.markdown(f"""
     <style>
-    .ticker-badge { display: inline-block; margin: 1px 3px; padding: 1px 5px; border: 1px solid #444; border-radius: 3px; font-size: 11px; background-color: #1e1e1e; color: #eee; }
-    .cloud-badge { background-color: #2e4a3e; border: 1px solid #4ecdc4; color: #4ecdc4; font-weight: bold; }
-    .ticker-name { font-weight: bold; color: #ffffff; margin-right: 4px; }
-    .ticker-rs { color: #4ecdc4; }
-    table { width:100%; border-collapse: collapse; }
-    th { padding: 4px 8px; background-color: #1f77b4; color: white; font-size: 12px; }
-    td { padding: 4px 8px; border-bottom: 1px solid #333; font-size: 12px; }
+    .ticker-badge {{ 
+        display: inline-block; 
+        margin: 1px 3px; 
+        padding: 1px 5px; 
+        border: 1px solid {border_col}; 
+        border-radius: 3px; 
+        font-size: 11px; 
+        background-color: {badge_bg}; 
+        color: {badge_txt}; 
+    }}
+    .cloud-badge {{ 
+        background-color: #2e4a3e; 
+        border: 1px solid #4ecdc4; 
+        color: #4ecdc4; 
+        font-weight: bold; 
+    }}
+    table {{ 
+        width:100%; 
+        border-collapse: collapse; 
+        color: {text_main}; 
+        background-color: {bg_alt}; 
+    }}
+    th {{ 
+        padding: 6px 8px; 
+        background-color: #1f77b4; 
+        color: white; 
+        font-size: 12px; 
+        text-align: left; 
+    }}
+    td {{ 
+        padding: 4px 8px; 
+        border-bottom: 1px solid {border_col}; 
+        font-size: 12px; 
+    }}
     </style>
     """, unsafe_allow_html=True)
 
-    table_html = """<table>
-    <thead><tr>
-    <th style="text-align: left;">Industry</th>
-    <th style="text-align: center; width: 80px;">Group RS</th>
-    <th style="text-align: left;">Tickers (Ranked)</th>
-    <th style="text-align: left; width: 150px;">21 EMA Cloud</th>
-    </tr></thead><tbody>"""
-
+    table_html = f"<table><thead><tr><th>Industry</th><th style='width:80px;'>Group RS</th><th>Tickers (Ranked)</th><th style='width:150px;'>21 EMA Cloud</th></tr></thead><tbody>"
+    
     for i, row in df_main.iterrows():
         item = next(d for d in all_data if d["Industry"] == row["Industry"])
+        tick_html = "".join([f'<div class="ticker-badge"><b>{r["Ticker"]}</b> <span style="color:#4ecdc4">{r["RS Score"]:.1f}</span></div>' for _, r in item["Tickers"].iterrows()])
+        cld_html = "".join([f'<div class="ticker-badge cloud-badge">{t}</div>' for t in item["Cloud"]]) or '<span style="color:#666; font-size:10px;">-</span>'
         
-        # Rank Tickers HTML
-        ticker_html = "".join([f'<div class="ticker-badge"><span class="ticker-name">{r["Ticker"]}</span><span class="ticker-rs">{r["RS Score"]:.1f}</span></div>' for _, r in item["Tickers"].iterrows()])
-        
-        # Cloud Tickers HTML
-        cloud_html = "".join([f'<div class="ticker-badge cloud-badge">{t}</div>' for t in item["Cloud Tickers"]])
-        if not cloud_html: cloud_html = '<span style="color:#666; font-size: 10px;">None</span>'
-
-        bg_color = "#262730" if i % 2 == 0 else "#0e1117"
-        
-        # REORDERED CELLS: Tickers first, Cloud last
-        table_html += f"""<tr style="background-color: {bg_color};">
-        <td style="font-weight: bold;">{row['Industry']}</td>
-        <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.1f}</td>
-        <td>{ticker_html}</td>
-        <td>{cloud_html}</td>
-        </tr>"""
-
-    table_html += "</tbody></table>"
-    st.markdown(table_html, unsafe_allow_html=True)
+        row_bg = bg_main if i % 2 == 0 else bg_alt
+        table_html += f"<tr style='background-color: {row_bg};'><td><b>{row['Industry']}</b></td><td style='color:#4ecdc4; text-align:center;'><b>{row['Group RS']:.1f}</b></td><td>{tick_html}</td><td>{cld_html}</td></tr>"
+    
+    st.markdown(table_html + "</tbody></table>", unsafe_allow_html=True)
