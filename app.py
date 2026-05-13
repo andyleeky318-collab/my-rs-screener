@@ -4,13 +4,11 @@ import pandas as pd
 import numpy as np
 import time
 
-#testing
 # 1. Setup Streamlit Page
 st.set_page_config(page_title="Chrome Sector RS", layout="wide")
 st.title("🚀 Chrome Sector Relative Strength")
 
 # 2. Cleaned Industry Database
-# Removed tickers identified as delisted (NOVA, IPG, SPR, NEP, AY, SKX, FL, etc.)
 INDUSTRIES = {
     "Nuclear": ["URA", "NLR", "CEG", "CCJ", "OKLO", "UUUU", "SMR"],
     "MAG7": ["AAPL", "GOOGL", "NVDA", "META", "MSFT", "AMZN", "TSLA"],
@@ -99,7 +97,7 @@ INDUSTRIES = {
     "CMPTR SFTWR-FINCL": ["FICO", "FIS", "NU", "SHOP"],
     "CMP SFTWR-GAMING": ["EA", "TTWO", "RBLX"],
     "CMP SFTWR-DBASE": ["DDOG"],
-    "COMPTR SFTWR-DSKTP": ["ZM", "SNAP", "Z"],
+    "COMPTER SFTWR-DSKTP": ["ZM", "SNAP", "Z"],
     "CMPTR SFTWR-MDCL": ["APP", "HQY"],
     "INTERNET-CONTENT": ["GOOGL", "META", "NFLX", "SPOT", "PINS", "RDDT", "MMYT", "MTCH", "IAC", "YELP", "GRND"],
     "INTRNT-NETWK SLTNS": ["IT", "MSTR", "CSGP", "VRSN", "UPST", "BRZE", "CARG", "NET", "VLTO"],
@@ -175,61 +173,43 @@ with st.sidebar:
     lookback = st.slider("Lookback Period (Days)", 20, 250, 90)
     top_n = st.number_input("Top N for Group Avg", value=5, min_value=1)
     
-    # Refresh Button to clear cache
     if st.button("Clear Cache & Refresh"):
         st.cache_data.clear()
 
 # 4. Optimized Data Processing with Caching
-@st.cache_data(ttl=3600) # Cache data for 1 hour
+@st.cache_data(ttl=3600)
 def get_rs_data_cached(tickers_tuple, benchmark_ticker, period):
     tickers = list(tickers_tuple)
     try:
         all_tickers = tickers + [benchmark_ticker]
         data = yf.download(all_tickers, period="1y", interval="1d", progress=False)['Close']
-        
         valid_tickers = [t for t in tickers if t in data.columns and data[t].notna().sum() > 0]
         if not valid_tickers: return None, None
-        
         rs_series = data[valid_tickers].div(data[benchmark_ticker], axis=0)
-        
-        # Calculate RS Performance
         start_idx = -period if len(rs_series) >= period else 0
         rs_perf = ((rs_series.iloc[-1] / rs_series.iloc[start_idx]) - 1) * 100
         ranks = rs_perf.rank(pct=True) * 99
-        
         return rs_perf, ranks
     except Exception:
         return None, None
 
 # 5. UI Layout
-st.markdown("<h3 style='font-size: 16px; margin-bottom: 15px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
+st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
 
 all_data = []
 progress_bar = st.progress(0)
 status_text = st.empty()
 
-# Iterate through industries
 industry_items = list(INDUSTRIES.items())
 for idx, (industry_name, tickers) in enumerate(industry_items):
     status_text.text(f"Processing {industry_name}...")
-    
-    # yfinance works best when we pass a tuple for caching
     perf, rs_scores = get_rs_data_cached(tuple(tickers), benchmark, lookback)
     
     if rs_scores is not None:
         top_n_scores = rs_scores.nlargest(int(top_n))
         group_avg = top_n_scores.mean()
-        
-        df_tickers = pd.DataFrame({
-            "Ticker": rs_scores.index,
-            "RS Score": rs_scores.values
-        }).sort_values(by="RS Score", ascending=False)
-        
-        all_data.append({
-            "Industry": industry_name,
-            "Group RS": group_avg,
-            "Tickers": df_tickers
-        })
+        df_tickers = pd.DataFrame({"Ticker": rs_scores.index, "RS Score": rs_scores.values}).sort_values(by="RS Score", ascending=False)
+        all_data.append({"Industry": industry_name, "Group RS": group_avg, "Tickers": df_tickers})
     
     progress_bar.progress((idx + 1) / len(industry_items))
 
@@ -246,37 +226,50 @@ if all_data:
     with col2:
         sort_order = st.radio("Order", ["Descending", "Ascending"], horizontal=True)
 
-    # Sort data
     if "Industry" in sort_by:
         df_main = df_main.sort_values("Industry", ascending=(sort_order == "Ascending"))
     else:
         df_main = df_main.sort_values("Group RS", ascending=(sort_order == "Ascending"))
 
-    # HTML Table Construction (Same as your original logic, using df_main order)
+    # Compact CSS and Side-by-Side Ticker logic
     st.markdown("""
     <style>
-    .ticker-badge { display: inline-block; margin: 3px; padding: 5px 8px; border: 1px solid #555; border-radius: 4px; font-size: 11px; background-color: #1e1e1e; color: #eee; text-align: center; min-width: 50px; }
-    .ticker-name { font-weight: bold; display: block; color: #ffffff; }
-    .ticker-rs { font-size: 10px; color: #4ecdc4; }
+    .ticker-badge { 
+        display: inline-block; 
+        margin: 2px; 
+        padding: 2px 6px; 
+        border: 1px solid #444; 
+        border-radius: 3px; 
+        font-size: 11px; 
+        background-color: #1e1e1e; 
+        color: #eee; 
+        white-space: nowrap;
+    }
+    .ticker-name { font-weight: bold; color: #ffffff; margin-right: 4px; }
+    .ticker-rs { color: #4ecdc4; }
+    table { width:100%; border-collapse: collapse; }
+    th { padding: 6px !important; background-color: #1f77b4; color: white; font-size: 13px; }
+    td { padding: 4px 8px !important; border-bottom: 1px solid #333; font-size: 12px; }
     </style>
     """, unsafe_allow_html=True)
 
-    table_html = """<table style="width:100%; border-collapse: collapse; border: 1px solid #444;">
-    <thead><tr style="background-color: #1f77b4; color: white;">
-    <th style="padding: 10px; text-align: left;">Industry</th>
-    <th style="padding: 10px; text-align: center; width: 100px;">Group RS</th>
-    <th style="padding: 10px; text-align: left;">Tickers (Ranked)</th>
+    table_html = """<table>
+    <thead><tr>
+    <th style="text-align: left;">Industry</th>
+    <th style="text-align: center; width: 80px;">Group RS</th>
+    <th style="text-align: left;">Tickers (Ranked)</th>
     </tr></thead><tbody>"""
 
     for i, row in df_main.iterrows():
         item = next(d for d in all_data if d["Industry"] == row["Industry"])
+        # Side-by-side display: TICKER SCORE
         ticker_html = "".join([f'<div class="ticker-badge"><span class="ticker-name">{r["Ticker"]}</span><span class="ticker-rs">{r["RS Score"]:.1f}</span></div>' for _, r in item["Tickers"].iterrows()])
         
         bg_color = "#262730" if i % 2 == 0 else "#0e1117"
         table_html += f"""<tr style="background-color: {bg_color};">
-        <td style="padding: 10px; border-bottom: 1px solid #444; font-weight: bold;">{row['Industry']}</td>
-        <td style="padding: 10px; border-bottom: 1px solid #444; text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.2f}</td>
-        <td style="padding: 10px; border-bottom: 1px solid #444;">{ticker_html}</td></tr>"""
+        <td style="font-weight: bold;">{row['Industry']}</td>
+        <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.2f}</td>
+        <td>{ticker_html}</td></tr>"""
 
     table_html += "</tbody></table>"
     st.markdown(table_html, unsafe_allow_html=True)
