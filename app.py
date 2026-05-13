@@ -174,55 +174,62 @@ with st.sidebar:
     if st.button("Clear Cache & Refresh"):
         st.cache_data.clear()
 
-# 4. IMPLEMENTATION OF YOUR WEIGHTED RS METHOD
+# 4. UPDATED DATA FETCHING (Includes EMA logic)
 @st.cache_data(ttl=3600)
 def get_rs_data_cached(tickers_tuple, benchmark_ticker):
     tickers = list(tickers_tuple)
     try:
-        # Download 1y+ data to ensure we have at least 252 trading days
         all_tickers = tickers + [benchmark_ticker]
-        data = yf.download(all_tickers, period="2y", interval="1d", progress=False)['Close']
+        # Download High, Low, and Close for EMA Cloud calculation
+        data = yf.download(all_tickers, period="2y", interval="1d", progress=False)
         
-        valid_tickers = [t for t in tickers if t in data.columns and data[t].notna().sum() >= 252]
-        if not valid_tickers: return None, None
+        close_data = data['Close']
+        high_data = data['High']
+        low_data = data['Low']
 
-        # Lookback offsets based on your Pine Script
-        # n63 (3m), n126 (6m), n189 (9m), n252 (12m)
+        valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= 252]
+        if not valid_tickers: return None, None, []
+
+        # RS Calculation Logic
         offsets = [63, 126, 189, 252]
         weights = [0.4, 0.2, 0.2, 0.2]
 
         def calculate_weighted_score(series):
             score = 0
             for offset, weight in zip(offsets, weights):
-                # Price Performance: current / price_N_days_ago
                 perf = series.iloc[-1] / series.iloc[-offset]
                 score += (perf * weight)
             return score
 
-        # Calculate Benchmark Weighted Score (rs_ref in your script)
-        bench_weighted = calculate_weighted_score(data[benchmark_ticker])
+        bench_weighted = calculate_weighted_score(close_data[benchmark_ticker])
 
-        # Calculate Stock Weighted Scores (rs_stock in your script)
         stock_scores = {}
+        inside_cloud_tickers = []
+
         for ticker in valid_tickers:
-            stock_weighted = calculate_weighted_score(data[ticker])
-            # totalRsScore = (rs_stock) / (rs_ref) * 100
+            # RS Score
+            stock_weighted = calculate_weighted_score(close_data[ticker])
             total_score = (stock_weighted / bench_weighted) * 100
             stock_scores[ticker] = total_score
 
+            # 21 EMA Cloud Logic
+            # EMA of Highs and Lows
+            ema_high = high_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
+            ema_low = low_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
+            current_close = close_data[ticker].iloc[-1]
+
+            if ema_low <= current_close <= ema_high:
+                inside_cloud_tickers.append(ticker)
+
         rs_perf = pd.Series(stock_scores)
-        
-        # Percentile Rank (1-99) to match your "totalRsRating" logic
         ranks = rs_perf.rank(pct=True) * 99
         
-        return rs_perf, ranks
+        return rs_perf, ranks, inside_cloud_tickers
     except Exception as e:
         st.error(f"Error: {e}")
-        return None, None
+        return None, None, []
 
-# 5. UI Layout & Logic (Preserved Processing Industry and Progress Bar)
-st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
-
+# 5. UI Layout & Logic
 all_data = []
 progress_bar = st.progress(0)
 status_text = st.empty()
@@ -230,13 +237,18 @@ status_text = st.empty()
 industry_items = list(INDUSTRIES.items())
 for idx, (industry_name, tickers) in enumerate(industry_items):
     status_text.text(f"Processing {industry_name}...")
-    perf, rs_scores = get_rs_data_cached(tuple(tickers), benchmark)
+    perf, rs_scores, cloud_tickers = get_rs_data_cached(tuple(tickers), benchmark)
     
     if rs_scores is not None:
         top_n_scores = rs_scores.nlargest(int(top_n))
         group_avg = top_n_scores.mean()
         df_tickers = pd.DataFrame({"Ticker": rs_scores.index, "RS Score": rs_scores.values}).sort_values(by="RS Score", ascending=False)
-        all_data.append({"Industry": industry_name, "Group RS": group_avg, "Tickers": df_tickers})
+        all_data.append({
+            "Industry": industry_name, 
+            "Group RS": group_avg, 
+            "Tickers": df_tickers,
+            "Cloud Tickers": cloud_tickers
+        })
     
     progress_bar.progress((idx + 1) / len(industry_items))
 
@@ -247,55 +259,44 @@ progress_bar.empty()
 if all_data:
     df_main = pd.DataFrame([{"Industry": item["Industry"], "Group RS": item["Group RS"]} for item in all_data])
 
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        sort_by = st.selectbox("Sort by", ["Group RS (High to Low)", "Industry (A-Z)", "Group RS (Low to High)"])
-    with col2:
-        sort_order = st.radio("Order", ["Descending", "Ascending"], horizontal=True)
+    sort_by = st.selectbox("Sort by", ["Group RS (High to Low)", "Industry (A-Z)"])
+    df_main = df_main.sort_values("Group RS" if "RS" in sort_by else "Industry", ascending=("A-Z" in sort_by))
 
-    if "Industry" in sort_by:
-        df_main = df_main.sort_values("Industry", ascending=(sort_order == "Ascending"))
-    else:
-        df_main = df_main.sort_values("Group RS", ascending=(sort_order == "Ascending"))
-
-    # Updated CSS for Side-by-Side Ticker Display and Thinner Rows
     st.markdown("""
     <style>
-    .ticker-badge { 
-        display: inline-block; 
-        margin: 1px 3px; 
-        padding: 1px 5px; 
-        border: 1px solid #444; 
-        border-radius: 3px; 
-        font-size: 11px; 
-        background-color: #1e1e1e; 
-        color: #eee; 
-        white-space: nowrap;
-    }
+    .ticker-badge { display: inline-block; margin: 1px 3px; padding: 1px 5px; border: 1px solid #444; border-radius: 3px; font-size: 11px; background-color: #1e1e1e; color: #eee; }
+    .cloud-badge { background-color: #2e4a3e; border: 1px solid #4ecdc4; color: #4ecdc4; font-weight: bold; }
     .ticker-name { font-weight: bold; color: #ffffff; margin-right: 4px; }
-    .ticker-rs { color: #4ecdc4; font-weight: normal; }
+    .ticker-rs { color: #4ecdc4; }
     table { width:100%; border-collapse: collapse; }
-    th { padding: 4px 8px !important; background-color: #1f77b4; color: white; font-size: 12px; }
-    td { padding: 2px 8px !important; border-bottom: 1px solid #333; font-size: 12px; }
+    th { padding: 4px 8px; background-color: #1f77b4; color: white; font-size: 12px; }
+    td { padding: 4px 8px; border-bottom: 1px solid #333; font-size: 12px; }
     </style>
     """, unsafe_allow_html=True)
 
     table_html = """<table>
     <thead><tr>
-    <th style="text-align: left;">Industry</th>
-    <th style="text-align: center; width: 80px;">Group RS</th>
-    <th style="text-align: left;">Tickers (Ranked)</th>
+    <th>Industry</th>
+    <th>Group RS</th>
+    <th>21 EMA Cloud</th>
+    <th>Tickers (Ranked)</th>
     </tr></thead><tbody>"""
 
     for i, row in df_main.iterrows():
         item = next(d for d in all_data if d["Industry"] == row["Industry"])
-        # Side-by-side display logic: "TICKER 87.0"
+        
+        # Format the RS Tickers
         ticker_html = "".join([f'<div class="ticker-badge"><span class="ticker-name">{r["Ticker"]}</span><span class="ticker-rs">{r["RS Score"]:.1f}</span></div>' for _, r in item["Tickers"].iterrows()])
         
+        # Format the Cloud Tickers
+        cloud_html = "".join([f'<div class="ticker-badge cloud-badge">{t}</div>' for t in item["Cloud Tickers"]])
+        if not cloud_html: cloud_html = '<span style="color:#666;">-</span>'
+
         bg_color = "#262730" if i % 2 == 0 else "#0e1117"
         table_html += f"""<tr style="background-color: {bg_color};">
         <td style="font-weight: bold;">{row['Industry']}</td>
-        <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.2f}</td>
+        <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.1f}</td>
+        <td>{cloud_html}</td>
         <td>{ticker_html}</td></tr>"""
 
     table_html += "</tbody></table>"
