@@ -276,28 +276,31 @@ if all_data:
 
     table_html = """<table>
     <thead><tr>
-    <th>Industry</th>
-    <th>Group RS</th>
-    <th>21 EMA Cloud</th>
-    <th>Tickers (Ranked)</th>
+    <th style="text-align: left;">Industry</th>
+    <th style="text-align: center; width: 80px;">Group RS</th>
+    <th style="text-align: left;">Tickers (Ranked)</th>
+    <th style="text-align: left; width: 150px;">21 EMA Cloud</th>
     </tr></thead><tbody>"""
 
     for i, row in df_main.iterrows():
         item = next(d for d in all_data if d["Industry"] == row["Industry"])
         
-        # Format the RS Tickers
+        # Rank Tickers HTML
         ticker_html = "".join([f'<div class="ticker-badge"><span class="ticker-name">{r["Ticker"]}</span><span class="ticker-rs">{r["RS Score"]:.1f}</span></div>' for _, r in item["Tickers"].iterrows()])
         
-        # Format the Cloud Tickers
+        # Cloud Tickers HTML
         cloud_html = "".join([f'<div class="ticker-badge cloud-badge">{t}</div>' for t in item["Cloud Tickers"]])
-        if not cloud_html: cloud_html = '<span style="color:#666;">-</span>'
+        if not cloud_html: cloud_html = '<span style="color:#666; font-size: 10px;">None</span>'
 
         bg_color = "#262730" if i % 2 == 0 else "#0e1117"
+        
+        # REORDERED CELLS: Tickers first, Cloud last
         table_html += f"""<tr style="background-color: {bg_color};">
         <td style="font-weight: bold;">{row['Industry']}</td>
         <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.1f}</td>
+        <td>{ticker_html}</td>
         <td>{cloud_html}</td>
-        <td>{ticker_html}</td></tr>"""
+        </tr>"""
 
     table_html += "</tbody></table>"
     st.markdown(table_html, unsafe_allow_html=True)
