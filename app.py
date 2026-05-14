@@ -166,6 +166,38 @@ INDUSTRIES = {
     "ELEC-SEMICON MFG": ["TSM", "TXN", "INTC", "GFS", "AMKR", "TSEM", "FORM"]
 }
 
+# Cleaned Known Stocks Database (Stripped invalid commas/chars)
+KNOWN_STOCKS = [
+    "VICR", "SLX", "CBOE", "SIMO", "FLEX", "POWL", "VLO", "DOCN", "IYZ", "LNG", "AAOI", "AXTI", "TSEM", "USO", "JNJ", 
+    "HP", "GLD", "ALB", "BUG", "BX", "DOW", "VZ", "REMX", "GDX", "SIL", "VEEV", "SNDK", "TLT", "APH", "ARM", "FANG", 
+    "NBIS", "NVT", "OXY", "FORM", "IBIT", "QTUM", "IAI", "KWEB", "IHI", "UFO", "ITA", "IYT", "CVS", "HUM", "NEE", "HPE", 
+    "PLAB", "INOD", "TTMI", "CCJ", "BE", "SLV", "PICK", "COPX", "MAR", "XAR", "VSCO", "GLW", "ANF", "AEO", "AEP", 
+    "GH", "SANM", "ROK", "PSN", "IAT", "HROW", "PL", "AVAV", "CIEN", "COHR", "NU", "WULF", "IREN", "CIFR", "RDW", 
+    "PH", "LITE", "ACHR", "CACI", "CRS", "URA", "NVO", "NLR", "ITB", "MVST", "EOSE", "APP", "RKLB", "ASTS", "IONQ", 
+    "RMBS", "RTX", "NOC", "LMT", "HON", "ONDS", "CLS", "LEU", "VRT", "VST", "NRG", "CEG", "SMCI", "CRDO", "SOFI", 
+    "XLP", "XLE", "HIMS", "HOOD", "GEV", "XLV", "HACK", "XOP", "CIBR", "ICLN", "XLB", "XLU", "XLRE", "IGV", "XLF", 
+    "IPAY", "XLC", "XLI", "KRE", "XLK", "CLOU", "KBE", "XME", "FIVG", "XTL", "JETS", "SMH", "XLY", "XHB", "BLOK", 
+    "XBI", "XRT", "MJ", "META", "MSFT", "AAPL", "AMZN", "GOOGL", "NVDA", "TSLA", "ARKX", "ARKQ", "ARKF", "ARKW", 
+    "ARKK", "ARKG", "CCL", "RCL", "UAL", "BA", "DAL", "NCLH", "AAL", "LUV", "SAVE", "PINS", "SNAP", "TWTR", "IBKR", 
+    "SCHW", "JPM", "MS", "GS", "BAC", "WFC", "SPGI", "BLK", "NDAQ", "C", "LI", "BIDU", "NIO", "XPEV", "TCEHY", "BABA", 
+    "PDD", "JD", "DQ", "JKS", "ENPH", "FSLR", "TAN", "SEDG", "CSIQ", "SPWR", "RUN", "PBW", "CLX", "PG", "EL", "RMS", 
+    "LVMH", "LULU", "SBUX", "NKE", "KER", "MELI", "EBAY", "FDX", "UPS", "SE", "JMIA", "ETSY", "SHOP", "Z", "OPEN", 
+    "CHWY", "BIGC", "CVNA", "BARK", "GM", "BLNK", "QS", "F", "RIVN", "FCEL", "CHPT", "LCID", "LAZR", "VLDR", "UPST", 
+    "PYPL", "AFRM", "V", "MA", "AXP", "SQ", "BITO", "COIN", "RIOT", "CAN", "MARA", "MSTR", "SI", "DKNG", "PENN", 
+    "BETZ", "REGN", "VRTX", "MRK", "UNH", "TMO", "ISRG", "ABT", "NARI", "IDXX", "TDOC", "CRSP", "BRK.B", "ETN", 
+    "CAT", "BLD", "U", "RBLX", "SKLZ", "FSLY", "TRIP", "EXPE", "BKNG", "ABNB", "DIS", "WMT", "COST", "TGT", "LOW", 
+    "HD", "DT", "SNPS", "CDNS", "MDB", "ORCL", "NOW", "ADP", "SNOW", "ANSS", "DDOG", "FROG", "ADSK", "INTU", "TEAM", "WDAY", 
+    "CRM", "PAYC", "ANET", "ADBE", "ACN", "EPAM", "ZM", "TTD", "TWLO", "DASH", "APPS", "DOCU", "AI", "COUP", "AKAM", 
+    "CYBR", "QLYS", "PANW", "FTNT", "CRWD", "TENB", "OKTA", "ZS", "NET", "S", "UMC", "ASML", "KEYS", "CRUS", "AMD", 
+    "AVGO", "MU", "KLAC", "TXN", "QRVO", "TSM", "SWKS", "AMBA", "STM", "MCHP", "ON", "QCOM", "SOXX", "MRVL", "ADI", 
+    "LRCX", "AMAT", "WDC", "NXPI", "TER", "MPWR", "INTC", "GFS", "WOLF", "STX", "A", "ZBRA", "ENTG", "ONTO", "TRMB", 
+    "BNTX", "PFE", "MRNA", "NVAX", "FCX", "CF", "DRI", "PEP", "XOM", "LLY", "CL", "MCD", "KO", "GE", "CVX", "FISV", 
+    "DE", "WM", "HLT", "FUTU", "UBER", "TIGR", "EQIX", "DPZ", "CSCO", "COKE", "SONY", "FDS", "MCO", "GRAB", "PTON", 
+    "AMT", "LIT", "CMG", "IPO", "PSTG", "INMD", "NNDM", "MP", "FUBO", "SPOT", "ALGN", "PZZA", "LOVE", "LMND", "POOL", 
+    "DADA", "PLTR", "ROKU", "CELH", "AZPN", "NFLX", "DHI", "DELL", "GOOG"
+]
+KNOWN_STOCKS = sorted(list(set(KNOWN_STOCKS))) # Remove duplicates
+
 # 3. Sidebar Inputs
 with st.sidebar:
     st.header("Settings")
@@ -212,7 +244,6 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker):
             stock_scores[ticker] = total_score
 
             # EMA Cloud Calculation (21 EMA of High/Low)
-            # ta.ema equivalent: ewm(span=21, adjust=False)
             ema_low = low_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
             ema_high = high_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
             current_price = close_data[ticker].iloc[-1]
@@ -227,6 +258,144 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker):
     except Exception as e:
         st.error(f"Error: {e}")
         return None, None, None
+
+
+# --- NEW CUSTOM STRATEGY SCANNING FUNCTIONS ---
+def scan_two_botak(df):
+    if len(df) < 2: return False
+    botak = (abs(df['Close'] - df['High']) < 0.01) & (df['Close'] > df['Open'])
+    percentile = (df['Close'] > df['Open']) & (((df['Close'] - df['Open']) / (df['High'] - df['Open'])) > 0.9)
+    twoBotak = (
+        (botak & botak.shift(1)) |
+        (botak & percentile.shift(1)) |
+        (percentile & botak.shift(1)) |
+        (percentile & percentile.shift(1))
+    )
+    return bool(twoBotak.iloc[-1])
+
+def scan_engulfing(df):
+    if len(df) < 31: return False, False
+    bullish_engulfing = (df['Open'] < df['Low'].shift(1)) & (df['Close'] > df['High'].shift(1))
+    engulf_count_series = bullish_engulfing.rolling(window=30).sum()
+    engulf_closes = df.loc[bullish_engulfing, 'Close']
+    prior_engulfs = 'Close' in df.columns and engulf_closes[engulf_closes.index < df.index[-1]] or pd.Series(dtype=float)
+    
+    eng1 = prior_engulfs.iloc[-1] if len(prior_engulfs) >= 1 else 0
+    eng2 = prior_engulfs.iloc[-2] if len(prior_engulfs) >= 2 else 0
+    eng3 = prior_engulfs.iloc[-3] if len(prior_engulfs) >= 3 else 0
+
+    current_close = df['Close'].iloc[-1]
+    current_count = engulf_count_series.iloc[-1]
+
+    two_engulf = (current_count >= 2) and (current_close > 20) and (current_close > eng1) and (current_close > eng2)
+    three_engulf = (current_count >= 3) and (current_close > 20) and (current_close > eng1) and (current_close > eng2) and (current_close > eng3)
+    return bool(two_engulf), bool(three_engulf)
+
+def scan_powertrend(df):
+    if len(df) < 51: return False
+    powerma = df['Close'].ewm(span=50, adjust=False).mean()
+    gradient = powerma - powerma.shift(1)
+    gradientPct = ((powerma - powerma.shift(1)) / powerma.shift(1)) * 100
+    absGradient = abs(gradientPct)
+    powertrend = (gradient > 0) & (absGradient >= 1) & (df['Close'] >= 20)
+    return bool(powertrend.iloc[-1])
+
+def scan_powertrend_not_extended(df):
+    if len(df) < 51: return False
+    powerma = df['Close'].ewm(span=50, adjust=False).mean()
+    gradient = powerma - powerma.shift(1)
+    gradientPct = ((powerma - powerma.shift(1)) / powerma.shift(1)) * 100
+    absGradient = abs(gradientPct)
+    powertrend = (gradient > 0) & (absGradient >= 1) & (df['Close'] >= 20)
+
+    high_low = df['High'] - df['Low']
+    high_close = abs(df['High'] - df['Close'].shift(1))
+    low_close = abs(df['Low'] - df['Close'].shift(1))
+    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    absATR = tr.rolling(14).mean()
+    atrPercent = (absATR / df['Close']) * 100
+
+    sma50 = df['Close'].rolling(50).mean()
+    percentGainFromMA = ((df['Close'] - sma50) / sma50) * 100
+    atrMultiple2 = percentGainFromMA / atrPercent
+    atrMultiple = (atrMultiple2 * 10).astype(int) / 10
+
+    result = powertrend & (atrMultiple <= 4)
+    return bool(result.iloc[-1])
+
+def scan_ppp(df):
+    if len(df) < 201: return False
+    high_low = df['High'] - df['Low']
+    high_close = abs(df['High'] - df['Close'].shift(1))
+    low_close = abs(df['Low'] - df['Close'].shift(1))
+    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    myAtr = tr.rolling(14).mean()
+    myAtr3 = myAtr / df['Close'] * 100
+    dynamicSensitivity = myAtr3 * 0.2
+
+    day0 = (df['Open'] + df['Close']) / 2
+    day1 = day0.shift(1)
+    day2 = day0.shift(2)
+    day3 = day0.shift(3)
+    day4 = day0.shift(4)
+
+    diff0 = abs((day0 - day1) / day1 * 100)
+    diff1 = abs((day1 - day2) / day2 * 100)
+
+    MALow = df['Low'].ewm(span=21, adjust=False).mean()
+    sma50 = df['Close'].rolling(50).mean()
+    sma200 = df['Close'].rolling(200).mean()
+
+    ma21_and_ma50_or_ma200 = ((df['Close'] >= sma200) | ((df['Close'] >= MALow) & (df['Close'] >= sma50))) & (df['Close'] >= 20)
+    ppp = (diff0 < dynamicSensitivity) & (diff1 < dynamicSensitivity) & ma21_and_ma50_or_ma200
+    return bool(ppp.iloc[-1])
+
+@st.cache_data(ttl=3600)
+def process_known_stocks_cached(stock_list):
+    try:
+        # Download all known stock historical data at once
+        raw_data = yf.download(stock_list, period="2y", interval="1d", progress=False)
+        matched_results = []
+        
+        for ticker in stock_list:
+            try:
+                # Extract individual symbol data frame
+                df = pd.DataFrame({
+                    'Open': raw_data['Open'][ticker],
+                    'High': raw_data['High'][ticker],
+                    'Low': raw_data['Low'][ticker],
+                    'Close': raw_data['Close'][ticker]
+                }).dropna()
+                
+                if len(df) < 201: continue
+                
+                # Check Strategy Matches
+                is_two_botak = scan_two_botak(df)
+                is_two_eng, is_three_eng = scan_engulfing(df)
+                is_powertrend = scan_powertrend(df)
+                is_pt_not_ext = scan_powertrend_not_extended(df)
+                is_ppp = scan_ppp(df)
+                
+                if any([is_two_botak, is_two_eng, is_three_eng, is_powertrend, is_pt_not_ext, is_ppp]):
+                    signals = []
+                    if is_two_botak: signals.append("Two Botak")
+                    if is_three_eng: signals.append("3 Bullish Engulfing")
+                    elif is_two_eng: signals.append("2 Bullish Engulfing")
+                    if is_pt_not_ext: signals.append("Power Trend (Not Ext)")
+                    elif is_powertrend: signals.append("Power Trend")
+                    if is_ppp: signals.append("PPP")
+                    
+                    matched_results.append({
+                        "Ticker": ticker,
+                        "Price": f"${df['Close'].iloc[-1]:.2f}",
+                        "Signals": signals
+                    })
+            except:
+                continue
+        return matched_results
+    except Exception as e:
+        return []
+
 
 # 5. UI Layout & Logic
 st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
@@ -288,37 +457,39 @@ if all_data:
         background-color: #2e4a3e;
         border: 1px solid #4ecdc4;
     }
+    .signal-badge {
+        display: inline-block;
+        margin: 1px 3px;
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: bold;
+        background-color: #3b5998;
+        color: #fff;
+    }
     .ticker-name { font-weight: bold; color: #ffffff; margin-right: 4px; }
     .ticker-rs { color: #4ecdc4; font-weight: normal; }
-    table { width:100%; border-collapse: collapse; }
+    table { width:100%; border-collapse: collapse; margin-bottom: 25px; }
     th { padding: 4px 8px !important; background-color: #1f77b4; color: white; font-size: 12px; }
     td { padding: 2px 8px !important; border-bottom: 1px solid #333; font-size: 12px; }
     </style>
     """, unsafe_allow_html=True)
 
-    # ADDED: Added a 'th' column header for the row number
     table_html = """<table>
     <thead><tr>
-    <th style="text-align: center; width: 40px;">#</th>
     <th style="text-align: left;">Industry</th>
     <th style="text-align: center; width: 80px;">Group RS</th>
     <th style="text-align: left;">Tickers (Ranked)</th>
     <th style="text-align: left; width: 150px;">Within 21 EMA Cloud</th>
     </tr></thead><tbody>"""
 
-    # MODIFIED: Used enumerate() to track the row counter (starting from 1)
-    for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
+    for i, row in df_main.iterrows():
         item = next(d for d in all_data if d["Industry"] == row["Industry"])
         ticker_html = "".join([f'<div class="ticker-badge"><span class="ticker-name">{r["Ticker"]}</span><span class="ticker-rs">{r["RS Score"]:.1f}</span></div>' for _, r in item["Tickers"].iterrows()])
-        
-        # Cloud Column Logic
         cloud_html = "".join([f'<div class="ticker-badge cloud-badge">{c}</div>' for c in item["Cloud"]])
         
-        bg_color = "#262730" if row_num % 2 == 0 else "#0e1117"
-        
-        # MODIFIED: Inserted the row_num cell into the HTML row string
+        bg_color = "#262730" if i % 2 == 0 else "#0e1117"
         table_html += f"""<tr style="background-color: {bg_color};">
-        <td style="text-align: center; color: #888; font-weight: bold;">{row_num}</td>
         <td style="font-weight: bold;">{row['Industry']}</td>
         <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.2f}</td>
         <td>{ticker_html}</td>
@@ -326,3 +497,37 @@ if all_data:
 
     table_html += "</tbody></table>"
     st.markdown(table_html, unsafe_allow_html=True)
+
+    # -----------------------------------------------------------------
+    # 7. ADDED: SECONDARY ISOLATED TABLE FOR STRATEGY ALERTS (KNOWN STOCKS)
+    # -----------------------------------------------------------------
+    st.write("---")
+    st.markdown("<h3 style='font-size: 16px; margin-top: 15px; margin-bottom: 10px;'>🎯 Technical Strategy Trigger Alerts (Known Stocks)</h3>", unsafe_allow_html=True)
+    
+    with st.spinner("Scanning Known Stocks for Strategy Patterns..."):
+        matched_stocks = process_known_stocks_cached(tuple(KNOWN_STOCKS))
+        
+    if matched_stocks:
+        strategy_table_html = """<table>
+        <thead><tr>
+        <th style="text-align: center; width: 50px;">#</th>
+        <th style="text-align: left; width: 120px;">Ticker</th>
+        <th style="text-align: left; width: 120px;">Current Price</th>
+        <th style="text-align: left;">Active Signals Met</th>
+        </tr></thead><tbody>"""
+        
+        for idx, item in enumerate(matched_stocks, start=1):
+            bg_color = "#262730" if idx % 2 == 0 else "#0e1117"
+            signal_badges = "".join([f'<div class="signal-badge">{sig}</div>' for sig in item["Signals"]])
+            
+            strategy_table_html += f"""<tr style="background-color: {bg_color};">
+            <td style="text-align: center; color: #888; font-weight: bold;">{idx}</td>
+            <td style="font-weight: bold; color: #fff; font-size: 13px;">{item['Ticker']}</td>
+            <td style="color: #4ecdc4; font-weight: bold;">{item['Price']}</td>
+            <td>{signal_badges}</td>
+            </tr>"""
+            
+        strategy_table_html += "</tbody></table>"
+        st.markdown(strategy_table_html, unsafe_allow_html=True)
+    else:
+        st.info("No stocks from the Known Stocks list currently meet any technical scan pattern requirements today.")
