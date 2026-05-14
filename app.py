@@ -9,7 +9,7 @@ st.title("🚀 Chrome Sector Relative Strength")
 
 # 2. Cleaned Industry Database (Preserved as requested)
 INDUSTRIES = {
-    "Crypto": ["MSRT", "CRCL", "COIN", "IBIT"],
+    "Crypto": ["MSTR", "CRCL", "COIN", "IBIT"],
     "Nuclear": ["URA", "NLR", "CEG", "CCJ", "OKLO", "UUUU", "SMR"],
     "MAG7": ["AAPL", "GOOGL", "NVDA", "META", "MSFT", "AMZN", "TSLA"],
     "ETF": ["XLK", "XLF", "XLE", "XLP", "XLU", "XLI", "XLY", "XLV", "XLC", "XLB"],
