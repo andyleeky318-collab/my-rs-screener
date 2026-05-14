@@ -295,23 +295,29 @@ if all_data:
     </style>
     """, unsafe_allow_html=True)
 
+    # ADDED: Added a 'th' column header for the row number
     table_html = """<table>
     <thead><tr>
+    <th style="text-align: center; width: 40px;">#</th>
     <th style="text-align: left;">Industry</th>
     <th style="text-align: center; width: 80px;">Group RS</th>
     <th style="text-align: left;">Tickers (Ranked)</th>
     <th style="text-align: left; width: 150px;">Within 21 EMA Cloud</th>
     </tr></thead><tbody>"""
 
-    for i, row in df_main.iterrows():
+    # MODIFIED: Used enumerate() to track the row counter (starting from 1)
+    for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
         item = next(d for d in all_data if d["Industry"] == row["Industry"])
         ticker_html = "".join([f'<div class="ticker-badge"><span class="ticker-name">{r["Ticker"]}</span><span class="ticker-rs">{r["RS Score"]:.1f}</span></div>' for _, r in item["Tickers"].iterrows()])
         
         # Cloud Column Logic
         cloud_html = "".join([f'<div class="ticker-badge cloud-badge">{c}</div>' for c in item["Cloud"]])
         
-        bg_color = "#262730" if i % 2 == 0 else "#0e1117"
+        bg_color = "#262730" if row_num % 2 == 0 else "#0e1117"
+        
+        # MODIFIED: Inserted the row_num cell into the HTML row string
         table_html += f"""<tr style="background-color: {bg_color};">
+        <td style="text-align: center; color: #888; font-weight: bold;">{row_num}</td>
         <td style="font-weight: bold;">{row['Industry']}</td>
         <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.2f}</td>
         <td>{ticker_html}</td>
