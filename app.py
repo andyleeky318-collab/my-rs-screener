@@ -429,6 +429,15 @@ def process_pattern_scanners(stocks_list):
                 if scan_ppp(ticker_df): ppp_matches.append(ticker)
             except:
                 continue
+                
+        # Minor Change: Alphabetical ascending sort applied to all results
+        botak_matches.sort()
+        engulf2_matches.sort()
+        engulf3_matches.sort()
+        powertrend_matches.sort()
+        powertrend_ne_matches.sort()
+        ppp_matches.sort()
+        
         return botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, ppp_matches
     except:
         return [], [], [], [], [], []
