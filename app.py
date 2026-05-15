@@ -199,7 +199,7 @@ KNOWN_STOCKS = [
     'PEP', 'XOM', 'LLY', 'CL', 'MCD', 'KO', 'ATVI', 'GE', 'CVX', 'FISV', 'DE', 'WM', 'HLT', 'FUTU', 'UBER', 
     'TIGR', 'EQIX', 'DPZ', 'CSCO', 'COKE', 'SONY', 'FDS', 'MCO', 'GRAB', 'PTON', 'AMT', 'LIT', 'CMG', 'IPO', 
     'PSTG', 'INMD', 'NNDM', 'MP', 'FUBO', 'SPOT', 'ALGN', 'PZZA', 'LOVE', 'LMND', 'POOL', 'DADA', 'PLTR', 'ROKU', 
-    'CELH', 'BTWN', 'AZPN', 'NFLX', 'DHI', 'DELL', 'GOOG', 'ANF', 'SHLD'
+    'CELH', 'BTWN', 'AZPN', 'NFLX', 'DHI', 'DELL', 'GOOG'
 ]
 # Ensure uniqueness
 KNOWN_STOCKS = list(set(KNOWN_STOCKS))
