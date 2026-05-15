@@ -262,9 +262,9 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker):
         return None, None, None
 
 # Reference Scanner Logic Functions
-def scan_two_botak(df):
-    if len(df) < 2: return False
-    # Adjusted check to look for high precision data setups across yfinance values
+def scan_two_botak(df, lookback=0):
+    idx = -1 - lookback
+    if len(df) < abs(idx) + 1: return False
     botak = (
         (abs(df['Close'] - df['High']) < 0.05) & 
         (df['Close'] > df['Open'])
@@ -279,24 +279,30 @@ def scan_two_botak(df):
         (percentile & botak.shift(1)) |
         (percentile & percentile.shift(1))
     )
-    return bool(twoBotak.iloc[-1])
+    return bool(twoBotak.iloc[idx])
 
-def scan_engulfing(df):
-    if len(df) < 30: return False, False
+def scan_engulfing(df, lookback=0):
+    idx = -1 - lookback
+    if len(df) < 30 + lookback: return False, False
     bullish_engulfing = (
         (df['Open'] < df['Low'].shift(1)) &
         (df['Close'] > df['High'].shift(1))
     )
     engulf_count_series = bullish_engulfing.rolling(window=30).sum()
-    engulf_closes = df.loc[bullish_engulfing, 'Close']
-    prior_engulfs = engulf_closes[engulf_closes.index < df.index[-1]]
+    
+    # Logic for historical comparison
+    df_temp = df.iloc[:len(df)-lookback] if lookback > 0 else df
+    current_idx = df_temp.index[-1]
+    
+    engulf_closes = df_temp.loc[bullish_engulfing, 'Close']
+    prior_engulfs = engulf_closes[engulf_closes.index < current_idx]
 
     eng1 = prior_engulfs.iloc[-1] if len(prior_engulfs) >= 1 else 0
     eng2 = prior_engulfs.iloc[-2] if len(prior_engulfs) >= 2 else 0
     eng3 = prior_engulfs.iloc[-3] if len(prior_engulfs) >= 3 else 0
 
-    current_close = df['Close'].iloc[-1]
-    current_count = engulf_count_series.iloc[-1]
+    current_close = df_temp['Close'].iloc[-1]
+    current_count = engulf_count_series.iloc[idx]
 
     two_engulf = (
         (current_count >= 2) and
@@ -313,21 +319,23 @@ def scan_engulfing(df):
     )
     return bool(two_engulf), bool(three_engulf)
 
-def scan_powertrend(df):
-    if len(df) < 52: return False
+def scan_powertrend(df, lookback=0):
+    idx = -1 - lookback
+    if len(df) < 52 + lookback: return False
     powerma = df['Close'].ewm(span=50, adjust=False).mean()
     gradient = powerma - powerma.shift(1)
     gradientPct = ((powerma - powerma.shift(1)) / powerma.shift(1)) * 100
     absGradient = abs(gradientPct)
     powertrend = (
         (gradient > 0) &
-        (absGradient >= 0.1) & # Slightly optimized boundary condition to avoid rigid flat periods
+        (absGradient >= 0.1) & 
         (df['Close'] >= 20)
     )
-    return bool(powertrend.iloc[-1])
+    return bool(powertrend.iloc[idx])
 
-def scan_powertrend_not_extended(df):
-    if len(df) < 52: return False
+def scan_powertrend_not_extended(df, lookback=0):
+    idx = -1 - lookback
+    if len(df) < 52 + lookback: return False
     powerma = df['Close'].ewm(span=50, adjust=False).mean()
     gradient = powerma - powerma.shift(1)
     gradientPct = ((powerma - powerma.shift(1)) / powerma.shift(1)) * 100
@@ -351,10 +359,11 @@ def scan_powertrend_not_extended(df):
     atrMultiple = (atrMultiple2 * 10).fillna(0).astype(int) / 10
 
     result = (powertrend & (atrMultiple <= 4))
-    return bool(result.iloc[-1])
+    return bool(result.iloc[idx])
 
-def scan_ppp(df):
-    if len(df) < 200: return False
+def scan_ppp(df, lookback=0):
+    idx = -1 - lookback
+    if len(df) < 200 + lookback: return False
     high_low = df['High'] - df['Low']
     high_close = abs(df['High'] - df['Close'].shift(1))
     low_close = abs(df['Low'] - df['Close'].shift(1))
@@ -366,13 +375,10 @@ def scan_ppp(df):
     day0 = (df['Open'] + df['Close']) / 2
     day1 = day0.shift(1)
     day2 = day0.shift(2)
-    day3 = day0.shift(3)
-    day4 = day0.shift(4)
 
     diff0 = abs((day0 - day1) / day1.replace(0, 0.001) * 100)
     diff1 = abs((day1 - day2) / day2.replace(0, 0.001) * 100)
 
-    MALow = df['Low'].ewm(span=21, adjust=False).mean()
     sma50 = df['Close'].rolling(50).mean()
     sma200 = df['Close'].rolling(200).mean()
 
@@ -388,12 +394,14 @@ def scan_ppp(df):
         (diff1 < dynamicSensitivity) &
         ma21_and_ma50_or_ma200
     )
-    return bool(ppp.iloc[-1])
+    return bool(ppp.iloc[idx])
 
 @st.cache_data(ttl=3600)
 def process_pattern_scanners(stocks_list):
     try:
         raw_data = yf.download(stocks_list, period="1y", interval="1d", progress=False)
+        
+        # Today's Matches
         botak_matches = []
         engulf2_matches = []
         engulf3_matches = []
@@ -401,9 +409,16 @@ def process_pattern_scanners(stocks_list):
         powertrend_ne_matches = []
         ppp_matches = []
         
+        # Yesterday's Matches (for color logic)
+        botak_yest = []
+        engulf2_yest = []
+        engulf3_yest = []
+        powertrend_yest = []
+        powertrend_ne_yest = []
+        ppp_yest = []
+        
         for ticker in stocks_list:
             try:
-                # Extract single ticker dataframe safely from multi-index or single index format
                 if len(stocks_list) > 1:
                     ticker_df = pd.DataFrame({
                         'Open': raw_data['Open'][ticker],
@@ -417,19 +432,27 @@ def process_pattern_scanners(stocks_list):
                 if ticker_df.empty or len(ticker_df) < 50:
                     continue
                 
-                if scan_two_botak(ticker_df): botak_matches.append(ticker)
-                
-                e2, e3 = scan_engulfing(ticker_df)
+                # Scan Today
+                if scan_two_botak(ticker_df, 0): botak_matches.append(ticker)
+                e2, e3 = scan_engulfing(ticker_df, 0)
                 if e2: engulf2_matches.append(ticker)
                 if e3: engulf3_matches.append(ticker)
-                
-                if scan_powertrend(ticker_df): powertrend_matches.append(ticker)
-                if scan_powertrend_not_extended(ticker_df): powertrend_ne_matches.append(ticker)
-                if scan_ppp(ticker_df): ppp_matches.append(ticker)
+                if scan_powertrend(ticker_df, 0): powertrend_matches.append(ticker)
+                if scan_powertrend_not_extended(ticker_df, 0): powertrend_ne_matches.append(ticker)
+                if scan_ppp(ticker_df, 0): ppp_matches.append(ticker)
+
+                # Scan Yesterday
+                if scan_two_botak(ticker_df, 1): botak_yest.append(ticker)
+                e2y, e3y = scan_engulfing(ticker_df, 1)
+                if e2y: engulf2_yest.append(ticker)
+                if e3y: engulf3_yest.append(ticker)
+                if scan_powertrend(ticker_df, 1): powertrend_yest.append(ticker)
+                if scan_powertrend_not_extended(ticker_df, 1): powertrend_ne_yest.append(ticker)
+                if scan_ppp(ticker_df, 1): ppp_yest.append(ticker)
+
             except:
                 continue
                 
-        # Minor Change: Alphabetical ascending sort applied to all results
         botak_matches.sort()
         engulf2_matches.sort()
         engulf3_matches.sort()
@@ -437,9 +460,10 @@ def process_pattern_scanners(stocks_list):
         powertrend_ne_matches.sort()
         ppp_matches.sort()
         
-        return botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, ppp_matches
+        return (botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, ppp_matches,
+                botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, ppp_yest)
     except:
-        return [], [], [], [], [], []
+        return [], [], [], [], [], [], [], [], [], [], [], []
 
 # 5. UI Layout & Logic
 st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
@@ -507,6 +531,12 @@ if all_data:
         color: #fff;
         font-weight: bold;
     }
+    .new-pattern-badge {
+        background-color: #FFD700;
+        border: 1px solid #B8860B;
+        color: #000;
+        font-weight: bold;
+    }
     .ticker-name { font-weight: bold; color: #ffffff; margin-right: 4px; }
     .ticker-rs { color: #4ecdc4; font-weight: normal; }
     table { width:100%; border-collapse: collapse; }
@@ -541,19 +571,24 @@ if all_data:
     table_html += "</tbody></table>"
     st.markdown(table_html, unsafe_allow_html=True)
 
-# 7. EXTRA SEPARATE PATTERNS SCANNING BLOCK (No logic impacted above)
+# 7. EXTRA SEPARATE PATTERNS SCANNING BLOCK
 st.markdown("---")
 st.markdown("### 🔍 Technical Pattern Screener (KNOWN_STOCKS Database)")
 
 with st.spinner("Scanning pattern anomalies across known instruments..."):
-    b_list, e2_list, e3_list, pt_list, ptne_list, ppp_list = process_pattern_scanners(tuple(KNOWN_STOCKS))
+    results = process_pattern_scanners(tuple(KNOWN_STOCKS))
+    b_list, e2_list, e3_list, pt_list, ptne_list, ppp_list = results[:6]
+    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, ppp_yest = results[6:]
 
 col_b, col_p, col_e = st.columns(3)
 
 with col_b:
     st.subheader("🔥 Two Botak")
     if b_list:
-        html_b = "".join([f'<div class="ticker-badge pattern-badge">{sym}</div>' for sym in b_list])
+        html_b = ""
+        for sym in b_list:
+            cls = "new-pattern-badge" if sym not in b_yest else "pattern-badge"
+            html_b += f'<div class="ticker-badge {cls}">{sym}</div>'
         st.markdown(html_b, unsafe_allow_html=True)
     else:
         st.info("No active setups discovered.")
@@ -561,7 +596,10 @@ with col_b:
 with col_p:
     st.subheader("📈 Tight (PPP)")
     if ppp_list:
-        html_p = "".join([f'<div class="ticker-badge pattern-badge">{sym}</div>' for sym in ppp_list])
+        html_p = ""
+        for sym in ppp_list:
+            cls = "new-pattern-badge" if sym not in ppp_yest else "pattern-badge"
+            html_p += f'<div class="ticker-badge {cls}">{sym}</div>'
         st.markdown(html_p, unsafe_allow_html=True)
     else:
         st.info("No active setups discovered.")
@@ -571,27 +609,40 @@ with col_e:
     if e2_list or e3_list:
         if e2_list:
             st.markdown("**2x Engulfing Conditions Matched:**")
-            html_e2 = "".join([f'<div class="ticker-badge pattern-badge">{sym}</div>' for sym in e2_list])
+            html_e2 = ""
+            for sym in e2_list:
+                cls = "new-pattern-badge" if sym not in e2_yest else "pattern-badge"
+                html_e2 += f'<div class="ticker-badge {cls}">{sym}</div>'
             st.markdown(html_e2, unsafe_allow_html=True)
         if e3_list:
             st.markdown("<div style='margin-top:10px;'><b>3x Engulfing Conditions Matched:</b></div>", unsafe_allow_html=True)
-            html_e3 = "".join([f'<div class="ticker-badge pattern-badge">{sym}</div>' for sym in e3_list])
+            html_e3 = ""
+            for sym in e3_list:
+                cls = "new-pattern-badge" if sym not in e3_yest else "pattern-badge"
+                html_e3 += f'<div class="ticker-badge {cls}">{sym}</div>'
             st.markdown(html_e3, unsafe_allow_html=True)
     else:
         st.info("No active setups discovered.")
 
-# Extra underlying trends metrics displayed for deep context visibility
 with st.expander("Show Extra Trend Metrics (PowerTrend Indicators)"):
     col_pt1, col_pt2 = st.columns(2)
     with col_pt1:
         st.markdown("**PowerTrend:**")
         if pt_list:
-            st.markdown("".join([f'<div class="ticker-badge">{sym}</div>' for sym in pt_list]), unsafe_allow_html=True)
+            html_pt = ""
+            for sym in pt_list:
+                cls = "new-pattern-badge" if sym not in pt_yest else ""
+                html_pt += f'<div class="ticker-badge {cls}">{sym}</div>'
+            st.markdown(html_pt, unsafe_allow_html=True)
         else:
             st.text("None")
     with col_pt2:
         st.markdown("**PowerTrend (Not Extended):**")
         if ptne_list:
-            st.markdown("".join([f'<div class="ticker-badge cloud-badge">{sym}</div>' for sym in ptne_list]), unsafe_allow_html=True)
+            html_ptne = ""
+            for sym in ptne_list:
+                cls = "new-pattern-badge" if sym not in ptne_yest else "cloud-badge"
+                html_ptne += f'<div class="ticker-badge {cls}">{sym}</div>'
+            st.markdown(html_ptne, unsafe_allow_html=True)
         else:
             st.text("None")
