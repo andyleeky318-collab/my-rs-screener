@@ -299,10 +299,12 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             
             # 3. Normalized logic: ((99 - 1) * (rsClose - ll) / (hh - ll)) + 1
             if pd.isna(current_hh) or pd.isna(current_ll) or current_hh == current_ll:
-                total_score = 0.0 # Handled by nz() fallback
+                total_score = 0
             else:
-                total_score = ((99 - 1) * (current_rs - current_ll) / (current_hh - current_ll)) + 1
+                # Convert the entire formula directly into an integer
+                total_score = int(((99 - 1) * (current_rs - current_ll) / (current_hh - current_ll)) + 1)
             
+            # This will now store a clean whole number (e.g., 85 instead of 85.34)
             stock_scores[ticker] = total_score
 
             # EMA Cloud Calculation (21 EMA of High/Low) - Kept Unchanged
