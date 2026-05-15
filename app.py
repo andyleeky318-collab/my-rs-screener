@@ -645,27 +645,29 @@ with col_e:
     else:
         st.info("No active setups discovered.")
 
-with st.expander("Show Extra Trend Metrics (PowerTrend Indicators)"):
-    col_pt1, col_pt2 = st.columns(2)
-    with col_pt1:
-        st.markdown(f"**PowerTrend ({len(pt_list)}):**")
-        if pt_list:
-            html_pt = ""
-            for sym in pt_list:
-                cls = "new-pattern-badge" if sym not in pt_yest else ""
-                html_pt += f'<div class="ticker-badge {cls}">{sym}</div>'
-            st.markdown(html_pt, unsafe_allow_html=True)
-        else:
-            st.text("None")
-            
-    with col_pt2:
-        st.markdown(f"**PowerTrend (Not Extended) ({len(ptne_list)}):**")
-        if ptne_list:
-            html_ptne = ""
-            for sym in ptne_list:
-                # Changed fallback from "cloud-badge" to "" to follow powertrend style
-                cls = "new-pattern-badge" if sym not in ptne_yest else ""
-                html_ptne += f'<div class="ticker-badge {cls}">{sym}</div>'
-            st.markdown(html_ptne, unsafe_allow_html=True)
-        else:
-            st.text("None")
+# --- Replaced st.expander with a clean horizontal divider and a bold header ---
+st.markdown("---")
+st.markdown("### 📊 Extra Trend Metrics (PowerTrend Indicators)")
+
+col_pt1, col_pt2 = st.columns(2)
+with col_pt1:
+    st.markdown(f"**PowerTrend ({len(pt_list)}):**")
+    if pt_list:
+        html_pt = ""
+        for sym in pt_list:
+            cls = "new-pattern-badge" if sym not in pt_yest else ""
+            html_pt += f'<div class="ticker-badge {cls}">{sym}</div>'
+        st.markdown(html_pt, unsafe_allow_html=True)
+    else:
+        st.text("None")
+        
+with col_pt2:
+    st.markdown(f"**PowerTrend (Not Extended) ({len(ptne_list)}):**")
+    if ptne_list:
+        html_ptne = ""
+        for sym in ptne_list:
+            cls = "new-pattern-badge" if sym not in ptne_yest else ""
+            html_ptne += f'<div class="ticker-badge {cls}">{sym}</div>'
+        st.markdown(html_ptne, unsafe_allow_html=True)
+    else:
+        st.text("None")
