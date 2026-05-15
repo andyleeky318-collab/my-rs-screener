@@ -624,20 +624,25 @@ with col_e:
     else:
         st.info("No active setups discovered.")
 
-# MINOR CHANGE: REMOVED EXPANDER AND DISPLAYED DIRECTLY
-st.markdown("<br>", unsafe_allow_html=True)
-c_pt1, c_pt2 = st.columns(2)
-with c_pt1:
-    st.subheader("🚀 PowerTrend")
-    if pt: 
-        html_pt = "".join([f'<div class="ticker-badge {"new-pattern-badge" if s not in pty else "pattern-badge"}">{s}</div>' for s in pt])
-        st.markdown(html_pt, unsafe_allow_html=True)
-    else: 
-        st.info("None")
-with c_pt2:
-    st.subheader("🛡️ PowerTrend (Not Extended)")
-    if ptne: 
-        html_ptne = "".join([f'<div class="ticker-badge {"new-pattern-badge" if s not in ptney else "cloud-badge"}">{s}</div>' for s in ptne])
-        st.markdown(html_ptne, unsafe_allow_html=True)
-    else: 
-        st.info("None")
+with st.expander("Show Extra Trend Metrics (PowerTrend Indicators)"):
+    col_pt1, col_pt2 = st.columns(2)
+    with col_pt1:
+        st.markdown("**PowerTrend:**")
+        if pt_list:
+            html_pt = ""
+            for sym in pt_list:
+                cls = "new-pattern-badge" if sym not in pt_yest else ""
+                html_pt += f'<div class="ticker-badge {cls}">{sym}</div>'
+            st.markdown(html_pt, unsafe_allow_html=True)
+        else:
+            st.text("None")
+    with col_pt2:
+        st.markdown("**PowerTrend (Not Extended):**")
+        if ptne_list:
+            html_ptne = ""
+            for sym in ptne_list:
+                cls = "new-pattern-badge" if sym not in ptne_yest else "cloud-badge"
+                html_ptne += f'<div class="ticker-badge {cls}">{sym}</div>'
+            st.markdown(html_ptne, unsafe_allow_html=True)
+        else:
+            st.text("None")
