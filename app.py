@@ -598,49 +598,48 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
 col_b, col_p, col_e = st.columns(3)
 
 with col_b:
-    # --- Added bracket count here ---
     st.subheader(f"🔥 Two Botak ({len(b_list)})")
     if b_list:
         html_b = ""
         for sym in b_list:
-            cls = "new-pattern-badge" if sym not in b_yest else "pattern-badge"
+            # Changed fallback from "pattern-badge" to "" to follow powertrend style
+            cls = "new-pattern-badge" if sym not in b_yest else ""
             html_b += f'<div class="ticker-badge {cls}">{sym}</div>'
         st.markdown(html_b, unsafe_allow_html=True)
     else:
         st.info("No active setups discovered.")
 
 with col_p:
-    # --- Added bracket count here ---
-    st.subheader(f"📈 Tight PPP ({len(ppp_list)})")
+    st.subheader(f"📈 Tight (PPP) ({len(ppp_list)})")
     if ppp_list:
         html_p = ""
         for sym in ppp_list:
-            cls = "new-pattern-badge" if sym not in ppp_yest else "pattern-badge"
+            # Changed fallback from "pattern-badge" to "" to follow powertrend style
+            cls = "new-pattern-badge" if sym not in ppp_yest else ""
             html_p += f'<div class="ticker-badge {cls}">{sym}</div>'
         st.markdown(html_p, unsafe_allow_html=True)
     else:
         st.info("No active setups discovered.")
 
 with col_e:
-    # Total count for all engulfing combined in the header
     total_engulf = len(e2_list) + len(e3_list)
     st.subheader(f"🐳 Bullish Engulfing ({total_engulf})")
     
     if e2_list or e3_list:
         if e2_list:
-            # --- Added bracket count here ---
             st.markdown(f"**2x Engulfing Conditions Matched ({len(e2_list)}):**")
             html_e2 = ""
             for sym in e2_list:
-                cls = "new-pattern-badge" if sym not in e2_yest else "pattern-badge"
+                # Changed fallback from "pattern-badge" to "" to follow powertrend style
+                cls = "new-pattern-badge" if sym not in e2_yest else ""
                 html_e2 += f'<div class="ticker-badge {cls}">{sym}</div>'
             st.markdown(html_e2, unsafe_allow_html=True)
         if e3_list:
-            # --- Added bracket count here ---
             st.markdown(f"<div style='margin-top:10px;'><b>3x Engulfing Conditions Matched ({len(e3_list)}):</b></div>", unsafe_allow_html=True)
             html_e3 = ""
             for sym in e3_list:
-                cls = "new-pattern-badge" if sym not in e3_yest else "pattern-badge"
+                # Changed fallback from "pattern-badge" to "" to follow powertrend style
+                cls = "new-pattern-badge" if sym not in e3_yest else ""
                 html_e3 += f'<div class="ticker-badge {cls}">{sym}</div>'
             st.markdown(html_e3, unsafe_allow_html=True)
     else:
@@ -649,7 +648,6 @@ with col_e:
 with st.expander("Show Extra Trend Metrics (PowerTrend Indicators)"):
     col_pt1, col_pt2 = st.columns(2)
     with col_pt1:
-        # --- Added bracket count here ---
         st.markdown(f"**PowerTrend ({len(pt_list)}):**")
         if pt_list:
             html_pt = ""
@@ -661,12 +659,12 @@ with st.expander("Show Extra Trend Metrics (PowerTrend Indicators)"):
             st.text("None")
             
     with col_pt2:
-        # --- Added bracket count here ---
-        st.markdown(f"**PowerTrend Not Extended ({len(ptne_list)}):**")
+        st.markdown(f"**PowerTrend (Not Extended) ({len(ptne_list)}):**")
         if ptne_list:
             html_ptne = ""
             for sym in ptne_list:
-                cls = "new-pattern-badge" if sym not in ptne_yest else "cloud-badge"
+                # Changed fallback from "cloud-badge" to "" to follow powertrend style
+                cls = "new-pattern-badge" if sym not in ptne_yest else ""
                 html_ptne += f'<div class="ticker-badge {cls}">{sym}</div>'
             st.markdown(html_ptne, unsafe_allow_html=True)
         else:
