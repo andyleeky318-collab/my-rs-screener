@@ -191,7 +191,7 @@ KNOWN_STOCKS = [
     'DASH', 'APPS', 'DOCU', 'AI', 'COUP', 'AKAM', 'CYBR', 'QLYS', 'PANW', 'FTNT', 'CRWD', 'TENB', 'OKTA', 'ZS', 
     'NET', 'S', 'UMC', 'ASML', 'KEYS', 'CRUS', 'AMD', 'AVGO', 'MU', 'KLAC', 'TXN', 'QRVO', 'TSM', 'SWKS', 'AMBA', 
     'STM', 'MCHP', 'ON', 'QCOM', 'SOXX', 'MRVL', 'ADI', 'LRCX', 'AMAT', 'WDC', 'NXPI', 'TER', 'MPWR', 'INTC', 
-    'GFS', 'WOLF', 'STX', 'A', 'ZBRA', 'ENTG', 'ONTO', 'TRMB', 'BNTX', 'PFE', 'MRNA', 'NVAX', 'FCX', 'CF', 'DRI', 
+    'GFS', 'STX', 'A', 'ZBRA', 'ENTG', 'ONTO', 'TRMB', 'BNTX', 'PFE', 'MRNA', 'NVAX', 'FCX', 'CF', 'DRI', 
     'PEP', 'XOM', 'LLY', 'CL', 'MCD', 'KO', 'ATVI', 'GE', 'CVX', 'FISV', 'DE', 'WM', 'HLT', 'FUTU', 'UBER', 
     'TIGR', 'EQIX', 'DPZ', 'CSCO', 'COKE', 'SONY', 'FDS', 'MCO', 'GRAB', 'PTON', 'AMT', 'LIT', 'CMG', 'IPO', 
     'PSTG', 'INMD', 'NNDM', 'MP', 'FUBO', 'SPOT', 'ALGN', 'PZZA', 'LOVE', 'LMND', 'POOL', 'DADA', 'PLTR', 'ROKU', 
@@ -378,8 +378,7 @@ def scan_ppp(df):
 
     ma21_and_ma50_or_ma200 = (
         (
-            (df['Close'] >= sma200) |
-            ((df['Close'] >= MALow) & (df['Close'] >= sma50))
+            ((df['Close'] >= sma200) & (df['Close'] >= sma50))
         ) &
         (df['Close'] >= 20)
     )
@@ -552,7 +551,7 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
 col_b, col_p, col_e = st.columns(3)
 
 with col_b:
-    st.subheader("🔥 Two Botak Pattern")
+    st.subheader("🔥 Two Botak")
     if b_list:
         html_b = "".join([f'<div class="ticker-badge pattern-badge">{sym}</div>' for sym in b_list])
         st.markdown(html_b, unsafe_allow_html=True)
@@ -560,7 +559,7 @@ with col_b:
         st.info("No active setups discovered.")
 
 with col_p:
-    st.subheader("📈 Pinch Play Setup (PPP)")
+    st.subheader("📈 Tight (PPP)")
     if ppp_list:
         html_p = "".join([f'<div class="ticker-badge pattern-badge">{sym}</div>' for sym in ppp_list])
         st.markdown(html_p, unsafe_allow_html=True)
@@ -568,7 +567,7 @@ with col_p:
         st.info("No active setups discovered.")
 
 with col_e:
-    st.subheader("🐳 Bullish Engulfing Structures")
+    st.subheader("🐳 Bullish Engulfing")
     if e2_list or e3_list:
         if e2_list:
             st.markdown("**2x Engulfing Conditions Matched:**")
@@ -585,7 +584,7 @@ with col_e:
 with st.expander("Show Extra Trend Metrics (PowerTrend Indicators)"):
     col_pt1, col_pt2 = st.columns(2)
     with col_pt1:
-        st.markdown("**Active PowerTrend:**")
+        st.markdown("**PowerTrend:**")
         if pt_list:
             st.markdown("".join([f'<div class="ticker-badge">{sym}</div>' for sym in pt_list]), unsafe_allow_html=True)
         else:
