@@ -595,79 +595,79 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
     b_list, e2_list, e3_list, pt_list, ptne_list, ppp_list = results[:6]
     b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, ppp_yest = results[6:]
 
-col_b, col_p, col_e = st.columns(3)
+# --- 1. TWO BOTAK (Full Horizontal Row) ---
+st.markdown(f"#### 🔥 Two Botak ({len(b_list)})")
+if b_list:
+    html_b = ""
+    for sym in b_list:
+        cls = "new-pattern-badge" if sym not in b_yest else ""
+        html_b += f'<div class="ticker-badge {cls}">{sym}</div>'
+    st.markdown(html_b, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
 
-with col_b:
-    st.subheader(f"🔥 Two Botak ({len(b_list)})")
-    if b_list:
-        html_b = ""
-        for sym in b_list:
-            # Changed fallback from "pattern-badge" to "" to follow powertrend style
-            cls = "new-pattern-badge" if sym not in b_yest else ""
-            html_b += f'<div class="ticker-badge {cls}">{sym}</div>'
-        st.markdown(html_b, unsafe_allow_html=True)
-    else:
-        st.info("No active setups discovered.")
+st.markdown("<br>", unsafe_allow_html=True) # Spacer
 
-with col_p:
-    st.subheader(f"📈 Tight (PPP) ({len(ppp_list)})")
-    if ppp_list:
-        html_p = ""
-        for sym in ppp_list:
-            # Changed fallback from "pattern-badge" to "" to follow powertrend style
-            cls = "new-pattern-badge" if sym not in ppp_yest else ""
-            html_p += f'<div class="ticker-badge {cls}">{sym}</div>'
-        st.markdown(html_p, unsafe_allow_html=True)
-    else:
-        st.info("No active setups discovered.")
+# --- 2. TIGHT PPP (Full Horizontal Row Below Two Botak) ---
+st.markdown(f"#### 📈 Tight (PPP) ({len(ppp_list)})")
+if ppp_list:
+    html_p = ""
+    for sym in ppp_list:
+        cls = "new-pattern-badge" if sym not in ppp_yest else ""
+        html_p += f'<div class="ticker-badge {cls}">{sym}</div>'
+    st.markdown(html_p, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
 
-with col_e:
-    total_engulf = len(e2_list) + len(e3_list)
-    st.subheader(f"🐳 Bullish Engulfing ({total_engulf})")
-    
-    if e2_list or e3_list:
-        if e2_list:
-            st.markdown(f"**2x Engulfing Conditions Matched ({len(e2_list)}):**")
-            html_e2 = ""
-            for sym in e2_list:
-                # Changed fallback from "pattern-badge" to "" to follow powertrend style
-                cls = "new-pattern-badge" if sym not in e2_yest else ""
-                html_e2 += f'<div class="ticker-badge {cls}">{sym}</div>'
-            st.markdown(html_e2, unsafe_allow_html=True)
-        if e3_list:
-            st.markdown(f"<div style='margin-top:10px;'><b>3x Engulfing Conditions Matched ({len(e3_list)}):</b></div>", unsafe_allow_html=True)
-            html_e3 = ""
-            for sym in e3_list:
-                # Changed fallback from "pattern-badge" to "" to follow powertrend style
-                cls = "new-pattern-badge" if sym not in e3_yest else ""
-                html_e3 += f'<div class="ticker-badge {cls}">{sym}</div>'
-            st.markdown(html_e3, unsafe_allow_html=True)
-    else:
-        st.info("No active setups discovered.")
+st.markdown("<br>", unsafe_allow_html=True) # Spacer
 
-# --- Replaced st.expander with a clean horizontal divider and a bold header ---
+# --- 3. BULLISH ENGULFING (Full Horizontal Row Below Tight PPP) ---
+total_engulf = len(e2_list) + len(e3_list)
+st.markdown(f"#### 🐳 Bullish Engulfing ({total_engulf})")
+
+if e2_list or e3_list:
+    if e2_list:
+        st.markdown(f"**2x Engulfing Conditions Matched ({len(e2_list)}):**")
+        html_e2 = ""
+        for sym in e2_list:
+            cls = "new-pattern-badge" if sym not in e2_yest else ""
+            html_e2 += f'<div class="ticker-badge {cls}">{sym}</div>'
+        st.markdown(html_e2, unsafe_allow_html=True)
+    if e3_list:
+        st.markdown(f"<div style='margin-top:10px;'><b>3x Engulfing Conditions Matched ({len(e3_list)}):</b></div>", unsafe_allow_html=True)
+        html_e3 = ""
+        for sym in e3_list:
+            cls = "new-pattern-badge" if sym not in e3_yest else ""
+            html_e3 += f'<div class="ticker-badge {cls}">{sym}</div>'
+        st.markdown(html_e3, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
+
+
+# --- EXTRA TREND METRICS (Stacked Horizontally Below Patterns) ---
 st.markdown("---")
 st.markdown("### 📊 Extra Trend Metrics (PowerTrend Indicators)")
 
-col_pt1, col_pt2 = st.columns(2)
-with col_pt1:
-    st.markdown(f"**PowerTrend ({len(pt_list)}):**")
-    if pt_list:
-        html_pt = ""
-        for sym in pt_list:
-            cls = "new-pattern-badge" if sym not in pt_yest else ""
-            html_pt += f'<div class="ticker-badge {cls}">{sym}</div>'
-        st.markdown(html_pt, unsafe_allow_html=True)
-    else:
-        st.text("None")
-        
-with col_pt2:
-    st.markdown(f"**PowerTrend (Not Extended) ({len(ptne_list)}):**")
-    if ptne_list:
-        html_ptne = ""
-        for sym in ptne_list:
-            cls = "new-pattern-badge" if sym not in ptne_yest else ""
-            html_ptne += f'<div class="ticker-badge {cls}">{sym}</div>'
-        st.markdown(html_ptne, unsafe_allow_html=True)
-    else:
-        st.text("None")
+# --- 4. POWERTREND (Full Horizontal Row) ---
+st.markdown(f"**PowerTrend ({len(pt_list)}):**")
+if pt_list:
+    html_pt = ""
+    for sym in pt_list:
+        cls = "new-pattern-badge" if sym not in pt_yest else ""
+        html_pt += f'<div class="ticker-badge {cls}">{sym}</div>'
+    st.markdown(html_pt, unsafe_allow_html=True)
+else:
+    st.text("None")
+
+st.markdown("<br>", unsafe_allow_html=True) # Spacer
+
+# --- 5. POWERTREND NOT EXTENDED (Full Horizontal Row Below PowerTrend) ---
+st.markdown(f"**PowerTrend (Not Extended) ({len(ptne_list)}):**")
+if ptne_list:
+    html_ptne = ""
+    for sym in ptne_list:
+        cls = "new-pattern-badge" if sym not in ptne_yest else ""
+        html_ptne += f'<div class="ticker-badge {cls}">{sym}</div>'
+    st.markdown(html_ptne, unsafe_allow_html=True)
+else:
+    st.text("None")
