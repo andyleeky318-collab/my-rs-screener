@@ -214,58 +214,6 @@ with st.sidebar:
     if st.button("Clear Cache & Refresh"):
         st.cache_data.clear()
 
-# # 4. IMPLEMENTATION OF WEIGHTED RS METHOD AND EMA CLOUD
-# @st.cache_data(ttl=3600)
-# def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker):
-#     tickers = list(tickers_tuple)
-#     try:
-#         all_tickers = tickers + [benchmark_ticker]
-#         data = yf.download(all_tickers, period="2y", interval="1d", progress=False)
-        
-#         close_data = data['Close']
-#         high_data = data['High']
-#         low_data = data['Low']
-        
-#         valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= 252]
-#         if not valid_tickers: return None, None, None
-
-#         # --- RS Logic ---
-#         offsets = [63, 126, 189, 252]
-#         weights = [0.4, 0.2, 0.2, 0.2]
-
-#         def calculate_weighted_score(series):
-#             score = 0
-#             for offset, weight in zip(offsets, weights):
-#                 perf = series.iloc[-1] / series.iloc[-offset]
-#                 score += (perf * weight)
-#             return score
-
-#         bench_weighted = calculate_weighted_score(close_data[benchmark_ticker])
-#         stock_scores = {}
-#         cloud_tickers = []
-
-#         for ticker in valid_tickers:
-#             # RS Calculation
-#             stock_weighted = calculate_weighted_score(close_data[ticker])
-#             total_score = (stock_weighted / bench_weighted) * 100
-#             stock_scores[ticker] = total_score
-
-#             # EMA Cloud Calculation (21 EMA of High/Low)
-#             ema_low = low_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
-#             ema_high = high_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
-#             current_price = close_data[ticker].iloc[-1]
-            
-#             if ema_low <= current_price <= ema_high:
-#                 cloud_tickers.append(ticker)
-
-#         rs_perf = pd.Series(stock_scores)
-#         ranks = rs_perf.rank(pct=True) * 99
-        
-#         return rs_perf, ranks, cloud_tickers
-#     except Exception as e:
-#         st.error(f"Error: {e}")
-#         return None, None, None
-
 # 4. IMPLEMENTATION OF NEW NORMALIZED RS METHOD AND EMA CLOUD
 @st.cache_data(ttl=3600)
 def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <-- Added length parameter
@@ -650,7 +598,8 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
 col_b, col_p, col_e = st.columns(3)
 
 with col_b:
-    st.subheader("🔥 Two Botak")
+    # --- Added bracket count here ---
+    st.subheader(f"🔥 Two Botak ({len(b_list)})")
     if b_list:
         html_b = ""
         for sym in b_list:
@@ -661,7 +610,8 @@ with col_b:
         st.info("No active setups discovered.")
 
 with col_p:
-    st.subheader("📈 Tight (PPP)")
+    # --- Added bracket count here ---
+    st.subheader(f"📈 Tight PPP ({len(ppp_list)})")
     if ppp_list:
         html_p = ""
         for sym in ppp_list:
@@ -672,17 +622,22 @@ with col_p:
         st.info("No active setups discovered.")
 
 with col_e:
-    st.subheader("🐳 Bullish Engulfing")
+    # Total count for all engulfing combined in the header
+    total_engulf = len(e2_list) + len(e3_list)
+    st.subheader(f"🐳 Bullish Engulfing ({total_engulf})")
+    
     if e2_list or e3_list:
         if e2_list:
-            st.markdown("**2x Engulfing Conditions Matched:**")
+            # --- Added bracket count here ---
+            st.markdown(f"**2x Engulfing Conditions Matched ({len(e2_list)}):**")
             html_e2 = ""
             for sym in e2_list:
                 cls = "new-pattern-badge" if sym not in e2_yest else "pattern-badge"
                 html_e2 += f'<div class="ticker-badge {cls}">{sym}</div>'
             st.markdown(html_e2, unsafe_allow_html=True)
         if e3_list:
-            st.markdown("<div style='margin-top:10px;'><b>3x Engulfing Conditions Matched:</b></div>", unsafe_allow_html=True)
+            # --- Added bracket count here ---
+            st.markdown(f"<div style='margin-top:10px;'><b>3x Engulfing Conditions Matched ({len(e3_list)}):</b></div>", unsafe_allow_html=True)
             html_e3 = ""
             for sym in e3_list:
                 cls = "new-pattern-badge" if sym not in e3_yest else "pattern-badge"
@@ -694,7 +649,8 @@ with col_e:
 with st.expander("Show Extra Trend Metrics (PowerTrend Indicators)"):
     col_pt1, col_pt2 = st.columns(2)
     with col_pt1:
-        st.markdown("**PowerTrend:**")
+        # --- Added bracket count here ---
+        st.markdown(f"**PowerTrend ({len(pt_list)}):**")
         if pt_list:
             html_pt = ""
             for sym in pt_list:
@@ -703,8 +659,10 @@ with st.expander("Show Extra Trend Metrics (PowerTrend Indicators)"):
             st.markdown(html_pt, unsafe_allow_html=True)
         else:
             st.text("None")
+            
     with col_pt2:
-        st.markdown("**PowerTrend (Not Extended):**")
+        # --- Added bracket count here ---
+        st.markdown(f"**PowerTrend Not Extended ({len(ptne_list)}):**")
         if ptne_list:
             html_ptne = ""
             for sym in ptne_list:
