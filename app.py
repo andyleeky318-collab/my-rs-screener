@@ -183,7 +183,7 @@ KNOWN_STOCKS = [
     'BABA', 'PDD', 'JD', 'DQ', 'JKS', 'ENPH', 'FSLR', 'TAN', 'SEDG', 'CSIQ', 'SPWR', 'RUN', 'PBW', 'CLX', 'PG', 
     'EL', 'RMS', 'LVMH', 'LULU', 'SBUX', 'NKE', 'KER', 'MELI', 'EBAY', 'FDX', 'UPS', 'SE', 'JMIA', 'ETSY', 'SHOP', 
     'Z', 'OPEN', 'CHWY', 'BIGC', 'CVNA', 'BARK', 'GM', 'BLNK', 'QS', 'F', 'RIVN', 'FCEL', 'CHPT', 'LCID', 'LAZR', 
-    'VLDR', 'UPST', 'PYPL', 'AFRM', 'V', 'MA', 'AXP', 'SQ', 'BITO', 'COIN', 'RIOT', 'CAN', 'MARA', 'MSTR', 'SI', 
+    'VLDR', 'UPST', 'PYPL', 'AFRM', 'V', 'MA', 'AXP', 'SQ', 'BITO', 'COIN', 'RIOT', 'MARA', 'MSTR', 'SI', 
     'DKNG', 'PENN', 'BETZ', 'REGN', 'VRTX', 'MRK', 'UNH', 'TMO', 'ISRG', 'ABT', 'NARI', 'IDXX', 'TDOC', 'CRSP', 
     'BRK.B', 'ETN', 'CAT', 'BLD', 'U', 'RBLX', 'SKLZ', 'FSLY', 'TRIP', 'EXPE', 'BKNG', 'ABNB', 'DIS', 'WMT', 
     'COST', 'TGT', 'LOW', 'HD', 'DT', 'SNPS', 'CDNS', 'MDB', 'ORCL', 'NOW', 'ADP', 'SNOW', 'ANSS', 'DDOG', 
