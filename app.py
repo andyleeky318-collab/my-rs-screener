@@ -315,7 +315,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             if ema_low <= current_price <= ema_high:
                 cloud_tickers.append(ticker)
 
-        rs_perf = pd.Series(stock_scores)
+        rs_perf = pd.Series(stock_scores).astype(int)
         
         # We assign the raw score directly as your ranking metrics instead of the old percentile conversion
         return rs_perf, rs_perf, cloud_tickers
@@ -618,7 +618,8 @@ if all_data:
 
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
         item = next(d for d in all_data if d["Industry"] == row["Industry"])
-        ticker_html = "".join([f'<div class="ticker-badge"><span class="ticker-name">{r["Ticker"]}</span><span class="ticker-rs">{r["RS Score"]:.1f}</span></div>' for _, r in item["Tickers"].iterrows()])
+        # Change :.1f to :.0f right here:
+        ticker_html = "".join([f'<div class="ticker-badge"><span class="ticker-name">{r["Ticker"]}</span><span class="ticker-rs">{r["RS Score"]:.0f}</span></div>' for _, r in item["Tickers"].iterrows()])
         
         cloud_html = "".join([f'<div class="ticker-badge cloud-badge">{c}</div>' for c in item["Cloud"]])
         bg_color = "#262730" if row_num % 2 == 0 else "#0e1117"
@@ -626,7 +627,7 @@ if all_data:
         table_html += f"""<tr style="background-color: {bg_color};">
         <td style="text-align: center; color: #888; font-weight: bold;">{row_num}</td>
         <td style="font-weight: bold;">{row['Industry']}</td>
-        <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.2f}</td>
+        <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.1f}</td>
         <td>{ticker_html}</td>
         <td>{cloud_html}</td></tr>"""
 
