@@ -204,48 +204,108 @@ KNOWN_STOCKS = list(set(KNOWN_STOCKS))
 with st.sidebar:
     st.header("Settings")
     benchmark = st.selectbox("Benchmark", ["^GSPC", "^IXIC"], index=0)
+    rs_length = st.number_input("RS Lookback Length", value=90, min_value=10)
     top_n = st.number_input("Top N for Group Avg", value=5, min_value=1)
     
     if st.button("Clear Cache & Refresh"):
         st.cache_data.clear()
 
-# 4. IMPLEMENTATION OF WEIGHTED RS METHOD AND EMA CLOUD
+# # 4. IMPLEMENTATION OF WEIGHTED RS METHOD AND EMA CLOUD
+# @st.cache_data(ttl=3600)
+# def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker):
+#     tickers = list(tickers_tuple)
+#     try:
+#         all_tickers = tickers + [benchmark_ticker]
+#         data = yf.download(all_tickers, period="2y", interval="1d", progress=False)
+        
+#         close_data = data['Close']
+#         high_data = data['High']
+#         low_data = data['Low']
+        
+#         valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= 252]
+#         if not valid_tickers: return None, None, None
+
+#         # --- RS Logic ---
+#         offsets = [63, 126, 189, 252]
+#         weights = [0.4, 0.2, 0.2, 0.2]
+
+#         def calculate_weighted_score(series):
+#             score = 0
+#             for offset, weight in zip(offsets, weights):
+#                 perf = series.iloc[-1] / series.iloc[-offset]
+#                 score += (perf * weight)
+#             return score
+
+#         bench_weighted = calculate_weighted_score(close_data[benchmark_ticker])
+#         stock_scores = {}
+#         cloud_tickers = []
+
+#         for ticker in valid_tickers:
+#             # RS Calculation
+#             stock_weighted = calculate_weighted_score(close_data[ticker])
+#             total_score = (stock_weighted / bench_weighted) * 100
+#             stock_scores[ticker] = total_score
+
+#             # EMA Cloud Calculation (21 EMA of High/Low)
+#             ema_low = low_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
+#             ema_high = high_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
+#             current_price = close_data[ticker].iloc[-1]
+            
+#             if ema_low <= current_price <= ema_high:
+#                 cloud_tickers.append(ticker)
+
+#         rs_perf = pd.Series(stock_scores)
+#         ranks = rs_perf.rank(pct=True) * 99
+        
+#         return rs_perf, ranks, cloud_tickers
+#     except Exception as e:
+#         st.error(f"Error: {e}")
+#         return None, None, None
+
+# 4. IMPLEMENTATION OF NEW NORMALIZED RS METHOD AND EMA CLOUD
 @st.cache_data(ttl=3600)
-def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker):
+def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <-- Added length parameter
     tickers = list(tickers_tuple)
     try:
         all_tickers = tickers + [benchmark_ticker]
+        # Download data (ensuring enough historical data to compute the rolling min/max lookback window)
         data = yf.download(all_tickers, period="2y", interval="1d", progress=False)
         
         close_data = data['Close']
         high_data = data['High']
         low_data = data['Low']
         
-        valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= 252]
+        valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= length]
         if not valid_tickers: return None, None, None
 
-        # --- RS Logic ---
-        offsets = [63, 126, 189, 252]
-        weights = [0.4, 0.2, 0.2, 0.2]
-
-        def calculate_weighted_score(series):
-            score = 0
-            for offset, weight in zip(offsets, weights):
-                perf = series.iloc[-1] / series.iloc[-offset]
-                score += (perf * weight)
-            return score
-
-        bench_weighted = calculate_weighted_score(close_data[benchmark_ticker])
+        # --- New RS Logic ---
+        bench_close = close_data[benchmark_ticker]
         stock_scores = {}
         cloud_tickers = []
 
         for ticker in valid_tickers:
-            # RS Calculation
-            stock_weighted = calculate_weighted_score(close_data[ticker])
-            total_score = (stock_weighted / bench_weighted) * 100
+            # 1. rsClose = close / indexClose
+            rs_ratio_series = close_data[ticker] / bench_close
+            
+            # 2. hh = ta.highest(rsClose, length) | ll = ta.lowest(rsClose, length)
+            # Use rolling window to get historical highs and lows of the ratio
+            hh = rs_ratio_series.rolling(window=length).max()
+            ll = rs_ratio_series.rolling(window=length).min()
+            
+            # Get the absolute most recent values (today's values)
+            current_rs = rs_ratio_series.iloc[-1]
+            current_hh = hh.iloc[-1]
+            current_ll = ll.iloc[-1]
+            
+            # 3. Normalized logic: ((99 - 1) * (rsClose - ll) / (hh - ll)) + 1
+            if pd.isna(current_hh) or pd.isna(current_ll) or current_hh == current_ll:
+                total_score = 0.0 # Handled by nz() fallback
+            else:
+                total_score = ((99 - 1) * (current_rs - current_ll) / (current_hh - current_ll)) + 1
+            
             stock_scores[ticker] = total_score
 
-            # EMA Cloud Calculation (21 EMA of High/Low)
+            # EMA Cloud Calculation (21 EMA of High/Low) - Kept Unchanged
             ema_low = low_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
             ema_high = high_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
             current_price = close_data[ticker].iloc[-1]
@@ -254,9 +314,9 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker):
                 cloud_tickers.append(ticker)
 
         rs_perf = pd.Series(stock_scores)
-        ranks = rs_perf.rank(pct=True) * 99
         
-        return rs_perf, ranks, cloud_tickers
+        # We assign the raw score directly as your ranking metrics instead of the old percentile conversion
+        return rs_perf, rs_perf, cloud_tickers
     except Exception as e:
         st.error(f"Error: {e}")
         return None, None, None
@@ -475,7 +535,7 @@ status_text = st.empty()
 industry_items = list(INDUSTRIES.items())
 for idx, (industry_name, tickers) in enumerate(industry_items):
     status_text.text(f"Processing {industry_name}...")
-    perf, rs_scores, cloud_list = get_rs_and_cloud_data_cached(tuple(tickers), benchmark)
+    perf, rs_scores, cloud_list = get_rs_and_cloud_data_cached(tuple(tickers), benchmark, 90)
     
     if rs_scores is not None:
         top_n_scores = rs_scores.nlargest(int(top_n))
