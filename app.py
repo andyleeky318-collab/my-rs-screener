@@ -342,7 +342,7 @@ def scan_powertrend(df, lookback=0):
     absGradient = abs(gradientPct)
     powertrend = (
         (gradient > 0) &
-        (absGradient >= 0.1) & 
+        (absGradient >= 1.0) & 
         (df['Close'] >= 20)
     )
     return bool(powertrend.iloc[idx])
@@ -357,7 +357,7 @@ def scan_powertrend_not_extended(df, lookback=0):
     
     powertrend = (
         (gradient > 0) &
-        (absGradient >= 0.1) &
+        (absGradient >= 1.0) &
         (df['Close'] >= 20)
     )
 
