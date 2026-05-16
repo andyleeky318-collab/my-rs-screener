@@ -375,6 +375,28 @@ def scan_powertrend_not_extended(df, lookback=0):
     result = (powertrend & (atrMultiple <= 4))
     return bool(result.iloc[idx])
 
+def scan_value_trap(df, lookback=0):
+    idx = -1 - lookback
+    if len(df) < 50 + lookback: return False
+    
+    high_low = df['High'] - df['Low']
+    high_close = abs(df['High'] - df['Close'].shift(1))
+    low_close = abs(df['Low'] - df['Close'].shift(1))
+    
+    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    absATR = tr.rolling(14).mean()
+    atrPercent = (absATR / df['Close']) * 100
+    
+    sma50 = df['Close'].rolling(50).mean()
+    percentGainFromMA = ((df['Close'] - sma50) / sma50) * 100
+    
+    atrMultiple2 = percentGainFromMA / atrPercent.replace(0, 0.001)
+    atrMultiple2 = atrMultiple2.replace([float('inf'), -float('inf')], pd.NA)
+    atrMultiple = ((atrMultiple2.fillna(0) * 10).astype(int) / 10)
+    
+    result = ((atrMultiple < -4) & (df['Close'] >= 20))
+    return bool(result.iloc[idx])
+
 def scan_ppp(df, lookback=0):
     idx = -1 - lookback
     if len(df) < 200 + lookback: return False
@@ -421,6 +443,7 @@ def process_pattern_scanners(stocks_list):
         engulf3_matches = []
         powertrend_matches = []
         powertrend_ne_matches = []
+        value_trap_matches = []
         ppp_matches = []
         
         # Yesterday's Matches (for color logic)
@@ -429,6 +452,7 @@ def process_pattern_scanners(stocks_list):
         engulf3_yest = []
         powertrend_yest = []
         powertrend_ne_yest = []
+        value_trap_yest = []
         ppp_yest = []
         
         for ticker in stocks_list:
@@ -453,6 +477,7 @@ def process_pattern_scanners(stocks_list):
                 if e3: engulf3_matches.append(ticker)
                 if scan_powertrend(ticker_df, 0): powertrend_matches.append(ticker)
                 if scan_powertrend_not_extended(ticker_df, 0): powertrend_ne_matches.append(ticker)
+                if scan_value_trap(ticker_df, 0): value_trap_matches.append(ticker)
                 if scan_ppp(ticker_df, 0): ppp_matches.append(ticker)
 
                 # Scan Yesterday
@@ -462,6 +487,7 @@ def process_pattern_scanners(stocks_list):
                 if e3y: engulf3_yest.append(ticker)
                 if scan_powertrend(ticker_df, 1): powertrend_yest.append(ticker)
                 if scan_powertrend_not_extended(ticker_df, 1): powertrend_ne_yest.append(ticker)
+                if scan_value_trap(ticker_df, 1): value_trap_yest.append(ticker)
                 if scan_ppp(ticker_df, 1): ppp_yest.append(ticker)
 
             except:
@@ -472,12 +498,13 @@ def process_pattern_scanners(stocks_list):
         engulf3_matches.sort()
         powertrend_matches.sort()
         powertrend_ne_matches.sort()
+        value_trap_matches.sort()
         ppp_matches.sort()
         
-        return (botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, ppp_matches,
-                botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, ppp_yest)
+        return (botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, value_trap_matches, ppp_matches,
+                botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, value_trap_yest, ppp_yest)
     except:
-        return [], [], [], [], [], [], [], [], [], [], [], []
+        return [], [], [], [], [], [], [], [], [], [], [], [], [], []
 
 # 5. UI Layout & Logic
 st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
@@ -588,12 +615,12 @@ if all_data:
 
 # 7. EXTRA SEPARATE PATTERNS SCANNING BLOCK
 st.markdown("---")
-st.markdown("### 🔍 Technical Pattern Screener (KNOWN_STOCKS Database)")
+#st.markdown("### 🔍 Technical Pattern Screener (KNOWN_STOCKS Database)")
 
 with st.spinner("Scanning pattern anomalies across known instruments..."):
     results = process_pattern_scanners(tuple(KNOWN_STOCKS))
-    b_list, e2_list, e3_list, pt_list, ptne_list, ppp_list = results[:6]
-    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, ppp_yest = results[6:]
+    b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list = results[:7]
+    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:]
 
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
 st.markdown(f"#### 🔥 Two Botak = Awareness short term group burst ({len(b_list)})")
@@ -670,5 +697,18 @@ if ptne_list:
         cls = "new-pattern-badge" if sym not in ptne_yest else ""
         html_ptne += f'<div class="ticker-badge {cls}">{sym}</div>'
     st.markdown(html_ptne, unsafe_allow_html=True)
+else:
+    st.text("None")
+
+st.markdown("<br>", unsafe_allow_html=True) # Spacer
+
+# --- 6. VALUE TRAP (Full Horizontal Row Below PowerTrend Not Extended) ---
+st.markdown(f"**Value Trap ({len(vt_list)}):**")
+if vt_list:
+    html_vt = ""
+    for sym in vt_list:
+        cls = "new-pattern-badge" if sym not in vt_yest else ""
+        html_vt += f'<div class="ticker-badge {cls}">{sym}</div>'
+    st.markdown(html_vt, unsafe_allow_html=True)
 else:
     st.text("None")
