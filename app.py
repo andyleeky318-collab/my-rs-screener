@@ -596,7 +596,7 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
     b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, ppp_yest = results[6:]
 
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
-st.markdown(f"#### 🔥 Two Botak - Awareness short term group burst ({len(b_list)})")
+st.markdown(f"#### 🔥 Two Botak = Awareness short term group burst ({len(b_list)})")
 if b_list:
     html_b = ""
     for sym in b_list:
@@ -609,7 +609,7 @@ else:
 st.markdown("<br>", unsafe_allow_html=True) # Spacer
 
 # --- 2. TIGHT PPP (Full Horizontal Row Below Two Botak) ---
-st.markdown(f"#### 📈 PPP - Opportunity ({len(ppp_list)})")
+st.markdown(f"#### 📈 PPP = Opportunity ({len(ppp_list)})")
 if ppp_list:
     html_p = ""
     for sym in ppp_list:
@@ -623,7 +623,7 @@ st.markdown("<br>", unsafe_allow_html=True) # Spacer
 
 # --- 3. BULLISH ENGULFING (Full Horizontal Row Below Tight PPP) ---
 total_engulf = len(e2_list) + len(e3_list)
-st.markdown(f"#### 🐳 Bullish Engulfing - Awareness HL ({total_engulf})")
+st.markdown(f"#### 🐳 Bullish Engulfing = Awareness HL ({total_engulf})")
 
 if e2_list or e3_list:
     if e2_list:
@@ -647,9 +647,10 @@ else:
 # --- EXTRA TREND METRICS (Stacked Horizontally Below Patterns) ---
 #st.markdown("---")
 #st.markdown("### 📊 Extra Trend Metrics (PowerTrend Indicators)")
+st.markdown("<br>", unsafe_allow_html=True) # Spacer
 
 # --- 4. POWERTREND (Full Horizontal Row) ---
-st.markdown(f"**PowerTrend ({len(pt_list)}):**")
+st.markdown(f"**PowerTrend = Awareness thematic leaders ({len(pt_list)}):**")
 if pt_list:
     html_pt = ""
     for sym in pt_list:
