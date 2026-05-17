@@ -784,11 +784,10 @@ header_html = (
     f"<span>⭐ Minervini Qualified Stocks (Total >= 10)</span>"
     f"<span style='font-size:12px; font-weight:normal; color:#888;'> "
     f"(<b style='color:#eee;'>Known Pos Pct:</b> {know_pos_pct:.2f}% |"
-    f" <b style='color:#FFD700;'>Known Positive Count:</b> {know_positive_count} |"
+    f" <b style='color:#eee;'>Known Positive Count:</b> {know_positive_count} |"
     f" <b style='color:#eee;'>Known Total Count:</b> {know_total_count})"
     f"</div>"
 )
-st.markdown(header_html, unsafe_allow_html=True)
 
 st.markdown(header_html, unsafe_allow_html=True)
 
