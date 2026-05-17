@@ -502,9 +502,9 @@ def process_pattern_scanners(stocks_list):
         ppp_matches.sort()
         
         return (botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, value_trap_matches, ppp_matches,
-                botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, value_trap_yest, ppp_yest)
+                botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, value_trap_yest, ppp_yest, raw_data)
     except:
-        return [], [], [], [], [], [], [], [], [], [], [], [], [], []
+        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], pd.DataFrame()
 
 # 5. UI Layout & Logic
 st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
@@ -517,16 +517,10 @@ status_text = st.empty()
 total_processed = 0
 know_total_count = 0
 know_positive_count = 0
-breadth_stats = {
-    'new_high': 0, 'new_low': 0, 'advance': 0, 'decline': 0,
-    'up_from_open': 0, 'down_from_open': 0, 'up_volume': 0, 'down_volume': 0,
-    'up_4pct': 0, 'down_4pct': 0
-}
 exportList = pd.DataFrame()
 exportList2 = pd.DataFrame()
 extra_52wk_high_symbols = []
 email_content_stocks = []
-index_return = 1.0  # Safe mock placeholder value
 
 industry_items = list(INDUSTRIES.items())
 for idx, (industry_name, tickers) in enumerate(industry_items):
@@ -544,196 +538,6 @@ for idx, (industry_name, tickers) in enumerate(industry_items):
             "Cloud": cloud_list
         })
 
-        # --- BREADTH AND MINERVINI REQUIREMENTS IMPLEMENTATION BLOCK ---
-        all_tickers_to_fetch = list(rs_scores.index)
-        if all_tickers_to_fetch:
-            try:
-                loop_raw_data = yf.download(all_tickers_to_fetch, period="2y", interval="1d", progress=False)
-                for stock in all_tickers_to_fetch:
-                    try:
-                        if len(all_tickers_to_fetch) > 1:
-                            df = pd.DataFrame({
-                                'Open': loop_raw_data['Open'][stock],
-                                'High': loop_raw_data['High'][stock],
-                                'Low': loop_raw_data['Low'][stock],
-                                'Close': loop_raw_data['Close'][stock],
-                                'Adj Close': loop_raw_data['Adj Close'][stock],
-                                'Volume': loop_raw_data['Volume'][stock]
-                            }).dropna()
-                        else:
-                            df = loop_raw_data.dropna().copy()
-                            df['Adj Close'] = df['Close']
-                        
-                        if len(df) < 200:
-                            continue
-                        
-                        sma = [50, 150, 200]
-                        for x in sma:
-                            df["SMA_"+str(x)] = round(df['Adj Close'].rolling(window=x).mean(), 2)
-
-                        ticker_sector = yf.Ticker(stock)
-                        total_processed += 1
-
-                        # Storing required values
-                        currentClose = df["Adj Close"].iloc[-1]
-                        prevClose = df["Adj Close"].iloc[-2]
-                        currentOpen = df["Open"].iloc[-1]
-                        currentVol = df["Volume"].iloc[-1]
-                        prevVol = df["Volume"].iloc[-2]
-                        Volume = df["Volume"].iloc[-1]
-                        moving_average_50 = df["SMA_50"].iloc[-1]
-                        moving_average_150 = df["SMA_150"].iloc[-1]
-                        moving_average_200 = df["SMA_200"].iloc[-1]
-                        low_of_52week = round(min(df["Low"].iloc[-260:]), 2)
-                        high_of_52week = round(df["High"].iloc[-260:-1].max(), 2)
-                        
-                        # Handle RS Match Safety
-                        rs_match = rs_scores.get(stock, 0)
-                        RS_Rating = round(rs_match) if not pd.isna(rs_match) else 0
-                        pct_change = (currentClose - prevClose) / prevClose
-
-                        # 1. New High vs New Low
-                        if currentClose >= high_of_52week: breadth_stats['new_high'] += 1
-                        if currentClose <= low_of_52week: breadth_stats['new_low'] += 1
-
-                        # 2. Advance vs Decline
-                        if currentClose > prevClose: breadth_stats['advance'] += 1
-                        elif currentClose < prevClose: breadth_stats['decline'] += 1
-
-                        # 3. Up from Open vs Down from Open
-                        if currentClose > currentOpen: breadth_stats['up_from_open'] += 1
-                        elif currentClose < currentOpen: breadth_stats['down_from_open'] += 1
-
-                        # 4. Up on Volume vs Down on Volume (Price up AND Vol > Prev Vol)
-                        if currentClose > prevClose and currentVol > prevVol: breadth_stats['up_volume'] += 1
-                        elif currentClose < prevClose and currentVol > prevVol: breadth_stats['down_volume'] += 1
-
-                        # 5. Up 4% vs Down 4%
-                        if pct_change >= 0.04: breadth_stats['up_4pct'] += 1
-                        elif pct_change <= -0.04: breadth_stats['down_4pct'] += 1
-
-                        volume_50days = df["Volume"].iloc[-50:].mean()
-                        volume_50days_13x = 1.3 * volume_50days
-                        volume_1year = max(df["Volume"].iloc[-52:-1])
-
-                        df['Percent Change'] = df['Adj Close'].pct_change()
-                        stock_return = (df['Percent Change'] + 1).cumprod().iloc[-1]
-                        returns_multiple = round((stock_return / index_return), 2)
-
-                        try:
-                            moving_average_200_20 = df["SMA_200"].iloc[-20]
-                        except Exception:
-                            moving_average_200_20 = 0
-
-                        # Condition 1: Current Price > 150 SMA and > 200 SMA
-                        if(currentClose > moving_average_50 > moving_average_200):
-                            condition_1 = 1
-                        else:
-                            condition_1 = 0
-
-                        # Condition 2: 150 SMA and > 200 SMA
-                        if(moving_average_50 > moving_average_200):
-                            condition_2 = 1
-                        else:
-                            condition_2 = 0
-
-                        # Condition 3: 200 SMA trending up for at least 1 month
-                        if(moving_average_200 > moving_average_200_20):
-                            condition_3 = 1
-                        else:
-                            condition_3 = 0
-
-                        # Condition 4: 50 SMA> 150 SMA and 50 SMA> 200 SMA
-                        if(moving_average_50 > moving_average_200):
-                            condition_4 = 1
-                        else:
-                            condition_4 = 0
-
-                        # Condition 5: Current Price > 50 SMA
-                        if(currentClose > moving_average_50):
-                            condition_5 = 1
-                        else:
-                            condition_5 = 0
-
-                        # Condition 6: Current Price is at least 30% above 52 week low
-                        if(currentClose >= (1.3*low_of_52week)):
-                            condition_6= 1
-                        else:
-                            condition_6 = 0
-
-                        # Condition 7: Current Price is within 25% of 52 week high
-                        if(currentClose >= (.75*high_of_52week)):
-                            condition_7 = 1
-                        else:
-                            condition_7 = 0
-
-                        if(currentClose >= 20):
-                            condition_8 = 1
-                        else:
-                            condition_8 = 0
-
-                        if(Volume > 20000):
-                            condition_9 = 1
-                        else:
-                            condition_9 = 0
-
-                        if((Volume*currentClose) > 2000000):
-                            condition_10 = 1
-                        else:
-                            condition_10 = 0
-
-                        condition_11 = False
-                        condition_11 = Volume > volume_50days_13x and currentClose > prevClose
-
-                        condition_12 = False
-                        condition_12 = Volume > volume_1year and currentClose > prevClose
-
-                        condition_13 = False
-                        condition_13 = Volume > volume_1year and currentClose < prevClose
-
-                        total = condition_1 + condition_2 + condition_3 + condition_4 + condition_5 + condition_6 + condition_7 + condition_8 + condition_9 + condition_10
-
-                        if(condition_12):
-                            volume_triangle = 2
-                        elif(condition_13):
-                            volume_triangle = -1
-                        elif(condition_11):
-                            volume_triangle = 1
-                        else:
-                            volume_triangle = 0
-
-                        know = 0
-                        know = 1 if stock in KNOWN_STOCKS else 0
-
-                        exportList = exportList._append({'Stock': stock, "stock_return" : stock_return, "returns_multiple" : returns_multiple, "volume_triangle" : volume_triangle, "currentClose" : currentClose, "RS_Rating": RS_Rating ,"50 Day MA": moving_average_50, "150 Day Ma": moving_average_150, "200 Day MA": moving_average_200, "52 Week Low": low_of_52week, "52 week High": high_of_52week, "cond1": condition_1, "cond2": condition_2, "cond3": condition_3, "cond4": condition_4, "cond5": condition_5, "cond6": condition_6, "cond7": condition_7, "cond8": condition_8, "cond9": condition_9, "cond10": condition_10, "total": total, "know": know}, ignore_index=True)
-
-                        is_positive = currentClose > prevClose
-                        is_at_52wk_high = currentClose >= high_of_52week
-
-                        print(
-                            f"{stock} made the Minervini requirements | "
-                            f"is_at_52wk_high={is_at_52wk_high} | "
-                            f"total={total} | "
-                            f"know={know} | "
-                            f"currentClose={currentClose:.2f} | "
-                            f"high_of_52week={high_of_52week:.2f}"
-                        )
-
-                        # ===== KNOWN stocks at 52-week high but NOT in email_display_list =====
-                        if (know == 1 and is_at_52wk_high and total < 10):
-                            extra_52wk_high_symbols.append(stock)
-                        if(total >= 10):
-                            exportList2 = exportList2._append({'Stock': stock, "stock_return" : stock_return, "returns_multiple" : returns_multiple, "volume_triangle" : volume_triangle, "currentClose" : currentClose, "RS_Rating": RS_Rating ,"50 Day MA": moving_average_50, "150 Day Ma": moving_average_150, "200 Day MA": moving_average_200, "52 Week Low": low_of_52week, "52 week High": high_of_52week, "cond1": condition_1, "cond2": condition_2, "cond3": condition_3, "cond4": condition_4, "cond5": condition_5, "cond6": condition_6, "cond7": condition_7, "cond8": condition_8, "cond9": condition_9, "cond10": condition_10, "total": total, "know": know}, ignore_index=True)
-                            if know == 1:
-                                know_total_count += 1
-                                if is_positive:
-                                    know_positive_count += 1
-                                email_content_stocks.append(stock)
-                    except:
-                        continue
-            except:
-                pass
-    
     progress_bar.progress((idx + 1) / len(industry_items))
 
 status_text.empty()
@@ -825,7 +629,67 @@ st.markdown("---")
 with st.spinner("Scanning pattern anomalies across known instruments..."):
     results = process_pattern_scanners(tuple(KNOWN_STOCKS))
     b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list = results[:7]
-    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:]
+    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:14]
+    known_raw_data = results[14]  # Captured the returned 2y raw_data
+
+# --- INTEGRATE AND REUSE KNOWN RAW DATA FOR MINERVINI STATISTICS TRACKING ---
+if not known_raw_data.empty:
+    for stock in KNOWN_STOCKS:
+        try:
+            if len(KNOWN_STOCKS) > 1:
+                df = pd.DataFrame({
+                    'Open': known_raw_data['Open'][stock],
+                    'High': known_raw_data['High'][stock],
+                    'Low': known_raw_data['Low'][stock],
+                    'Close': known_raw_data['Close'][stock],
+                    'Adj Close': known_raw_data['Adj Close'][stock],
+                    'Volume': known_raw_data['Volume'][stock]
+                }).dropna()
+            else:
+                df = known_raw_data.dropna().copy()
+                df['Adj Close'] = df['Close']
+            
+            if len(df) < 200:
+                continue
+                
+            sma = [50, 150, 200]
+            for x in sma:
+                df["SMA_"+str(x)] = round(df['Adj Close'].rolling(window=x).mean(), 2)
+            
+            currentClose = df["Adj Close"].iloc[-1]
+            prevClose = df["Adj Close"].iloc[-2]
+            Volume = df["Volume"].iloc[-1]
+            moving_average_50 = df["SMA_50"].iloc[-1]
+            moving_average_150 = df["SMA_150"].iloc[-1]
+            moving_average_200 = df["SMA_200"].iloc[-1]
+            low_of_52week = round(min(df["Low"].iloc[-260:]), 2)
+            high_of_52week = round(df["High"].iloc[-260:-1].max(), 2)
+
+            try:
+                moving_average_200_20 = df["SMA_200"].iloc[-20]
+            except Exception:
+                moving_average_200_20 = 0
+
+            condition_1 = 1 if (currentClose > moving_average_50 > moving_average_200) else 0
+            condition_2 = 1 if (moving_average_50 > moving_average_200) else 0
+            condition_3 = 1 if (moving_average_200 > moving_average_200_20) else 0
+            condition_4 = 1 if (moving_average_50 > moving_average_200) else 0
+            condition_5 = 1 if (currentClose > moving_average_50) else 0
+            condition_6 = 1 if (currentClose >= (1.3 * low_of_52week)) else 0
+            condition_7 = 1 if (currentClose >= (.75 * high_of_52week)) else 0
+            condition_8 = 1 if (currentClose >= 20) else 0
+            condition_9 = 1 if (Volume > 20000) else 0
+            condition_10 = 1 if ((Volume * currentClose) > 2000000) else 0
+
+            total = condition_1 + condition_2 + condition_3 + condition_4 + condition_5 + condition_6 + condition_7 + condition_8 + condition_9 + condition_10
+
+            if total >= 10:
+                know_total_count += 1
+                if currentClose > prevClose:
+                    know_positive_count += 1
+                email_content_stocks.append(stock)
+        except:
+            continue
 
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
 st.markdown(f"#### 🔥 Two Botak = Awareness short term group burst ({len(b_list)})")
