@@ -458,6 +458,7 @@ def process_pattern_scanners(stocks_list):
         # Initialize internal metrics tracking variables
         know_total_count = 0
         know_positive_count = 0
+        email_content_stocks = []
         
         for ticker in stocks_list:
             try:
@@ -516,7 +517,12 @@ def process_pattern_scanners(stocks_list):
 
                     if total >= 10:
                         know_total_count += 1
-                        if currentClose > prevClose:
+                        is_pos_today = currentClose > prevClose
+                        
+                        # Store both the symbol name and its positive state true/false flag
+                        email_content_stocks.append((ticker, is_pos_today)) 
+                        
+                        if is_pos_today:
                             know_positive_count += 1
                 
                 # Scan Today
@@ -554,9 +560,9 @@ def process_pattern_scanners(stocks_list):
         
         return (botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, value_trap_matches, ppp_matches,
                 botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, value_trap_yest, ppp_yest, 
-                know_pos_pct, know_positive_count, know_total_count)
+                know_pos_pct, know_positive_count, know_total_count, email_content_stocks)
     except:
-        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0
+        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, []
 
 # 5. UI Layout & Logic
 st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
@@ -673,7 +679,7 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
     results = process_pattern_scanners(tuple(KNOWN_STOCKS))
     b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list = results[:7]
     b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:14]
-    know_pos_pct, know_positive_count, know_total_count = results[14:]
+    know_pos_pct, know_positive_count, know_total_count, email_content_stocks = results[14:]
 
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
 st.markdown(f"#### 🔥 Two Botak = Awareness short term group burst ({len(b_list)})")
@@ -771,23 +777,24 @@ st.markdown("<br>", unsafe_allow_html=True) # Spacer
 # --- Display metrics row at the very bottom of the website ---
 #st.write(f"**Known Pos Pct:** {know_pos_pct:.2f}% | **Known Positive Count:** {know_positive_count} | **Known Total Count:** {know_total_count}")
 
-# --- Styled Badge Display at the very bottom of the website ---
-st.markdown(
-    f"""
-    <div style="display: flex; gap: 8px; align-items: center; margin-top: 20px;">
-        <div class="ticker-badge" style="background-color: #2c3e50; border: 1px solid #34495e;">
-            <span style="font-weight: bold; color: #fff;">Total Count:</span> 
-            <span style="color: #4ecdc4; font-weight: bold;">{know_total_count}</span>
-        </div>
-        <div class="ticker-badge" style="background-color: #3a321d; border: 1px solid #FFD700;">
-            <span style="font-weight: bold; color: #fff;">Positive Count:</span> 
-            <span style="color: #FFD700; font-weight: bold;">{know_positive_count}</span>
-        </div>
-        <div class="ticker-badge" style="background-color: #1e1e1e; border: 1px solid #444;">
-            <span style="font-weight: bold; color: #fff;">Positive Pct:</span> 
-            <span style="color: #eee; font-weight: bold;">{know_pos_pct:.2f}%</span>
-        </div>
-    </div>
-    """, 
-    unsafe_allow_html=True
-)
+# --- Render the Qualifying Stocks List Row ---
+st.markdown("<div style='margin-top:20px; font-size:14px; font-weight:bold;'>⭐ Minervini Qualified Stocks (Total >= 10):</div>", unsafe_allow_html=True)
+if email_content_stocks:
+    stocks_html = ""
+    # Loop over the tuples unpacked directly out of the data collection array
+    for sym, is_positive in email_content_stocks:
+        if is_positive:
+            # Special Gold Badge Styling for items matching positive close direction states
+            stocks_html += f'<div class="ticker-badge" style="background-color: #3a321d; border: 1px solid #FFD700; color: #FFD700; font-weight: bold;">{sym} 🗲</div>'
+        else:
+            # Standard Matching Badge Layout
+            stocks_html += f'<div class="ticker-badge">{sym}</div>'
+            
+    st.markdown(stocks_html, unsafe_allow_html=True)
+else:
+    st.info("No stocks matched all required filters today.")
+
+st.markdown("<br>", unsafe_allow_html=True) # Spacer
+
+# --- Your exact Summary Line rendered directly below ---
+st.write(f"**Known Pos Pct:** {know_pos_pct:.2f}% | **Known Positive Count:** {know_positive_count} | **Known Total Count:** {know_total_count}")
