@@ -736,7 +736,7 @@ header_html = (
     f" <b style='color:#eee;'>Total Count:</b> {know_total_count})"
     f"</div>"
 )
-st.markdown(header_html, unsafe_allow_html=True)
+#st.markdown(header_html, unsafe_allow_html=True)
 
 if email_content_stocks:
     stocks_html = ""
@@ -754,7 +754,7 @@ st.markdown("---")
 # ==============================================================================
 # BLOCK B: NEW EXTRA 52W HIGH SYMBOLS (Placed directly underneath)
 # ==============================================================================
-st.markdown("<br>", unsafe_allow_html=True) # Spacer
+#st.markdown("<br>", unsafe_allow_html=True) # Spacer
 
 extra_header_html = (
     f"<div style='font-size:1.15em; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
