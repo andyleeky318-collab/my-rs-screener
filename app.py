@@ -683,7 +683,7 @@ if not known_raw_data.empty:
 
             total = condition_1 + condition_2 + condition_3 + condition_4 + condition_5 + condition_6 + condition_7 + condition_8 + condition_9 + condition_10
 
-            if total >= 10:
+            if total >= 1:
                 know_total_count += 1
                 if currentClose > prevClose:
                     know_positive_count += 1
