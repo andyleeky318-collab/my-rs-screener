@@ -766,5 +766,28 @@ if vt_list:
 else:
     st.text("None")
 
+st.markdown("<br>", unsafe_allow_html=True) # Spacer
+
 # --- Display metrics row at the very bottom of the website ---
-st.write(f"**Known Pos Pct:** {know_pos_pct:.2f}% | **Known Positive Count:** {know_positive_count} | **Known Total Count:** {know_total_count}")
+#st.write(f"**Known Pos Pct:** {know_pos_pct:.2f}% | **Known Positive Count:** {know_positive_count} | **Known Total Count:** {know_total_count}")
+
+# --- Styled Badge Display at the very bottom of the website ---
+st.markdown(
+    f"""
+    <div style="display: flex; gap: 8px; align-items: center; margin-top: 20px;">
+        <div class="ticker-badge" style="background-color: #2c3e50; border: 1px solid #34495e;">
+            <span style="font-weight: bold; color: #fff;">Total Count:</span> 
+            <span style="color: #4ecdc4; font-weight: bold;">{know_total_count}</span>
+        </div>
+        <div class="ticker-badge" style="background-color: #3a321d; border: 1px solid #FFD700;">
+            <span style="font-weight: bold; color: #fff;">Positive Count:</span> 
+            <span style="color: #FFD700; font-weight: bold;">{know_positive_count}</span>
+        </div>
+        <div class="ticker-badge" style="background-color: #1e1e1e; border: 1px solid #444;">
+            <span style="font-weight: bold; color: #fff;">Positive Pct:</span> 
+            <span style="color: #eee; font-weight: bold;">{know_pos_pct:.2f}%</span>
+        </div>
+    </div>
+    """, 
+    unsafe_allow_html=True
+)
