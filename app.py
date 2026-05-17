@@ -460,6 +460,7 @@ def process_pattern_scanners(stocks_list):
         know_total_count = 0
         know_positive_count = 0
         email_content_stocks = []  # Now tracks tuples of (ticker, is_new_addition)
+        extra_52wk_high_symbols = []
 
         for ticker in stocks_list:
             try:
@@ -532,6 +533,10 @@ def process_pattern_scanners(stocks_list):
 
                     total_yesterday = (cond1_y + cond2_y + cond3_y + cond4_y + cond5_y + 
                                        cond6_y + cond7_y + cond8_y + cond9_y + cond10_y)
+                    
+                    is_at_52wk_high = currentClose >= high_of_52week
+                    if (is_at_52wk_high and total_today < 10):
+                        extra_52wk_high_symbols.append(ticker)
 
                     # --- SET CONTROLLER FLAGS ---
                     if total_today >= 10:
@@ -577,11 +582,13 @@ def process_pattern_scanners(stocks_list):
         
         know_pos_pct = (know_positive_count / know_total_count * 100) if know_total_count > 0 else 0
         
+        # Append extra_52wk_high_symbols to the very end of your main return tuple
         return (botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, value_trap_matches, ppp_matches,
                 botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, value_trap_yest, ppp_yest, 
-                know_pos_pct, know_positive_count, know_total_count, email_content_stocks)
+                know_pos_pct, know_positive_count, know_total_count, email_content_stocks, 
+                extra_52wk_high_symbols) # <--- Added here
     except:
-        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, []
+        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, [], [] # <--- Added empty fallback list
 
 # 5. UI Layout & Logic
 #st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
@@ -698,36 +705,54 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
     results = process_pattern_scanners(tuple(KNOWN_STOCKS))
     b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list = results[:7]
     b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:14]
-    know_pos_pct, know_positive_count, know_total_count, email_content_stocks = results[14:]
+    # Unpack extra_52wk_high_symbols at the end
+    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, extra_52wk_high_symbols = results[14:]
 
 # --- Render Header with Inline Summary Metrics inside Parentheses ---
 header_html = (
     f"<div style='margin-top:20px; font-size:14px; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
-    f"<span>⭐ Minervini Qualified Stocks (Total >= 10)</span>"
+    f"<span>⭐ Minervini Qualified Stocks</span>"
     f"<span style='font-size:12px; font-weight:normal; color:#888;'> "
-    f"(<b style='color:#eee;'>Known Pos Pct:</b> {know_pos_pct:.2f}% |"
-    f" <b style='color:#FFD700;'>Known Positive Count:</b> {know_positive_count} |"
+    f"(<b style='color:#eee;'>Known Pos Pct:</b> {know_pos_pct:.1f}% |"
+    f" <b style='color:#eee;'>Known Positive Count:</b> {know_positive_count} |"
     f" <b style='color:#eee;'>Known Total Count:</b> {know_total_count})"
     f"</div>"
 )
 st.markdown(header_html, unsafe_allow_html=True)
 
-# --- Render the Qualifying Stocks Badge Row (Sorted Alphabetically) ---
 if email_content_stocks:
     stocks_html = ""
-    
-    # Sort the tuples alphabetically by the stock ticker symbol
     for sym, is_new_addition in sorted(email_content_stocks):
         if is_new_addition:
-            # Applies the native gold badge class if the stock is a brand new addition today
             stocks_html += f'<div class="ticker-badge new-pattern-badge">{sym}</div>'
         else:
-            # Standard dark badge layout for established matching stocks
             stocks_html += f'<div class="ticker-badge">{sym}</div>'
-            
     st.markdown(stocks_html, unsafe_allow_html=True)
 else:
     st.info("No stocks matched all required filters today.")
+
+
+# ==============================================================================
+# BLOCK B: NEW EXTRA 52W HIGH SYMBOLS (Placed directly underneath)
+# ==============================================================================
+st.markdown("<br>", unsafe_allow_html=True) # Spacer
+
+extra_header_html = (
+    f"<div style='font-size:14px; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
+    f"<span>🚀 extra_52w_high_symbols</span>"
+    f"<span style='font-size:12px; font-weight:normal; color:#888;'>({len(extra_52wk_high_symbols)})</span>"
+    f"</div>"
+)
+st.markdown(extra_header_html, unsafe_allow_html=True)
+
+if extra_52wk_high_symbols:
+    extra_html = ""
+    # Sort alphabetically to maintain clean list standardization
+    for sym in sorted(extra_52wk_high_symbols):
+        extra_html += f'<div class="ticker-badge">{sym}</div>'
+    st.markdown(extra_html, unsafe_allow_html=True)
+else:
+    st.text("None")
 
 st.markdown("<br>", unsafe_allow_html=True) # Spacer
 
