@@ -759,7 +759,7 @@ st.markdown("---")
 extra_header_html = (
     f"<div style='font-size:1.15em; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
     f"<span>🚀 ATH , but fail Minervini criteria</span>"
-    f"<span style='font-weight:normal; color:#888;'>({len(extra_52wk_high_symbols)})</span>"
+    f"<span style='font-weight:normal; color:#ffffff;'>({len(extra_52wk_high_symbols)})</span>"
     f"</div>"
 )
 st.markdown(extra_header_html, unsafe_allow_html=True)
