@@ -22,6 +22,7 @@ st.markdown(
 
 # 2. Cleaned Industry Database (Preserved as requested)
 INDUSTRIES = {
+    '3D printing': ['XMTR', 'VELO', 'DDD', 'PRLB', 'MTLS', 'SSYS', 'NNDM'],
     'Crypto': ['MSTR', 'CRCL', 'COIN', 'IBIT'],
     'Nuclear': ['URA', 'NLR', 'CEG', 'CCJ', 'OKLO', 'UUUU', 'SMR'],
     'MAG7': ['AAPL', 'GOOGL', 'NVDA', 'META', 'MSFT', 'AMZN', 'TSLA'],
@@ -181,7 +182,7 @@ INDUSTRIES = {
 
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
-    'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EXC', 'FIGR', 
+    'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'HON', 'JEF', 'JKS', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'NTAP', 'OR', 
     'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
     'VUG', 'WGMI', 'WMB', 'XEL', 'XMAG', 'XYZ', 'ZIM','VICR', 'SLX', 'CBOE', 'SIMO', 'FLEX', 'POWL', 'VLO', 'DOCN', 
@@ -216,6 +217,13 @@ KNOWN_STOCKS = [
 ]
 # Ensure uniqueness
 KNOWN_STOCKS = list(set(KNOWN_STOCKS))
+
+LIME_STOCKS = [
+    'USO', 'XOP', 'BUG', 'CLOU', 'IGV', 'HACK', 'CIBR', 'TAN', 'IHI', 'IPAY', 
+    'VTV', 'KBE', 'KRE', 'VUG', 'PBW', 'MAGS', 'XRT', 'JETS', 'XTL', 'SHLD', 
+    'IBIT', 'UFO', 'XBI', 'SLX', 'ITA', 'REMX', 'LIT', 'KWEB', 'XHB', 'SMH', 
+    'BLOK', 'XME', 'URA', 'DRAM', 'GDX', 'WGMI', 'COPX', 'SIL'
+]
 
 # 3. Sidebar Inputs
 with st.sidebar:
@@ -684,6 +692,12 @@ if all_data:
         color: #000;
         font-weight: bold;
     }
+    .lime-badge {
+        background-color: #00FF00;
+        border: 1px solid #009900;
+        color: #000000;
+        font-weight: bold;
+    }
     .ticker-name { font-weight: bold; color: #ffffff; margin-right: 4px; }
     .ticker-rs { color: #4ecdc4; font-weight: normal; }
     table { width:100%; border-collapse: collapse; }
@@ -711,9 +725,16 @@ if all_data:
             rs_score = r["RS Score"]
             ticker_price = price_lookup.get(ticker_sym, 999)
             
-            if rs_score >= 80 and ticker_price > 30:
+            if rs_score >= 80:# and ticker_price > 30:
                 # If the ticker is inside KNOWN_STOCKS, apply high-contrast dark text rules
-                if ticker_sym in KNOWN_STOCKS:
+                if ticker_sym in LIME_STOCKS:
+                    ticker_html += (
+                        f'<div class="ticker-badge lime-badge">'
+                        f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{ticker_sym}</span>' 
+                        f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{rs_score:.0f}</span>' 
+                        f'</div>'
+                    )
+                elif ticker_sym in KNOWN_STOCKS:
                     ticker_html += (
                         f'<div class="ticker-badge new-pattern-badge">'
                         f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{ticker_sym}</span>' # Clean high-contrast dark charcoal text
@@ -740,8 +761,14 @@ if all_data:
             # Retrieve the RS Score from our data map (default to 0 if not found)
             cloud_rs = rs_lookup.get(cloud_sym, 0)
             
-            # Formats the badge background style using your Known Stock rules
-            if cloud_sym in KNOWN_STOCKS:
+            if cloud_sym in LIME_STOCKS:
+                cloud_html += (
+                    f'<div class="ticker-badge lime-badge">'
+                    f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{cloud_sym}</span>'
+                    f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{cloud_rs:.0f}</span>'
+                    f'</div>'
+                )
+            elif cloud_sym in KNOWN_STOCKS:
                 cloud_html += (
                     f'<div class="ticker-badge new-pattern-badge">'
                     f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{cloud_sym}</span>'
