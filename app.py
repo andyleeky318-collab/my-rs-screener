@@ -241,12 +241,13 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         low_data = data['Low']
         
         valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= length]
-        if not valid_tickers: return None, None, None
+        if not valid_tickers: return None, None, None, {}
 
         # --- New RS Logic ---
         bench_close = close_data[benchmark_ticker]
         stock_scores = {}
         cloud_tickers = []
+        price_lookup = {}  # Added to track individual stock prices out of cache cleanly
 
         for ticker in valid_tickers:
             # 1. rsClose = close / indexClose
@@ -276,6 +277,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             ema_low = low_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
             ema_high = high_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
             current_price = close_data[ticker].iloc[-1]
+            price_lookup[ticker] = current_price  # Cache current price reference maps
             
             if ema_low <= current_price <= ema_high:
                 cloud_tickers.append(ticker)
@@ -283,10 +285,10 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         rs_perf = pd.Series(stock_scores).astype(int)
         
         # We assign the raw score directly as your ranking metrics instead of the old percentile conversion
-        return rs_perf, rs_perf, cloud_tickers
+        return rs_perf, rs_perf, cloud_tickers, price_lookup
     except Exception as e:
         st.error(f"Error: {e}")
-        return None, None, None
+        return None, None, None, {}
 
 # Reference Scanner Logic Functions
 def scan_two_botak(df, lookback=0):
@@ -619,7 +621,7 @@ status_text = st.empty()
 industry_items = list(INDUSTRIES.items())
 for idx, (industry_name, tickers) in enumerate(industry_items):
     status_text.text(f"Processing {industry_name}...")
-    perf, rs_scores, cloud_list = get_rs_and_cloud_data_cached(tuple(tickers), benchmark, 90)
+    perf, rs_scores, cloud_list, price_lookup = get_rs_and_cloud_data_cached(tuple(tickers), benchmark, 90)
     
     if rs_scores is not None:
         top_n_scores = rs_scores.nlargest(int(top_n))
@@ -629,7 +631,8 @@ for idx, (industry_name, tickers) in enumerate(industry_items):
             "Industry": industry_name, 
             "Group RS": group_avg, 
             "Tickers": df_tickers, 
-            "Cloud": cloud_list
+            "Cloud": cloud_list,
+            "Prices": price_lookup  # Store prices securely into dataset
         })
     
     progress_bar.progress((idx + 1) / len(industry_items))
@@ -706,8 +709,9 @@ if all_data:
         for _, r in item["Tickers"].iterrows():
             ticker_sym = r["Ticker"]
             rs_score = r["RS Score"]
+            ticker_price = price_lookup.get(ticker_sym, 999)
             
-            if rs_score >= 80:
+            if rs_score >= 80 and ticker_price > 30:
                 # If the ticker is inside KNOWN_STOCKS, apply high-contrast dark text rules
                 if ticker_sym in KNOWN_STOCKS:
                     ticker_html += (
