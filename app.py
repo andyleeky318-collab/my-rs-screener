@@ -633,22 +633,41 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
     known_raw_data = results[14]  # Captured the returned 2y raw_data
 
 # --- INTEGRATE AND REUSE KNOWN RAW DATA FOR MINERVINI STATISTICS TRACKING ---
+# --- INTEGRATE AND REUSE KNOWN RAW DATA FOR MINERVINI STATISTICS TRACKING ---
 if not known_raw_data.empty:
     for stock in KNOWN_STOCKS:
         try:
+            # 1. Multi-index structural layout handling
             if len(KNOWN_STOCKS) > 1:
+                # Check if ticker exists in the downloaded data columns to avoid KeyError
+                # If multiple stocks were downloaded, columns will be a MultiIndex
+                if isinstance(known_raw_data.columns, pd.MultiIndex):
+                    if stock not in known_raw_data['Close'].columns:
+                        continue
+                else:
+                    # If only one stock ended up being valid, it won't have a sub-column index
+                    if stock not in KNOWN_STOCKS:
+                        continue
+                
+                # Safely extract columns, defaulting Adj Close to Close if missing
+                close_series = known_raw_data['Close'][stock]
+                adj_close_series = known_raw_data['Adj Close'][stock] if 'Adj Close' in known_raw_data.columns else close_series
+                
                 df = pd.DataFrame({
                     'Open': known_raw_data['Open'][stock],
                     'High': known_raw_data['High'][stock],
                     'Low': known_raw_data['Low'][stock],
-                    'Close': known_raw_data['Close'][stock],
-                    'Adj Close': known_raw_data['Adj Close'][stock],
+                    'Close': close_series,
+                    'Adj Close': adj_close_series,
                     'Volume': known_raw_data['Volume'][stock]
                 }).dropna()
             else:
+                # Single stock schema handling
                 df = known_raw_data.dropna().copy()
-                df['Adj Close'] = df['Close']
+                if 'Adj Close' not in df.columns and 'Close' in df.columns:
+                    df['Adj Close'] = df['Close']
             
+            # 2. Check for sufficient physical rows
             if len(df) < 200:
                 continue
                 
@@ -683,12 +702,13 @@ if not known_raw_data.empty:
 
             total = condition_1 + condition_2 + condition_3 + condition_4 + condition_5 + condition_6 + condition_7 + condition_8 + condition_9 + condition_10
 
-            if total >= 0:
+            if total >= 10:
                 know_total_count += 1
                 if currentClose > prevClose:
                     know_positive_count += 1
                 email_content_stocks.append(stock)
         except Exception as e:
+            # Silently catch unexpected computation errors on broken data rows
             st.error(f"Exception entered for ticker '{stock}': {str(e)}")
             continue
 
