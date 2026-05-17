@@ -774,16 +774,12 @@ else:
 
 st.markdown("<br>", unsafe_allow_html=True) # Spacer
 
-# --- Display metrics row at the very bottom of the website ---
-#st.write(f"**Known Pos Pct:** {know_pos_pct:.2f}% | **Known Positive Count:** {know_positive_count} | **Known Total Count:** {know_total_count}")
-
-# --- Render the Qualifying Stocks List Row ---
 # --- Render Header with Inline Summary Metrics inside Parentheses ---
 header_html = (
     f"<div style='margin-top:20px; font-size:14px; font-weight:bold; display:flex; align-items:center; gap:10px;'> "
     f"<span>⭐ Minervini Qualified Stocks (Total >= 10)</span>"
     f"<span style='font-size:12px; font-weight:normal; color:#888;'> "
-    f"(<b style='color:#eee;'>Known Pos Pct:</b> {know_pos_pct:.2f}% |"
+    f"(<b style='color:#eee;'>Known Pos Pct:</b> {know_pos_pct:.1f}% |"
     f" <b style='color:#eee;'>Known Positive Count:</b> {know_positive_count} |"
     f" <b style='color:#eee;'>Known Total Count:</b> {know_total_count})"
     f"</div>"
