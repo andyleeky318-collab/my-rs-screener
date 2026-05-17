@@ -728,12 +728,12 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
 
 # --- Render Header with Inline Summary Metrics inside Parentheses ---
 header_html = (
-    f"<div style='margin-top:20px; font-size:14px; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
+    f"<div style='margin-top:20px; font-size:1.15em; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
     f"<span>⭐ Minervini Qualified Stocks</span>"
     f"<span style='font-size:12px; font-weight:normal; color:#888;'> "
-    f"(<b style='color:#eee;'>Known Pos Pct:</b> {know_pos_pct:.1f}% |"
-    f" <b style='color:#eee;'>Known Positive Count:</b> {know_positive_count} |"
-    f" <b style='color:#eee;'>Known Total Count:</b> {know_total_count})"
+    f"(<b style='color:#eee;'>Positive Pct:</b> {know_pos_pct:.2f}% |"
+    f" <b style='color:#FFD700;'>Positive Count:</b> {know_positive_count} |"
+    f" <b style='color:#eee;'>Total Count:</b> {know_total_count})"
     f"</div>"
 )
 st.markdown(header_html, unsafe_allow_html=True)
@@ -756,8 +756,8 @@ else:
 st.markdown("<br>", unsafe_allow_html=True) # Spacer
 
 extra_header_html = (
-    f"<div style='font-size:14px; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
-    f"<span>🚀 extra_52w_high_symbols</span>"
+    f"<div style='font-size:1.15em; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
+    f"<span>🚀 ATH , but fail Minervini criteria</span>"
     f"<span style='font-size:12px; font-weight:normal; color:#888;'>({len(extra_52wk_high_symbols)})</span>"
     f"</div>"
 )
@@ -834,7 +834,7 @@ else:
 st.markdown("<br>", unsafe_allow_html=True) # Spacer
 
 # --- 4. POWERTREND (Full Horizontal Row) ---
-st.markdown(f"**PowerTrend = Awareness thematic leaders ({len(pt_list)}):**")
+st.markdown(f"#### ⚡ PowerTrend = Awareness thematic leaders ({len(pt_list)})")
 if pt_list:
     html_pt = ""
     for sym in pt_list:
@@ -847,7 +847,7 @@ else:
 st.markdown("<br>", unsafe_allow_html=True) # Spacer
 
 # --- 5. POWERTREND NOT EXTENDED (Full Horizontal Row Below PowerTrend) ---
-st.markdown(f"**PowerTrend (Not Extended) ({len(ptne_list)}):**")
+st.markdown(f"#### 🛡️ PowerTrend (Not Extended) ({len(ptne_list)})")
 if ptne_list:
     html_ptne = ""
     for sym in ptne_list:
@@ -860,7 +860,7 @@ else:
 st.markdown("<br>", unsafe_allow_html=True) # Spacer
 
 # --- 6. VALUE TRAP (Full Horizontal Row Below PowerTrend Not Extended) ---
-st.markdown(f"**Value Trap ({len(vt_list)}):**")
+st.markdown(f"#### ⚠️ Value Trap ({len(vt_list)})")
 if vt_list:
     html_vt = ""
     for sym in vt_list:
