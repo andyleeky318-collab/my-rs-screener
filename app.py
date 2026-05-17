@@ -435,7 +435,7 @@ def scan_ppp(df, lookback=0):
 @st.cache_data(ttl=3600)
 def process_pattern_scanners(stocks_list):
     try:
-        raw_data = yf.download(stocks_list, period="1y", interval="1d", progress=False)
+        raw_data = yf.download(stocks_list, period="2y", interval="1d", progress=False)
         
         # Today's Matches
         botak_matches = []
