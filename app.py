@@ -781,8 +781,9 @@ st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("<div style='margin-top:20px; font-size:14px; font-weight:bold;'>⭐ Minervini Qualified Stocks (Total >= 10):</div>", unsafe_allow_html=True)
 if email_content_stocks:
     stocks_html = ""
-    # Loop over the tuples unpacked directly out of the data collection array
-    for sym, is_positive in email_content_stocks:
+    
+    # Applied sorted() here to sort the tuples alphabetically by the stock ticker
+    for sym, is_positive in sorted(email_content_stocks):
         if is_positive:
             # Special Gold Badge Styling for items matching positive close direction states
             stocks_html += f'<div class="ticker-badge" style="background-color: #3a321d; border: 1px solid #FFD700; color: #FFD700; font-weight: bold;">{sym} 🗲</div>'
