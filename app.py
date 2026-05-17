@@ -691,7 +691,7 @@ if all_data:
 
     table_html = """<table>
     <thead><tr>
-    <th style="text-align: center; width: 40px;">#</th>
+    <th style="text-align: center; width: 30px;">#</th>
     <th style="text-align: left;">Industry</th>
     <th style="text-align: center; width: 40px;">RS</th>
     <th style="text-align: left;">Tickers (Ranked)</th>
