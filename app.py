@@ -5,7 +5,7 @@ import numpy as np
 
 # 1. Setup Streamlit Page
 st.set_page_config(page_title="Chrome Sector RS", layout="wide")
-st.title("🚀 Chrome Sector Relative Strength & Patterns")
+st.title("🚀 Theme Tracker")
 
 # 2. Cleaned Industry Database (Preserved as requested)
 INDUSTRIES = {
@@ -565,7 +565,7 @@ def process_pattern_scanners(stocks_list):
         return [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, []
 
 # 5. UI Layout & Logic
-st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
+#st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
 
 all_data = []
 progress_bar = st.progress(0)
@@ -777,7 +777,7 @@ st.markdown("<br>", unsafe_allow_html=True) # Spacer
 # --- Render Header with Inline Summary Metrics inside Parentheses ---
 header_html = (
     f"<div style='margin-top:20px; font-size:14px; font-weight:bold; display:flex; align-items:center; gap:10px;'> "
-    f"<span>⭐ Minervini Qualified Stocks (Total >= 10)</span>"
+    f"<span>⭐ Minervini Qualified Stocks</span>"
     f"<span style='font-size:12px; font-weight:normal; color:#888;'> "
     f"(<b style='color:#eee;'>Known Pos Pct:</b> {know_pos_pct:.1f}% |"
     f" <b style='color:#eee;'>Known Positive Count:</b> {know_positive_count} |"
