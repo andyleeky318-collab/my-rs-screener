@@ -683,12 +683,13 @@ if not known_raw_data.empty:
 
             total = condition_1 + condition_2 + condition_3 + condition_4 + condition_5 + condition_6 + condition_7 + condition_8 + condition_9 + condition_10
 
-            if total >= 1:
+            if total >= 0:
                 know_total_count += 1
                 if currentClose > prevClose:
                     know_positive_count += 1
                 email_content_stocks.append(stock)
         except:
+            st.error(f"Exception entered for ticker '{stock}': {str(e)}")
             continue
 
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
