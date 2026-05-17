@@ -924,4 +924,4 @@ if know_total_count > 0:
 else:
     know_pos_pct = 0
 
-st.write(f"Known Positive Percentage: {know_pos_pct:.2f}%")
+st.write(f"Known Positive Percentage: {know_pos_pct:.2f}%, Total Known Count: {know_total_count}")
