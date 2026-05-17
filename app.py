@@ -743,9 +743,9 @@ if all_data:
                 )
             else:
                 cloud_html += (
-                    f'<div class="ticker-badge cloud-badge">'
+                    f'<div class="ticker-badge">'
                     f'<span class="ticker-name">{cloud_sym}</span>'
-                    f'<span class="ticker-rs" style="color: #4ecdc4; margin-left: 5px; font-size: 0.85em;">{cloud_rs:.0f}</span>'
+                    f'<span class="ticker-rs">{cloud_rs:.0f}</span>'
                     f'</div>'
                 )
         bg_color = "#262730" if row_num % 2 == 0 else "#0e1117"
