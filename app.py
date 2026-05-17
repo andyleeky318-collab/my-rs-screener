@@ -42,7 +42,7 @@ INDUSTRIES = {
     'ENERGY COAL': ['HCC', 'BTU', 'ARLP', 'AMR'],
     'MEDIA-DIVERSIFIED': ['WMG'],
     'COMPTER-NETWRKING': ['ANET', 'CSCO', 'CALX'],
-    'COMPTR-DATA STRGE': ['DRAM', 'WDC', 'STX', 'MU', 'SNDK'],
+    'COMPTR-DATA STRGE': ['DRAM', 'WDC', 'STX', 'MU', 'SNDK', 'SIMO'],
     'CMP-HRDWRE/PERIP': ['DELL', 'HPQ', 'SMCI', 'HPE', 'ZBRA', 'NATL'],
     'CONTAINERS/PACKAGING': ['SW', 'BALL', 'PKG', 'AVY', 'AMCR', 'OC', 'CCK', 'ATR', 'GPK', 'SLGN', 'SON', 'SEE', 'GEF', 'OI'],
     'OIL&GAS-DRILLING': ['SLB', 'BKR', 'NE', 'VAL', 'HP', 'SDRL'],
@@ -53,10 +53,10 @@ INDUSTRIES = {
     'RETAIL-DRUG STORES': ['CVS'],
     'UTILITY-ELCTRIC PWR': ['NEE', 'SO', 'CEG', 'DUK', 'AEP', 'SRE', 'D', 'VST', 'PEG', 'PCG', 'EXC', 'XEL', 'ED', 'EIX', 'WEC', 'ETR', 'DTE', 'FE', 'PPL', 'AEE', 'ES', 'CMS', 'NRG', 'CNP', 'LNT', 'EVRG', 'AES', 'PNW', 'OGE', 'IDA', 'POR', 'ORA', 'BKH', 'TXNM', 'NWE', 'MGEE'],
     'ELECTRICAL POWER/EQPMT': ['ETN', 'GEV', 'AME', 'ROK', 'HUBB', 'RRX', 'GNRC', 'AYI', 'BDC', 'ENS', 'FLNC', 'SMR', 'ATKR', 'PBW', 'POWL', 'VICR', 'BE', 'ENVX'],
-    'TELCOM-FIBR OPTCS': ['AAOI', 'COHR', 'CIEN', 'FN', 'LITE'],
+    'TELCOM-FIBR OPTCS': ['AAOI', 'COHR', 'CIEN', 'FN', 'LITE', 'AXTI'],
     'ELEC-PARTS': ['APH', 'GLW', 'NVT', 'CAMT', 'TEL'],
     'ELEC-SCNTIFIC/MSRNG': ['PH', 'EMR', 'KEYS', 'FTV', 'CGNX', 'NOVT', 'ST', 'NXT', 'ITRI', 'ESE', 'SXI', 'MTRN'],
-    'ELEC-SEMICNDCTR EQP': ['ASML', 'KLAC', 'AMAT', 'LRCX', 'ONTO', 'NVMI', 'TER', 'AEIS', 'MKSI', 'ENTG', 'ACLS'],
+    'ELEC-SEMICNDCTR EQP': ['ASML', 'KLAC', 'AMAT', 'LRCX', 'ONTO', 'NVMI', 'TER', 'AEIS', 'MKSI', 'ENTG', 'ACLS', 'AEHR'],
     'ELEC-CONTRACT MFG': ['SOLS', 'VRT', 'FLEX', 'PLXS', 'JBL', 'SANM', 'TTMI'],
     'ELEC-MISC PRODUCTS': ['OLED', 'LFUS', 'VSH'],
     'WHOLESALE-ELECT': ['SNX', 'ARW', 'AVT', 'REZI', 'GWW', 'FAST', 'FERG', 'GPC', 'POOL', 'AIT', 'WCC', 'MSM', 'UGI'],
@@ -139,7 +139,7 @@ INDUSTRIES = {
     'MEDICAL-ETHICAL DRGS': ['NVO', 'LLY', 'JNJ', 'ABBV', 'MRK', 'PFE', 'VRTX', 'REGN', 'BMY', 'ZTS', 'ALNY', 'BIIB', 'RPRX', 'UTHR', 'VTRS', 'INCY', 'INSM', 'SRPT', 'NBIX', 'CTLT', 'ROIV', 'ITCI', 'RGEN', 'VKTX', 'EXEL', 'JAZZ', 'CYTK', 'IONS', 'BHVN', 'RARE', 'CORT', 'MDGL', 'OGN', 'ALKS', 'CRNX', 'TGTX', 'PHB', 'PRGO', 'APLS', 'RVMD'],
     'MINING-GLD/SILVR/GMS': ['NEM', 'RGLD'],
     'INSRNCE-PRP/CAS/TITL': ['BRK.B', 'CB', 'TRV', 'ALL', 'AIG', 'ERIE', 'WRB', 'MKL', 'L', 'EG', 'RNR', 'AFG', 'AIZ', 'MTG', 'SIGI', 'THG', 'KMPR', 'HGTY', 'MCY', 'NMIH', 'PLMR', 'SPNT', 'FNF', 'ORI', 'ESNT', 'FAF', 'RDN', 'AGO'],
-    'MEDIA-BOOKS': ['WLY'],
+    'MEDIA-BOOKS': ['WLY', 'SPOT', 'LYV', 'DIS', 'WBD'],
     'MEDIA-NEWSPAPERS': ['NWS', 'NYT'],
     'PAPER & PAPER PRODUC': ['IP', 'SLVM'],
     'TRANSPORTATION-RAIL': ['UNP', 'CSX', 'NSC', 'GATX'],
@@ -162,13 +162,13 @@ INDUSTRIES = {
     'MCHNRY-CNSTR/MNG': ['CAT', 'PCAR'],
     'UTILITY-WATER SUPPLY': ['AWK', 'WTRG', 'AWR', 'CWT'],
     'TELCOM SVC-WIRLES': ['TMUS', 'VZ', 'T', 'LBRDA', 'USM', 'TIGO', 'TDS'],
-    'ELEC-SEMICON FBLSS': ['ARM', 'NVDA', 'AVGO', 'AMD', 'QCOM', 'ADI', 'MRVL', 'NXPI', 'MPWR', 'MCHP', 'ON', 'SWKS', 'QRVO', 'ALAB', 'MTSI', 'LSCC', 'CRUS', 'PI', 'RMBS', 'SITM', 'ALGM', 'SLAB', 'POWI', 'IPGP', 'SMTC', 'DIOD', 'SYNA', 'AMBA'],
+    'ELEC-SEMICON FBLSS': ['ARM', 'NVDA', 'AVGO', 'AMD', 'QCOM', 'ADI', 'MRVL', 'NXPI', 'MPWR', 'MCHP', 'ON', 'SWKS', 'QRVO', 'ALAB', 'CRDO', 'MTSI', 'LSCC', 'CRUS', 'PI', 'RMBS', 'SITM', 'ALGM', 'SLAB', 'POWI', 'IPGP', 'SMTC', 'DIOD', 'SYNA', 'AMBA'],
     'ELEC-SEMICON MFG': ['TSM', 'TXN', 'INTC', 'GFS', 'AMKR', 'TSEM', 'FORM', 'STM']
 }
 
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
-    'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EXC', 'FIGR', 
+    'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'HON', 'JEF', 'JKS', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'NTAP', 'OR', 
     'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
     'VUG', 'WGMI', 'WMB', 'XEL', 'XMAG', 'XYZ', 'ZIM','VICR', 'SLX', 'CBOE', 'SIMO', 'FLEX', 'POWL', 'VLO', 'DOCN', 
