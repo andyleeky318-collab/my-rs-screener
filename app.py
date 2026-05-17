@@ -695,7 +695,7 @@ if all_data:
     <th style="text-align: left;">Industry</th>
     <th style="text-align: center; width: 40px;">RS</th>
     <th style="text-align: left;">Tickers (Ranked)</th>
-    <th style="text-align: left; width: 220px;">Within 21 EMA Cloud</th>
+    <th style="text-align: left; width: 350px;">Within 21 EMA Cloud</th>
     </tr></thead><tbody>"""
 
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
