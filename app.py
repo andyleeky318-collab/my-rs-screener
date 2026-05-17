@@ -7,6 +7,19 @@ import numpy as np
 st.set_page_config(page_title="Chrome Sector RS", layout="wide")
 st.title("🚀 Theme Tracker")
 
+st.markdown(
+    """
+    <style>
+    /* Adjusts the sidebar drawer structural container width */
+    [data-testid="stSidebar"] {
+        min-width: 240px !important;
+        max-width: 240px !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # 2. Cleaned Industry Database (Preserved as requested)
 INDUSTRIES = {
     'Crypto': ['MSTR', 'CRCL', 'COIN', 'IBIT'],
