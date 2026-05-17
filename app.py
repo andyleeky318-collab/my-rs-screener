@@ -700,6 +700,7 @@ if all_data:
 
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
         item = next(d for d in all_data if d["Industry"] == row["Industry"])
+        rs_lookup = dict(zip(item["Tickers"]["Ticker"], item["Tickers"]["RS Score"]))
         
         ticker_html = ""
         for _, r in item["Tickers"].iterrows():
@@ -726,10 +727,9 @@ if all_data:
         
         #cloud_html = "".join([f'<div class="ticker-badge cloud-badge">{c}</div>' for c in item["Cloud"]])
         cloud_html = ""
-        # Create a quick symbol lookup map to match the cloud tickers to their exact RS scores
-        rs_lookup = dict(zip(item["Tickers"]["Ticker"], item["Tickers"]["RS Score"]))
+        sorted_cloud = sorted(item["Cloud"], key=lambda sym: rs_lookup.get(sym, 0), reverse=True)
         
-        for cloud_sym in item["Cloud"]:
+        for cloud_sym in sorted_cloud:
             # Retrieve the RS Score from our data map (default to 0 if not found)
             cloud_rs = rs_lookup.get(cloud_sym, 0)
             
