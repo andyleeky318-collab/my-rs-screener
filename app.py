@@ -693,7 +693,7 @@ if all_data:
     <thead><tr>
     <th style="text-align: center; width: 40px;">#</th>
     <th style="text-align: left;">Industry</th>
-    <th style="text-align: center; width: 80px;">Group RS</th>
+    <th style="text-align: center; width: 40px;">RS</th>
     <th style="text-align: left;">Tickers (Ranked)</th>
     <th style="text-align: left; width: 220px;">Within 21 EMA Cloud</th>
     </tr></thead><tbody>"""
@@ -728,7 +728,7 @@ if all_data:
         #cloud_html = "".join([f'<div class="ticker-badge cloud-badge">{c}</div>' for c in item["Cloud"]])
         cloud_html = ""
         sorted_cloud = sorted(item["Cloud"], key=lambda sym: rs_lookup.get(sym, 0), reverse=True)
-        
+
         # --- SLICE LOGIC: Slices the sorted array to isolate the top 5 items only ---
         top_5_cloud = sorted_cloud[:5]
         
