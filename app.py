@@ -782,13 +782,13 @@ st.markdown("<div style='margin-top:20px; font-size:14px; font-weight:bold;'>⭐
 if email_content_stocks:
     stocks_html = ""
     
-    # Applied sorted() here to sort the tuples alphabetically by the stock ticker
+    # Sort the tuples alphabetically by the stock ticker symbol
     for sym, is_positive in sorted(email_content_stocks):
         if is_positive:
-            # Special Gold Badge Styling for items matching positive close direction states
-            stocks_html += f'<div class="ticker-badge" style="background-color: #3a321d; border: 1px solid #FFD700; color: #FFD700; font-weight: bold;">{sym} 🗲</div>'
+            # Uses your exact native gold badge configuration class
+            stocks_html += f'<div class="ticker-badge new-pattern-badge">{sym}</div>'
         else:
-            # Standard Matching Badge Layout
+            # Standard dark badge layout
             stocks_html += f'<div class="ticker-badge">{sym}</div>'
             
     st.markdown(stocks_html, unsafe_allow_html=True)
