@@ -689,8 +689,6 @@ if all_data:
     </style>
     """, unsafe_allow_html=True)
 
-    # ... [Keep your existing table header setup completely untouched] ...
-
     table_html = """<table>
     <thead><tr>
     <th style="text-align: center; width: 40px;">#</th>
@@ -703,14 +701,26 @@ if all_data:
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
         item = next(d for d in all_data if d["Industry"] == row["Industry"])
         
-        # --- ADDED INLINE CONDITIONAL CHECK FOR KNOWN_STOCKS ONLY ---
         ticker_html = ""
         for _, r in item["Tickers"].iterrows():
             ticker_sym = r["Ticker"]
-            # If the ticker is inside KNOWN_STOCKS, apply your native gold class
-            badge_class = "ticker-badge new-pattern-badge" if ticker_sym in KNOWN_STOCKS else "ticker-badge"
             
-            ticker_html += f'<div class="{badge_class}"><span class="ticker-name">{ticker_sym}</span><span class="ticker-rs">{r["RS Score"]:.0f}</span></div>'
+            # If the ticker is inside KNOWN_STOCKS, apply high-contrast dark text rules
+            if ticker_sym in KNOWN_STOCKS:
+                ticker_html += (
+                    f'<div class="ticker-badge new-pattern-badge">'
+                    f'<span class="ticker-name" style="color: #111111;">{ticker_sym}</span>' # Clean high-contrast dark charcoal text
+                    f'<span class="ticker-rs" style="color: #664d03; font-weight: bold;">{r["RS Score"]:.0f}</span>' # Highly legible dark gold numbers
+                    f'</div>'
+                )
+            else:
+                # Standard matching dark badge layout for everything else
+                ticker_html += (
+                    f'<div class="ticker-badge">'
+                    f'<span class="ticker-name">{ticker_sym}</span>'
+                    f'<span class="ticker-rs">{r["RS Score"]:.0f}</span>'
+                    f'</div>'
+                )
         
         cloud_html = "".join([f'<div class="ticker-badge cloud-badge">{c}</div>' for c in item["Cloud"]])
         bg_color = "#262730" if row_num % 2 == 0 else "#0e1117"
