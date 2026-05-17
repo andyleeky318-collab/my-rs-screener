@@ -681,6 +681,38 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
     b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:14]
     know_pos_pct, know_positive_count, know_total_count, email_content_stocks = results[14:]
 
+# --- Render Header with Inline Summary Metrics inside Parentheses ---
+header_html = (
+    f"<div style='margin-top:20px; font-size:14px; font-weight:bold; display:flex; align-items:center; gap:10px;'> "
+    f"<span>⭐ Minervini Qualified Stocks</span>"
+    f"<span style='font-size:12px; font-weight:normal; color:#888;'> "
+    f"(<b style='color:#eee;'>Known Pos Pct:</b> {know_pos_pct:.1f}% |"
+    f" <b style='color:#eee;'>Known Positive Count:</b> {know_positive_count} |"
+    f" <b style='color:#eee;'>Known Total Count:</b> {know_total_count})"
+    f"</div>"
+)
+
+st.markdown(header_html, unsafe_allow_html=True)
+
+# --- Render the Qualifying Stocks Badge Row (Sorted Alphabetically) ---
+if email_content_stocks:
+    stocks_html = ""
+    
+    # Sort the tuples alphabetically by the stock ticker symbol
+    for sym, is_positive in sorted(email_content_stocks):
+        if is_positive:
+            # Uses your exact native gold badge configuration class
+            stocks_html += f'<div class="ticker-badge new-pattern-badge">{sym}</div>'
+        else:
+            # Standard dark badge layout
+            stocks_html += f'<div class="ticker-badge">{sym}</div>'
+            
+    st.markdown(stocks_html, unsafe_allow_html=True)
+else:
+    st.info("No stocks matched all required filters today.")
+
+st.markdown("<br>", unsafe_allow_html=True) # Spacer
+
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
 st.markdown(f"#### 🔥 Two Botak = Awareness short term group burst ({len(b_list)})")
 if b_list:
@@ -771,35 +803,3 @@ if vt_list:
     st.markdown(html_vt, unsafe_allow_html=True)
 else:
     st.text("None")
-
-st.markdown("<br>", unsafe_allow_html=True) # Spacer
-
-# --- Render Header with Inline Summary Metrics inside Parentheses ---
-header_html = (
-    f"<div style='margin-top:20px; font-size:14px; font-weight:bold; display:flex; align-items:center; gap:10px;'> "
-    f"<span>⭐ Minervini Qualified Stocks</span>"
-    f"<span style='font-size:12px; font-weight:normal; color:#888;'> "
-    f"(<b style='color:#eee;'>Known Pos Pct:</b> {know_pos_pct:.1f}% |"
-    f" <b style='color:#eee;'>Known Positive Count:</b> {know_positive_count} |"
-    f" <b style='color:#eee;'>Known Total Count:</b> {know_total_count})"
-    f"</div>"
-)
-
-st.markdown(header_html, unsafe_allow_html=True)
-
-# --- Render the Qualifying Stocks Badge Row (Sorted Alphabetically) ---
-if email_content_stocks:
-    stocks_html = ""
-    
-    # Sort the tuples alphabetically by the stock ticker symbol
-    for sym, is_positive in sorted(email_content_stocks):
-        if is_positive:
-            # Uses your exact native gold badge configuration class
-            stocks_html += f'<div class="ticker-badge new-pattern-badge">{sym}</div>'
-        else:
-            # Standard dark badge layout
-            stocks_html += f'<div class="ticker-badge">{sym}</div>'
-            
-    st.markdown(stocks_html, unsafe_allow_html=True)
-else:
-    st.info("No stocks matched all required filters today.")
