@@ -712,7 +712,7 @@ if all_data:
                 if ticker_sym in KNOWN_STOCKS:
                     ticker_html += (
                         f'<div class="ticker-badge new-pattern-badge">'
-                        f'<span class="ticker-name" style="color: #111111;">{ticker_sym}</span>' # Clean high-contrast dark charcoal text
+                        f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{ticker_sym}</span>' # Clean high-contrast dark charcoal text
                         f'<span class="ticker-rs" style="color: #004d26; font-weight: bold;">{r["RS Score"]:.0f}</span>' # Highly legible dark gold numbers
                         f'</div>'
                     )
@@ -737,8 +737,8 @@ if all_data:
             if cloud_sym in KNOWN_STOCKS:
                 cloud_html += (
                     f'<div class="ticker-badge new-pattern-badge">'
-                    f'<span class="ticker-name" style="color: #004d26; font-weight: bold;">{cloud_sym}</span>'
-                    f'<span class="ticker-rs" style="color: #004d26; font-weight: bold; margin-left: 5px;">{cloud_rs:.0f}</span>'
+                    f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{cloud_sym}</span>'
+                    f'<span class="ticker-rs" style="color: #004d26; font-weight: bold;">{cloud_rs:.0f}</span>'
                     f'</div>'
                 )
             else:
