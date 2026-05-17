@@ -435,7 +435,7 @@ def scan_ppp(df, lookback=0):
 @st.cache_data(ttl=3600)
 def process_pattern_scanners(stocks_list):
     try:
-        raw_data = yf.download(stocks_list, period="1y", interval="1d", progress=False)
+        raw_data = yf.download(stocks_list, period="2y", interval="1d", progress=False)
         
         # Today's Matches
         botak_matches = []
@@ -454,6 +454,10 @@ def process_pattern_scanners(stocks_list):
         powertrend_ne_yest = []
         value_trap_yest = []
         ppp_yest = []
+
+        # Initialize internal metrics tracking variables
+        know_total_count = 0
+        know_positive_count = 0
         
         for ticker in stocks_list:
             try:
@@ -462,13 +466,58 @@ def process_pattern_scanners(stocks_list):
                         'Open': raw_data['Open'][ticker],
                         'High': raw_data['High'][ticker],
                         'Low': raw_data['Low'][ticker],
-                        'Close': raw_data['Close'][ticker]
+                        'Close': raw_data['Close'][ticker],
+                        'Volume': raw_data['Volume'][ticker]
                     }).dropna()
                 else:
-                    ticker_df = raw_data.dropna()
+                    ticker_df = raw_data.dropna().copy()
                 
                 if ticker_df.empty or len(ticker_df) < 50:
                     continue
+
+                # --- INTEGRATION OF CUSTOM USER LOGIC APPLIED TO KNOWN STOCKS ---
+                if ticker in KNOWN_STOCKS and len(ticker_df) >= 260:
+                    # Implement SMA calculations using Close to align seamlessly with template parameters
+                    ticker_df["SMA_50"] = round(ticker_df['Close'].rolling(window=50).mean(), 2)
+                    ticker_df["SMA_150"] = round(ticker_df['Close'].rolling(window=150).mean(), 2)
+                    ticker_df["SMA_200"] = round(ticker_df['Close'].rolling(window=200).mean(), 2)
+
+                    currentClose = ticker_df["Close"].iloc[-1]
+                    prevClose = ticker_df["Close"].iloc[-2]
+                    Volume = ticker_df["Volume"].iloc[-1]
+                    moving_average_50 = ticker_df["SMA_50"].iloc[-1]
+                    moving_average_200 = ticker_df["SMA_200"].iloc[-1]
+                    
+                    low_of_52week = round(min(ticker_df["Low"].iloc[-260:]), 2)
+                    high_of_52week = round(ticker_df["High"].iloc[-260:-1].max(), 2)
+                    volume_50days = ticker_df["Volume"].iloc[-50:].mean()
+                    volume_50days_13x = 1.3 * volume_50days
+                    volume_1year = max(ticker_df["Volume"].iloc[-52:-1])
+
+                    try:
+                        moving_average_200_20 = ticker_df["SMA_200"].iloc[-20]
+                    except:
+                        moving_average_200_20 = 0
+
+                    # Convert boolean metrics directly to integer indicators
+                    condition_1 = int(currentClose > moving_average_50 > moving_average_200)
+                    condition_2 = int(moving_average_50 > moving_average_200)
+                    condition_3 = int(moving_average_200 > moving_average_200_20)
+                    condition_4 = int(moving_average_50 > moving_average_200)
+                    condition_5 = int(currentClose > moving_average_50)
+                    condition_6 = int(currentClose >= (1.3 * low_of_52week))
+                    condition_7 = int(currentClose >= (0.75 * high_of_52week))
+                    condition_8 = int(currentClose >= 20)
+                    condition_9 = int(Volume > 20000)
+                    condition_10 = int((Volume * currentClose) > 2000000)
+
+                    total = (condition_1 + condition_2 + condition_3 + condition_4 + condition_5 + 
+                             condition_6 + condition_7 + condition_8 + condition_9 + condition_10)
+
+                    if total >= 10:
+                        know_total_count += 1
+                        if currentClose > prevClose:
+                            know_positive_count += 1
                 
                 # Scan Today
                 if scan_two_botak(ticker_df, 0): botak_matches.append(ticker)
@@ -500,11 +549,14 @@ def process_pattern_scanners(stocks_list):
         powertrend_ne_matches.sort()
         value_trap_matches.sort()
         ppp_matches.sort()
+
+        know_pos_pct = (know_positive_count / know_total_count * 100) if know_total_count > 0 else 0
         
         return (botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, value_trap_matches, ppp_matches,
-                botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, value_trap_yest, ppp_yest)
+                botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, value_trap_yest, ppp_yest, 
+                know_pos_pct, know_positive_count, know_total_count)
     except:
-        return [], [], [], [], [], [], [], [], [], [], [], [], [], []
+        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0
 
 # 5. UI Layout & Logic
 st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
@@ -620,7 +672,8 @@ st.markdown("---")
 with st.spinner("Scanning pattern anomalies across known instruments..."):
     results = process_pattern_scanners(tuple(KNOWN_STOCKS))
     b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list = results[:7]
-    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:]
+    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:14]
+    know_pos_pct, know_positive_count, know_total_count = results[14:]
 
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
 st.markdown(f"#### 🔥 Two Botak = Awareness short term group burst ({len(b_list)})")
@@ -712,3 +765,6 @@ if vt_list:
     st.markdown(html_vt, unsafe_allow_html=True)
 else:
     st.text("None")
+
+# --- Display metrics row at the very bottom of the website ---
+st.write(f"**Known Pos Pct:** {know_pos_pct:.2f}% | **Known Positive Count:** {know_positive_count} | **Known Total Count:** {know_total_count}")
