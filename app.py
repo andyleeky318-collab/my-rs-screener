@@ -435,15 +435,8 @@ def scan_ppp(df, lookback=0):
 @st.cache_data(ttl=3600)
 def process_pattern_scanners(stocks_list):
     try:
-        # Changed period to 2y to ensure enough lookback window for 52-week parameters and template metrics
         raw_data = yf.download(stocks_list, period="1y", interval="1d", progress=False)
         
-        # Unique raw download calculation tracking
-        if isinstance(raw_data.columns, pd.MultiIndex):
-            raw_kb_count = len(raw_data.columns.levels[1].unique()) if len(raw_data.columns.levels) > 1 else 1
-        else:
-            raw_kb_count = 1 if len(stocks_list) == 1 else len(raw_data.columns.unique())
-
         # Today's Matches
         botak_matches = []
         engulf2_matches = []
@@ -452,9 +445,8 @@ def process_pattern_scanners(stocks_list):
         powertrend_ne_matches = []
         value_trap_matches = []
         ppp_matches = []
-        email_content_stocks = []
         
-        # Yesterday's Matches
+        # Yesterday's Matches (for color logic)
         botak_yest = []
         engulf2_yest = []
         engulf3_yest = []
@@ -462,10 +454,6 @@ def process_pattern_scanners(stocks_list):
         powertrend_ne_yest = []
         value_trap_yest = []
         ppp_yest = []
-        email_content_stocks_yest = []
-
-        know_total_count = 0
-        know_positive_count = 0
         
         for ticker in stocks_list:
             try:
@@ -474,9 +462,7 @@ def process_pattern_scanners(stocks_list):
                         'Open': raw_data['Open'][ticker],
                         'High': raw_data['High'][ticker],
                         'Low': raw_data['Low'][ticker],
-                        'Close': raw_data['Close'][ticker],
-                        'Adj Close': raw_data['Adj Close'][ticker],
-                        'Volume': raw_data['Volume'][ticker]
+                        'Close': raw_data['Close'][ticker]
                     }).dropna()
                 else:
                     ticker_df = raw_data.dropna()
@@ -484,7 +470,7 @@ def process_pattern_scanners(stocks_list):
                 if ticker_df.empty or len(ticker_df) < 50:
                     continue
                 
-                # Scan Today Patterns
+                # Scan Today
                 if scan_two_botak(ticker_df, 0): botak_matches.append(ticker)
                 e2, e3 = scan_engulfing(ticker_df, 0)
                 if e2: engulf2_matches.append(ticker)
@@ -494,7 +480,7 @@ def process_pattern_scanners(stocks_list):
                 if scan_value_trap(ticker_df, 0): value_trap_matches.append(ticker)
                 if scan_ppp(ticker_df, 0): ppp_matches.append(ticker)
 
-                # Scan Yesterday Patterns
+                # Scan Yesterday
                 if scan_two_botak(ticker_df, 1): botak_yest.append(ticker)
                 e2y, e3y = scan_engulfing(ticker_df, 1)
                 if e2y: engulf2_yest.append(ticker)
@@ -503,67 +489,6 @@ def process_pattern_scanners(stocks_list):
                 if scan_powertrend_not_extended(ticker_df, 1): powertrend_ne_yest.append(ticker)
                 if scan_value_trap(ticker_df, 1): value_trap_yest.append(ticker)
                 if scan_ppp(ticker_df, 1): ppp_yest.append(ticker)
-
-                # --- Integrated Email Content Stocks Template Setup ---
-                sma = [50, 150, 200]
-                for x in sma:
-                    ticker_df["SMA_"+str(x)] = round(ticker_df['Adj Close'].rolling(window=x).mean(), 2)
-
-                currentClose = ticker_df["Adj Close"].iloc[-1]
-                prevClose = ticker_df["Adj Close"].iloc[-2]
-                currentOpen = ticker_df["Open"].iloc[-1]
-                currentVol = ticker_df["Volume"].iloc[-1]
-                prevVol = ticker_df["Volume"].iloc[-2]
-                Volume = ticker_df["Volume"].iloc[-1]
-                moving_average_50 = ticker_df["SMA_50"].iloc[-1]
-                moving_average_150 = ticker_df["SMA_150"].iloc[-1]
-                moving_average_200 = ticker_df["SMA_200"].iloc[-1]
-                low_of_52week = round(min(ticker_df["Low"].iloc[-260:]), 2)
-                high_of_52week = round(ticker_df["High"].iloc[-260:-1].max(), 2)
-
-                moving_average_200_20 = ticker_df["SMA_200"].iloc[-20] if len(ticker_df) >= 20 else 0
-                condition_1 = 1 if (currentClose > moving_average_50 > moving_average_200) else 0
-                condition_2 = 1 if (moving_average_50 > moving_average_200) else 0
-                condition_3 = 1 if (moving_average_200 > moving_average_200_20) else 0
-                condition_4 = 1 if (moving_average_50 > moving_average_200) else 0
-                condition_5 = 1 if (currentClose > moving_average_50) else 0
-                condition_6 = 1 if (currentClose >= (1.3*low_of_52week)) else 0
-                condition_7 = 1 if (currentClose >= (.75*high_of_52week)) else 0
-                condition_8 = 1 if (currentClose >= 20) else 0
-                condition_9 = 1 if (Volume > 20000) else 0
-                condition_10 = 1 if ((Volume*currentClose) > 2000000) else 0
-                
-                total = condition_1 + condition_2 + condition_3 + condition_4 + condition_5 + condition_6 + condition_7 + condition_8 + condition_9 + condition_10
-
-                if total >= 10:
-                    know_total_count += 1
-                    if currentClose > prevClose:
-                        know_positive_count += 1
-                    email_content_stocks.append(ticker)
-
-                # Yesterday Email Match Logic 
-                yestClose = ticker_df["Adj Close"].iloc[-2]
-                yest_moving_average_50 = ticker_df["SMA_50"].iloc[-2]
-                yest_moving_average_200 = ticker_df["SMA_200"].iloc[-2]
-                yest_low_of_52week = round(min(ticker_df["Low"].iloc[-261:-1]), 2)
-                yest_high_of_52week = round(ticker_df["High"].iloc[-261:-2].max(), 2)
-                yest_moving_average_200_20 = ticker_df["SMA_200"].iloc[-21] if len(ticker_df) >= 21 else 0
-                yest_Volume = ticker_df["Volume"].iloc[-2]
-
-                y_cond1 = 1 if (yestClose > yest_moving_average_50 > yest_moving_average_200) else 0
-                y_cond2 = 1 if (yest_moving_average_50 > yest_moving_average_200) else 0
-                y_cond3 = 1 if (yest_moving_average_200 > yest_moving_average_200_20) else 0
-                y_cond4 = 1 if (yest_moving_average_50 > yest_moving_average_200) else 0
-                y_cond5 = 1 if (yestClose > yest_moving_average_50) else 0
-                y_cond6 = 1 if (yestClose >= (1.3*yest_low_of_52week)) else 0
-                y_cond7 = 1 if (yestClose >= (.75*yest_high_of_52week)) else 0
-                y_cond8 = 1 if (yestClose >= 20) else 0
-                y_cond9 = 1 if (yest_Volume > 20000) else 0
-                y_cond10 = 1 if ((yest_Volume*yestClose) > 2000000) else 0
-                y_total = y_cond1 + y_cond2 + y_cond3 + y_cond4 + y_cond5 + y_cond6 + y_cond7 + y_cond8 + y_cond9 + y_cond10
-                
-                if y_total >= 10:
-                    email_content_stocks_yest.append(ticker)
 
             except:
                 continue
@@ -577,10 +502,9 @@ def process_pattern_scanners(stocks_list):
         ppp_matches.sort()
         
         return (botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, value_trap_matches, ppp_matches,
-                botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, value_trap_yest, ppp_yest,
-                email_content_stocks, email_content_stocks_yest, know_positive_count, know_total_count, raw_kb_count)
+                botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, value_trap_yest, ppp_yest)
     except:
-        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0
+        return [], [], [], [], [], [], [], [], [], [], [], [], [], []
 
 # 5. UI Layout & Logic
 st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
@@ -696,8 +620,7 @@ st.markdown("---")
 with st.spinner("Scanning pattern anomalies across known instruments..."):
     results = process_pattern_scanners(tuple(KNOWN_STOCKS))
     b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list = results[:7]
-    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:14]
-    email_content_stocks, email_content_stocks_yest, know_positive_count, know_total_count, raw_kb_count = results[14:]
+    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:]
 
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
 st.markdown(f"#### 🔥 Two Botak = Awareness short term group burst ({len(b_list)})")
@@ -787,22 +710,5 @@ if vt_list:
         cls = "new-pattern-badge" if sym not in vt_yest else ""
         html_vt += f'<div class="ticker-badge {cls}">{sym}</div>'
     st.markdown(html_vt, unsafe_allow_html=True)
-else:
-    st.text("None")
-
-# --- 8. PAGE FOOTER RATIO DISPLAY ---
-st.markdown("---")
-if know_total_count > 0:
-    know_pos_pct = (know_positive_count / know_total_count) * 100
-else:
-    know_pos_pct = 0
-
-st.markdown(f"#### ✉️ Known Positive Ratio: **{know_pos_pct:.1f}%** ({know_positive_count} / {know_total_count}, total raw download count: {raw_kb_count})")
-if email_content_stocks:
-    html_email = ""
-    for sym in sorted(email_content_stocks):
-        cls = "new-pattern-badge" if sym not in email_content_stocks_yest else ""
-        html_email += f'<div class="ticker-badge {cls}">{sym}</div>'
-    st.markdown(html_email, unsafe_allow_html=True)
 else:
     st.text("None")
