@@ -736,7 +736,7 @@ header_html = (
     f" <b style='color:#eee;'>Total Count:</b> {know_total_count})"
     f"</div>"
 )
-#st.markdown(header_html, unsafe_allow_html=True)
+st.markdown(header_html, unsafe_allow_html=True)
 
 if email_content_stocks:
     stocks_html = ""
@@ -745,7 +745,7 @@ if email_content_stocks:
             stocks_html += f'<div class="ticker-badge new-pattern-badge">{sym}</div>'
         else:
             stocks_html += f'<div class="ticker-badge">{sym}</div>'
-    st.markdown(stocks_html, unsafe_allow_html=True)
+    #st.markdown(stocks_html, unsafe_allow_html=True)
 else:
     st.info("No stocks matched all required filters today.")
 
