@@ -710,7 +710,7 @@ if all_data:
                 ticker_html += (
                     f'<div class="ticker-badge new-pattern-badge">'
                     f'<span class="ticker-name" style="color: #111111;">{ticker_sym}</span>' # Clean high-contrast dark charcoal text
-                    f'<span class="ticker-rs" style="color: #664d03; font-weight: bold;">{r["RS Score"]:.0f}</span>' # Highly legible dark gold numbers
+                    f'<span class="ticker-rs" style="color: #4ecdc4; font-weight: bold;">{r["RS Score"]:.0f}</span>' # Highly legible dark gold numbers
                     f'</div>'
                 )
             else:
