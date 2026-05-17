@@ -749,6 +749,7 @@ if email_content_stocks:
 else:
     st.info("No stocks matched all required filters today.")
 
+st.markdown("---")
 
 # ==============================================================================
 # BLOCK B: NEW EXTRA 52W HIGH SYMBOLS (Placed directly underneath)
@@ -777,7 +778,8 @@ if extra_52wk_high_symbols:
 else:
     st.text("None")
 
-st.markdown("<br>", unsafe_allow_html=True) # Spacer
+#st.markdown("<br>", unsafe_allow_html=True) # Spacer
+st.markdown("---")
 
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
 st.markdown(f"#### 🔥 Two Botak = Awareness short term group burst ({len(b_list)})")
@@ -790,7 +792,8 @@ if b_list:
 else:
     st.info("No active setups discovered.")
 
-st.markdown("<br>", unsafe_allow_html=True) # Spacer
+#st.markdown("<br>", unsafe_allow_html=True) # Spacer
+st.markdown("---")
 
 # --- 2. TIGHT PPP (Full Horizontal Row Below Two Botak) ---
 st.markdown(f"#### 📈 PPP = Opportunity ({len(ppp_list)})")
@@ -803,7 +806,8 @@ if ppp_list:
 else:
     st.info("No active setups discovered.")
 
-st.markdown("<br>", unsafe_allow_html=True) # Spacer
+#st.markdown("<br>", unsafe_allow_html=True) # Spacer
+st.markdown("---")
 
 # --- 3. BULLISH ENGULFING (Full Horizontal Row Below Tight PPP) ---
 total_engulf = len(e2_list) + len(e3_list)
@@ -831,7 +835,8 @@ else:
 # --- EXTRA TREND METRICS (Stacked Horizontally Below Patterns) ---
 #st.markdown("---")
 #st.markdown("### 📊 Extra Trend Metrics (PowerTrend Indicators)")
-st.markdown("<br>", unsafe_allow_html=True) # Spacer
+#st.markdown("<br>", unsafe_allow_html=True) # Spacer
+st.markdown("---")
 
 # --- 4. POWERTREND (Full Horizontal Row) ---
 st.markdown(f"#### ⚡ PowerTrend = Awareness thematic leaders ({len(pt_list)})")
@@ -844,7 +849,8 @@ if pt_list:
 else:
     st.text("None")
 
-st.markdown("<br>", unsafe_allow_html=True) # Spacer
+#st.markdown("<br>", unsafe_allow_html=True) # Spacer
+st.markdown("---")
 
 # --- 5. POWERTREND NOT EXTENDED (Full Horizontal Row Below PowerTrend) ---
 st.markdown(f"#### 🛡️ PowerTrend (Not Extended) ({len(ptne_list)})")
@@ -857,7 +863,8 @@ if ptne_list:
 else:
     st.text("None")
 
-st.markdown("<br>", unsafe_allow_html=True) # Spacer
+#st.markdown("<br>", unsafe_allow_html=True) # Spacer
+st.markdown("---")
 
 # --- 6. VALUE TRAP (Full Horizontal Row Below PowerTrend Not Extended) ---
 st.markdown(f"#### ⚠️ Value Trap ({len(vt_list)})")
