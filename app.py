@@ -778,7 +778,21 @@ st.markdown("<br>", unsafe_allow_html=True) # Spacer
 #st.write(f"**Known Pos Pct:** {know_pos_pct:.2f}% | **Known Positive Count:** {know_positive_count} | **Known Total Count:** {know_total_count}")
 
 # --- Render the Qualifying Stocks List Row ---
-st.markdown("<div style='margin-top:20px; font-size:14px; font-weight:bold;'>⭐ Minervini Qualified Stocks (Total >= 10):</div>", unsafe_allow_html=True)
+# --- Render Header with Inline Summary Metrics inside Parentheses ---
+header_html = (
+    f"<div style='margin-top:20px; font-size:14px; font-weight:bold; display:flex; align-items:center; gap:10px;'> "
+    f"<span>⭐ Minervini Qualified Stocks (Total >= 10)</span>"
+    f"<span style='font-size:12px; font-weight:normal; color:#888;'> "
+    f"(<b style='color:#eee;'>Known Pos Pct:</b> {know_pos_pct:.2f}% |"
+    f" <b style='color:#FFD700;'>Known Positive Count:</b> {know_positive_count} |"
+    f" <b style='color:#eee;'>Known Total Count:</b> {know_total_count})"
+    f"</div>"
+)
+st.markdown(header_html, unsafe_allow_html=True)
+
+st.markdown(header_html, unsafe_allow_html=True)
+
+# --- Render the Qualifying Stocks Badge Row (Sorted Alphabetically) ---
 if email_content_stocks:
     stocks_html = ""
     
@@ -794,8 +808,3 @@ if email_content_stocks:
     st.markdown(stocks_html, unsafe_allow_html=True)
 else:
     st.info("No stocks matched all required filters today.")
-
-st.markdown("<br>", unsafe_allow_html=True) # Spacer
-
-# --- Your exact Summary Line rendered directly below ---
-st.write(f"**Known Pos Pct:** {know_pos_pct:.2f}% | **Known Positive Count:** {know_positive_count} | **Known Total Count:** {know_total_count}")
