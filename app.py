@@ -456,10 +456,11 @@ def process_pattern_scanners(stocks_list):
         ppp_yest = []
 
         # Initialize internal metrics tracking variables
+        # --- Inside process_pattern_scanners loop setup ---
         know_total_count = 0
         know_positive_count = 0
-        email_content_stocks = []
-        
+        email_content_stocks = []  # Now tracks tuples of (ticker, is_new_addition)
+
         for ticker in stocks_list:
             try:
                 if len(stocks_list) > 1:
@@ -475,56 +476,74 @@ def process_pattern_scanners(stocks_list):
                 
                 if ticker_df.empty or len(ticker_df) < 50:
                     continue
-
-                # --- INTEGRATION OF CUSTOM USER LOGIC APPLIED TO KNOWN STOCKS ---
-                if ticker in KNOWN_STOCKS and len(ticker_df) >= 260:
-                    # Implement SMA calculations using Close to align seamlessly with template parameters
+                
+                # --- ADJUSTED FOR NEW ADDITIONS TODAY VS YESTERDAY ---
+                if ticker in KNOWN_STOCKS and len(ticker_df) >= 261:
+                    # Setup SMA structures
                     ticker_df["SMA_50"] = round(ticker_df['Close'].rolling(window=50).mean(), 2)
                     ticker_df["SMA_150"] = round(ticker_df['Close'].rolling(window=150).mean(), 2)
                     ticker_df["SMA_200"] = round(ticker_df['Close'].rolling(window=200).mean(), 2)
 
+                    # --- EVALUATE TODAY (Index -1) ---
                     currentClose = ticker_df["Close"].iloc[-1]
                     prevClose = ticker_df["Close"].iloc[-2]
                     Volume = ticker_df["Volume"].iloc[-1]
                     moving_average_50 = ticker_df["SMA_50"].iloc[-1]
                     moving_average_200 = ticker_df["SMA_200"].iloc[-1]
+                    moving_average_200_20 = ticker_df["SMA_200"].iloc[-20] if len(ticker_df) >= 20 else 0
                     
                     low_of_52week = round(min(ticker_df["Low"].iloc[-260:]), 2)
                     high_of_52week = round(ticker_df["High"].iloc[-260:-1].max(), 2)
-                    volume_50days = ticker_df["Volume"].iloc[-50:].mean()
-                    volume_50days_13x = 1.3 * volume_50days
-                    volume_1year = max(ticker_df["Volume"].iloc[-52:-1])
 
-                    try:
-                        moving_average_200_20 = ticker_df["SMA_200"].iloc[-20]
-                    except:
-                        moving_average_200_20 = 0
+                    cond1_t = int(currentClose > moving_average_50 > moving_average_200)
+                    cond2_t = int(moving_average_50 > moving_average_200)
+                    cond3_t = int(moving_average_200 > moving_average_200_20)
+                    cond4_t = int(moving_average_50 > moving_average_200)
+                    cond5_t = int(currentClose > moving_average_50)
+                    cond6_t = int(currentClose >= (1.3 * low_of_52week))
+                    cond7_t = int(currentClose >= (0.75 * high_of_52week))
+                    cond8_t = int(currentClose >= 20)
+                    cond9_t = int(Volume > 20000)
+                    cond10_t = int((Volume * currentClose) > 2000000)
+                    
+                    total_today = (cond1_t + cond2_t + cond3_t + cond4_t + cond5_t + 
+                                   cond6_t + cond7_t + cond8_t + cond9_t + cond10_t)
 
-                    # Convert boolean metrics directly to integer indicators
-                    condition_1 = int(currentClose > moving_average_50 > moving_average_200)
-                    condition_2 = int(moving_average_50 > moving_average_200)
-                    condition_3 = int(moving_average_200 > moving_average_200_20)
-                    condition_4 = int(moving_average_50 > moving_average_200)
-                    condition_5 = int(currentClose > moving_average_50)
-                    condition_6 = int(currentClose >= (1.3 * low_of_52week))
-                    condition_7 = int(currentClose >= (0.75 * high_of_52week))
-                    condition_8 = int(currentClose >= 20)
-                    condition_9 = int(Volume > 20000)
-                    condition_10 = int((Volume * currentClose) > 2000000)
+                    # --- EVALUATE YESTERDAY (Index -2) ---
+                    yestClose = ticker_df["Close"].iloc[-2]
+                    yestVolume = ticker_df["Volume"].iloc[-2]
+                    yest_ma_50 = ticker_df["SMA_50"].iloc[-2]
+                    yest_ma_200 = ticker_df["SMA_200"].iloc[-2]
+                    yest_ma_200_20 = ticker_df["SMA_200"].iloc[-21] if len(ticker_df) >= 21 else 0
+                    
+                    yest_low_of_52week = round(min(ticker_df["Low"].iloc[-261:-1]), 2)
+                    yest_high_of_52week = round(ticker_df["High"].iloc[-261:-2].max(), 2)
 
-                    total = (condition_1 + condition_2 + condition_3 + condition_4 + condition_5 + 
-                             condition_6 + condition_7 + condition_8 + condition_9 + condition_10)
+                    cond1_y = int(yestClose > yest_ma_50 > yest_ma_200)
+                    cond2_y = int(yest_ma_50 > yest_ma_200)
+                    cond3_y = int(yest_ma_200 > yest_ma_200_20)
+                    cond4_y = int(yest_ma_50 > yest_ma_200)
+                    cond5_y = int(yestClose > yest_ma_50)
+                    cond6_y = int(yestClose >= (1.3 * yest_low_of_52week))
+                    cond7_y = int(yestClose >= (0.75 * yest_high_of_52week))
+                    cond8_y = int(yestClose >= 20)
+                    cond9_y = int(yestVolume > 20000)
+                    cond10_y = int((yestVolume * yestClose) > 2000000)
 
-                    if total >= 10:
+                    total_yesterday = (cond1_y + cond2_y + cond3_y + cond4_y + cond5_y + 
+                                       cond6_y + cond7_y + cond8_y + cond9_y + cond10_y)
+
+                    # --- SET CONTROLLER FLAGS ---
+                    if total_today >= 10:
                         know_total_count += 1
-                        is_pos_today = currentClose > prevClose
                         
-                        # Store both the symbol name and its positive state true/false flag
-                        email_content_stocks.append((ticker, is_pos_today)) 
+                        # A stock is a new addition if it has total >= 10 today but was < 10 yesterday
+                        is_new_addition = (total_yesterday < 10)
+                        email_content_stocks.append((ticker, is_new_addition))
                         
-                        if is_pos_today:
+                        if currentClose > prevClose:
                             know_positive_count += 1
-                
+
                 # Scan Today
                 if scan_two_botak(ticker_df, 0): botak_matches.append(ticker)
                 e2, e3 = scan_engulfing(ticker_df, 0)
@@ -555,7 +574,7 @@ def process_pattern_scanners(stocks_list):
         powertrend_ne_matches.sort()
         value_trap_matches.sort()
         ppp_matches.sort()
-
+        
         know_pos_pct = (know_positive_count / know_total_count * 100) if know_total_count > 0 else 0
         
         return (botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, value_trap_matches, ppp_matches,
@@ -683,15 +702,14 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
 
 # --- Render Header with Inline Summary Metrics inside Parentheses ---
 header_html = (
-    f"<div style='margin-top:20px; font-size:14px; font-weight:bold; display:flex; align-items:center; gap:10px;'> "
-    f"<span>⭐ Minervini Qualified Stocks</span>"
+    f"<div style='margin-top:20px; font-size:14px; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
+    f"<span>⭐ Minervini Qualified Stocks (Total >= 10)</span>"
     f"<span style='font-size:12px; font-weight:normal; color:#888;'> "
-    f"(<b style='color:#eee;'>Known Pos Pct:</b> {know_pos_pct:.1f}% |"
-    f" <b style='color:#eee;'>Known Positive Count:</b> {know_positive_count} |"
+    f"(<b style='color:#eee;'>Known Pos Pct:</b> {know_pos_pct:.2f}% |"
+    f" <b style='color:#FFD700;'>Known Positive Count:</b> {know_positive_count} |"
     f" <b style='color:#eee;'>Known Total Count:</b> {know_total_count})"
     f"</div>"
 )
-
 st.markdown(header_html, unsafe_allow_html=True)
 
 # --- Render the Qualifying Stocks Badge Row (Sorted Alphabetically) ---
@@ -699,12 +717,12 @@ if email_content_stocks:
     stocks_html = ""
     
     # Sort the tuples alphabetically by the stock ticker symbol
-    for sym, is_positive in sorted(email_content_stocks):
-        if is_positive:
-            # Uses your exact native gold badge configuration class
+    for sym, is_new_addition in sorted(email_content_stocks):
+        if is_new_addition:
+            # Applies the native gold badge class if the stock is a brand new addition today
             stocks_html += f'<div class="ticker-badge new-pattern-badge">{sym}</div>'
         else:
-            # Standard dark badge layout
+            # Standard dark badge layout for established matching stocks
             stocks_html += f'<div class="ticker-badge">{sym}</div>'
             
     st.markdown(stocks_html, unsafe_allow_html=True)
