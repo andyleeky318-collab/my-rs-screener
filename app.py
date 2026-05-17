@@ -688,7 +688,7 @@ if not known_raw_data.empty:
                 if currentClose > prevClose:
                     know_positive_count += 1
                 email_content_stocks.append(stock)
-        except:
+        except Exception as e:
             st.error(f"Exception entered for ticker '{stock}': {str(e)}")
             continue
 
