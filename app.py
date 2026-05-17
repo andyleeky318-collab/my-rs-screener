@@ -730,9 +730,9 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
 header_html = (
     f"<div style='margin-top:20px; font-size:1.15em; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
     f"<span>⭐ Minervini Qualified Stocks</span>"
-    f"<span style='font-size:12px; font-weight:normal; color:#888;'> "
-    f"(<b style='color:#eee;'>Positive Pct:</b> {know_pos_pct:.2f}% |"
-    f" <b style='color:#FFD700;'>Positive Count:</b> {know_positive_count} |"
+    f"<span style='font-weight:normal; color:#888;'> "
+    f"(<b style='color:#eee;'>Positive Pct:</b> {know_pos_pct:.1f}% |"
+    f" <b style='color:#eee;'>Positive Count:</b> {know_positive_count} |"
     f" <b style='color:#eee;'>Total Count:</b> {know_total_count})"
     f"</div>"
 )
@@ -758,7 +758,7 @@ st.markdown("<br>", unsafe_allow_html=True) # Spacer
 extra_header_html = (
     f"<div style='font-size:1.15em; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
     f"<span>🚀 ATH , but fail Minervini criteria</span>"
-    f"<span style='font-size:12px; font-weight:normal; color:#888;'>({len(extra_52wk_high_symbols)})</span>"
+    f"<span style='font-weight:normal; color:#888;'>({len(extra_52wk_high_symbols)})</span>"
     f"</div>"
 )
 st.markdown(extra_header_html, unsafe_allow_html=True)
