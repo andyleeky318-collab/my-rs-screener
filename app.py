@@ -704,23 +704,25 @@ if all_data:
         ticker_html = ""
         for _, r in item["Tickers"].iterrows():
             ticker_sym = r["Ticker"]
+            rs_score = r["RS Score"]
             
-            # If the ticker is inside KNOWN_STOCKS, apply high-contrast dark text rules
-            if ticker_sym in KNOWN_STOCKS:
-                ticker_html += (
-                    f'<div class="ticker-badge new-pattern-badge">'
-                    f'<span class="ticker-name" style="color: #111111;">{ticker_sym}</span>' # Clean high-contrast dark charcoal text
-                    f'<span class="ticker-rs" style="color: #004d26; font-weight: bold;">{r["RS Score"]:.0f}</span>' # Highly legible dark gold numbers
-                    f'</div>'
-                )
-            else:
-                # Standard matching dark badge layout for everything else
-                ticker_html += (
-                    f'<div class="ticker-badge">'
-                    f'<span class="ticker-name">{ticker_sym}</span>'
-                    f'<span class="ticker-rs">{r["RS Score"]:.0f}</span>'
-                    f'</div>'
-                )
+            if rs_score >= 80:
+                # If the ticker is inside KNOWN_STOCKS, apply high-contrast dark text rules
+                if ticker_sym in KNOWN_STOCKS:
+                    ticker_html += (
+                        f'<div class="ticker-badge new-pattern-badge">'
+                        f'<span class="ticker-name" style="color: #111111;">{ticker_sym}</span>' # Clean high-contrast dark charcoal text
+                        f'<span class="ticker-rs" style="color: #004d26; font-weight: bold;">{r["RS Score"]:.0f}</span>' # Highly legible dark gold numbers
+                        f'</div>'
+                    )
+                else:
+                    # Standard matching dark badge layout for everything else
+                    ticker_html += (
+                        f'<div class="ticker-badge">'
+                        f'<span class="ticker-name">{ticker_sym}</span>'
+                        f'<span class="ticker-rs">{r["RS Score"]:.0f}</span>'
+                        f'</div>'
+                    )
         
         cloud_html = "".join([f'<div class="ticker-badge cloud-badge">{c}</div>' for c in item["Cloud"]])
         bg_color = "#262730" if row_num % 2 == 0 else "#0e1117"
