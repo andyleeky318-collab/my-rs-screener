@@ -695,7 +695,7 @@ if all_data:
     <th style="text-align: left;">Industry</th>
     <th style="text-align: center; width: 80px;">Group RS</th>
     <th style="text-align: left;">Tickers (Ranked)</th>
-    <th style="text-align: left; width: 150px;">Within 21 EMA Cloud</th>
+    <th style="text-align: left; width: 220px;">Within 21 EMA Cloud</th>
     </tr></thead><tbody>"""
 
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
@@ -724,7 +724,30 @@ if all_data:
                         f'</div>'
                     )
         
-        cloud_html = "".join([f'<div class="ticker-badge cloud-badge">{c}</div>' for c in item["Cloud"]])
+        #cloud_html = "".join([f'<div class="ticker-badge cloud-badge">{c}</div>' for c in item["Cloud"]])
+        cloud_html = ""
+        # Create a quick symbol lookup map to match the cloud tickers to their exact RS scores
+        rs_lookup = dict(zip(item["Tickers"]["Ticker"], item["Tickers"]["RS Score"]))
+        
+        for cloud_sym in item["Cloud"]:
+            # Retrieve the RS Score from our data map (default to 0 if not found)
+            cloud_rs = rs_lookup.get(cloud_sym, 0)
+            
+            # Formats the badge background style using your Known Stock rules
+            if cloud_sym in KNOWN_STOCKS:
+                cloud_html += (
+                    f'<div class="ticker-badge new-pattern-badge">'
+                    f'<span class="ticker-name" style="color: #004d26; font-weight: bold;">{cloud_sym}</span>'
+                    f'<span class="ticker-rs" style="color: #004d26; font-weight: bold; margin-left: 5px;">{cloud_rs:.0f}</span>'
+                    f'</div>'
+                )
+            else:
+                cloud_html += (
+                    f'<div class="ticker-badge cloud-badge">'
+                    f'<span class="ticker-name">{cloud_sym}</span>'
+                    f'<span class="ticker-rs" style="color: #4ecdc4; margin-left: 5px; font-size: 0.85em;">{cloud_rs:.0f}</span>'
+                    f'</div>'
+                )
         bg_color = "#262730" if row_num % 2 == 0 else "#0e1117"
         
         table_html += f"""<tr style="background-color: {bg_color};">
