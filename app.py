@@ -729,7 +729,10 @@ if all_data:
         cloud_html = ""
         sorted_cloud = sorted(item["Cloud"], key=lambda sym: rs_lookup.get(sym, 0), reverse=True)
         
-        for cloud_sym in sorted_cloud:
+        # --- SLICE LOGIC: Slices the sorted array to isolate the top 5 items only ---
+        top_5_cloud = sorted_cloud[:5]
+        
+        for cloud_sym in top_5_cloud:
             # Retrieve the RS Score from our data map (default to 0 if not found)
             cloud_rs = rs_lookup.get(cloud_sym, 0)
             
