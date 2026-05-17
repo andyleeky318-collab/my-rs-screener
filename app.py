@@ -435,7 +435,7 @@ def scan_ppp(df, lookback=0):
 @st.cache_data(ttl=3600)
 def process_pattern_scanners(stocks_list):
     try:
-        raw_data = yf.download(stocks_list, period="2y", interval="1d", progress=False)
+        raw_data = yf.download(stocks_list, period="1y", interval="1d", progress=False)
         
         # Today's Matches
         botak_matches = []
@@ -502,9 +502,9 @@ def process_pattern_scanners(stocks_list):
         ppp_matches.sort()
         
         return (botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, value_trap_matches, ppp_matches,
-                botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, value_trap_yest, ppp_yest, raw_data)
+                botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, value_trap_yest, ppp_yest)
     except:
-        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], pd.DataFrame()
+        return [], [], [], [], [], [], [], [], [], [], [], [], [], []
 
 # 5. UI Layout & Logic
 st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
@@ -512,15 +512,6 @@ st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Str
 all_data = []
 progress_bar = st.progress(0)
 status_text = st.empty()
-
-# --- INITIALIZE VARIABLES FOR TARGET DATA LOGIC ---
-total_processed = 0
-know_total_count = 0
-know_positive_count = 0
-exportList = pd.DataFrame()
-exportList2 = pd.DataFrame()
-extra_52wk_high_symbols = []
-email_content_stocks = []
 
 industry_items = list(INDUSTRIES.items())
 for idx, (industry_name, tickers) in enumerate(industry_items):
@@ -537,7 +528,7 @@ for idx, (industry_name, tickers) in enumerate(industry_items):
             "Tickers": df_tickers, 
             "Cloud": cloud_list
         })
-
+    
     progress_bar.progress((idx + 1) / len(industry_items))
 
 status_text.empty()
@@ -629,88 +620,7 @@ st.markdown("---")
 with st.spinner("Scanning pattern anomalies across known instruments..."):
     results = process_pattern_scanners(tuple(KNOWN_STOCKS))
     b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list = results[:7]
-    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:14]
-    known_raw_data = results[14]  # Captured the returned 2y raw_data
-
-# --- INTEGRATE AND REUSE KNOWN RAW DATA FOR MINERVINI STATISTICS TRACKING ---
-# --- INTEGRATE AND REUSE KNOWN RAW DATA FOR MINERVINI STATISTICS TRACKING ---
-if not known_raw_data.empty:
-    for stock in KNOWN_STOCKS:
-        try:
-            # 1. Multi-index structural layout handling
-            if len(KNOWN_STOCKS) > 1:
-                # Check if ticker exists in the downloaded data columns to avoid KeyError
-                # If multiple stocks were downloaded, columns will be a MultiIndex
-                if isinstance(known_raw_data.columns, pd.MultiIndex):
-                    if stock not in known_raw_data['Close'].columns:
-                        continue
-                else:
-                    # If only one stock ended up being valid, it won't have a sub-column index
-                    if stock not in KNOWN_STOCKS:
-                        continue
-                
-                # Safely extract columns, defaulting Adj Close to Close if missing
-                close_series = known_raw_data['Close'][stock]
-                adj_close_series = known_raw_data['Adj Close'][stock] if 'Adj Close' in known_raw_data.columns else close_series
-                
-                df = pd.DataFrame({
-                    'Open': known_raw_data['Open'][stock],
-                    'High': known_raw_data['High'][stock],
-                    'Low': known_raw_data['Low'][stock],
-                    'Close': close_series,
-                    'Adj Close': adj_close_series,
-                    'Volume': known_raw_data['Volume'][stock]
-                }).dropna()
-            else:
-                # Single stock schema handling
-                df = known_raw_data.dropna().copy()
-                if 'Adj Close' not in df.columns and 'Close' in df.columns:
-                    df['Adj Close'] = df['Close']
-            
-            # 2. Check for sufficient physical rows
-            if len(df) < 200:
-                continue
-                
-            sma = [50, 150, 200]
-            for x in sma:
-                df["SMA_"+str(x)] = round(df['Adj Close'].rolling(window=x).mean(), 2)
-            
-            currentClose = df["Adj Close"].iloc[-1]
-            prevClose = df["Adj Close"].iloc[-2]
-            Volume = df["Volume"].iloc[-1]
-            moving_average_50 = df["SMA_50"].iloc[-1]
-            moving_average_150 = df["SMA_150"].iloc[-1]
-            moving_average_200 = df["SMA_200"].iloc[-1]
-            low_of_52week = round(min(df["Low"].iloc[-260:]), 2)
-            high_of_52week = round(df["High"].iloc[-260:-1].max(), 2)
-
-            try:
-                moving_average_200_20 = df["SMA_200"].iloc[-20]
-            except Exception:
-                moving_average_200_20 = 0
-
-            condition_1 = 1 if (currentClose > moving_average_50 > moving_average_200) else 0
-            condition_2 = 1 if (moving_average_50 > moving_average_200) else 0
-            condition_3 = 1 if (moving_average_200 > moving_average_200_20) else 0
-            condition_4 = 1 if (moving_average_50 > moving_average_200) else 0
-            condition_5 = 1 if (currentClose > moving_average_50) else 0
-            condition_6 = 1 if (currentClose >= (1.3 * low_of_52week)) else 0
-            condition_7 = 1 if (currentClose >= (.75 * high_of_52week)) else 0
-            condition_8 = 1 if (currentClose >= 20) else 0
-            condition_9 = 1 if (Volume > 20000) else 0
-            condition_10 = 1 if ((Volume * currentClose) > 2000000) else 0
-
-            total = condition_1 + condition_2 + condition_3 + condition_4 + condition_5 + condition_6 + condition_7 + condition_8 + condition_9 + condition_10
-
-            if total >= 10:
-                know_total_count += 1
-                if currentClose > prevClose:
-                    know_positive_count += 1
-                email_content_stocks.append(stock)
-        except Exception as e:
-            # Silently catch unexpected computation errors on broken data rows
-            st.error(f"Exception entered for ticker '{stock}': {str(e)}")
-            continue
+    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:]
 
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
 st.markdown(f"#### 🔥 Two Botak = Awareness short term group burst ({len(b_list)})")
@@ -802,11 +712,3 @@ if vt_list:
     st.markdown(html_vt, unsafe_allow_html=True)
 else:
     st.text("None")
-
-# --- BOTTOM LOGIC FOR know_pos_pct ---
-if know_total_count > 0:
-    know_pos_pct = (know_positive_count / know_total_count) * 100
-else:
-    know_pos_pct = 0
-
-st.write(f"Known Positive Percentage: {know_pos_pct:.2f}%, Total Known Count: {know_total_count}")
