@@ -436,7 +436,7 @@ def scan_ppp(df, lookback=0):
 def process_pattern_scanners(stocks_list):
     try:
         # Changed period to 2y to ensure enough lookback window for 52-week parameters and template metrics
-        raw_data = yf.download(stocks_list, period="2y", interval="1d", progress=False)
+        raw_data = yf.download(stocks_list, period="1y", interval="1d", progress=False)
         
         # Unique raw download calculation tracking
         if isinstance(raw_data.columns, pd.MultiIndex):
@@ -481,7 +481,7 @@ def process_pattern_scanners(stocks_list):
                 else:
                     ticker_df = raw_data.dropna()
                 
-                if ticker_df.empty or len(ticker_df) < 260:
+                if ticker_df.empty or len(ticker_df) < 50:
                     continue
                 
                 # Scan Today Patterns
