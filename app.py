@@ -706,8 +706,9 @@ if all_data:
         for _, r in item["Tickers"].iterrows():
             ticker_sym = r["Ticker"]
             rs_score = r["RS Score"]
+            ticker_price = r["Price"]
             
-            if rs_score >= 80:
+            if rs_score >= 80 and ticker_price > 30:
                 # If the ticker is inside KNOWN_STOCKS, apply high-contrast dark text rules
                 if ticker_sym in KNOWN_STOCKS:
                     ticker_html += (
