@@ -712,3 +712,126 @@ if vt_list:
     st.markdown(html_vt, unsafe_allow_html=True)
 else:
     st.text("None")
+
+# --- 8. NEW: MOST BOTTOM OF THE WEBSITE PAGE DISPLAY (MINIMAL LOGIC ADDITION) ---
+st.markdown("---")
+breadth_stats = {'new_high': 0, 'new_low': 0, 'advance': 0, 'decline': 0, 'up_from_open': 0, 'down_from_open': 0, 'up_volume': 0, 'down_volume': 0, 'up_4pct': 0, 'down_4pct': 0}
+know_total_count = 0
+know_positive_count = 0
+email_content_stocks = []
+email_content_stocks_yest = []
+
+with st.spinner("Processing trend template breadth matrix..."):
+    # Since yfinance download is already used in other parts of the script, we fetch KNOWN_STOCKS dynamically here
+    if KNOWN_STOCKS:
+        raw_kb = yf.download(KNOWN_STOCKS, period="2y", interval="1d", progress=False)
+        
+        for stock in KNOWN_STOCKS:
+            try:
+                if len(KNOWN_STOCKS) > 1:
+                    df = pd.DataFrame({
+                        'Open': raw_kb['Open'][stock], 'High': raw_kb['High'][stock],
+                        'Low': raw_kb['Low'][stock], 'Close': raw_kb['Close'][stock],
+                        'Adj Close': raw_kb['Adj Close'][stock], 'Volume': raw_kb['Volume'][stock]
+                    }).dropna()
+                else:
+                    df = raw_kb.dropna()
+
+                if len(df) < 260: continue
+                
+                sma = [50, 150, 200]
+                for x in sma:
+                    df["SMA_"+str(x)] = round(df['Adj Close'].rolling(window=x).mean(), 2)
+
+                # --- TODAY VALUES ---
+                currentClose = df["Adj Close"].iloc[-1]
+                prevClose = df["Adj Close"].iloc[-2]
+                currentOpen = df["Open"].iloc[-1]
+                currentVol = df["Volume"].iloc[-1]
+                prevVol = df["Volume"].iloc[-2]
+                Volume = df["Volume"].iloc[-1]
+                moving_average_50 = df["SMA_50"].iloc[-1]
+                moving_average_150 = df["SMA_150"].iloc[-1]
+                moving_average_200 = df["SMA_200"].iloc[-1]
+                low_of_52week = round(min(df["Low"].iloc[-260:]), 2)
+                high_of_52week = round(df["High"].iloc[-260:-1].max(), 2)
+                pct_change = (currentClose - prevClose) / prevClose
+
+                # 1. New High vs New Low
+                if currentClose >= high_of_52week: breadth_stats['new_high'] += 1
+                if currentClose <= low_of_52week: breadth_stats['new_low'] += 1
+                # 2. Advance vs Decline
+                if currentClose > prevClose: breadth_stats['advance'] += 1
+                elif currentClose < prevClose: breadth_stats['decline'] += 1
+                # 3. Up from Open vs Down from Open
+                if currentClose > currentOpen: breadth_stats['up_from_open'] += 1
+                elif currentClose < currentOpen: breadth_stats['down_from_open'] += 1
+                # 4. Up on Volume vs Down on Volume
+                if currentClose > prevClose and currentVol > prevVol: breadth_stats['up_volume'] += 1
+                elif currentClose < prevClose and currentVol > prevVol: breadth_stats['down_volume'] += 1
+                # 5. Up 4% vs Down 4%
+                if pct_change >= 0.04: breadth_stats['up_4pct'] += 1
+                elif pct_change <= -0.04: breadth_stats['down_4pct'] += 1
+
+                moving_average_200_20 = df["SMA_200"].iloc[-20] if len(df) >= 20 else 0
+                condition_1 = 1 if (currentClose > moving_average_50 > moving_average_200) else 0
+                condition_2 = 1 if (moving_average_50 > moving_average_200) else 0
+                condition_3 = 1 if (moving_average_200 > moving_average_200_20) else 0
+                condition_4 = 1 if (moving_average_50 > moving_average_200) else 0
+                condition_5 = 1 if (currentClose > moving_average_50) else 0
+                condition_6 = 1 if (currentClose >= (1.3*low_of_52week)) else 0
+                condition_7 = 1 if (currentClose >= (.75*high_of_52week)) else 0
+                condition_8 = 1 if (currentClose >= 20) else 0
+                condition_9 = 1 if (Volume > 20000) else 0
+                condition_10 = 1 if ((Volume*currentClose) > 2000000) else 0
+                
+                total = condition_1 + condition_2 + condition_3 + condition_4 + condition_5 + condition_6 + condition_7 + condition_8 + condition_9 + condition_10
+                know = 1 if stock in KNOWN_STOCKS else 0
+
+                if total >= 10 and know == 1:
+                    know_total_count += 1
+                    if currentClose > prevClose:
+                        know_positive_count += 1
+                    email_content_stocks.append(stock)
+
+                # --- YESTERDAY VALUES (To allow comparison badge logic) ---
+                yestClose = df["Adj Close"].iloc[-2]
+                yest_moving_average_50 = df["SMA_50"].iloc[-2]
+                yest_moving_average_200 = df["SMA_200"].iloc[-2]
+                yest_low_of_52week = round(min(df["Low"].iloc[-261:-1]), 2)
+                yest_high_of_52week = round(df["High"].iloc[-261:-2].max(), 2)
+                yest_moving_average_200_20 = df["SMA_200"].iloc[-21] if len(df) >= 21 else 0
+                yest_Volume = df["Volume"].iloc[-2]
+
+                y_cond1 = 1 if (yestClose > yest_moving_average_50 > yest_moving_average_200) else 0
+                y_cond2 = 1 if (yest_moving_average_50 > yest_moving_average_200) else 0
+                y_cond3 = 1 if (yest_moving_average_200 > yest_moving_average_200_20) else 0
+                y_cond4 = 1 if (yest_moving_average_50 > yest_moving_average_200) else 0
+                y_cond5 = 1 if (yestClose > yest_moving_average_50) else 0
+                y_cond6 = 1 if (yestClose >= (1.3*yest_low_of_52week)) else 0
+                y_cond7 = 1 if (yestClose >= (.75*yest_high_of_52week)) else 0
+                y_cond8 = 1 if (yestClose >= 20) else 0
+                y_cond9 = 1 if (yest_Volume > 20000) else 0
+                y_cond10 = 1 if ((yest_Volume*yestClose) > 2000000) else 0
+                y_total = y_cond1 + y_cond2 + y_cond3 + y_cond4 + y_cond5 + y_cond6 + y_cond7 + y_cond8 + y_cond9 + y_cond10
+                
+                if y_total >= 10 and know == 1:
+                    email_content_stocks_yest.append(stock)
+            except:
+                continue
+
+if know_total_count > 0:
+    know_pos_pct = (know_positive_count / know_total_count) * 100
+else:
+    know_pos_pct = 0
+
+# Streamlit Front-End rendering at the complete bottom
+st.markdown(f"#### ✉️ Known Positive Ratio: **{know_pos_pct:.1f}%**")
+if email_content_stocks:
+    html_email = ""
+    for sym in sorted(email_content_stocks):
+        cls = "new-pattern-badge" if sym not in email_content_stocks_yest else ""
+        html_email += f'<div class="ticker-badge {cls}">{sym}</div>'
+    st.markdown(html_email, unsafe_allow_html=True)
+else:
+    st.text("None")
