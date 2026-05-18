@@ -960,7 +960,7 @@ st.markdown("---")
 # ==============================================================================
 # 8. HISTORICAL KNOW_TOTAL_COUNT 30-DAY CHART (Completely New Logic at Bottom)
 # ==============================================================================
-st.markdown("### 📈 Historical Trend: Minervini Qualified Total Count (Past 30 Days)")
+st.markdown("### Total Count (Past 90 Days)")
 
 @st.cache_data(ttl=3600)
 def compute_historical_know_counts(stocks_list):
@@ -1060,7 +1060,7 @@ if not historical_df.empty:
     st.markdown("---")
     
     # 2. THE NEW STANDALONE CHART: Displays the Positive Percentage metric over 90 days
-    st.markdown("### 📈 Historical Trend: Minervini Qualified Positive Percentage (Past 90 Days)")
+    st.markdown("### Positive Percentage (Past 90 Days)")
     st.line_chart(data=historical_df, x="Date", y="Positive Pct", use_container_width=True)
 else:
     st.info("Insufficient historical trading records available to draw historical metrics.")
