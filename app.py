@@ -485,13 +485,9 @@ def process_pattern_scanners(stocks_list):
         email_content_stocks = []  # Now tracks tuples of (ticker, is_new_addition)
         extra_52wk_high_symbols = []
 
-        # --- NEW 30-DAY HISTORICAL ARRAY LOGIC SIMILAR TO BOTAK_YEST ---
-        historical_total_counts = [0] * 30
-        historical_dates = [""] * 30
-
         for ticker in stocks_list:
             try:
-                if isinstance(raw_data.columns, pd.MultiIndex):
+                if len(stocks_list) > 1:
                     ticker_df = pd.DataFrame({
                         'Open': raw_data['Open'][ticker],
                         'High': raw_data['High'][ticker],
@@ -501,8 +497,8 @@ def process_pattern_scanners(stocks_list):
                     }).dropna()
                 else:
                     ticker_df = raw_data.dropna().copy()
-
-                if ticker_df.empty or len(ticker_df) < 261:
+                
+                if ticker_df.empty or len(ticker_df) < 50:
                     continue
                 
                 # --- ADJUSTED FOR NEW ADDITIONS TODAY VS YESTERDAY ---
@@ -583,37 +579,6 @@ def process_pattern_scanners(stocks_list):
                         if currentClose > prevClose:
                             know_positive_count += 1
 
-                    # --- 30-DAY HISTORICAL DATA RETRIEVAL LOOP ---
-                    for d in range(30):
-                        idx_offset = -1 - d
-                        if len(ticker_df) >= abs(idx_offset) + 260:
-                            hist_close = ticker_df["Close"].iloc[idx_offset]
-                            hist_ma_50 = ticker_df["SMA_50"].iloc[idx_offset]
-                            hist_ma_200 = ticker_df["SMA_200"].iloc[idx_offset]
-                            hist_ma_200_20 = ticker_df["SMA_200"].iloc[idx_offset - 19] if len(ticker_df) >= abs(idx_offset - 19) else 0
-                            
-                            h_low_52w = round(min(ticker_df["Low"].iloc[idx_offset-259:idx_offset+1]), 2)
-                            h_high_52w = round(ticker_df["High"].iloc[idx_offset-259:idx_offset].max(), 2)
-                            hist_vol = ticker_df["Volume"].iloc[idx_offset]
-
-                            c1 = int(hist_close > hist_ma_50 > hist_ma_200)
-                            c2 = int(hist_ma_50 > hist_ma_200)
-                            c3 = int(hist_ma_200 > hist_ma_200_20)
-                            c4 = int(hist_ma_50 > hist_ma_200)
-                            c5 = int(hist_close > hist_ma_50)
-                            c6 = int(hist_close >= (1.3 * h_low_52w))
-                            c7 = int(hist_close >= (0.75 * h_high_52w))
-                            c8 = int(hist_close >= 20)
-                            c9 = int(hist_vol > 20000)
-                            c10 = int((hist_vol * hist_close) > 2000000)
-
-                            if (c1+c2+c3+c4+c5+c6+c7+c8+c9+c10) >= 10:
-                                historical_total_counts[d] += 1
-                            
-                            # Capture dates once from the final processing checks
-                            if historical_dates[d] == "":
-                                historical_dates[d] = ticker_df.index[idx_offset].strftime('%m-%d')
-
                 # Scan Today
                 if scan_two_botak(ticker_df, 0): botak_matches.append(ticker)
                 e2, e3 = scan_engulfing(ticker_df, 0)
@@ -646,17 +611,13 @@ def process_pattern_scanners(stocks_list):
         ppp_matches.sort()
         
         know_pos_pct = (know_positive_count / know_total_count * 100) if know_total_count > 0 else 0
-
-        # Reverse chronological calculation back into standard timeline layout
-        historical_total_counts.reverse()
-        historical_dates.reverse()
         
         return (botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, value_trap_matches, ppp_matches,
                 botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, value_trap_yest, ppp_yest, 
                 know_pos_pct, know_positive_count, know_total_count, email_content_stocks, 
-                extra_52wk_high_symbols, historical_total_counts, historical_dates)
+                extra_52wk_high_symbols)
     except:
-        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, [], [], [0]*30, [""]*30
+        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, [], []
 
 # 5. UI Layout & Logic
 #st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
@@ -841,8 +802,7 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
     results = process_pattern_scanners(tuple(KNOWN_STOCKS))
     b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list = results[:7]
     b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:14]
-    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, extra_52wk_high_symbols = results[14:19]
-    historical_total_counts, historical_dates = results[19:]
+    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, extra_52wk_high_symbols = results[14:]
 
 # --- Render Header with Inline Summary Metrics inside Parentheses ---
 header_html = (
@@ -994,22 +954,3 @@ if vt_list:
     st.markdown(html_vt, unsafe_allow_html=True)
 else:
     st.text("None")
-
-st.markdown("---")
-
-# ==============================================================================
-# TRUE HISTORICAL CALENDAR 30-DAY CHART BLOCK (Placed at the absolute bottom)
-# ==============================================================================
-st.markdown("---")
-st.markdown("#### 📊 Historical Trend (Minervini Qualified Stack Over Last 30 Days)")
-
-if any(historical_total_counts):
-    # Constructing historical metrics line chart DataFrame cleanly
-    chart_df = pd.DataFrame({
-        "Date": historical_dates,
-        "Qualified Counts": historical_total_counts
-    }).set_index("Date")
-    
-    st.line_chart(chart_df, use_container_width=True)
-else:
-    st.info("Insufficient historical breakout aggregates to display trend metrics.")
