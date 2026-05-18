@@ -1054,13 +1054,12 @@ def compute_historical_know_counts(stocks_list):
 historical_df = compute_historical_know_counts(tuple(KNOWN_STOCKS))
 
 if not historical_df.empty:
-    # 1. THE ORIGINAL CHART: Isolate the last 30 data points cleanly to prevent layout changes
-    original_30d_df = historical_df.tail(30)
-    st.line_chart(data=original_30d_df, x="Date", y="Total Count", use_container_width=True)
+    # 1. THE ORIGINAL CHART: Updated to pass the full dataframe to show 90 days instead of 30
+    st.line_chart(data=historical_df, x="Date", y="Total Count", use_container_width=True)
     
     st.markdown("---")
     
-    # 2. THE NEW STANDALONE CHART: Display the Positive Percentage metric over 90 days
+    # 2. THE NEW STANDALONE CHART: Displays the Positive Percentage metric over 90 days
     st.markdown("### 📈 Historical Trend: Minervini Qualified Positive Percentage (Past 90 Days)")
     st.line_chart(data=historical_df, x="Date", y="Positive Pct", use_container_width=True)
 else:
