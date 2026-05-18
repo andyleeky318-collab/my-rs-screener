@@ -491,7 +491,7 @@ def process_pattern_scanners(stocks_list):
 
         for ticker in stocks_list:
             try:
-                if len(stocks_list) > 1:
+                if isinstance(raw_data.columns, pd.MultiIndex):
                     ticker_df = pd.DataFrame({
                         'Open': raw_data['Open'][ticker],
                         'High': raw_data['High'][ticker],
@@ -501,8 +501,8 @@ def process_pattern_scanners(stocks_list):
                     }).dropna()
                 else:
                     ticker_df = raw_data.dropna().copy()
-                
-                if ticker_df.empty or len(ticker_df) < 50:
+
+                if ticker_df.empty or len(ticker_df) < 261:
                     continue
                 
                 # --- ADJUSTED FOR NEW ADDITIONS TODAY VS YESTERDAY ---
@@ -1000,10 +1000,16 @@ st.markdown("---")
 # ==============================================================================
 # TRUE HISTORICAL CALENDAR 30-DAY CHART BLOCK (Placed at the absolute bottom)
 # ==============================================================================
-st.markdown("#### 📊 True Historical Trend: Minervini Total Count (Past 30 Market Days)")
+st.markdown("---")
+st.markdown("#### 📊 Historical Trend (Minervini Qualified Stack Over Last 30 Days)")
 
-chart_df = pd.DataFrame({
-    "Total Count": historical_total_counts
-}, index=historical_dates)
-
-st.line_chart(chart_df, use_container_width=True)
+if any(historical_total_counts):
+    # Constructing historical metrics line chart DataFrame cleanly
+    chart_df = pd.DataFrame({
+        "Date": historical_dates,
+        "Qualified Counts": historical_total_counts
+    }).set_index("Date")
+    
+    st.line_chart(chart_df, use_container_width=True)
+else:
+    st.info("Insufficient historical breakout aggregates to display trend metrics.")
