@@ -958,14 +958,16 @@ else:
 st.markdown("---")
 
 # ==============================================================================
-# 8. HISTORICAL KNOW_TOTAL_COUNT 30-DAY CHART (Completely New Logic at Bottom)
+# 8. HISTORICAL TREND VISUALIZATION (Dual Y-Axis Combo Chart)
 # ==============================================================================
-st.markdown("### 📈 Historical Trend: Minervini Qualified Total Count (Past 30 Days)")
+st.markdown("### 📈 Historical Trend: Minervini Qualification & Market Breadth (Past 90 Days)")
+
+import altair as alt
 
 @st.cache_data(ttl=3600)
 def compute_historical_know_counts(stocks_list):
     try:
-        # Download historical data spanning long enough timeline to process 52w highs and 30-day index shifts safely
+        # Download historical data spanning long enough timeline safely
         chart_raw_data = yf.download(list(stocks_list), period="2y", interval="1d", progress=False)
         
         # Isolate individual ticker structures into isolated dataframes matching your setup logic
@@ -994,14 +996,15 @@ def compute_historical_know_counts(stocks_list):
         any_ticker = list(ticker_dfs.keys())[0]
         full_timeline = ticker_dfs[any_ticker].index
         
-        # Calculate real data for the last 30 trading days
         days_to_compute = min(90, len(full_timeline))
         historical_records = []
 
         for i in range(days_to_compute - 1, -1, -1):
             target_idx = -1 - i
             current_date = full_timeline[target_idx]
+            
             day_total_count = 0
+            day_positive_count = 0
             
             for ticker, df_cloned in ticker_dfs.items():
                 if len(df_cloned) < abs(target_idx) + 260:
@@ -1009,6 +1012,7 @@ def compute_historical_know_counts(stocks_list):
                 
                 # Dynamic calculations relative to the target index lookback offset
                 c_close = df_cloned["Close"].iloc[target_idx]
+                p_close = df_cloned["Close"].iloc[target_idx - 1]
                 c_vol = df_cloned["Volume"].iloc[target_idx]
                 ma_50 = df_cloned["SMA_50"].iloc[target_idx]
                 ma_200 = df_cloned["SMA_200"].iloc[target_idx]
@@ -1033,20 +1037,58 @@ def compute_historical_know_counts(stocks_list):
 
                 if (c1 + c2 + c3 + c4 + c5 + c6 + c7 + c8 + c9 + c10) >= 10:
                     day_total_count += 1
+                    if c_close > p_close:
+                        day_positive_count += 1
+            
+            day_pos_pct = (day_positive_count / day_total_count * 100) if day_total_count > 0 else 0
             
             historical_records.append({
                 "Date": current_date.strftime("%Y-%m-%d"), 
-                "Total Count": day_total_count
+                "Total Count": day_total_count,
+                "Positive Pct": round(day_pos_pct, 1)
             })
 
         return pd.DataFrame(historical_records)
     except Exception as e:
         return pd.DataFrame()
 
-# Process data and render line chart component explicitly
+# Process data and render combined chart component explicitly
 historical_df = compute_historical_know_counts(tuple(KNOWN_STOCKS))
 
 if not historical_df.empty:
-    st.line_chart(data=historical_df, x="Date", y="Total Count", use_container_width=True)
+    # Base chart mapping shared X-axis
+    base = alt.Chart(historical_df).encode(
+        x=alt.X('Date:T', title='Trading Date', axis=alt.Axis(format='%b %d', labelAngle=-45))
+    )
+
+    # Left Axis: Total Count Bar Chart
+    bars = base.mark_bar(opacity=0.45, color='#1f77b4', size=6).encode(
+        y=alt.Y('Total Count:Q', 
+                title='Total Qualified Count', 
+                axis=alt.Axis(titleColor='#1f77b4', grid=True)),
+        tooltip=['Date', 'Total Count']
+    )
+
+    # Right Axis: Positive Pct Line Chart
+    line = base.mark_line(color='#ff7f0e', strokeWidth=2).encode(
+        y=alt.Y('Positive Pct:Q', 
+                title='Positive Pct (%)', 
+                scale=alt.Scale(domain=[0, 100]),
+                axis=alt.Axis(titleColor='#ff7f0e', grid=False)),
+        tooltip=['Date', 'Positive Pct']
+    )
+    
+    # Layer charts together and apply interactive responsive formatting
+    combined_chart = alt.layer(bars, line).resolve_scale(
+        y='independent'
+    ).properties(
+        width='container',
+        height=380
+    ).configure_axis(
+        labelFontSize=11,
+        titleFontSize=12
+    )
+    
+    st.altair_chart(combined_chart, use_container_width=True)
 else:
-    st.info("Insufficient historical trading records available to draw historical count metrics.")
+    st.info("Insufficient historical trading records available to draw combined metrics.")
