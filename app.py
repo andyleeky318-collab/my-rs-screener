@@ -77,7 +77,7 @@ INDUSTRIES = {
     'RETAIL-CNSMR ELEC': ['BBY', 'GME'],
     'CONSUMER PROD-ELEC': ['SN', 'ROKU', 'WHR', 'SPB', 'AAPL'],
     'BLDG-HEAVY CONSTR': ['PWR', 'EME', 'FIX', 'ACM', 'TTEK', 'MTZ', 'APG', 'FLR', 'DY', 'STRL', 'ROAD', 'GVA', 'PRIM'],
-    'BLDG-RSIDNT/COMML': ['BLD', 'IBP', 'EXPO', 'IESC', 'DHI', 'LEN', 'NVR', 'PHM', 'TOL', 'MTH', 'TMHC', 'KBH', 'SKY', 'MHO', 'TPH', 'FTDR', 'GRBK', 'DFH', 'CCS', 'LGIH'],
+    'BLDG-RSIDNT/COMML': ['ITB', 'BLD', 'IBP', 'EXPO', 'IESC', 'DHI', 'LEN', 'NVR', 'PHM', 'TOL', 'MTH', 'TMHC', 'KBH', 'SKY', 'MHO', 'TPH', 'FTDR', 'GRBK', 'DFH', 'CCS', 'LGIH'],
     'BLDG-MBILE/MFG & RV': ['CVCO', 'PATK'],
     'POLLUTION CONTROL': ['WM', 'RSG', 'CLH', 'CWST'],
     'COMML SVCS-LEASING': ['URI', 'AER', 'UHAL', 'WSC', 'R', 'AL', 'HRI', 'WD', 'CAR', 'MGRC', 'PRG'],
@@ -222,7 +222,7 @@ LIME_STOCKS = [
     'USO', 'XOP', 'BUG', 'CLOU', 'IGV', 'HACK', 'CIBR', 'TAN', 'IHI', 'IPAY', 
     'VTV', 'KBE', 'KRE', 'VUG', 'PBW', 'MAGS', 'XRT', 'JETS', 'XTL', 'SHLD', 
     'IBIT', 'UFO', 'XBI', 'SLX', 'ITA', 'REMX', 'LIT', 'KWEB', 'XHB', 'SMH', 
-    'BLOK', 'XME', 'URA', 'DRAM', 'GDX', 'WGMI', 'COPX', 'SIL', 'IAT'
+    'BLOK', 'XME', 'URA', 'DRAM', 'GDX', 'WGMI', 'COPX', 'SIL', 'IAT', 'ITB'
 ]
 
 # 3. Sidebar Inputs
@@ -874,7 +874,7 @@ else:
 st.markdown("---")
 
 # --- 2. TIGHT PPP (Full Horizontal Row Below Two Botak) ---
-st.markdown(f"#### 📈 PPP = Opportunity ({len(ppp_list)})")
+st.markdown(f"#### 📉 PPP = Opportunity ({len(ppp_list)})")
 if ppp_list:
     html_p = ""
     for sym in ppp_list:
@@ -931,7 +931,7 @@ else:
 st.markdown("---")
 
 # --- 5. POWERTREND NOT EXTENDED (Full Horizontal Row Below PowerTrend) ---
-st.markdown(f"#### 🛡️ PowerTrend (Not Extended) ({len(ptne_list)})")
+st.markdown(f"#### ⚡ PowerTrend (Not Extended) ({len(ptne_list)})")
 if ptne_list:
     html_ptne = ""
     for sym in ptne_list:
