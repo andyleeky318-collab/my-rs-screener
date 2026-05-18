@@ -67,7 +67,7 @@ INDUSTRIES = {
     'RETAIL-DRUG STORES': ['CVS', 'UNH', 'ELV', 'HUM'],
     'UTILITY-ELCTRIC PWR': ['NEE', 'SO', 'CEG', 'DUK', 'AEP', 'SRE', 'D', 'VST', 'PEG', 'PCG', 'EXC', 'XEL', 'ED', 'EIX', 'WEC', 'ETR', 'DTE', 'FE', 'PPL', 'AEE', 'ES', 'CMS', 'NRG', 'CNP', 'LNT', 'EVRG', 'AES', 'PNW', 'OGE', 'IDA', 'POR', 'ORA', 'BKH', 'TXNM', 'NWE', 'MGEE'],
     'ELECTRICAL POWER/EQPMT': ['ETN', 'GEV', 'AME', 'ROK', 'HUBB', 'RRX', 'GNRC', 'AYI', 'BDC', 'ENS', 'FLNC', 'SMR', 'ATKR', 'PBW', 'POWL', 'VICR', 'BE', 'ENVX'],
-    'TELCOM-FIBR OPTCS': ['AAOI', 'COHR', 'CIEN', 'FN', 'LITE', 'AXTI'],
+    'TELCOM-FIBR OPTCS': ['XTL', 'AAOI', 'COHR', 'CIEN', 'FN', 'LITE', 'AXTI'],
     'ELEC-PARTS': ['APH', 'GLW', 'NVT', 'CAMT', 'TEL'],
     'ELEC-SCNTIFIC/MSRNG': ['PH', 'EMR', 'KEYS', 'FTV', 'CGNX', 'NOVT', 'ST', 'NXT', 'ITRI', 'ESE', 'SXI', 'MTRN'],
     'ELEC-SEMICNDCTR EQP': ['ASML', 'KLAC', 'AMAT', 'LRCX', 'ONTO', 'NVMI', 'TER', 'AEIS', 'MKSI', 'ENTG', 'ACLS', 'AEHR'],
@@ -117,7 +117,7 @@ INDUSTRIES = {
     'INTRNT-NETWK SLTNS': ['IT', 'MSTR', 'CSGP', 'VRSN', 'UPST', 'BRZE', 'CARG', 'NET', 'VLTO'],
     'INSURANCE-BROKERS': ['AON', 'AJG', 'WTW', 'BRO', 'RYAN', 'CRVL', 'GSHD'],
     'OIL&GAS INTEGRATED': ['XOM', 'CVX', 'OXY'],
-    'OIL&GAS-U S EXPL PRO': ['COP', 'EOG', 'FANG', 'DVN', 'EQT', 'EXE', 'CTRA', 'PR', 'OVV', 'APA', 'CHRD', 'MTDR', 'NFG', 'CNX', 'CRC', 'CRGY', 'AR', 'RRC', 'MUR', 'MGY', 'SM', 'NOG', 'CRK', 'GPOR', 'XPRO'],
+    'OIL&GAS-U S EXPL PRO': ['XOP', 'COP', 'EOG', 'FANG', 'DVN', 'EQT', 'EXE', 'CTRA', 'PR', 'OVV', 'APA', 'CHRD', 'MTDR', 'NFG', 'CNX', 'CRC', 'CRGY', 'AR', 'RRC', 'MUR', 'MGY', 'SM', 'NOG', 'CRK', 'GPOR', 'XPRO'],
     'OIL&GAS-ROYALTY TRUST': ['VNOM', 'HESM', 'BSM'],
     'RETAIL-INTERNET': ['AMZN', 'MELI', 'CPNG', 'LULU', 'EBAY', 'CHWY', 'GLBE', 'ETSY', 'ACVA'],
     'FIN-INVEST BNK/BKRS': ['GS', 'SCHW', 'ICE', 'CME', 'IBKR', 'BK', 'COIN', 'NDAQ', 'TW', 'STT', 'CBOE', 'HOOD', 'LPLA', 'JEF', 'HLI', 'MKTX', 'XP', 'EVR', 'FRHC', 'PJT', 'MC', 'PIPR', 'VIRT', 'LAZ', 'SNEX'],
@@ -128,15 +128,15 @@ INDUSTRIES = {
     'BANKS-FOREIGN': ['UBS', 'BAP'],
     'BANKS-SUPR RGIONAL': ['PNC', 'HBAN', 'RF', 'CFG', 'KEY', 'ZION', 'FITB', 'TFC', 'MTB', 'ALLY', 'WAL'],
     'BANKS-WST/STHWST': ['BOKF', 'ONB', 'TCBI', 'WAFD', 'PRK', 'BKU', 'IBOC', 'BANF', 'UCB', 'AUB', 'FIBK', 'CATY', 'FHB', 'BOH', 'CVBF'],
-    'BANKS-SOUTHEAST': ['CADE', 'FNB', 'FBK', 'SNV', 'HOMB', 'OZK', 'ABCB'],
-    'BANKS-MIDWEST': ['FFIN', 'UMBF', 'ASB', 'FULT', 'CBU', 'SFNC', 'FRME', 'NBTB', 'CBSH', 'COLB', 'GBCI', 'UBSI', 'HWC', 'TOWN'],
-    'BANKS-NORTHEAST': ['FCNCA', 'EWBC', 'FHN', 'CFR', 'PNFP', 'SSB', 'WTFC', 'BPOP', 'PB', 'WU', 'EBC', 'FBP', 'TBBK'],
+    'BANKS-SOUTHEAST': ['KBE', 'CADE', 'FNB', 'FBK', 'SNV', 'HOMB', 'OZK', 'ABCB'],
+    'BANKS-MIDWEST': ['KRE', 'FFIN', 'UMBF', 'ASB', 'FULT', 'CBU', 'SFNC', 'FRME', 'NBTB', 'CBSH', 'COLB', 'GBCI', 'UBSI', 'HWC', 'TOWN'],
+    'BANKS-NORTHEAST': ['IAT', 'FCNCA', 'EWBC', 'FHN', 'CFR', 'PNFP', 'SSB', 'WTFC', 'BPOP', 'PB', 'WU', 'EBC', 'FBP', 'TBBK'],
     'FINANC-SVINGS & LO': ['WBS', 'NYCB', 'TFSL', 'WSFS', 'PFS'],
     'MED-MANAGED CARE': ['UNH', 'ELV', 'CI', 'CNC', 'HUM', 'MOH', 'OSCR', 'ALHC'],
     'TRANSPORTATION-SHIP': ['KEX', 'FRO', 'MATX', 'GLNG', 'STNG', 'TDW', 'INSW', 'SBLK', 'GOGL', 'ZIM', 'TNK'],
     'MDCAL-WHLSLE DRG': ['MCK', 'COR', 'CAH', 'HSIC'],
     'MEDICAL-PRODUCTS': ['TMO', 'ABT', 'DHR', 'A', 'IDXX', 'RMD', 'MTD', 'RVTY', 'EXAS', 'BRKR', 'QGEN', 'BIO', 'GMEN', 'LNTH', 'MASI', 'GKOS', 'BLCO', 'MMSI'],
-    'MEDICAL-SYSTEMS/EQP': ['ISRG', 'SYK', 'BSX', 'MDT', 'BDX', 'GEHC', 'EW', 'DXCM', 'STE', 'WST', 'COO', 'ZBH', 'WAT', 'HOLX', 'BAX', 'ALGN', 'PODD', 'NTRA', 'TFX', 'PEN', 'INSP'],
+    'MEDICAL-SYSTEMS/EQP': ['IHI', 'ISRG', 'SYK', 'BSX', 'MDT', 'BDX', 'GEHC', 'EW', 'DXCM', 'STE', 'WST', 'COO', 'ZBH', 'WAT', 'HOLX', 'BAX', 'ALGN', 'PODD', 'NTRA', 'TFX', 'PEN', 'INSP'],
     'METAL PROC & FABRICA': ['RBC', 'MLI', 'VMI', 'ROCK'],
     'CMML SVCS-CNSLTNG': ['TNET', 'LOPE', 'CNXC', 'ABM', 'RCM', 'LAUR', 'QXO', 'G'],
     'AUTO MANUFACTURERS': ['TSLA', 'GM', 'F', 'RIVN'],
@@ -222,7 +222,7 @@ LIME_STOCKS = [
     'USO', 'XOP', 'BUG', 'CLOU', 'IGV', 'HACK', 'CIBR', 'TAN', 'IHI', 'IPAY', 
     'VTV', 'KBE', 'KRE', 'VUG', 'PBW', 'MAGS', 'XRT', 'JETS', 'XTL', 'SHLD', 
     'IBIT', 'UFO', 'XBI', 'SLX', 'ITA', 'REMX', 'LIT', 'KWEB', 'XHB', 'SMH', 
-    'BLOK', 'XME', 'URA', 'DRAM', 'GDX', 'WGMI', 'COPX', 'SIL'
+    'BLOK', 'XME', 'URA', 'DRAM', 'GDX', 'WGMI', 'COPX', 'SIL', 'IAT'
 ]
 
 # 3. Sidebar Inputs
