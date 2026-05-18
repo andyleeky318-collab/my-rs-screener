@@ -958,16 +958,14 @@ else:
 st.markdown("---")
 
 # ==============================================================================
-# 8. HISTORICAL TREND VISUALIZATION (Dual Y-Axis Combo Chart)
+# 8. HISTORICAL KNOW_TOTAL_COUNT 30-DAY CHART (Completely New Logic at Bottom)
 # ==============================================================================
-st.markdown("### 📈 Historical Trend: Minervini Qualification & Market Breadth (Past 90 Days)")
-
-import altair as alt
+st.markdown("### 📈 Historical Trend: Minervini Qualified Total Count (Past 30 Days)")
 
 @st.cache_data(ttl=3600)
 def compute_historical_know_counts(stocks_list):
     try:
-        # Download historical data spanning long enough timeline safely
+        # Download historical data spanning long enough timeline to process 52w highs and 90-day index shifts safely
         chart_raw_data = yf.download(list(stocks_list), period="2y", interval="1d", progress=False)
         
         # Isolate individual ticker structures into isolated dataframes matching your setup logic
@@ -996,13 +994,13 @@ def compute_historical_know_counts(stocks_list):
         any_ticker = list(ticker_dfs.keys())[0]
         full_timeline = ticker_dfs[any_ticker].index
         
+        # Calculate real data for the last 90 trading days to cover both charts
         days_to_compute = min(90, len(full_timeline))
         historical_records = []
 
         for i in range(days_to_compute - 1, -1, -1):
             target_idx = -1 - i
             current_date = full_timeline[target_idx]
-            
             day_total_count = 0
             day_positive_count = 0
             
@@ -1012,7 +1010,7 @@ def compute_historical_know_counts(stocks_list):
                 
                 # Dynamic calculations relative to the target index lookback offset
                 c_close = df_cloned["Close"].iloc[target_idx]
-                p_close = df_cloned["Close"].iloc[target_idx - 1]
+                p_close = df_cloned["Close"].iloc[target_idx - 1] # Previous day close for gain tracking
                 c_vol = df_cloned["Volume"].iloc[target_idx]
                 ma_50 = df_cloned["SMA_50"].iloc[target_idx]
                 ma_200 = df_cloned["SMA_200"].iloc[target_idx]
@@ -1052,43 +1050,18 @@ def compute_historical_know_counts(stocks_list):
     except Exception as e:
         return pd.DataFrame()
 
-# Process data and render combined chart component explicitly
+# Process full 90-day data asset
 historical_df = compute_historical_know_counts(tuple(KNOWN_STOCKS))
 
 if not historical_df.empty:
-    # Base chart mapping shared X-axis
-    base = alt.Chart(historical_df).encode(
-        x=alt.X('Date:T', title='Trading Date', axis=alt.Axis(format='%b %d', labelAngle=-45))
-    )
-
-    # Left Axis: Total Count Bar Chart
-    bars = base.mark_bar(opacity=0.45, color='#1f77b4', size=6).encode(
-        y=alt.Y('Total Count:Q', 
-                title='Total Qualified Count', 
-                axis=alt.Axis(titleColor='#1f77b4', grid=True)),
-        tooltip=['Date', 'Total Count']
-    )
-
-    # Right Axis: Positive Pct Line Chart
-    line = base.mark_line(color='#ff7f0e', strokeWidth=2).encode(
-        y=alt.Y('Positive Pct:Q', 
-                title='Positive Pct (%)', 
-                scale=alt.Scale(domain=[0, 100]),
-                axis=alt.Axis(titleColor='#ff7f0e', grid=False)),
-        tooltip=['Date', 'Positive Pct']
-    )
+    # 1. THE ORIGINAL CHART: Isolate the last 30 data points cleanly to prevent layout changes
+    original_30d_df = historical_df.tail(30)
+    st.line_chart(data=original_30d_df, x="Date", y="Total Count", use_container_width=True)
     
-    # Layer charts together and apply interactive responsive formatting
-    combined_chart = alt.layer(bars, line).resolve_scale(
-        y='independent'
-    ).properties(
-        width='container',
-        height=380
-    ).configure_axis(
-        labelFontSize=11,
-        titleFontSize=12
-    )
+    st.markdown("---")
     
-    st.altair_chart(combined_chart, use_container_width=True)
+    # 2. THE NEW STANDALONE CHART: Display the Positive Percentage metric over 90 days
+    st.markdown("### 📈 Historical Trend: Minervini Qualified Positive Percentage (Past 90 Days)")
+    st.line_chart(data=historical_df, x="Date", y="Positive Pct", use_container_width=True)
 else:
-    st.info("Insufficient historical trading records available to draw combined metrics.")
+    st.info("Insufficient historical trading records available to draw historical metrics.")
