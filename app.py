@@ -954,3 +954,97 @@ if vt_list:
     st.markdown(html_vt, unsafe_allow_html=True)
 else:
     st.text("None")
+
+# ==============================================================================
+# 8. HISTORICAL KNOW_TOTAL_COUNT 30-DAY CHART (Completely New Logic at Bottom)
+# ==============================================================================
+st.markdown("### 📈 Historical Trend: Minervini Qualified Total Count (Past 30 Days)")
+
+@st.cache_data(ttl=3600)
+def compute_historical_know_counts(stocks_list):
+    try:
+        # Download historical data spanning long enough timeline to process 52w highs and 30-day index shifts safely
+        chart_raw_data = yf.download(list(stocks_list), period="2y", interval="1d", progress=False)
+        
+        # Isolate individual ticker structures into isolated dataframes matching your setup logic
+        ticker_dfs = {}
+        for ticker in stocks_list:
+            if len(stocks_list) > 1:
+                t_df = pd.DataFrame({
+                    'Open': chart_raw_data['Open'][ticker],
+                    'High': chart_raw_data['High'][ticker],
+                    'Low': chart_raw_data['Low'][ticker],
+                    'Close': chart_raw_data['Close'][ticker],
+                    'Volume': chart_raw_data['Volume'][ticker]
+                }).dropna()
+            else:
+                t_df = chart_raw_data.dropna().copy()
+            
+            if not t_df.empty and len(t_df) >= 261:
+                t_df["SMA_50"] = round(t_df['Close'].rolling(window=50).mean(), 2)
+                t_df["SMA_200"] = round(t_df['Close'].rolling(window=200).mean(), 2)
+                ticker_dfs[ticker] = t_df
+
+        if not ticker_dfs:
+            return pd.DataFrame()
+
+        # Find valid chronological execution timeline dates matching trading sessions
+        any_ticker = list(ticker_dfs.keys())[0]
+        full_timeline = ticker_dfs[any_ticker].index
+        
+        # Calculate real data for the last 30 trading days
+        days_to_compute = min(30, len(full_timeline))
+        historical_records = []
+
+        for i in range(days_to_compute - 1, -1, -1):
+            target_idx = -1 - i
+            current_date = full_timeline[target_idx]
+            day_total_count = 0
+            
+            for ticker, df_cloned in ticker_dfs.items():
+                if len(df_cloned) < abs(target_idx) + 260:
+                    continue
+                
+                # Dynamic calculations relative to the target index lookback offset
+                c_close = df_cloned["Close"].iloc[target_idx]
+                c_vol = df_cloned["Volume"].iloc[target_idx]
+                ma_50 = df_cloned["SMA_50"].iloc[target_idx]
+                ma_200 = df_cloned["SMA_200"].iloc[target_idx]
+                
+                # Handle safe range windows relative to chosen index shift pointer
+                end_p = len(df_cloned) + target_idx
+                ma_200_20 = df_cloned["SMA_200"].iloc[target_idx - 20] if end_p >= 20 else 0
+                
+                low_52w = round(min(df_cloned["Low"].iloc[target_idx - 260 : end_p if end_p != 0 else None]), 2)
+                high_52w = round(df_cloned["High"].iloc[target_idx - 260 : target_idx].max(), 2)
+
+                c1 = int(c_close > ma_50 > ma_200)
+                c2 = int(ma_50 > ma_200)
+                c3 = int(ma_200 > ma_200_20)
+                c4 = int(ma_50 > ma_200)
+                c5 = int(c_close > ma_50)
+                c6 = int(c_close >= (1.3 * low_52w))
+                c7 = int(c_close >= (0.75 * high_52w))
+                c8 = int(c_close >= 20)
+                c9 = int(c_vol > 20000)
+                c10 = int((c_vol * c_close) > 2000000)
+
+                if (c1 + c2 + c3 + c4 + c5 + c6 + c7 + c8 + c9 + c10) >= 10:
+                    day_total_count += 1
+            
+            historical_records.append({
+                "Date": current_date.strftime("%Y-%m-%d"), 
+                "Total Count": day_total_count
+            })
+
+        return pd.DataFrame(historical_records)
+    except Exception as e:
+        return pd.DataFrame()
+
+# Process data and render line chart component explicitly
+historical_df = compute_historical_know_counts(tuple(KNOWN_STOCKS))
+
+if not historical_df.empty:
+    st.line_chart(data=historical_df, x="Date", y="Total Count", use_container_width=True)
+else:
+    st.info("Insufficient historical trading records available to draw historical count metrics.")
