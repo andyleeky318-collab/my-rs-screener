@@ -1022,20 +1022,33 @@ st.markdown("---")
 total_engulf = len(e2_list) + len(e3_list)
 st.markdown(f"#### 🐳 Bullish Engulfing = Awareness HL ({total_engulf})")
 
-if e2_list or e3_list:
-    if e2_list:
+if e2_list or e3_list or e2_yest or e3_yest:
+    if e2_list or e2_yest:
         st.markdown(f"**2x Engulfing Conditions Matched ({len(e2_list)}):**")
         html_e2 = ""
         for sym in e2_list:
             cls = "new-pattern-badge" if sym not in e2_yest else ""
             html_e2 += f'<div class="ticker-badge {cls}">{sym}</div>'
+        
+        # Process and append removed 2x engulfing stocks
+        removed_e2 = [sym for sym in e2_yest if sym not in e2_list]
+        for sym in sorted(removed_e2):
+            html_e2 += f'<div class="ticker-badge removed-badge">{sym}</div>'
+            
         st.markdown(html_e2, unsafe_allow_html=True)
-    if e3_list:
+        
+    if e3_list or e3_yest:
         st.markdown(f"<div style='margin-top:10px;'><b>3x Engulfing Conditions Matched ({len(e3_list)}):</b></div>", unsafe_allow_html=True)
         html_e3 = ""
         for sym in e3_list:
             cls = "new-pattern-badge" if sym not in e3_yest else ""
             html_e3 += f'<div class="ticker-badge {cls}">{sym}</div>'
+            
+        # Process and append removed 3x engulfing stocks
+        removed_e3 = [sym for sym in e3_yest if sym not in e3_list]
+        for sym in sorted(removed_e3):
+            html_e3 += f'<div class="ticker-badge removed-badge">{sym}</div>'
+            
         st.markdown(html_e3, unsafe_allow_html=True)
 else:
     st.info("No active setups discovered.")
