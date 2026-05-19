@@ -311,10 +311,11 @@ def scan_two_botak(df, lookback=0):
         (((df['Close'] - df['Open']) / ((df['High'] - df['Open']).replace(0, 0.001))) > 0.9)
     )
     twoBotak = (
-        (botak & botak.shift(1)) |
+        ((botak & botak.shift(1)) |
         (botak & percentile.shift(1)) |
         (percentile & botak.shift(1)) |
-        (percentile & percentile.shift(1))
+        (percentile & percentile.shift(1))) &
+        (df['Close'] > 20)
     )
     return bool(twoBotak.iloc[idx])
 
