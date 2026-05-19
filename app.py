@@ -722,7 +722,7 @@ if all_data:
     <th style="text-align: center; width: 30px;">#</th>
     <th style="text-align: left;">Industry</th>
     <th style="text-align: center; width: 40px;">RS</th>
-    <th style="text-align: left;">Tickers (Ranked)</th>
+    <th style="text-align: left;">Tickers (Above 80)</th>
     <th style="text-align: left; width: 300px;">Within 21 EMA Cloud</th>
     </tr></thead><tbody>"""
 
@@ -736,7 +736,7 @@ if all_data:
             rs_score = r["RS Score"]
             ticker_price = price_lookup.get(ticker_sym, 999)
             
-            if rs_score >= 80:# and ticker_price > 30:
+            if rs_score >= 80 and ticker_price > 20:
                 # If the ticker is inside KNOWN_STOCKS, apply high-contrast dark text rules
                 if ticker_sym in LIME_STOCKS:
                     ticker_html += (
