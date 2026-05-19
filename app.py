@@ -1085,18 +1085,40 @@ st.markdown("---")
 st.markdown(f"#### ⚠️ Value Trap ({len(vt_list)})")
 if vt_list or vt_yest:
     html_vt = ""
+    
+    # 1. Render today's active Value Traps
     for sym in vt_list:
         cls = "new-pattern-badge" if sym not in vt_yest else ""
         html_vt += f'<div class="ticker-badge {cls}">{sym}</div>'
     
-    # Process and append removed stocks
+    # 2. Process and append removed stocks with conditional gold + strikethrough coloring
     removed_vt = [sym for sym in vt_yest if sym not in vt_list]
     for sym in sorted(removed_vt):
-        html_vt += f'<div class="ticker-badge removed-badge">{sym}</div>'
+        try:
+            # Safely extract today's price action from your cached pricing lookup dictionary
+            # If today's close is higher than yesterday's close, make it a gold badge with a strikethrough
+            if len(stocks_list) > 1:
+                ticker_df = pd.DataFrame({
+                    'Open': raw_data['Open'][sym],
+                    'High': raw_data['High'][sym],
+                    'Low': raw_data['Low'][sym],
+                    'Close': raw_data['Close'][sym]
+                }).dropna()
+            else:
+                ticker_df = raw_data.dropna().copy()
+                
+            is_positive_today = ticker_df['Close'].iloc[-1] > ticker_df['Close'].iloc[-2]
+        except:
+            is_positive_today = False
+
+        if is_positive_today:
+            # Gold background badge + dark text + inline strikethrough style
+            html_vt += f'<div class="ticker-badge new-pattern-badge" style="text-decoration: line-through;">{sym}</div>'
+        else:
+            # Standard light greyed-out strikethrough badge
+            html_vt += f'<div class="ticker-badge removed-badge">{sym}</div>'
         
     st.markdown(html_vt, unsafe_allow_html=True)
 else:
     st.text("None")
-
-st.markdown("---")
 
