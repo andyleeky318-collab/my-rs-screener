@@ -734,7 +734,7 @@ if all_data:
         for _, r in item["Tickers"].iterrows():
             ticker_sym = r["Ticker"]
             rs_score = r["RS Score"]
-            ticker_price = price_lookup.get(ticker_sym, 999)
+            ticker_price = item["Prices"].get(ticker_sym, 0)
             
             if rs_score >= 80 and ticker_price > 20:
                 # If the ticker is inside KNOWN_STOCKS, apply high-contrast dark text rules
