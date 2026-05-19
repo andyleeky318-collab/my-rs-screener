@@ -925,6 +925,74 @@ if not historical_df.empty:
 else:
     st.info("Insufficient historical trading records available to draw historical metrics.")
 
+# ==============================================================================
+# 9. AUTOMATED BREADTH MARKET REGIME INTERPRETATION
+# ==============================================================================
+if not historical_df.empty and len(historical_df) >= 10:
+    st.markdown("#### 🧠 Market Breadth Regime Analysis")
+    
+    # Isolate trailing 30 days data (or max available) for trend analysis
+    sample_df = historical_df.tail(30).copy()
+    counts = sample_df["Total Count"].tolist()
+    dates = sample_df["Date"].tolist()
+    
+    current_count = counts[-1]
+    prev_count = counts[-2]
+    
+    # 1. Compute Basic Moving Averages of the Breadth Metric
+    ma_short = np.mean(counts[-5:])  # 5-day breath trend
+    ma_long = np.mean(counts[-20:])  # 20-day breadth trend
+    
+    # 2. Identify Peak/Trough Structures (Swing Highs / Lows)
+    peaks = []
+    troughs = []
+    for idx in range(1, len(counts) - 1):
+        if counts[idx] > counts[idx-1] and counts[idx] > counts[idx+1]:
+            peaks.append((idx, counts[idx]))
+        elif counts[idx] < counts[idx-1] and counts[idx] < counts[idx+1]:
+            troughs.append((idx, counts[idx]))
+            
+    # 3. Formulate structural trend strings
+    structure_desc = "Consolidating Range"
+    if len(peaks) >= 2 and len(troughs) >= 2:
+        if peaks[-1][1] > peaks[-2][1] and troughs[-1][1] > troughs[-2][1]:
+            structure_desc = "Bullish Structure (Higher Highs & Higher Lows)"
+        elif peaks[-1][1] < peaks[-2][1] and troughs[-1][1] < troughs[-2][1]:
+            structure_desc = "Deteriorating Structure (Lower Highs & Lower Lows)"
+        elif peaks[-1][1] < peaks[-2][1] and troughs[-1][1] > troughs[-2][1]:
+            structure_desc = "Coiling / Symmetrical Compression"
+            
+    # 4. Determine Momentum & Direction Status Flags
+    if ma_short > ma_long and current_count >= prev_count:
+        status_color = "#00FF00" # Emerald Green
+        status_title = "EXPANDING MOMENTUM"
+        action_note = "Market participation is expanding actively. Growth setups have a high probability of immediate follow-through. Lean long."
+    elif ma_short < ma_long and current_count <= prev_count:
+        status_color = "#FF4B4B" # Red
+        status_title = "DETERIORATING BREADTH"
+        action_note = "Market leadership is thinning or experiencing distribution. New breakouts are prone to failure traps. Tighten risk parameters and trail stops aggressively."
+    else:
+        status_color = "#FFA500" # Orange
+        status_title = "CHOPPY / TRANSITIONAL REGIME"
+        action_note = "Breadth lacks a clear trend or is turning divergent. Prioritize high-conviction, isolated leaders showing clean relative strength; avoid chasing generic extensions."
+
+    # 5. Render styled callout UI box
+    st.markdown(
+        f"""
+        <div style="border: 1px solid {status_color}; border-left: 5px solid {status_color}; padding: 12px; border-radius: 4px; background-color: #1a1c23; margin-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-weight: bold; color: {status_color}; font-size: 1.1em;">⚠️ MARKET STATUS: {status_title}</span>
+                <span style="font-size: 0.9em; color: #888;">Structure: <b>{structure_desc}</b></span>
+            </div>
+            <p style="margin: 0; font-size: 0.95em; color: #e0e0e0; line-height: 1.5;">
+                <b>Breadth Matrix:</b> Current active Minervini pool rests at <b>{current_count}</b> setups (5-Day Trend Avg: {ma_short:.1f} vs 20-Day Trend Avg: {ma_long:.1f}). <br>
+                <b>Tactical Playbook:</b> {action_note}
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 st.markdown("---")
 
 # --- Render Header with Inline Summary Metrics inside Parentheses ---
