@@ -816,7 +816,7 @@ st.markdown("---")
 # ==============================================================================
 # 8. HISTORICAL KNOW_TOTAL_COUNT 30-DAY CHART (Completely New Logic at Bottom)
 # ==============================================================================
-st.markdown("### Total Count (Past 90 Days)")
+st.markdown(f"### Total Count ({know_total_count})")
 
 @st.cache_data(ttl=3600)
 def compute_historical_know_counts(stocks_list):
@@ -916,7 +916,7 @@ if not historical_df.empty:
     st.markdown("---")
     
     # 2. THE NEW STANDALONE CHART: Displays the Positive Percentage metric over 90 days
-    st.markdown("### Positive Percentage (Past 90 Days)")
+    st.markdown(f"### Positive Percentage ({know_pos_pct:.1f}%)")
     st.line_chart(data=historical_df, x="Date", y="Positive Pct", use_container_width=True)
 else:
     st.info("Insufficient historical trading records available to draw historical metrics.")
@@ -1048,7 +1048,7 @@ else:
 st.markdown("---")
 
 # --- 4. POWERTREND (Full Horizontal Row) ---
-st.markdown(f"#### ⚡ PowerTrend = Awareness thematic leaders ({len(pt_list)})")
+st.markdown(f"#### ⚡ PowerTrend = Awareness thematic leaders extended ({len(pt_list)})")
 if pt_list or pt_yest:
     html_pt = ""
     for sym in pt_list:
@@ -1068,7 +1068,7 @@ else:
 st.markdown("---")
 
 # --- 5. POWERTREND NOT EXTENDED (Full Horizontal Row Below PowerTrend) ---
-st.markdown(f"#### ⚡ PowerTrend (Not Extended) ({len(ptne_list)})")
+st.markdown(f"#### ⚡ PowerTrend ... Not Extended ({len(ptne_list)})")
 if ptne_list:
     html_ptne = ""
     for sym in ptne_list:
