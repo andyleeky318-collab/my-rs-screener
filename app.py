@@ -931,11 +931,17 @@ st.markdown("---")
 
 # --- 4. POWERTREND (Full Horizontal Row) ---
 st.markdown(f"#### ⚡ PowerTrend = Awareness thematic leaders ({len(pt_list)})")
-if pt_list:
+if pt_list or pt_yest:
     html_pt = ""
     for sym in pt_list:
         cls = "new-pattern-badge" if sym not in pt_yest else ""
         html_pt += f'<div class="ticker-badge {cls}">{sym}</div>'
+    
+    # Process and append removed stocks
+    removed_pt = [sym for sym in pt_yest if sym not in pt_list]
+    for sym in sorted(removed_pt):
+        html_pt += f'<div class="ticker-badge removed-badge">{sym}</div>'
+        
     st.markdown(html_pt, unsafe_allow_html=True)
 else:
     st.text("None")
@@ -973,6 +979,8 @@ if vt_list or vt_yest:
     st.markdown(html_vt, unsafe_allow_html=True)
 else:
     st.text("None")
+
+st.markdown("---")
 
 # ==============================================================================
 # 8. HISTORICAL KNOW_TOTAL_COUNT 30-DAY CHART (Completely New Logic at Bottom)
