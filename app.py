@@ -802,7 +802,7 @@ if all_data:
     st.markdown(table_html, unsafe_allow_html=True)
 
 # 7. EXTRA SEPARATE PATTERNS SCANNING BLOCK
-st.markdown("---")
+#st.markdown("---")
 #st.markdown("### 🔍 Technical Pattern Screener (KNOWN_STOCKS Database)")
 
 with st.spinner("Scanning pattern anomalies across known instruments..."):
