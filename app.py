@@ -576,7 +576,8 @@ def process_pattern_scanners(stocks_list):
                     if total_today >= 10:
                         know_total_count += 1
                         is_new_addition = (total_yesterday < 10)
-                        email_content_stocks.append((ticker, is_new_addition))
+                        is_positive_today = (currentClose > prevClose)
+                        email_content_stocks.append((ticker, is_new_addition, is_positive_today))
                         
                         if currentClose > prevClose:
                             know_positive_count += 1
@@ -941,12 +942,16 @@ st.markdown(header_html, unsafe_allow_html=True)
 if email_content_stocks or email_content_removed:
     minervini_html = ""
     
-    # 1. Active Symbols Layout (Sorted Alphabetically)
-    for sym, is_new_addition in sorted(email_content_stocks, key=lambda x: x[0]):
+    # 1. Active Symbols Layout (Sorted Alphabetically by the ticker name)
+    for sym, is_new_addition, is_positive_today in sorted(email_content_stocks, key=lambda x: x[0]):
+        
+        # Inject small up logo to the left side if the stock finished positive today
+        up_logo = "<span style='color:#00FF00; margin-right:4px; font-weight:bold;'>▲</span>" if is_positive_today else ""
+        
         if is_new_addition:
-            minervini_html += f'<div class="ticker-badge new-pattern-badge">{sym}</div>'
+            minervini_html += f'<div class="ticker-badge new-pattern-badge">{up_logo}{sym}</div>'
         else:
-            minervini_html += f'<div class="ticker-badge">{sym}</div>'
+            minervini_html += f'<div class="ticker-badge">{up_logo}{sym}</div>'
             
     # 2. Dropped/Removed Symbols Layout (Sorted Alphabetically with line-through)
     for sym in sorted(email_content_removed):
