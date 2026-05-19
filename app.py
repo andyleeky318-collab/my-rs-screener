@@ -484,6 +484,7 @@ def process_pattern_scanners(stocks_list):
         know_total_count = 0
         know_positive_count = 0
         email_content_stocks = []  # Now tracks tuples of (ticker, is_new_addition)
+        email_content_removed = [] # Tracks dropped Minervini stocks compared to yesterday
         extra_52wk_high_symbols = []
         extra_52wk_high_removed = []
 
@@ -566,7 +567,6 @@ def process_pattern_scanners(stocks_list):
                     was_qualified_yest = (is_at_52wk_high_yest and total_yesterday < 10)
                     
                     if qualified_today_52w:
-                        # It is a brand new addition if it qualifies today but didn't yesterday
                         is_new_addition_52w = not was_qualified_yest
                         extra_52wk_high_symbols.append((ticker, is_new_addition_52w))
                     elif was_qualified_yest:
@@ -575,13 +575,13 @@ def process_pattern_scanners(stocks_list):
                     # --- SET CONTROLLER FLAGS ---
                     if total_today >= 10:
                         know_total_count += 1
-                        
-                        # A stock is a new addition if it has total >= 10 today but was < 10 yesterday
                         is_new_addition = (total_yesterday < 10)
                         email_content_stocks.append((ticker, is_new_addition))
                         
                         if currentClose > prevClose:
                             know_positive_count += 1
+                    elif total_yesterday >= 10:
+                        email_content_removed.append(ticker)
 
                 # Scan Today
                 if scan_two_botak(ticker_df, 0): botak_matches.append(ticker)
@@ -618,10 +618,10 @@ def process_pattern_scanners(stocks_list):
         
         return (botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, value_trap_matches, ppp_matches,
                 botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, value_trap_yest, ppp_yest, 
-                know_pos_pct, know_positive_count, know_total_count, email_content_stocks, 
+                know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed,
                 extra_52wk_high_symbols, extra_52wk_high_removed)
     except:
-        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, [], [], []
+        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, [], [], [], []
 
 # 5. UI Layout & Logic
 #st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
@@ -812,7 +812,7 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
     results = process_pattern_scanners(tuple(KNOWN_STOCKS))
     b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list = results[:7]
     b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:14]
-    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, extra_52wk_high_symbols, extra_52wk_high_removed = results[14:]
+    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed = results[14:]
 
 st.markdown("---")
 
@@ -938,16 +938,23 @@ header_html = (
 )
 st.markdown(header_html, unsafe_allow_html=True)
 
-if email_content_stocks:
-    stocks_html = ""
-    for sym, is_new_addition in sorted(email_content_stocks):
+if email_content_stocks or email_content_removed:
+    minervini_html = ""
+    
+    # 1. Active Symbols Layout (Sorted Alphabetically)
+    for sym, is_new_addition in sorted(email_content_stocks, key=lambda x: x[0]):
         if is_new_addition:
-            stocks_html += f'<div class="ticker-badge new-pattern-badge">{sym}</div>'
+            minervini_html += f'<div class="ticker-badge new-pattern-badge">{sym}</div>'
         else:
-            stocks_html += f'<div class="ticker-badge">{sym}</div>'
-    st.markdown(stocks_html, unsafe_allow_html=True)
+            minervini_html += f'<div class="ticker-badge">{sym}</div>'
+            
+    # 2. Dropped/Removed Symbols Layout (Sorted Alphabetically with line-through)
+    for sym in sorted(email_content_removed):
+        minervini_html += f'<div class="ticker-badge removed-badge">{sym}</div>'
+        
+    st.markdown(minervini_html, unsafe_allow_html=True)
 else:
-    st.info("No stocks matched all required filters today.")
+    st.text("None")
 
 st.markdown("---")
 
