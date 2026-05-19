@@ -693,6 +693,12 @@ if all_data:
         color: #000;
         font-weight: bold;
     }
+    .removed-badge {
+        background-color: #2d2d2d;
+        border: 1px solid #555555;
+        color: #888888;
+        text-decoration: line-through;
+    }
     .lime-badge {
         background-color: #00FF00;
         border: 1px solid #009900;
@@ -947,16 +953,20 @@ st.markdown("---")
 
 # --- 6. VALUE TRAP (Full Horizontal Row Below PowerTrend Not Extended) ---
 st.markdown(f"#### ⚠️ Value Trap ({len(vt_list)})")
-if vt_list:
+if vt_list or vt_yest:
     html_vt = ""
     for sym in vt_list:
         cls = "new-pattern-badge" if sym not in vt_yest else ""
         html_vt += f'<div class="ticker-badge {cls}">{sym}</div>'
+    
+    # Process and append removed stocks
+    removed_vt = [sym for sym in vt_yest if sym not in vt_list]
+    for sym in sorted(removed_vt):
+        html_vt += f'<div class="ticker-badge removed-badge">{sym}</div>'
+        
     st.markdown(html_vt, unsafe_allow_html=True)
 else:
     st.text("None")
-
-st.markdown("---")
 
 # ==============================================================================
 # 8. HISTORICAL KNOW_TOTAL_COUNT 30-DAY CHART (Completely New Logic at Bottom)
