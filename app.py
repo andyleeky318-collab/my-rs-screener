@@ -868,11 +868,17 @@ st.markdown("---")
 
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
 st.markdown(f"#### 🔥 Two Botak = Awareness short term group burst ({len(b_list)})")
-if b_list:
+if b_list or b_yest:
     html_b = ""
     for sym in b_list:
         cls = "new-pattern-badge" if sym not in b_yest else ""
         html_b += f'<div class="ticker-badge {cls}">{sym}</div>'
+    
+    # Process and append removed stocks
+    removed_b = [sym for sym in b_yest if sym not in b_list]
+    for sym in sorted(removed_b):
+        html_b += f'<div class="ticker-badge removed-badge">{sym}</div>'
+        
     st.markdown(html_b, unsafe_allow_html=True)
 else:
     st.info("No active setups discovered.")
