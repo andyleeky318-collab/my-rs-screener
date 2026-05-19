@@ -485,6 +485,7 @@ def process_pattern_scanners(stocks_list):
         know_positive_count = 0
         email_content_stocks = []  # Now tracks tuples of (ticker, is_new_addition)
         extra_52wk_high_symbols = []
+        extra_52wk_high_removed = []
 
         for ticker in stocks_list:
             try:
@@ -559,15 +560,17 @@ def process_pattern_scanners(stocks_list):
                                        cond6_y + cond7_y + cond8_y + cond9_y + cond10_y)
                     
                     is_at_52wk_high_today = currentClose >= high_of_52week
-                    if (is_at_52wk_high_today and total_today < 10):
-                        # --- EVALUATE YESTERDAY'S 52W HIGH CONDITION ---
-                        # Yesterday's closing price vs yesterday's rolling 52-week high boundary
-                        is_at_52wk_high_yest = yestClose >= yest_high_of_52week
-                        was_qualified_yest = (is_at_52wk_high_yest and total_yesterday < 10)
-                        
+                    is_at_52wk_high_yest = yestClose >= yest_high_of_52week
+                    
+                    qualified_today_52w = (is_at_52wk_high_today and total_today < 10)
+                    was_qualified_yest = (is_at_52wk_high_yest and total_yesterday < 10)
+                    
+                    if qualified_today_52w:
                         # It is a brand new addition if it qualifies today but didn't yesterday
                         is_new_addition_52w = not was_qualified_yest
                         extra_52wk_high_symbols.append((ticker, is_new_addition_52w))
+                    elif was_qualified_yest:
+                        extra_52wk_high_removed.append(ticker)
 
                     # --- SET CONTROLLER FLAGS ---
                     if total_today >= 10:
@@ -616,9 +619,9 @@ def process_pattern_scanners(stocks_list):
         return (botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, value_trap_matches, ppp_matches,
                 botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, value_trap_yest, ppp_yest, 
                 know_pos_pct, know_positive_count, know_total_count, email_content_stocks, 
-                extra_52wk_high_symbols)
+                extra_52wk_high_symbols, extra_52wk_high_removed)
     except:
-        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, [], []
+        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, [], [], []
 
 # 5. UI Layout & Logic
 #st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
@@ -809,7 +812,7 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
     results = process_pattern_scanners(tuple(KNOWN_STOCKS))
     b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list = results[:7]
     b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:14]
-    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, extra_52wk_high_symbols = results[14:]
+    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, extra_52wk_high_symbols, extra_52wk_high_removed = results[14:]
 
 st.markdown("---")
 
@@ -953,24 +956,33 @@ st.markdown("---")
 # ==============================================================================
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 
+active_52wk_high_count = len(extra_52wk_high_symbols)
+
 extra_header_html = (
     f"<div style='font-size:1.15em; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
     f"<span>🚀 ATH , but fail Minervini criteria</span>"
-    f"<span style='font-weight:normal; color:#ffffff;'>({len(extra_52wk_high_symbols)})</span>"
+    f"<span style='font-weight:normal; color:#ffffff;'>({active_52wk_high_count})</span>"
     f"</div>"
 )
 st.markdown(extra_header_html, unsafe_allow_html=True)
 
-if extra_52wk_high_symbols:
+# Render if there are either active items OR removed items to show
+if extra_52wk_high_symbols or extra_52wk_high_removed:
     extra_html = ""
-    # Sort alphabetically by symbol tuple
-    for sym, is_new_addition_52w in sorted(extra_52wk_high_symbols):
+    
+    # 1. Render Active Symbols (Sorted alphabetically)
+    for sym, is_new_addition_52w in sorted(extra_52wk_high_symbols, key=lambda x: x[0]):
         if is_new_addition_52w:
             # Uses your exact native gold badge class for brand new additions today
             extra_html += f'<div class="ticker-badge new-pattern-badge">{sym}</div>'
         else:
             # Standard dark badge layout for stocks that were already on this list yesterday
             extra_html += f'<div class="ticker-badge">{sym}</div>'
+            
+    # 2. Append Removed Symbols (Sorted alphabetically with the removed badge style)
+    for sym in sorted(extra_52wk_high_removed):
+        extra_html += f'<div class="ticker-badge removed-badge">{sym}</div>'
+        
     st.markdown(extra_html, unsafe_allow_html=True)
 else:
     st.text("None")
