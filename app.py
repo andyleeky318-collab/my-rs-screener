@@ -797,7 +797,7 @@ if all_data:
         
         table_html += f"""<tr style="background-color: {bg_color};">
         <td style="text-align: center; color: #888; font-weight: bold;">{row_num}</td>
-        <td style="font-weight: bold;">{row['Industry']}</td>
+        <td style="font-weight: bold; color: #ffffff !important;">{row['Industry']}</td>
         <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.1f}</td>
         <td>{ticker_html}</td>
         <td>{cloud_html}</td></tr>"""
