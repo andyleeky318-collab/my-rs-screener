@@ -980,7 +980,7 @@ if not historical_df.empty and len(historical_df) >= 10:
         unsafe_allow_html=True
     )
 
-st.markdown("---")
+#st.markdown("---")
 
 st.markdown(f"### Total Count ({know_total_count})")
 if not historical_df.empty:
