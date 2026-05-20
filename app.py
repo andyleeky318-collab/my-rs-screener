@@ -916,7 +916,7 @@ historical_df = compute_historical_know_counts(tuple(KNOWN_STOCKS))
 # 9. AUTOMATED BREADTH MARKET REGIME INTERPRETATION
 # ==============================================================================
 if not historical_df.empty and len(historical_df) >= 10:
-    st.markdown("#### 🧠 Market Breadth Regime Analysis")
+    #st.markdown("#### 🧠 Market Breadth Regime Analysis")
     
     # Isolate trailing 30 days data (or max available) for trend analysis
     sample_df = historical_df.tail(30).copy()
