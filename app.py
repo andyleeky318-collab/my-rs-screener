@@ -231,7 +231,7 @@ with st.sidebar:
     benchmark = st.selectbox("Benchmark", ["^GSPC", "^IXIC"], index=0)
     rs_length = st.number_input("RS Lookback Length", value=90, min_value=10)
     top_n = st.number_input("Top N for Group Avg", value=5, min_value=1)
-    show_rs_80 = st.toggle("Show RS >= 80 Tickers", value=True)
+    show_all_rs = st.toggle("Show RS < 80 Tickers", value=False)
     
     if st.button("Clear Cache & Refresh"):
         st.cache_data.clear()
@@ -732,36 +732,35 @@ if all_data:
         rs_lookup = dict(zip(item["Tickers"]["Ticker"], item["Tickers"]["RS Score"]))
         
         ticker_html = ""
-        if show_rs_80:
-            for _, r in item["Tickers"].iterrows():
-                ticker_sym = r["Ticker"]
-                rs_score = r["RS Score"]
-                ticker_price = item["Prices"].get(ticker_sym, 0)
-                
-                if rs_score >= 80 and ticker_price > 20:
-                    # If the ticker is inside KNOWN_STOCKS, apply high-contrast dark text rules
-                    if ticker_sym in LIME_STOCKS:
-                        ticker_html += (
-                            f'<div class="ticker-badge lime-badge">'
-                            f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{ticker_sym}</span>' 
-                            f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{rs_score:.0f}</span>' 
-                            f'</div>'
-                        )
-                    elif ticker_sym in KNOWN_STOCKS:
-                        ticker_html += (
-                            f'<div class="ticker-badge new-pattern-badge">'
-                            f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{ticker_sym}</span>' # Clean high-contrast dark charcoal text
-                            f'<span class="ticker-rs" style="color: #004d26; font-weight: bold;">{r["RS Score"]:.0f}</span>' # Highly legible dark gold numbers
-                            f'</div>'
-                        )
-                    else:
-                        # Standard matching dark badge layout for everything else
-                        ticker_html += (
-                            f'<div class="ticker-badge">'
-                            f'<span class="ticker-name">{ticker_sym}</span>'
-                            f'<span class="ticker-rs">{r["RS Score"]:.0f}</span>'
-                            f'</div>'
-                        )
+        for _, r in item["Tickers"].iterrows():
+            ticker_sym = r["Ticker"]
+            rs_score = r["RS Score"]
+            ticker_price = item["Prices"].get(ticker_sym, 0)
+            
+            if (show_all_rs or rs_score >= 80) and ticker_price > 20:
+                # If the ticker is inside KNOWN_STOCKS, apply high-contrast dark text rules
+                if ticker_sym in LIME_STOCKS:
+                    ticker_html += (
+                        f'<div class="ticker-badge lime-badge">'
+                        f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{ticker_sym}</span>' 
+                        f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{rs_score:.0f}</span>' 
+                        f'</div>'
+                    )
+                elif ticker_sym in KNOWN_STOCKS:
+                    ticker_html += (
+                        f'<div class="ticker-badge new-pattern-badge">'
+                        f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{ticker_sym}</span>' # Clean high-contrast dark charcoal text
+                        f'<span class="ticker-rs" style="color: #004d26; font-weight: bold;">{r["RS Score"]:.0f}</span>' # Highly legible dark gold numbers
+                        f'</div>'
+                    )
+                else:
+                    # Standard matching dark badge layout for everything else
+                    ticker_html += (
+                        f'<div class="ticker-badge">'
+                        f'<span class="ticker-name">{ticker_sym}</span>'
+                        f'<span class="ticker-rs">{r["RS Score"]:.0f}</span>'
+                        f'</div>'
+                    )
         
         #cloud_html = "".join([f'<div class="ticker-badge cloud-badge">{c}</div>' for c in item["Cloud"]])
         cloud_html = ""
