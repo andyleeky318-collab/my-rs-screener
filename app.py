@@ -1038,16 +1038,17 @@ st.markdown("---")
 # ==============================================================================
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 
-active_52wk_high_count = len(extra_52wk_high_symbols)
+# active_52wk_high_count = len(extra_52wk_high_symbols)
 
-extra_header_html = (
-    f"<div style='font-size:1.15em; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
-    f"<span>🚀 ATH , but fail Minervini criteria</span>"
-    f"<span style='font-weight:normal; color:#ffffff;'>({active_52wk_high_count})</span>"
-    f"</div>"
-)
-st.markdown(extra_header_html, unsafe_allow_html=True)
+# extra_header_html = (
+#     f"<div style='font-size:1.15em; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
+#     f"<span>🚀 ATH , but fail Minervini criteria</span>"
+#     f"<span style='font-weight:normal; color:#ffffff;'>({active_52wk_high_count})</span>"
+#     f"</div>"
+# )
+# st.markdown(extra_header_html, unsafe_allow_html=True)
 
+st.markdown(f"#### 🚀 ATH , but fail Minervini criteria ({len(extra_52wk_high_symbols)})")
 # Render if there are either active items OR removed items to show
 if extra_52wk_high_symbols or extra_52wk_high_removed:
     extra_html = ""
