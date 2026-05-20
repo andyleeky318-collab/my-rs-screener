@@ -488,6 +488,8 @@ def process_pattern_scanners(stocks_list):
         email_content_removed = [] # Tracks dropped Minervini stocks compared to yesterday
         extra_52wk_high_symbols = []
         extra_52wk_high_removed = []
+        ema200_above_count = 0
+        ema200_total_count = 0
 
         for ticker in stocks_list:
             try:
@@ -504,6 +506,14 @@ def process_pattern_scanners(stocks_list):
                 
                 if ticker_df.empty or len(ticker_df) < 50:
                     continue
+
+                # Calculate EMA 200 for the current stock
+                if len(ticker_df) >= 200:
+                    current_close = ticker_df['Close'].iloc[-1]
+                    ema200 = ticker_df['Close'].ewm(span=200, adjust=False).mean().iloc[-1]
+                    ema200_total_count += 1
+                    if current_close > ema200:
+                        ema200_above_count += 1
                 
                 # --- ADJUSTED FOR NEW ADDITIONS TODAY VS YESTERDAY ---
                 if ticker in KNOWN_STOCKS and len(ticker_df) >= 261:
@@ -617,13 +627,14 @@ def process_pattern_scanners(stocks_list):
         ppp_matches.sort()
         
         know_pos_pct = (know_positive_count / know_total_count * 100) if know_total_count > 0 else 0
+        pct_above_ema200 = (ema200_above_count / ema200_total_count * 100) if ema200_total_count > 0 else 0
         
         return (botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, value_trap_matches, ppp_matches,
                 botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, value_trap_yest, ppp_yest, 
                 know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed,
-                extra_52wk_high_symbols, extra_52wk_high_removed)
+                extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200)
     except:
-        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, [], [], [], []
+        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, [], [], [], [], 0
 
 # 5. UI Layout & Logic
 #st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
@@ -814,7 +825,7 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
     results = process_pattern_scanners(tuple(KNOWN_STOCKS))
     b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list = results[:7]
     b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:14]
-    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed = results[14:]
+    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200 = results[14:]
 
 st.markdown("---")
 
@@ -1211,4 +1222,6 @@ else:
     st.info("No active setups discovered.")
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
-#st.markdown("---")
+st.markdown("---")
+
+st.write(f"Percentage of stock above EMA200: {pct_above_ema200:.2f}%")
