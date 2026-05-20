@@ -998,16 +998,23 @@ else:
 st.markdown("---")
 
 # --- Render Header with Inline Summary Metrics inside Parentheses ---
-header_html = (
-    f"<div style='margin-top:20px; font-size:1.15em; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
-    f"<span>⭐ Minervini Qualified Stocks</span>"
-    f"<span style='font-weight:normal; color:#888;'> "
-    f"(<b style='color:#eee;'>Positive Pct:</b> {know_pos_pct:.1f}% |"
-    f" <b style='color:#eee;'>Positive Count:</b> {know_positive_count} |"
-    f" <b style='color:#eee;'>Total Count:</b> {know_total_count})"
-    f"</div>"
+# header_html = (
+#     f"<div style='margin-top:20px; font-size:1.15em; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
+#     f"<span>⭐ Minervini Qualified Stocks</span>"
+#     f"<span style='font-weight:normal; color:#888;'> "
+#     f"(<b style='color:#eee;'>Positive Pct:</b> {know_pos_pct:.1f}% |"
+#     f" <b style='color:#eee;'>Positive Count:</b> {know_positive_count} |"
+#     f" <b style='color:#eee;'>Total Count:</b> {know_total_count})"
+#     f"</div>"
+# )
+# st.markdown(header_html, unsafe_allow_html=True)
+
+st.markdown(
+    f"#### ⭐ Minervini Qualified Stocks ("
+    f"Positive Pct: {know_pos_pct:.1f}% | "
+    f"Positive Count: {know_positive_count} | "
+    f"Total Count: {know_total_count})"
 )
-st.markdown(header_html, unsafe_allow_html=True)
 
 if email_content_stocks or email_content_removed:
     minervini_html = ""
