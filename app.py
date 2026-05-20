@@ -1225,3 +1225,65 @@ else:
 st.markdown("---")
 
 st.write(f"Percentage of stock above EMA200: {pct_above_ema200:.2f}%")
+
+# ==============================================================================
+# 11. MARKET REGIME REFERENCE TABLE (Dynamic Highlight)
+# ==============================================================================
+#st.markdown("---")
+st.markdown("### 🧭 Market Regime Reference (% Above 200 EMA)")
+
+# 1. Define raw data exactly from your reference image
+regime_data = {
+    "Market Condition": [
+        "Above 200 EMA < 40%",
+        "Above 200 EMA 40–50%",
+        "Above 200 EMA 50–60%",
+        "Above 200 EMA > 60%",
+        "Above 200 EMA > 70%"
+    ],
+    "What to do": [
+        "Be cautious, focus only on best setups",
+        "Recovery attempt",
+        "Market improving",
+        "Good swing trading environment",
+        "Strong bull participation"
+    ]
+}
+
+# 2. Convert to DataFrame
+df_regime = pd.DataFrame(regime_data)
+
+# 3. Determine which row index should be highlighted based on your live variable
+# (Using nested if/elif structure matching the hierarchy)
+highlight_idx = None
+
+if pct_above_ema200 > 70:
+    highlight_idx = 4
+elif pct_above_ema200 > 60:
+    highlight_idx = 3
+elif 50 <= pct_above_ema200 <= 60:
+    highlight_idx = 2
+elif 40 <= pct_above_ema200 < 50:
+    highlight_idx = 1
+elif pct_above_ema200 < 40:
+    highlight_idx = 0
+
+# 4. Create a styling function to apply the lime background
+def highlight_current_regime(row):
+    # Default styling for unselected rows
+    style = [''] * len(row)
+    
+    # If this row matches our live market condition, paint it lime
+    if row.name == highlight_idx:
+        style = ['background-color: #00FF00; color: #000000; font-weight: bold;'] * len(row)
+        
+    return style
+
+# 5. Apply the style and render via Streamlit dataframe (handles styling better than st.table)
+styled_df = df_regime.style.apply(highlight_current_regime, axis=1)
+
+st.dataframe(
+    styled_df, 
+    use_container_width=True, 
+    hide_index=True
+)
