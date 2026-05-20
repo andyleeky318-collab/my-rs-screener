@@ -821,8 +821,6 @@ st.markdown("---")
 # ==============================================================================
 # 8. HISTORICAL KNOW_TOTAL_COUNT 30-DAY CHART (Completely New Logic at Bottom)
 # ==============================================================================
-st.markdown(f"### Total Count ({know_total_count})")
-
 @st.cache_data(ttl=3600)
 def compute_historical_know_counts(stocks_list):
     try:
@@ -984,6 +982,7 @@ if not historical_df.empty and len(historical_df) >= 10:
 
 st.markdown("---")
 
+st.markdown(f"### Total Count ({know_total_count})")
 if not historical_df.empty:
     # 1. THE ORIGINAL CHART: Updated to pass the full dataframe to show 90 days instead of 30
     st.line_chart(data=historical_df, x="Date", y="Total Count", use_container_width=True)
@@ -995,6 +994,8 @@ if not historical_df.empty:
     st.line_chart(data=historical_df, x="Date", y="Positive Pct", use_container_width=True)
 else:
     st.info("Insufficient historical trading records available to draw historical metrics.")
+
+st.markdown("---")
 
 # --- Render Header with Inline Summary Metrics inside Parentheses ---
 header_html = (
