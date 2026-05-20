@@ -1275,7 +1275,7 @@ def highlight_current_regime(row):
     
     # If this row matches our live market condition, paint it lime
     if row.name == highlight_idx:
-        style = ['background-color: #00FF00; color: #000000; font-weight: bold;'] * len(row)
+        style = ['background-color: #90EE90; color: #000000; font-weight: bold;'] * len(row)
         
     return style
 
