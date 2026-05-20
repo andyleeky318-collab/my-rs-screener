@@ -1092,26 +1092,6 @@ else:
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
 
-# --- 2. TIGHT PPP (Full Horizontal Row Below Two Botak) ---
-st.markdown(f"#### 📉 PPP = Opportunity ({len(ppp_list)})")
-if ppp_list or ppp_yest:
-    html_p = ""
-    for sym in ppp_list:
-        cls = "new-pattern-badge" if sym not in ppp_yest else ""
-        html_p += f'<div class="ticker-badge {cls}">{sym}</div>'
-    
-    # Process and append removed stocks
-    removed_ppp = [sym for sym in ppp_yest if sym not in ppp_list]
-    for sym in sorted(removed_ppp):
-        html_p += f'<div class="ticker-badge removed-badge">{sym}</div>'
-        
-    st.markdown(html_p, unsafe_allow_html=True)
-else:
-    st.info("No active setups discovered.")
-
-#st.markdown("<br>", unsafe_allow_html=True) # Spacer
-st.markdown("---")
-
 # --- 3. BULLISH ENGULFING (Full Horizontal Row Below Tight PPP) ---
 total_engulf = len(e2_list) + len(e3_list)
 st.markdown(f"#### 🐳 Bullish Engulfing = Awareness HL ({total_engulf})")
@@ -1205,3 +1185,22 @@ if vt_list or vt_yest:
 else:
     st.text("None")
 
+# --- 2. TIGHT PPP (Full Horizontal Row Below Two Botak) ---
+st.markdown(f"#### 📉 PPP = Opportunity ({len(ppp_list)})")
+if ppp_list or ppp_yest:
+    html_p = ""
+    for sym in ppp_list:
+        cls = "new-pattern-badge" if sym not in ppp_yest else ""
+        html_p += f'<div class="ticker-badge {cls}">{sym}</div>'
+    
+    # Process and append removed stocks
+    removed_ppp = [sym for sym in ppp_yest if sym not in ppp_list]
+    for sym in sorted(removed_ppp):
+        html_p += f'<div class="ticker-badge removed-badge">{sym}</div>'
+        
+    st.markdown(html_p, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
+
+#st.markdown("<br>", unsafe_allow_html=True) # Spacer
+#st.markdown("---")
