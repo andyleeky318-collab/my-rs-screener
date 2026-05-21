@@ -998,13 +998,87 @@ if not historical_df.empty:
     # 1. THE ORIGINAL CHART: Updated to pass the full dataframe to show 90 days instead of 30
     st.line_chart(data=historical_df, x="Date", y="Total Count", use_container_width=True)
     
-    st.markdown("---")
+    #st.markdown("---")
     
     # 2. THE NEW STANDALONE CHART: Displays the Positive Percentage metric over 90 days
-    st.markdown(f"### Positive Percentage ({know_pos_pct:.1f}%)")
-    st.line_chart(data=historical_df, x="Date", y="Positive Pct", use_container_width=True)
+    #st.markdown(f"### Positive Percentage ({know_pos_pct:.1f}%)")
+    #st.line_chart(data=historical_df, x="Date", y="Positive Pct", use_container_width=True)
 else:
     st.info("Insufficient historical trading records available to draw historical metrics.")
+
+st.markdown("---")
+
+# ==============================================================================
+# 11. MARKET REGIME REFERENCE TABLE (Dynamic Highlight)
+# ==============================================================================
+#st.markdown("---")
+st.markdown(f"#### 🧭 Market Regime Reference ({pct_above_ema200:.2f}%)")
+# 1. Define raw data exactly from your reference image
+regime_data = {
+    "Market Condition": [
+        "Above 200 EMA < 40%",
+        "Above 200 EMA 40–50%",
+        "Above 200 EMA 50–60%",
+        "Above 200 EMA > 60%",
+        "Above 200 EMA > 70%"
+    ],
+    "What to do": [
+        "Be cautious, focus only on best setups",
+        "Recovery attempt",
+        "Market improving",
+        "Good swing trading environment",
+        "Strong bull participation"
+    ]
+}
+
+# 2. Convert to DataFrame
+df_regime = pd.DataFrame(regime_data)
+
+# 3. Determine which row index should be highlighted based on your live variable
+# (Using nested if/elif structure matching the hierarchy)
+highlight_idx = None
+
+if pct_above_ema200 > 70:
+    highlight_idx = 4
+elif pct_above_ema200 > 60:
+    highlight_idx = 3
+elif 50 <= pct_above_ema200 <= 60:
+    highlight_idx = 2
+elif 40 <= pct_above_ema200 < 50:
+    highlight_idx = 1
+elif pct_above_ema200 < 40:
+    highlight_idx = 0
+
+# 4. Create a styling function to apply the lime background
+def highlight_current_regime(row):
+    style = [''] * len(row)
+
+    if row.name == highlight_idx:
+
+        # Be cautious = Light Red
+        if highlight_idx == 0:
+            bg = "#FFCCCC"
+
+        # Recovery Attempt + Market Improving = Light Orange
+        elif highlight_idx in [1, 2]:
+            bg = "#FFD8A8"
+
+        # Good / Strong market = Light Green
+        else:
+            bg = "#90EE90"
+
+        style = [f'background-color: {bg}; color: #000000; font-weight: bold;'] * len(row)
+
+    return style
+
+# 5. Apply the style and render via Streamlit dataframe (handles styling better than st.table)
+styled_df = df_regime.style.apply(highlight_current_regime, axis=1)
+
+st.dataframe(
+    styled_df, 
+    use_container_width=True, 
+    hide_index=True
+)
 
 st.markdown("---")
 
@@ -1224,79 +1298,7 @@ else:
     st.info("No active setups discovered.")
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
-st.markdown("---")
-
-st.write(f"Percentage of stock above EMA200: {pct_above_ema200:.2f}%")
-
-# ==============================================================================
-# 11. MARKET REGIME REFERENCE TABLE (Dynamic Highlight)
-# ==============================================================================
 #st.markdown("---")
-st.markdown("### 🧭 Market Regime Reference (% Above 200 EMA)")
 
-# 1. Define raw data exactly from your reference image
-regime_data = {
-    "Market Condition": [
-        "Above 200 EMA < 40%",
-        "Above 200 EMA 40–50%",
-        "Above 200 EMA 50–60%",
-        "Above 200 EMA > 60%",
-        "Above 200 EMA > 70%"
-    ],
-    "What to do": [
-        "Be cautious, focus only on best setups",
-        "Recovery attempt",
-        "Market improving",
-        "Good swing trading environment",
-        "Strong bull participation"
-    ]
-}
+#st.write(f"Percentage of stock above EMA200: {pct_above_ema200:.2f}%")
 
-# 2. Convert to DataFrame
-df_regime = pd.DataFrame(regime_data)
-
-# 3. Determine which row index should be highlighted based on your live variable
-# (Using nested if/elif structure matching the hierarchy)
-highlight_idx = None
-
-if pct_above_ema200 > 70:
-    highlight_idx = 4
-elif pct_above_ema200 > 60:
-    highlight_idx = 3
-elif 50 <= pct_above_ema200 <= 60:
-    highlight_idx = 2
-elif 40 <= pct_above_ema200 < 50:
-    highlight_idx = 1
-elif pct_above_ema200 < 40:
-    highlight_idx = 0
-
-# 4. Create a styling function to apply the lime background
-def highlight_current_regime(row):
-    style = [''] * len(row)
-
-    if row.name == highlight_idx:
-
-        # Be cautious = Light Red
-        if highlight_idx == 0:
-            bg = "#FFCCCC"
-
-        # Recovery Attempt + Market Improving = Light Orange
-        elif highlight_idx in [1, 2]:
-            bg = "#FFD8A8"
-
-        # Good / Strong market = Light Green
-        else:
-            bg = "#90EE90"
-
-        style = [f'background-color: {bg}; color: #000000; font-weight: bold;'] * len(row)
-
-    return style
-
-# 5. Apply the style and render via Streamlit dataframe (handles styling better than st.table)
-styled_df = df_regime.style.apply(highlight_current_regime, axis=1)
-
-st.dataframe(
-    styled_df, 
-    use_container_width=True, 
-    hide_index=True
-)
