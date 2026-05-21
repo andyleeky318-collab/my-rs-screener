@@ -754,19 +754,8 @@ if all_data:
     }
     .ticker-name { font-weight: bold; color: #ffffff; margin-right: 4px; }
     .ticker-rs { color: #4ecdc4; font-weight: normal; }
-    
-    /* STICKY HEADER FIXES */
     table { width:100%; border-collapse: collapse; }
-    th { 
-        padding: 4px 8px !important; 
-        background-color: #1f77b4; 
-        color: white; 
-        font-size: 12px; 
-        position: sticky;
-        top: 0;
-        z-index: 10;
-        box-shadow: 0 1px 0px rgba(0,0,0,0.3);
-    }
+    th { padding: 4px 8px !important; background-color: #1f77b4; color: white; font-size: 12px; }
     td { padding: 2px 8px !important; border-bottom: 1px solid #333; font-size: 12px; }
     </style>
     """, unsafe_allow_html=True)
@@ -776,7 +765,7 @@ if all_data:
     <th style="text-align: center; width: 30px;">#</th>
     <th style="text-align: left;">Industry</th>
     <th style="text-align: center; width: 40px;">RS</th>
-    <th style="text-align: center; width: 70px;">1W Rank</th>
+    <th style="text-align: center; width: 40px;">1W</th>
     <th style="text-align: left;">Tickers (Above 80)</th>
     <th style="text-align: left; width: 300px;">Within 21 EMA Cloud</th>
     </tr></thead><tbody>"""
@@ -784,19 +773,18 @@ if all_data:
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
         item = next(d for d in all_data if d["Industry"] == row["Industry"])
         rs_lookup = dict(zip(item["Tickers"]["Ticker"], item["Tickers"]["RS Score"]))
-        
-        # Calculate Rank Shift strings cleanly and map custom colors 
+
+        # Calculate Rank Shift strings cleanly dynamically
         cur_r = row['Current Rank']
         prv_r = row['Prev Rank']
         shift = prv_r - cur_r
-        
         if shift > 0:
             rank_str = f'<span style="color: #00FF00; font-weight: bold;">+{shift}</span>'
         elif shift < 0:
             rank_str = f'<span style="color: #FF7F7F; font-weight: bold;">{shift}</span>'
         else:
             rank_str = f'<span style="color: #aaaaaa;">0</span>'
-
+        
         ticker_html = ""
         for _, r in item["Tickers"].iterrows():
             ticker_sym = r["Ticker"]
@@ -804,6 +792,7 @@ if all_data:
             ticker_price = item["Prices"].get(ticker_sym, 0)
             
             if (show_all_rs or rs_score >= 80) and ticker_price > 20:
+                # If the ticker is inside KNOWN_STOCKS, apply high-contrast dark text rules
                 if ticker_sym in LIME_STOCKS:
                     ticker_html += (
                         f'<div class="ticker-badge lime-badge">'
@@ -814,11 +803,12 @@ if all_data:
                 elif ticker_sym in KNOWN_STOCKS:
                     ticker_html += (
                         f'<div class="ticker-badge new-pattern-badge">'
-                        f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{ticker_sym}</span>'
-                        f'<span class="ticker-rs" style="color: #004d26; font-weight: bold;">{r["RS Score"]:.0f}</span>'
+                        f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{ticker_sym}</span>' # Clean high-contrast dark charcoal text
+                        f'<span class="ticker-rs" style="color: #004d26; font-weight: bold;">{r["RS Score"]:.0f}</span>' # Highly legible dark gold numbers
                         f'</div>'
                     )
                 else:
+                    # Standard matching dark badge layout for everything else
                     ticker_html += (
                         f'<div class="ticker-badge">'
                         f'<span class="ticker-name">{ticker_sym}</span>'
@@ -826,11 +816,15 @@ if all_data:
                         f'</div>'
                     )
         
+        #cloud_html = "".join([f'<div class="ticker-badge cloud-badge">{c}</div>' for c in item["Cloud"]])
         cloud_html = ""
         sorted_cloud = sorted(item["Cloud"], key=lambda sym: rs_lookup.get(sym, 0), reverse=True)
+
+        # --- SLICE LOGIC: Slices the sorted array to isolate the top 5 items only ---
         top_5_cloud = sorted_cloud[:5]
         
         for cloud_sym in top_5_cloud:
+            # Retrieve the RS Score from our data map (default to 0 if not found)
             cloud_rs = rs_lookup.get(cloud_sym, 0)
             
             if cloud_sym in LIME_STOCKS:
@@ -865,14 +859,7 @@ if all_data:
         <td>{cloud_html}</td></tr>"""
 
     table_html += "</tbody></table>"
-    
-    # Render with a wrapper that restricts size to create a clean, internal scrolling view
-    scrollable_table_html = f"""
-    <div style="max-height: 650px; overflow-y: auto; border: 1px solid #333; border-radius: 4px;">
-        {table_html}
-    </div>
-    """
-    st.markdown(scrollable_table_html, unsafe_allow_html=True)
+    st.markdown(table_html, unsafe_allow_html=True)
 
 # 7. EXTRA SEPARATE PATTERNS SCANNING BLOCK
 #st.markdown("---")
