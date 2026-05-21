@@ -1204,6 +1204,8 @@ if vt_list or vt_yest:
 else:
     st.text("None")
 
+st.markdown("---")
+
 # --- 2. TIGHT PPP (Full Horizontal Row Below Two Botak) ---
 st.markdown(f"#### 📉 PPP = Opportunity ({len(ppp_list)})")
 if ppp_list or ppp_yest:
