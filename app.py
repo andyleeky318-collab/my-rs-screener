@@ -1272,13 +1272,24 @@ elif pct_above_ema200 < 40:
 
 # 4. Create a styling function to apply the lime background
 def highlight_current_regime(row):
-    # Default styling for unselected rows
     style = [''] * len(row)
-    
-    # If this row matches our live market condition, paint it lime
+
     if row.name == highlight_idx:
-        style = ['background-color: #90EE90; color: #000000; font-weight: bold;'] * len(row)
-        
+
+        # Be cautious = Light Red
+        if highlight_idx == 0:
+            bg = "#FFCCCC"
+
+        # Recovery Attempt + Market Improving = Light Orange
+        elif highlight_idx in [1, 2]:
+            bg = "#FFD8A8"
+
+        # Good / Strong market = Light Green
+        else:
+            bg = "#90EE90"
+
+        style = [f'background-color: {bg}; color: #000000; font-weight: bold;'] * len(row)
+
     return style
 
 # 5. Apply the style and render via Streamlit dataframe (handles styling better than st.table)
