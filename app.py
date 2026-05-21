@@ -779,11 +779,11 @@ if all_data:
         prv_r = row['Prev Rank']
         shift = prv_r - cur_r
         if shift > 0:
-            rank_str = f"{prv_r} (+{shift})"
+            rank_str = f'<span style="color: #00FF00; font-weight: bold;">+{shift}</span>'
         elif shift < 0:
-            rank_str = f"{prv_r} ({shift})"
+            rank_str = f'<span style="color: #FF7F7F; font-weight: bold;">{shift}</span>'
         else:
-            rank_str = f"{prv_r} (0)"
+            rank_str = f'<span style="color: #aaaaaa;">0</span>'
         
         ticker_html = ""
         for _, r in item["Tickers"].iterrows():
@@ -854,7 +854,7 @@ if all_data:
         <td style="text-align: center; color: #888; font-weight: bold;">{row_num}</td>
         <td style="font-weight: bold; color: #ffffff;">{row['Industry']}</td>
         <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.1f}</td>
-        <td style="text-align: center; color: #aaaaaa; font-weight: normal;">{rank_str}</td>
+        <td style="text-align: center; vertical-align: middle;">{rank_str}</td>
         <td>{ticker_html}</td>
         <td>{cloud_html}</td></tr>"""
 
