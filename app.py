@@ -765,7 +765,7 @@ if all_data:
     <th style="text-align: center; width: 30px;">#</th>
     <th style="text-align: left;">Industry</th>
     <th style="text-align: center; width: 40px;">RS</th>
-    <th style="text-align: center; width: 70px;">1W</th>
+    <th style="text-align: center; width: 40px;">1W</th>
     <th style="text-align: left;">Tickers (Above 80)</th>
     <th style="text-align: left; width: 300px;">Within 21 EMA Cloud</th>
     </tr></thead><tbody>"""
