@@ -665,6 +665,103 @@ for idx, (industry_name, tickers) in enumerate(industry_items):
 status_text.empty()
 progress_bar.empty()
 
+# ==============================================================================
+# HISTORICAL INDUSTRY RANK COMPARISON (1 WEEK AGO)
+# ==============================================================================
+
+@st.cache_data(ttl=3600)
+def compute_historical_industry_ranks(industry_dict, benchmark_ticker, length, top_n_value, trading_days_ago=5):
+    historical_ranks = {}
+
+    try:
+        for industry_name, tickers in industry_dict.items():
+
+            try:
+                all_tickers = tickers + [benchmark_ticker]
+
+                data = yf.download(
+                    all_tickers,
+                    period="2y",
+                    interval="1d",
+                    progress=False
+                )
+
+                close_data = data['Close']
+
+                if benchmark_ticker not in close_data.columns:
+                    continue
+
+                bench_close = close_data[benchmark_ticker]
+
+                stock_scores = {}
+
+                for ticker in tickers:
+
+                    if ticker not in close_data.columns:
+                        continue
+
+                    series = close_data[ticker].dropna()
+
+                    if len(series) < (length + trading_days_ago + 5):
+                        continue
+
+                    rs_ratio_series = close_data[ticker] / bench_close
+
+                    # Shift historical window backward by trading_days_ago
+                    historical_rs = rs_ratio_series.iloc[:len(rs_ratio_series)-trading_days_ago]
+
+                    hh = historical_rs.rolling(window=length).max()
+                    ll = historical_rs.rolling(window=length).min()
+
+                    current_rs = historical_rs.iloc[-1]
+                    current_hh = hh.iloc[-1]
+                    current_ll = ll.iloc[-1]
+
+                    if pd.isna(current_hh) or pd.isna(current_ll) or current_hh == current_ll:
+                        total_score = 0
+                    else:
+                        total_score = int(
+                            ((99 - 1) * (current_rs - current_ll) / (current_hh - current_ll)) + 1
+                        )
+
+                    stock_scores[ticker] = total_score
+
+                if stock_scores:
+                    rs_series = pd.Series(stock_scores).astype(int)
+                    top_scores = rs_series.nlargest(int(top_n_value))
+                    group_avg = top_scores.mean()
+
+                    historical_ranks[industry_name] = group_avg
+
+            except:
+                continue
+
+        # Convert to ranking
+        sorted_hist = sorted(
+            historical_ranks.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )
+
+        rank_lookup = {}
+
+        for rank_idx, (industry_name, _) in enumerate(sorted_hist, start=1):
+            rank_lookup[industry_name] = rank_idx
+
+        return rank_lookup
+
+    except:
+        return {}
+
+# Compute historical industry rankings from ~1 week ago (5 trading days)
+historical_rank_lookup = compute_historical_industry_ranks(
+    INDUSTRIES,
+    benchmark,
+    rs_length,
+    top_n,
+    trading_days_ago=5
+)
+
 # 6. Compact Display Logic
 if all_data:
     df_main = pd.DataFrame([{"Industry": item["Industry"], "Group RS": item["Group RS"]} for item in all_data])
@@ -734,11 +831,24 @@ if all_data:
     <th style="text-align: center; width: 30px;">#</th>
     <th style="text-align: left;">Industry</th>
     <th style="text-align: center; width: 40px;">RS</th>
+    <th style="text-align: center; width: 90px;">Prev Rank</th>
     <th style="text-align: left;">Tickers (Above 80)</th>
     <th style="text-align: left; width: 300px;">Within 21 EMA Cloud</th>
     </tr></thead><tbody>"""
 
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
+        current_rank = row_num
+        previous_rank = historical_rank_lookup.get(row["Industry"], current_rank)
+
+        rank_change = previous_rank - current_rank
+
+        if rank_change > 0:
+            rank_display = f"{previous_rank} (+{rank_change})"
+        elif rank_change < 0:
+            rank_display = f"{previous_rank} ({rank_change})"
+        else:
+            rank_display = f"{previous_rank} (0)"
+
         item = next(d for d in all_data if d["Industry"] == row["Industry"])
         rs_lookup = dict(zip(item["Tickers"]["Ticker"], item["Tickers"]["RS Score"]))
         
@@ -811,6 +921,15 @@ if all_data:
         <td style="text-align: center; color: #888; font-weight: bold;">{row_num}</td>
         <td style="font-weight: bold; color: #ffffff;">{row['Industry']}</td>
         <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.1f}</td>
+
+        <td style="
+            text-align: center;
+            color: #ffffff;
+            font-weight: bold;
+        ">
+            {rank_display}
+        </td>
+
         <td>{ticker_html}</td>
         <td>{cloud_html}</td></tr>"""
 
