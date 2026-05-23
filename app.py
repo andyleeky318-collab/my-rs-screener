@@ -1277,62 +1277,58 @@ else:
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
 
-# ==============================================================================
-# NEW CODE: 60-Day Historical Bar Chart for Two Botak (Isolated Logic)
-# ==============================================================================
+# --- NEW HISTORICAL TWOBOTAK BAR CHART INJECTED BELOW LIST ---
 try:
-    # Clone data arrays specifically for historical calculation to prevent side-effects
-    hist_close_tb = df_close.copy()
-    hist_open_tb = df_open.copy()
+    # 1. Download tracking sequence data for unique target instruments safely
+    hist_raw_data = yf.download(KNOWN_STOCKS, period="2y", interval="1d", progress=False)
     
-    # Filter the dataframes to only include tickers currently in the Two Botak loop context
-    all_context_tickers = list(set(tb_list + tb_yest))
-    valid_tb_tickers = [t for t in all_context_tickers if t in hist_close_tb.index]
-    
-    if valid_tb_tickers and len(hist_close_tb.columns) > 1:
-        # Get the last 60 available trading days (or less if history is shorter)
-        lookback_days = min(60, len(hist_close_tb.columns) - 1)
-        history_columns = hist_close_tb.columns[-lookback_days:]
+    # 2. Extract reliable historical index mapping directly from downloaded dataset
+    if len(KNOWN_STOCKS) > 1:
+        base_index = hist_raw_data['Close'].dropna().index
+    else:
+        base_index = hist_raw_data.dropna().index
+
+    # Identify lookback date thresholds matching standard calendar distributions
+    lookback_days = 60
+    if len(base_index) >= lookback_days:
+        target_dates = base_index[-lookback_days:]
+        historical_counts = []
         
-        daily_counts = []
-        chart_dates = []
-        
-        # Calculate Two Botak conditions historically day-by-day
-        for idx in range(len(history_columns)):
-            # Reference the specific day and its previous day dynamically
-            target_col = history_columns[idx]
-            target_col_idx = hist_close_tb.columns.get_loc(target_col)
-            prev_col = hist_close_tb.columns[target_col_idx - 1]
+        # 3. Calculate signal frequency day-by-day across the target window range
+        for day_idx in range(lookback_days):
+            current_lookback = (lookback_days - 1) - day_idx
+            daily_active_count = 0
             
-            day_count = 0
-            for sym in valid_tb_tickers:
+            for ticker in KNOWN_STOCKS:
                 try:
-                    c_today = hist_close_tb.at[sym, target_col]
-                    o_today = hist_open_tb.at[sym, target_col]
-                    c_yest = hist_close_tb.at[sym, prev_col]
+                    if len(KNOWN_STOCKS) > 1:
+                        ticker_df_clone = pd.DataFrame({
+                            'Open': hist_raw_data['Open'][ticker],
+                            'High': hist_raw_data['High'][ticker],
+                            'Low': hist_raw_data['Low'][ticker],
+                            'Close': hist_raw_data['Close'][ticker],
+                            'Volume': hist_raw_data['Volume'][ticker]
+                        }).dropna()
+                    else:
+                        ticker_df_clone = hist_raw_data.dropna().copy()
                     
-                    # Exact "Two Botak" conditional criteria cloned from your logic
-                    if (not np.isnan(c_today) and not np.isnan(o_today) and not np.isnan(c_yest)):
-                        if c_today > c_yest and c_today == o_today:
-                            day_count += 1
+                    if not ticker_df_clone.empty and len(ticker_df_clone) >= (50 + current_lookback):
+                        if scan_two_botak(ticker_df_clone, lookback=current_lookback):
+                            daily_active_count += 1
                 except:
                     continue
-            
-            daily_counts.append(day_count)
-            chart_dates.append(target_col.strftime('%Y-%m-%d'))
+            historical_counts.append(daily_active_count)
         
-        # Create an isolated DataFrame for the Streamlit Bar Chart
-        df_tb_chart = pd.DataFrame({
-            'Date': chart_dates,
-            'Count': daily_counts
-        }).set_index('Date')
+        # 4. Bind information securely to dataframe and output visual chart layout
+        chart_df = pd.DataFrame({
+            "Date": target_dates,
+            "Twobotak Setup Count": historical_counts
+        }).set_index("Date")
         
-        # Display the chart safely underneath
-        st.caption("📊 Two Botak Count (Past 60 Trading Days)")
-        st.bar_chart(df_tb_chart, height=200)
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.bar_chart(chart_df, y="Twobotak Setup Count")
 except Exception as e:
-    pass # Silent fallback to ensure application stability if calculation fails
-# ==============================================================================
+    st.error(f"Could not render historical chart: {e}")
 
 st.markdown("---")
 
