@@ -1277,68 +1277,6 @@ else:
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
 
-# --- NEW HISTORICAL TWOBOTAK BAR CHART INJECTED BELOW LIST ---
-try:
-    # 1. Safely extract the available historical dates directly from your main raw_data dataframe
-    if len(KNOWN_STOCKS) > 1:
-        base_index = raw_data['Close'].dropna().index
-    else:
-        base_index = raw_data.dropna().index
-
-    # 2. Slice the last 60 trading days available in the dataset
-    lookback_days = 60
-    if len(base_index) >= lookback_days:
-        target_dates = base_index[-lookback_days:]
-        historical_counts = []
-        
-        # 3. Calculate signal frequency day-by-day using your exact pattern logic
-        for day_idx in range(lookback_days):
-            # Calculate the lookback shift matching your scan functions (0 is today, 1 is yesterday, etc.)
-            current_lookback = (lookback_days - 1) - day_idx
-            daily_active_count = 0
-            
-            for ticker in KNOWN_STOCKS:
-                try:
-                    # Match your exact dataframe reconstruction method from process_pattern_scanners
-                    if len(KNOWN_STOCKS) > 1:
-                        ticker_df_clone = pd.DataFrame({
-                            'Open': raw_data['Open'][ticker],
-                            'High': raw_data['High'][ticker],
-                            'Low': raw_data['Low'][ticker],
-                            'Close': raw_data['Close'][ticker],
-                            'Volume': raw_data['Volume'][ticker]
-                        }).dropna()
-                    else:
-                        ticker_df_clone = raw_data.dropna().copy()
-                    
-                    # Run the scan using the dynamic day offset
-                    if not ticker_df_clone.empty:
-                        if scan_two_botak(ticker_df_clone, lookback=current_lookback):
-                            daily_active_count += 1
-                except Exception:
-                    continue
-                    
-            historical_counts.append(daily_active_count)
-        
-        # 4. Bind information to a clean dataframe and output the bar chart
-        chart_df = pd.DataFrame({
-            "Date": target_dates,
-            "Twobotak Setup Count": historical_counts
-        })
-        
-        # Convert Timestamp to formatted string so Streamlit displays the dates properly on the X-axis
-        chart_df['Date'] = chart_df['Date'].dt.strftime('%Y-%m-%d')
-        chart_df = chart_df.set_index("Date")
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.bar_chart(chart_df, y="Twobotak Setup Count")
-    else:
-        st.warning("Not enough trading history available to generate a 60-day historical chart.")
-except Exception as e:
-    st.error(f"Could not render historical chart: {e}")
-
-st.markdown("---")
-
 # --- 3. BULLISH ENGULFING (Full Horizontal Row Below Tight PPP) ---
 total_engulf = len(e2_list) + len(e3_list)
 st.markdown(f"#### 🐳 Bullish Engulfing = Awareness HL ({total_engulf})")
