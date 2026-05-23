@@ -315,11 +315,19 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             if ema_low <= current_price <= ema_high:
                 cloud_tickers.append(ticker)
 
-        rs_perf = pd.Series(stock_scores).astype(int)
-        rs_perf_prev = pd.Series(stock_scores_prev).astype(int)
-        rs_perf_1m = pd.Series(stock_scores_1m).astype(int)
+        # Convert dictionary metrics to Pandas Series
+        rs_perf_raw = pd.Series(stock_scores).astype(int)
+        rs_perf_prev_raw = pd.Series(stock_scores_prev).astype(int)
+        rs_perf_1m_raw = pd.Series(stock_scores_1m).astype(int)
         
-        # We assign the raw score directly as your ranking metrics instead of the old percentile conversion
+        # Build a list of tickers that strictly have a price greater than 20
+        valid_price_tickers = [ticker for ticker, price in price_lookup.items() if price > 20]
+        
+        # Filter the series so only stocks with a price > 20 remain
+        rs_perf = rs_perf_raw[rs_perf_raw.index.isin(valid_price_tickers)]
+        rs_perf_prev = rs_perf_prev_raw[rs_perf_prev_raw.index.isin(valid_price_tickers)]
+        rs_perf_1m = rs_perf_1m_raw[rs_perf_1m_raw.index.isin(valid_price_tickers)]
+        
         return rs_perf, rs_perf, cloud_tickers, price_lookup, rs_perf_prev, rs_perf_1m
     except Exception as e:
         st.error(f"Error: {e}")
