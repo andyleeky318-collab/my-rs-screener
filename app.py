@@ -1277,6 +1277,65 @@ else:
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
 
+# ==============================================================================
+# NEW CODE: 60-Day Historical Bar Chart for Two Botak (Isolated Logic)
+# ==============================================================================
+try:
+    # Clone data arrays specifically for historical calculation to prevent side-effects
+    hist_close_tb = df_close.copy()
+    hist_open_tb = df_open.copy()
+    
+    # Filter the dataframes to only include tickers currently in the Two Botak loop context
+    all_context_tickers = list(set(tb_list + tb_yest))
+    valid_tb_tickers = [t for t in all_context_tickers if t in hist_close_tb.index]
+    
+    if valid_tb_tickers and len(hist_close_tb.columns) > 1:
+        # Get the last 60 available trading days (or less if history is shorter)
+        lookback_days = min(60, len(hist_close_tb.columns) - 1)
+        history_columns = hist_close_tb.columns[-lookback_days:]
+        
+        daily_counts = []
+        chart_dates = []
+        
+        # Calculate Two Botak conditions historically day-by-day
+        for idx in range(len(history_columns)):
+            # Reference the specific day and its previous day dynamically
+            target_col = history_columns[idx]
+            target_col_idx = hist_close_tb.columns.get_loc(target_col)
+            prev_col = hist_close_tb.columns[target_col_idx - 1]
+            
+            day_count = 0
+            for sym in valid_tb_tickers:
+                try:
+                    c_today = hist_close_tb.at[sym, target_col]
+                    o_today = hist_open_tb.at[sym, target_col]
+                    c_yest = hist_close_tb.at[sym, prev_col]
+                    
+                    # Exact "Two Botak" conditional criteria cloned from your logic
+                    if (not np.isnan(c_today) and not np.isnan(o_today) and not np.isnan(c_yest)):
+                        if c_today > c_yest and c_today == o_today:
+                            day_count += 1
+                except:
+                    continue
+            
+            daily_counts.append(day_count)
+            chart_dates.append(target_col.strftime('%Y-%m-%d'))
+        
+        # Create an isolated DataFrame for the Streamlit Bar Chart
+        df_tb_chart = pd.DataFrame({
+            'Date': chart_dates,
+            'Count': daily_counts
+        }).set_index('Date')
+        
+        # Display the chart safely underneath
+        st.caption("📊 Two Botak Count (Past 60 Trading Days)")
+        st.bar_chart(df_tb_chart, height=200)
+except Exception as e:
+    pass # Silent fallback to ensure application stability if calculation fails
+# ==============================================================================
+
+st.markdown("---")
+
 # --- 3. BULLISH ENGULFING (Full Horizontal Row Below Tight PPP) ---
 total_engulf = len(e2_list) + len(e3_list)
 st.markdown(f"#### 🐳 Bullish Engulfing = Awareness HL ({total_engulf})")
