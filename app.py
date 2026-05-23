@@ -250,12 +250,13 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         low_data = data['Low']
         
         valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= length]
-        if not valid_tickers: return None, None, None, {}, None
+        if not valid_tickers: return None, None, None, {}, None, None
 
         # --- New RS Logic ---
         bench_close = close_data[benchmark_ticker]
         stock_scores = {}
         stock_scores_prev = {}
+        stock_scores_1m = {}
         cloud_tickers = []
         price_lookup = {}  # Added to track individual stock prices out of cache cleanly
 
@@ -277,6 +278,11 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             prev_rs = rs_ratio_series.iloc[-6]
             prev_hh = hh.iloc[-6]
             prev_ll = ll.iloc[-6]
+
+            # Get values from 1 month ago (21 trading days ago)
+            m1_rs = rs_ratio_series.iloc[-22]
+            m1_hh = hh.iloc[-22]
+            m1_ll = ll.iloc[-22]
             
             # 3. Normalized logic: ((99 - 1) * (rsClose - ll) / (hh - ll)) + 1
             if pd.isna(current_hh) or pd.isna(current_ll) or current_hh == current_ll:
@@ -290,9 +296,15 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             else:
                 total_score_prev = int(((99 - 1) * (prev_rs - prev_ll) / (prev_hh - prev_ll)) + 1)
 
+            if pd.isna(m1_hh) or pd.isna(m1_ll) or m1_hh == m1_ll:
+                total_score_1m = 0
+            else:
+                total_score_1m = int(((99 - 1) * (m1_rs - m1_ll) / (m1_hh - m1_ll)) + 1)
+
             # This will now store a clean whole number (e.g., 85 instead of 85.34)
             stock_scores[ticker] = total_score
             stock_scores_prev[ticker] = total_score_prev
+            stock_scores_1m[ticker] = total_score_1m
 
             # EMA Cloud Calculation (21 EMA of High/Low) - Kept Unchanged
             ema_low = low_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
@@ -305,12 +317,13 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
 
         rs_perf = pd.Series(stock_scores).astype(int)
         rs_perf_prev = pd.Series(stock_scores_prev).astype(int)
+        rs_perf_1m = pd.Series(stock_scores_1m).astype(int)
         
         # We assign the raw score directly as your ranking metrics instead of the old percentile conversion
-        return rs_perf, rs_perf, cloud_tickers, price_lookup, rs_perf_prev
+        return rs_perf, rs_perf, cloud_tickers, price_lookup, rs_perf_prev, rs_perf_1m
     except Exception as e:
         st.error(f"Error: {e}")
-        return None, None, None, {}, None
+        return None, None, None, {}, None, None
 
 # Reference Scanner Logic Functions
 def scan_two_botak(df, lookback=0):
@@ -659,7 +672,7 @@ status_text = st.empty()
 industry_items = list(INDUSTRIES.items())
 for idx, (industry_name, tickers) in enumerate(industry_items):
     status_text.text(f"Processing {industry_name}...")
-    perf, rs_scores, cloud_list, price_lookup, rs_scores_prev = get_rs_and_cloud_data_cached(tuple(tickers), benchmark, 90)
+    perf, rs_scores, cloud_list, price_lookup, rs_scores_prev, rs_scores_1m = get_rs_and_cloud_data_cached(tuple(tickers), benchmark, 90)
     
     if rs_scores is not None:
         top_n_scores = rs_scores.nlargest(int(top_n))
@@ -670,11 +683,19 @@ for idx, (industry_name, tickers) in enumerate(industry_items):
             group_avg_prev = top_n_scores_prev.mean()
         else:
             group_avg_prev = group_avg
+
+        if rs_scores_1m is not None and not rs_scores_1m.empty:
+            top_n_scores_1m = rs_scores_1m.nlargest(int(top_n))
+            group_avg_1m = top_n_scores_1m.mean()
+        else:
+            group_avg_1m = group_avg
+
         df_tickers = pd.DataFrame({"Ticker": rs_scores.index, "RS Score": rs_scores.values}).sort_values(by="RS Score", ascending=False)
         all_data.append({
             "Industry": industry_name, 
             "Group RS": group_avg, 
             "Group RS Prev": group_avg_prev, 
+            "Group RS 1M": group_avg_1m, 
             "Tickers": df_tickers, 
             "Cloud": cloud_list,
             "Prices": price_lookup  # Store prices securely into dataset
@@ -687,7 +708,7 @@ progress_bar.empty()
 
 # 6. Compact Display Logic
 if all_data:
-    df_main = pd.DataFrame([{"Industry": item["Industry"], "Group RS": item["Group RS"], "Group RS Prev": item["Group RS Prev"]} for item in all_data])
+    df_main = pd.DataFrame([{"Industry": item["Industry"], "Group RS": item["Group RS"], "Group RS Prev": item["Group RS Prev"], "Group RS 1M": item["Group RS 1M"]} for item in all_data])
 
     col1, col2 = st.columns([1, 1])
     with col1:
@@ -707,9 +728,16 @@ if all_data:
     df_prev_sorted = df_main.sort_values("Group RS Prev", ascending=(sort_order == "Ascending")).copy()
     df_prev_sorted['Prev Rank'] = range(1, len(df_prev_sorted) + 1)
     
+    # Sort by 1M scores to resolve 1 month visual ranks
+    df_1m_sorted = df_main.sort_values("Group RS 1M", ascending=(sort_order == "Ascending")).copy()
+    df_1m_sorted['1M Rank'] = range(1, len(df_1m_sorted) + 1)
+
     # Map elements back directly inside the pipeline
     rank_map = dict(zip(df_prev_sorted['Industry'], df_prev_sorted['Prev Rank']))
     df_main['Prev Rank'] = df_main['Industry'].map(rank_map)
+
+    rank_map_1m = dict(zip(df_1m_sorted['Industry'], df_1m_sorted['1M Rank']))
+    df_main['1M Rank'] = df_main['Industry'].map(rank_map_1m)
 
     st.markdown("""
     <style>
@@ -766,6 +794,7 @@ if all_data:
     <th style="text-align: left;">Industry</th>
     <th style="text-align: center; width: 40px;">RS</th>
     <th style="text-align: center; width: 40px;">1W</th>
+    <th style="text-align: center; width: 40px;">1M</th>
     <th style="text-align: left;">Tickers</th>
     <th style="text-align: left; width: 300px;">21ema Cloud</th>
     </tr></thead><tbody>"""
@@ -785,6 +814,16 @@ if all_data:
         else:
             rank_str = f'<span style="color: #aaaaaa;">0</span>'
         
+        # Calculate 1M Rank Shift strings cleanly dynamically
+        prv_r_1m = row['1M Rank']
+        shift_1m = prv_r_1m - cur_r
+        if shift_1m > 0:
+            rank_str_1m = f'<span style="color: #00FF00; font-weight: bold;">+{shift_1m}</span>'
+        elif shift_1m < 0:
+            rank_str_1m = f'<span style="color: #FF7F7F; font-weight: bold;">{shift_1m}</span>'
+        else:
+            rank_str_1m = f'<span style="color: #aaaaaa;">0</span>'
+
         ticker_html = ""
         for _, r in item["Tickers"].iterrows():
             ticker_sym = r["Ticker"]
@@ -855,6 +894,7 @@ if all_data:
         <td style="font-weight: bold; color: #ffffff;">{row['Industry']}</td>
         <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.1f}</td>
         <td style="text-align: center; vertical-align: middle;">{rank_str}</td>
+        <td style="text-align: center; vertical-align: middle;">{rank_str_1m}</td>
         <td>{ticker_html}</td>
         <td>{cloud_html}</td></tr>"""
 
