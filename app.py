@@ -945,41 +945,48 @@ def compute_two_botak_history(stocks_list):
 
         for i in range(days_to_compute - 1, -1, -1):
             idx = -1 - i
-            date = full_timeline[idx]
+            current_date = full_timeline[idx]
 
-            day_count = 0
+            day_total_count = 0
 
             for ticker, df in ticker_dfs.items():
-                if len(df) < abs(idx) + 2:
+                if len(df) < 2:
                     continue
 
-                sub = df.iloc[:idx+1]
+                # =========================
+                # FULL SERIES LOGIC (FIXED)
+                # =========================
+                df_full = df
 
                 botak = (
-                    (abs(sub['Close'] - sub['High']) < 0.05) &
-                    (sub['Close'] > sub['Open'])
+                    (abs(df_full['Close'] - df_full['High']) < 0.05) &
+                    (df_full['Close'] > df_full['Open'])
                 )
 
                 percentile = (
-                    (sub['Close'] > sub['Open']) &
-                    (((sub['Close'] - sub['Open']) /
-                      ((sub['High'] - sub['Open']).replace(0, 0.001))) > 0.9)
+                    (df_full['Close'] > df_full['Open']) &
+                    (((df_full['Close'] - df_full['Open']) /
+                      ((df_full['High'] - df_full['Open']).replace(0, 0.001))) > 0.9)
                 )
 
-                two_botak = (
+                two_botak_series = (
                     ((botak & botak.shift(1)) |
                      (botak & percentile.shift(1)) |
                      (percentile & botak.shift(1)) |
                      (percentile & percentile.shift(1))) &
-                    (sub['Close'] > 20)
+                    (df_full['Close'] > 20)
                 )
 
-                if len(two_botak) > abs(idx) and bool(two_botak.iloc[-1]):
-                    day_count += 1
+                # =========================
+                # SAFE HISTORICAL PROJECTION
+                # =========================
+                if len(two_botak_series) > abs(idx):
+                    if bool(two_botak_series.iloc[idx]):
+                        day_total_count += 1
 
             records.append({
-                "Date": date.strftime("%Y-%m-%d"),
-                "Two Botak Count": day_count
+                "Date": current_date.strftime("%Y-%m-%d"),
+                "Two Botak Count": day_total_count
             })
 
         return pd.DataFrame(records)
