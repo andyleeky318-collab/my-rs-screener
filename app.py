@@ -994,9 +994,83 @@ def compute_two_botak_history(stocks_list):
     except Exception as e:
         return pd.DataFrame()
 
+@st.cache_data(ttl=3600)
+def compute_engulfing_history(stocks_list):
+    try:
+        raw_data = yf.download(list(stocks_list), period="2y", interval="1d", progress=False)
+
+        ticker_dfs = {}
+        for ticker in stocks_list:
+            if len(stocks_list) > 1:
+                df = pd.DataFrame({
+                    'Open': raw_data['Open'][ticker],
+                    'High': raw_data['High'][ticker],
+                    'Low': raw_data['Low'][ticker],
+                    'Close': raw_data['Close'][ticker],
+                    'Volume': raw_data['Volume'][ticker]
+                }).dropna()
+            else:
+                df = raw_data.dropna().copy()
+
+            if not df.empty:
+                ticker_dfs[ticker] = df
+
+        if not ticker_dfs:
+            return pd.DataFrame()
+
+        timeline = ticker_dfs[list(ticker_dfs.keys())[0]].index
+        days = min(60, len(timeline))
+
+        records = []
+
+        for i in range(days - 1, -1, -1):
+            idx = -1 - i
+            date = timeline[idx]
+
+            count_2x = 0
+            count_3x = 0
+
+            for ticker, df in ticker_dfs.items():
+                if len(df) < 30:
+                    continue
+
+                df_full = df
+
+                bullish_engulfing = (
+                    (df_full['Open'] < df_full['Low'].shift(1)) &
+                    (df_full['Close'] > df_full['High'].shift(1))
+                )
+
+                engulf_count_series = bullish_engulfing.rolling(window=30).sum()
+
+                # ---- SAFE historical alignment ----
+                if len(engulf_count_series) <= abs(idx):
+                    continue
+
+                current_close = df_full['Close'].iloc[idx]
+                current_count = engulf_count_series.iloc[idx]
+
+                if current_count >= 2 and current_close > 20:
+                    count_2x += 1
+
+                if current_count >= 3 and current_close > 20:
+                    count_3x += 1
+
+            records.append({
+                "Date": date.strftime("%Y-%m-%d"),
+                "2x Engulfing Count": count_2x,
+                "3x Engulfing Count": count_3x
+            })
+
+        return pd.DataFrame(records)
+
+    except Exception:
+        return pd.DataFrame()
+
 with st.spinner("Scanning pattern anomalies across known instruments..."):
     results = process_pattern_scanners(tuple(KNOWN_STOCKS))
     two_botak_hist = compute_two_botak_history(tuple(KNOWN_STOCKS))
+    engulf_hist = compute_engulfing_history(tuple(KNOWN_STOCKS))
     b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list = results[:7]
     b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:14]
     know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200 = results[14:]
@@ -1357,7 +1431,7 @@ else:
     st.info("No active setups discovered.")
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
-st.markdown("---")
+#st.markdown("---")
 
 # ===================== TWO BOTAK 60-DAY BREADTH CHART =====================
 if not two_botak_hist.empty:
@@ -1406,6 +1480,12 @@ if e2_list or e3_list or e2_yest or e3_yest:
 else:
     st.info("No active setups discovered.")
 
+if not engulf_hist.empty:
+    st.markdown("#### 🐳 2x Engulfing Breadth (60 Days)")
+    st.bar_chart(engulf_hist, x="Date", y="2x Engulfing Count", use_container_width=True)
+
+    st.markdown("#### 🐳 3x Engulfing Breadth (60 Days)")
+    st.bar_chart(engulf_hist, x="Date", y="3x Engulfing Count", use_container_width=True)
 
 # --- EXTRA TREND METRICS (Stacked Horizontally Below Patterns) ---
 #st.markdown("---")
