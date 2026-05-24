@@ -312,7 +312,76 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             current_price = close_data[ticker].iloc[-1]
             price_lookup[ticker] = current_price  # Cache current price reference maps
             
-            if ema_low <= current_price <= ema_high:
+            #if ema_low <= current_price <= ema_high:
+            #    cloud_tickers.append(ticker)
+
+            # ================================
+            # BUYABLE-STYLE 21 EMA CLOUD LOGIC
+            # ================================
+
+            ema21_close = low_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
+            ema21_low   = low_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
+
+            sma50_series = close_data[ticker].rolling(50).mean()
+            sma50 = sma50_series.iloc[-1]
+            sma50_prev1 = sma50_series.iloc[-2] if len(sma50_series) > 2 else sma50
+            sma50_prev2 = sma50_series.iloc[-3] if len(sma50_series) > 3 else sma50
+
+            # --- MA50 Rising ---
+            ma50Rising = (sma50 > sma50_prev1) and (sma50_prev1 > sma50_prev2)
+
+            # --- EMA50 gradient ---
+            powerma = close_data[ticker].ewm(span=50, adjust=False).mean()
+            gradient = (powerma.iloc[-1] - powerma.iloc[-2]) if len(powerma) > 1 else 0
+
+            # --- ATR% ---
+            high = high_data[ticker]
+            low = low_data[ticker]
+            close = close_data[ticker]
+
+            tr = pd.concat([
+                high - low,
+                abs(high - close.shift(1)),
+                abs(low - close.shift(1))
+            ], axis=1).max(axis=1)
+
+            atr = tr.rolling(14).mean()
+            atrPercent = (atr / close) * 100
+
+            atr21_R = (((close.iloc[-1] - ema21_close) / close.iloc[-1]) * 100) / (atrPercent.iloc[-1] + 1e-6)
+            atr50_R = (((close.iloc[-1] - sma50) / close.iloc[-1]) * 100) / (atrPercent.iloc[-1] + 1e-6)
+
+            # --- EMA distance filter ---
+            emaDistPercent = ((close.iloc[-1] - ema21_low) / close.iloc[-1]) * 100
+
+            # --- BUYABLE CONDITIONS ---
+            cond1 = True  # adrPercent logic not available here unless you already compute it
+
+            cond2 = -0.5 <= atr21_R <= 1
+            cond3 = 0 <= atr50_R <= 3
+            cond4 = 0 < emaDistPercent <= 8
+            cond5 = close.iloc[-1] > ema21_low
+
+            # --- smoothing logic placeholders (simplified version) ---
+            pbb_cond1 = True
+            pbb_cond2 = gradient >= 0
+            pbb_cond3 = True
+
+            # --- FINAL BUYABLE FILTER ---
+            buyable = (
+                cond1 and
+                cond2 and
+                cond3 and
+                cond4 and
+                pbb_cond2 and
+                ma50Rising and
+                close.iloc[-1] >= 20
+            )
+
+            # ================================
+            # CLOUD CONDITION (UPDATED)
+            # ================================
+            if buyable:
                 cloud_tickers.append(ticker)
 
         # Convert dictionary metrics to Pandas Series
