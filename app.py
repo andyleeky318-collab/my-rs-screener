@@ -1233,11 +1233,11 @@ if not historical_df.empty and len(historical_df) >= 10:
             </div>
             <p style="margin: 0; font-size: 0.95em; color: #e0e0e0; line-height: 1.5;">
                 <b>Breadth Matrix:</b> Current active Minervini pool rests at 
-                <span style="color: #FFD700; font-weight: bold;">{current_count}</span> setups 
+                <span style="color: {status_color}; font-weight: bold;">{current_count}</span> setups 
                 (5-Day Trend Avg: 
-                <span style="color: #FFD700; font-weight: bold;">{ma_short:.1f}</span> 
+                <span style="color: {status_color}; font-weight: bold;">{ma_short:.1f}</span> 
                 vs 20-Day Trend Avg: 
-                <span style="color: #FFD700; font-weight: bold;">{ma_long:.1f}</span>). <br>
+                <span style="color: {status_color}; font-weight: bold;">{ma_long:.1f}</span>). <br>
                 <b>Tactical Playbook:</b> {action_note}
             </p>
         </div>
