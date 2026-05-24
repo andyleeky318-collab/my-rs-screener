@@ -1481,6 +1481,7 @@ if e2_list or e3_list or e2_yest or e3_yest:
 else:
     st.info("No active setups discovered.")
 
+st.write("")
 if not engulf_hist.empty:
     st.markdown("#### 🐳 2x Engulfing Breadth (60 Days)")
     st.bar_chart(engulf_hist, x="Date", y="2x Engulfing Count", use_container_width=True)
