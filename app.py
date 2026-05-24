@@ -1432,7 +1432,7 @@ else:
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 #st.markdown("---")
-#st.write("")
+st.write("")
 
 # ===================== TWO BOTAK 60-DAY BREADTH CHART =====================
 if not two_botak_hist.empty:
