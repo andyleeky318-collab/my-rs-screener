@@ -1246,6 +1246,7 @@ if not historical_df.empty and len(historical_df) >= 10:
     )
 
 #st.markdown("---")
+st.write("")
 
 #st.markdown(f"### Total Count ({know_total_count})")
 if not historical_df.empty:
