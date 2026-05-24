@@ -319,7 +319,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             # BUYABLE-STYLE 21 EMA CLOUD LOGIC
             # ================================
 
-            ema21_close = low_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
+            ema21_close = close_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
             ema21_low   = low_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
 
             sma50_series = close_data[ticker].rolling(50).mean()
