@@ -878,7 +878,7 @@ if all_data:
     <th style="text-align: center; width: 40px;">1W</th>
     <th style="text-align: center; width: 40px;">1M</th>
     <th style="text-align: left;">Tickers</th>
-    <th style="text-align: left; width: 300px;">21ema Cloud</th>
+    <th style="text-align: left; width: 300px;">21ema Valid</th>
     </tr></thead><tbody>"""
 
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
@@ -1449,18 +1449,18 @@ st.markdown(f"#### 🧭 Market Regime Reference ({pct_above_ema200:.2f}%)")
 # 1. Define raw data exactly from your reference image
 regime_data = {
     "Market Condition": [
-        "Above 200 EMA < 40%",
-        "Above 200 EMA 40–50%",
-        "Above 200 EMA 50–60%",
+        "Above 200 EMA > 70%",
         "Above 200 EMA > 60%",
-        "Above 200 EMA > 70%"
+        "Above 200 EMA 50–60%",
+        "Above 200 EMA 40–50%",
+        "Above 200 EMA < 40%"
     ],
     "What to do": [
-        "Be cautious, focus only on best setups",
-        "Recovery attempt",
-        "Market improving",
+        "Strong bull participation",
         "Good swing trading environment",
-        "Strong bull participation"
+        "Market improving",
+        "Recovery attempt",
+        "Be cautious, focus only on best setups"
     ]
 }
 
