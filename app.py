@@ -941,8 +941,8 @@ if all_data:
     <th style="text-align: center; width: 40px;">1W</th>
     <th style="text-align: center; width: 40px;">1M</th>
     <th style="text-align: left;">Tickers</th>
-    <th style="text-align: left; width: 300px;">21ema_Valid</th>
-    <th style="text-align: left; width: 300px;">21ema_Cloud</th>
+    <th style="text-align: left; width: 175px;">21ema_Valid</th>
+    <th style="text-align: left; width: 175px;">21ema_Cloud</th>
     </tr></thead><tbody>"""
 
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
