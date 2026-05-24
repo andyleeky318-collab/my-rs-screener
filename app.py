@@ -1060,7 +1060,7 @@ if all_data:
                 )
             else:
                 cloud_21ema_html += (
-                    f'<div class="ticker-badge cloud-badge">'
+                    f'<div class="ticker-badge">'
                     f'<span class="ticker-name">{cloud_sym}</span>'
                     f'<span class="ticker-rs">{cloud_rs:.0f}</span>'
                     f'</div>'
