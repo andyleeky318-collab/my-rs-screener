@@ -384,6 +384,43 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             )
 
             # ================================
+            # DEBUG AMAT
+            # ================================
+            if ticker == "AMAT":
+
+                debug_data = {
+                    "ticker": ticker,
+
+                    "close": round(close.iloc[-1], 2),
+
+                    "adrPercent": round(float(adrPercent.iloc[-1]), 2),
+                    "cond1_adr_2.45_to_8": cond1,
+
+                    "atr21_R": round(float(atr21_R), 2),
+                    "cond2_atr21": cond2,
+
+                    "atr50_R": round(float(atr50_R), 2),
+                    "cond3_atr50": cond3,
+
+                    "emaDistPercent": round(float(emaDistPercent), 2),
+                    "cond4_emaDist": cond4,
+
+                    "gradient": round(float(gradient), 4),
+                    "pbb_cond2_gradient_positive": pbb_cond2,
+
+                    "sma50": round(float(sma50), 2),
+                    "sma50_prev1": round(float(sma50_prev1), 2),
+                    "sma50_prev2": round(float(sma50_prev2), 2),
+                    "ma50Rising": ma50Rising,
+
+                    "close_gt_20": close.iloc[-1] >= 20,
+
+                    "FINAL_BUYABLE": buyable
+                }
+
+                st.write(debug_data)
+
+            # ================================
             # CLOUD CONDITION (UPDATED)
             # ================================
             if buyable:
