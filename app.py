@@ -1098,11 +1098,83 @@ def compute_engulfing_history(stocks_list):
     except Exception as e:
         print(e)
         return pd.DataFrame()
+    
+@st.cache_data(ttl=3600)
+def compute_powertrend_history(stocks_list):
+    try:
+        raw_data = yf.download(list(stocks_list), period="2y", interval="1d", progress=False)
 
+        ticker_dfs = {}
+
+        for ticker in stocks_list:
+            if len(stocks_list) > 1:
+                df = pd.DataFrame({
+                    'Open': raw_data['Open'][ticker],
+                    'High': raw_data['High'][ticker],
+                    'Low': raw_data['Low'][ticker],
+                    'Close': raw_data['Close'][ticker],
+                    'Volume': raw_data['Volume'][ticker]
+                }).dropna()
+            else:
+                df = raw_data.dropna().copy()
+
+            if not df.empty:
+                ticker_dfs[ticker] = df
+
+        if not ticker_dfs:
+            return pd.DataFrame()
+
+        timeline = ticker_dfs[list(ticker_dfs.keys())[0]].index
+        days = min(60, len(timeline))
+
+        records = []
+
+        for i in range(days - 1, -1, -1):
+            idx = -1 - i
+            date = timeline[idx]
+
+            count_powertrend = 0
+
+            for ticker, df in ticker_dfs.items():
+
+                if len(df) < 52:
+                    continue
+
+                # =========================
+                # CLONED LOGIC (DO NOT TOUCH ORIGINAL FUNCTION)
+                # =========================
+                powerma = df['Close'].ewm(span=50, adjust=False).mean()
+                gradient = powerma - powerma.shift(1)
+                gradientPct = ((powerma - powerma.shift(1)) / powerma.shift(1)) * 100
+                absGradient = abs(gradientPct)
+
+                powertrend_series = (
+                    (gradient > 0) &
+                    (absGradient >= 1.0) &
+                    (df['Close'] >= 20)
+                )
+
+                if len(powertrend_series) <= abs(idx):
+                    continue
+
+                if bool(powertrend_series.iloc[idx]):
+                    count_powertrend += 1
+
+            records.append({
+                "Date": date.strftime("%Y-%m-%d"),
+                "PowerTrend Count": count_powertrend
+            })
+
+        return pd.DataFrame(records)
+
+    except Exception:
+        return pd.DataFrame()
+    
 with st.spinner("Scanning pattern anomalies across known instruments..."):
     results = process_pattern_scanners(tuple(KNOWN_STOCKS))
     two_botak_hist = compute_two_botak_history(tuple(KNOWN_STOCKS))
     engulf_hist = compute_engulfing_history(tuple(KNOWN_STOCKS))
+    powertrend_hist = compute_powertrend_history(tuple(KNOWN_STOCKS))
     b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list = results[:7]
     b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:14]
     know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200 = results[14:]
@@ -1551,6 +1623,15 @@ if pt_list or pt_yest:
     st.markdown(html_pt, unsafe_allow_html=True)
 else:
     st.text("None")
+
+st.write("")
+if not powertrend_hist.empty:
+    st.bar_chart(
+        data=powertrend_hist,
+        x="Date",
+        y="PowerTrend Count",
+        use_container_width=True
+    )
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
