@@ -248,9 +248,10 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         close_data = data['Close']
         high_data = data['High']
         low_data = data['Low']
+        open_data = data['Open']
         
         valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= length]
-        if not valid_tickers: return None, None, None, {}, None, None
+        if not valid_tickers: return None, None, None, {}, None, None, None
 
         # --- New RS Logic ---
         bench_close = close_data[benchmark_ticker]
@@ -258,6 +259,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         stock_scores_prev = {}
         stock_scores_1m = {}
         cloud_tickers = []
+        cloud_21ema_tickers = []
         price_lookup = {}  # Added to track individual stock prices out of cache cleanly
 
         for ticker in valid_tickers:
@@ -397,6 +399,58 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             if buyable:
                 cloud_tickers.append(ticker)
 
+            # ================================
+            # 21 EMA CLOUD CONDITION (finalCondition)
+            # ================================
+            if len(close_data[ticker]) >= 3 and len(low_data[ticker]) >= 3 and len(high_data[ticker]) >= 3 and len(open_data[ticker]) >= 3:
+                ema21_low_series  = low_data[ticker].ewm(span=21, adjust=False).mean()
+                ema21_high_series = high_data[ticker].ewm(span=21, adjust=False).mean()
+
+                MALow0  = ema21_low_series.iloc[-1]
+                MALow1  = ema21_low_series.iloc[-2]
+                MALow2  = ema21_low_series.iloc[-3]
+                MAHigh0 = ema21_high_series.iloc[-1]
+                MAHigh1 = ema21_high_series.iloc[-2]
+                MAHigh2 = ema21_high_series.iloc[-3]
+
+                c0 = close_data[ticker].iloc[-1]
+                c1 = close_data[ticker].iloc[-2]
+                c2 = close_data[ticker].iloc[-3]
+                o0 = open_data[ticker].iloc[-1]
+                o1 = open_data[ticker].iloc[-2]
+                o2 = open_data[ticker].iloc[-3]
+                h0 = high_data[ticker].iloc[-1]
+                h1 = high_data[ticker].iloc[-2]
+                h2 = high_data[ticker].iloc[-3]
+                l0 = low_data[ticker].iloc[-1]
+                l1 = low_data[ticker].iloc[-2]
+                l2 = low_data[ticker].iloc[-3]
+
+                insideCloud0 = MALow0 <= c0 <= MAHigh0
+                insideCloud1 = MALow1 <= c1 <= MAHigh1
+                insideCloud2 = MALow2 <= c2 <= MAHigh2
+
+                insideCloud3Days         = insideCloud0 and insideCloud1 and insideCloud2
+                insideCloud2DaysPositive = insideCloud0 and insideCloud1 and (c0 > c1) and (c0 > o0)
+
+                bodyTop0    = max(o0, c0);  bodyBottom0 = min(o0, c0);  bodySize0 = bodyTop0 - bodyBottom0
+                bodyTop1    = max(o1, c1);  bodyBottom1 = min(o1, c1);  bodySize1 = bodyTop1 - bodyBottom1
+                bodyTop2    = max(o2, c2);  bodyBottom2 = min(o2, c2);  bodySize2 = bodyTop2 - bodyBottom2
+
+                insideBody0 = max(0.0, min(bodyTop0, MAHigh0) - max(bodyBottom0, MALow0))
+                insideBody1 = max(0.0, min(bodyTop1, MAHigh1) - max(bodyBottom1, MALow1))
+                insideBody2 = max(0.0, min(bodyTop2, MAHigh2) - max(bodyBottom2, MALow2))
+
+                insidePct0 = (insideBody0 / bodySize0) if bodySize0 > 0 else 0.0
+                insidePct1 = (insideBody1 / bodySize1) if bodySize1 > 0 else 0.0
+                insidePct2 = (insideBody2 / bodySize2) if bodySize2 > 0 else 0.0
+
+                bodyCloud3Days = insidePct0 >= 0.70 and insidePct1 >= 0.70 and insidePct2 >= 0.70
+                finalCondition = bodyCloud3Days or insideCloud3Days or insideCloud2DaysPositive
+
+                if buyable and finalCondition and close_data[ticker].iloc[-1] >= 20:
+                    cloud_21ema_tickers.append(ticker)
+
         # Convert dictionary metrics to Pandas Series
         rs_perf_raw = pd.Series(stock_scores).astype(int)
         rs_perf_prev_raw = pd.Series(stock_scores_prev).astype(int)
@@ -410,10 +464,10 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         rs_perf_prev = rs_perf_prev_raw[rs_perf_prev_raw.index.isin(valid_price_tickers)]
         rs_perf_1m = rs_perf_1m_raw[rs_perf_1m_raw.index.isin(valid_price_tickers)]
         
-        return rs_perf, rs_perf, cloud_tickers, price_lookup, rs_perf_prev, rs_perf_1m
+        return rs_perf, rs_perf, cloud_tickers, price_lookup, rs_perf_prev, rs_perf_1m, cloud_21ema_tickers
     except Exception as e:
         st.error(f"Error: {e}")
-        return None, None, None, {}, None, None
+        return None, None, None, {}, None, None, None
 
 # Reference Scanner Logic Functions
 def scan_two_botak(df, lookback=0):
@@ -762,7 +816,7 @@ status_text = st.empty()
 industry_items = list(INDUSTRIES.items())
 for idx, (industry_name, tickers) in enumerate(industry_items):
     status_text.text(f"Processing {industry_name}...")
-    perf, rs_scores, cloud_list, price_lookup, rs_scores_prev, rs_scores_1m = get_rs_and_cloud_data_cached(tuple(tickers), benchmark, 90)
+    perf, rs_scores, cloud_list, price_lookup, rs_scores_prev, rs_scores_1m, cloud_21ema_list = get_rs_and_cloud_data_cached(tuple(tickers), benchmark, 90)
     
     if rs_scores is not None:
         top_n_scores = rs_scores.nlargest(int(top_n))
@@ -788,6 +842,7 @@ for idx, (industry_name, tickers) in enumerate(industry_items):
             "Group RS 1M": group_avg_1m, 
             "Tickers": df_tickers, 
             "Cloud": cloud_list,
+            "Cloud21EMA": cloud_21ema_list if cloud_21ema_list is not None else [],
             "Prices": price_lookup  # Store prices securely into dataset
         })
     
@@ -886,7 +941,8 @@ if all_data:
     <th style="text-align: center; width: 40px;">1W</th>
     <th style="text-align: center; width: 40px;">1M</th>
     <th style="text-align: left;">Tickers</th>
-    <th style="text-align: left; width: 300px;">21ema Valid</th>
+    <th style="text-align: left; width: 300px;">21ema_Valid</th>
+    <th style="text-align: left; width: 300px;">21ema_Cloud</th>
     </tr></thead><tbody>"""
 
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
@@ -977,6 +1033,38 @@ if all_data:
                     f'<span class="ticker-rs">{cloud_rs:.0f}</span>'
                     f'</div>'
                 )
+
+        # ================================
+        # 21 EMA CLOUD COLUMN (new column)
+        # ================================
+        cloud_21ema_html = ""
+        sorted_cloud_21ema = sorted(item["Cloud21EMA"], key=lambda sym: rs_lookup.get(sym, 0), reverse=True)
+        top_5_cloud_21ema = sorted_cloud_21ema[:5]
+
+        for cloud_sym in top_5_cloud_21ema:
+            cloud_rs = rs_lookup.get(cloud_sym, 0)
+
+            if cloud_sym in LIME_STOCKS:
+                cloud_21ema_html += (
+                    f'<div class="ticker-badge lime-badge">'
+                    f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{cloud_sym}</span>'
+                    f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{cloud_rs:.0f}</span>'
+                    f'</div>'
+                )
+            elif cloud_sym in KNOWN_STOCKS:
+                cloud_21ema_html += (
+                    f'<div class="ticker-badge new-pattern-badge">'
+                    f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{cloud_sym}</span>'
+                    f'<span class="ticker-rs" style="color: #004d26; font-weight: bold;">{cloud_rs:.0f}</span>'
+                    f'</div>'
+                )
+            else:
+                cloud_21ema_html += (
+                    f'<div class="ticker-badge cloud-badge">'
+                    f'<span class="ticker-name">{cloud_sym}</span>'
+                    f'<span class="ticker-rs">{cloud_rs:.0f}</span>'
+                    f'</div>'
+                )
         bg_color = "#262730" if row_num % 2 == 0 else "#0e1117"
         
         table_html += f"""<tr style="background-color: {bg_color};">
@@ -986,7 +1074,8 @@ if all_data:
         <td style="text-align: center; vertical-align: middle;">{rank_str}</td>
         <td style="text-align: center; vertical-align: middle;">{rank_str_1m}</td>
         <td>{ticker_html}</td>
-        <td>{cloud_html}</td></tr>"""
+        <td>{cloud_html}</td>
+        <td>{cloud_21ema_html}</td></tr>"""
 
     table_html += "</tbody></table>"
     st.markdown(table_html, unsafe_allow_html=True)
