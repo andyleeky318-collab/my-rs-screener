@@ -1484,22 +1484,31 @@ elif pct_above_ema200 < 40:
 
 # 4. Create a styling function to apply the lime background
 def highlight_current_regime(row):
-    pct = pct_above_ema200  # live value
+    pct = pct_above_ema200
+
+    is_highlight = False
+    bg = ""
 
     if pct > 70 and row["Market Condition"] == "Above 200 EMA > 70%":
-        bg = "#90EE90"  # strong green
+        bg = "#90EE90"
+        is_highlight = True
     elif pct > 60 and row["Market Condition"] == "Above 200 EMA > 60%":
         bg = "#90EE90"
+        is_highlight = True
     elif 50 <= pct <= 60 and row["Market Condition"] == "Above 200 EMA 50–60%":
         bg = "#FFD8A8"
+        is_highlight = True
     elif 40 <= pct < 50 and row["Market Condition"] == "Above 200 EMA 40–50%":
         bg = "#FFD8A8"
+        is_highlight = True
     elif pct < 40 and row["Market Condition"] == "Above 200 EMA < 40%":
         bg = "#FFCCCC"
-    else:
-        bg = ""
+        is_highlight = True
 
-    return [f"background-color: {bg}; color: #000000; font-weight: bold;"] * len(row)
+    if is_highlight:
+        return [f"background-color: {bg}; color: #000000; font-weight: bold;"] * len(row)
+    else:
+        return [""] * len(row)
 
 # 5. Apply the style and render via Streamlit dataframe (handles styling better than st.table)
 styled_df = df_regime.style.apply(highlight_current_regime, axis=1)
