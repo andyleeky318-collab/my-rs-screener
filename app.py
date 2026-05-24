@@ -1432,10 +1432,11 @@ else:
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 #st.markdown("---")
+#st.write("")
 
 # ===================== TWO BOTAK 60-DAY BREADTH CHART =====================
 if not two_botak_hist.empty:
-    st.markdown("#### 📊 Two Botak Breadth (60 Days)")
+    #st.markdown("#### 📊 Two Botak Breadth (60 Days)")
     st.bar_chart(
         data=two_botak_hist,
         x="Date",
@@ -1483,10 +1484,10 @@ else:
 
 st.write("")
 if not engulf_hist.empty:
-    st.markdown("#### 🐳 2x Engulfing Breadth (60 Days)")
+    #st.markdown("#### 🐳 2x Engulfing Breadth (60 Days)")
     st.bar_chart(engulf_hist, x="Date", y="2x Engulfing Count", use_container_width=True)
 
-    st.markdown("#### 🐳 3x Engulfing Breadth (60 Days)")
+    #st.markdown("#### 🐳 3x Engulfing Breadth (60 Days)")
     st.bar_chart(engulf_hist, x="Date", y="3x Engulfing Count", use_container_width=True)
 
 # --- EXTRA TREND METRICS (Stacked Horizontally Below Patterns) ---
