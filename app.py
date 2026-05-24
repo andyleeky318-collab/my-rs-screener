@@ -5,7 +5,7 @@ import numpy as np
 
 # 1. Setup Streamlit Page
 st.set_page_config(page_title="Chrome Sector RS", layout="wide")
-st.title("🚀 Theme Tracker")
+st.title("🐱 Theme Tracker")
 
 st.markdown(
     """
@@ -355,7 +355,12 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             emaDistPercent = ((close.iloc[-1] - ema21_low) / close.iloc[-1]) * 100
 
             # --- BUYABLE CONDITIONS ---
-            cond1 = True  # adrPercent logic not available here unless you already compute it
+            hl_ratio = high_data[ticker] / low_data[ticker]
+            adr_sma = hl_ratio.rolling(20).mean()
+
+            adrPercent = 100 * (adr_sma - 1)
+
+            cond1 = (adrPercent.iloc[-1] >= 2.45) and (adrPercent.iloc[-1] <= 8)
 
             cond2 = -0.5 <= atr21_R <= 1
             cond3 = 0 <= atr50_R <= 3
@@ -375,7 +380,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
                 cond4 and
                 pbb_cond2 and
                 ma50Rising and
-                close.iloc[-1] >= 20
+                close.iloc[-1] >= 20 #left count8_and_TML
             )
 
             # ================================
