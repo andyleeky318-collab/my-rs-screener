@@ -1135,10 +1135,11 @@ def compute_historical_know_counts(stocks_list):
                 
                 # Handle safe range windows relative to chosen index shift pointer
                 end_p = len(df_cloned) + target_idx
-                ma_200_20 = df_cloned["SMA_200"].iloc[target_idx - 20] if end_p >= 20 else 0
+                ma_200_20 = df_cloned["SMA_200"].iloc[target_idx - 19] if end_p >= 20 else 0
                 
                 low_52w = round(min(df_cloned["Low"].iloc[target_idx - 260 : end_p if end_p != 0 else None]), 2)
-                high_52w = round(df_cloned["High"].iloc[target_idx - 260 : target_idx].max(), 2)
+                hist_end = len(df_cloned) + target_idx
+                high_52w = round(df_cloned["High"].iloc[target_idx - 260 : hist_end].max(), 2)
 
                 c1 = int(c_close > ma_50 > ma_200)
                 c2 = int(ma_50 > ma_200)
