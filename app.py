@@ -1463,7 +1463,8 @@ if e2_list or e3_list or e2_yest or e3_yest:
             html_e2 += f'<div class="ticker-badge removed-badge">{sym}</div>'
             
         st.markdown(html_e2, unsafe_allow_html=True)
-        
+    
+    st.write("")
     if e3_list or e3_yest:
         st.markdown(f"<div style='margin-top:10px;'><b>3x Engulfing Conditions Matched ({len(e3_list)}):</b></div>", unsafe_allow_html=True)
         html_e3 = ""
