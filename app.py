@@ -1000,6 +1000,7 @@ def compute_engulfing_history(stocks_list):
         raw_data = yf.download(list(stocks_list), period="2y", interval="1d", progress=False)
 
         ticker_dfs = {}
+
         for ticker in stocks_list:
             if len(stocks_list) > 1:
                 df = pd.DataFrame({
@@ -1024,36 +1025,66 @@ def compute_engulfing_history(stocks_list):
         records = []
 
         for i in range(days - 1, -1, -1):
-            idx = -1 - i
+
+            lookback = i
+            idx = -1 - lookback
             date = timeline[idx]
 
             count_2x = 0
             count_3x = 0
 
             for ticker, df in ticker_dfs.items():
-                if len(df) < 30:
+
+                if len(df) < 30 + lookback:
                     continue
 
-                df_full = df
-
+                # =========================
+                # SAME LOGIC AS scan_engulfing()
+                # =========================
                 bullish_engulfing = (
-                    (df_full['Open'] < df_full['Low'].shift(1)) &
-                    (df_full['Close'] > df_full['High'].shift(1))
+                    (df['Open'] < df['Low'].shift(1)) &
+                    (df['Close'] > df['High'].shift(1))
                 )
 
                 engulf_count_series = bullish_engulfing.rolling(window=30).sum()
 
-                # ---- SAFE historical alignment ----
-                if len(engulf_count_series) <= abs(idx):
+                # Historical slice
+                df_temp = df.iloc[:len(df)-lookback] if lookback > 0 else df
+
+                if len(df_temp) < 30:
                     continue
 
-                current_close = df_full['Close'].iloc[idx]
+                current_idx = df_temp.index[-1]
+
+                engulf_closes = df_temp.loc[bullish_engulfing, 'Close']
+                prior_engulfs = engulf_closes[engulf_closes.index < current_idx]
+
+                eng1 = prior_engulfs.iloc[-1] if len(prior_engulfs) >= 1 else 0
+                eng2 = prior_engulfs.iloc[-2] if len(prior_engulfs) >= 2 else 0
+                eng3 = prior_engulfs.iloc[-3] if len(prior_engulfs) >= 3 else 0
+
+                current_close = df_temp['Close'].iloc[-1]
                 current_count = engulf_count_series.iloc[idx]
 
-                if current_count >= 2 and current_close > 20:
+                two_engulf = (
+                    (current_count >= 2) and
+                    (current_close > 20) and
+                    (current_close > eng1) and
+                    (current_close > eng2)
+                )
+
+                three_engulf = (
+                    (current_count >= 3) and
+                    (current_close > 20) and
+                    (current_close > eng1) and
+                    (current_close > eng2) and
+                    (current_close > eng3)
+                )
+
+                if two_engulf:
                     count_2x += 1
 
-                if current_count >= 3 and current_close > 20:
+                if three_engulf:
                     count_3x += 1
 
             records.append({
@@ -1064,7 +1095,8 @@ def compute_engulfing_history(stocks_list):
 
         return pd.DataFrame(records)
 
-    except Exception:
+    except Exception as e:
+        print(e)
         return pd.DataFrame()
 
 with st.spinner("Scanning pattern anomalies across known instruments..."):
