@@ -261,6 +261,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         cloud_tickers = []
         cloud_21ema_tickers = []
         cloud_wick_tickers = []
+        ma50_bounce_tickers = []
         price_lookup = {}  # Added to track individual stock prices out of cache cleanly
 
         for ticker in valid_tickers:
@@ -467,6 +468,32 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             if buyable and longWickToday and c_today >= 20:
                 cloud_wick_tickers.append(ticker)
 
+            # ================================
+            # 50MA BOUNCE CONDITION (ma50_bounce_cond)
+            # ================================
+            sma50_series_full = close_data[ticker].rolling(50).mean()
+            if len(sma50_series_full) >= 2 and len(low_data[ticker]) >= 2:
+                sma50_today = sma50_series_full.iloc[-1]
+                sma50_yest  = sma50_series_full.iloc[-2]
+
+                fiftyday_percent  = (close_data[ticker].iloc[-1] - sma50_today) / sma50_today * 100
+                # truncate to 1 decimal place (mirrors Pine Script truncate())
+                fiftyday_percent2 = int(fiftyday_percent * 10) / 10
+
+                touchMA50_yest = low_data[ticker].iloc[-2] <= sma50_yest
+                recover1       = touchMA50_yest and (close_data[ticker].iloc[-1] > sma50_today)
+
+                ma50_bounce_cond = (
+                    recover1 and
+                    cond1 and
+                    fiftyday_percent2 <= 8 and
+                    ma50Rising and
+                    close_data[ticker].iloc[-1] >= 20
+                )
+
+                if ma50_bounce_cond:
+                    ma50_bounce_tickers.append(ticker)
+
         # Convert dictionary metrics to Pandas Series
         rs_perf_raw = pd.Series(stock_scores).astype(int)
         rs_perf_prev_raw = pd.Series(stock_scores_prev).astype(int)
@@ -480,10 +507,10 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         rs_perf_prev = rs_perf_prev_raw[rs_perf_prev_raw.index.isin(valid_price_tickers)]
         rs_perf_1m = rs_perf_1m_raw[rs_perf_1m_raw.index.isin(valid_price_tickers)]
         
-        return rs_perf, rs_perf, cloud_tickers, price_lookup, rs_perf_prev, rs_perf_1m, cloud_21ema_tickers, cloud_wick_tickers
+        return rs_perf, rs_perf, cloud_tickers, price_lookup, rs_perf_prev, rs_perf_1m, cloud_21ema_tickers, cloud_wick_tickers, ma50_bounce_tickers
     except Exception as e:
         st.error(f"Error: {e}")
-        return None, None, None, {}, None, None, None, None
+        return None, None, None, {}, None, None, None, None, None
 
 # Reference Scanner Logic Functions
 def scan_two_botak(df, lookback=0):
@@ -832,7 +859,7 @@ status_text = st.empty()
 industry_items = list(INDUSTRIES.items())
 for idx, (industry_name, tickers) in enumerate(industry_items):
     status_text.text(f"Processing {industry_name}...")
-    perf, rs_scores, cloud_list, price_lookup, rs_scores_prev, rs_scores_1m, cloud_21ema_list, cloud_wick_list = get_rs_and_cloud_data_cached(tuple(tickers), benchmark, 90)
+    perf, rs_scores, cloud_list, price_lookup, rs_scores_prev, rs_scores_1m, cloud_21ema_list, cloud_wick_list, ma50_bounce_list = get_rs_and_cloud_data_cached(tuple(tickers), benchmark, 90)
     
     if rs_scores is not None:
         top_n_scores = rs_scores.nlargest(int(top_n))
@@ -860,6 +887,7 @@ for idx, (industry_name, tickers) in enumerate(industry_items):
             "Cloud": cloud_list,
             "Cloud21EMA": cloud_21ema_list if cloud_21ema_list is not None else [],
             "CloudWick": cloud_wick_list if cloud_wick_list is not None else [],
+            "MA50Bounce": ma50_bounce_list if ma50_bounce_list is not None else [],
             "Prices": price_lookup  # Store prices securely into dataset
         })
     
@@ -958,9 +986,10 @@ if all_data:
     <th style="text-align: center; width: 40px;">1W</th>
     <th style="text-align: center; width: 40px;">1M</th>
     <th style="text-align: left;">Tickers</th>
-    <th style="text-align: left; width: 175px;">21ema_Valid</th>
-    <th style="text-align: left; width: 175px;">21ema_Cloud</th>
-    <th style="text-align: left; width: 175px;">21ema_Wick</th>
+    <th style="text-align: left; width: 150px;">21ema_Valid</th>
+    <th style="text-align: left; width: 150px;">21ema_Cloud</th>
+    <th style="text-align: left; width: 150px;">21ema_Wick</th>
+    <th style="text-align: left; width: 150px;">50ma_Bounce</th>
     </tr></thead><tbody>"""
 
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
@@ -1117,6 +1146,38 @@ if all_data:
                     f'</div>'
                 )
 
+        # ================================
+        # 50MA BOUNCE COLUMN (new column)
+        # ================================
+        ma50_bounce_html = ""
+        sorted_ma50_bounce = sorted(item["MA50Bounce"], key=lambda sym: rs_lookup.get(sym, 0), reverse=True)
+        top_5_ma50_bounce = sorted_ma50_bounce[:5]
+
+        for cloud_sym in top_5_ma50_bounce:
+            cloud_rs = rs_lookup.get(cloud_sym, 0)
+
+            if cloud_sym in LIME_STOCKS:
+                ma50_bounce_html += (
+                    f'<div class="ticker-badge lime-badge">'
+                    f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{cloud_sym}</span>'
+                    f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{cloud_rs:.0f}</span>'
+                    f'</div>'
+                )
+            elif cloud_sym in KNOWN_STOCKS:
+                ma50_bounce_html += (
+                    f'<div class="ticker-badge new-pattern-badge">'
+                    f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{cloud_sym}</span>'
+                    f'<span class="ticker-rs" style="color: #004d26; font-weight: bold;">{cloud_rs:.0f}</span>'
+                    f'</div>'
+                )
+            else:
+                ma50_bounce_html += (
+                    f'<div class="ticker-badge">'
+                    f'<span class="ticker-name">{cloud_sym}</span>'
+                    f'<span class="ticker-rs">{cloud_rs:.0f}</span>'
+                    f'</div>'
+                )
+
         table_html += f"""<tr style="background-color: {bg_color};">
         <td style="text-align: center; color: #888; font-weight: bold;">{row_num}</td>
         <td style="font-weight: bold; color: #ffffff;">{row['Industry']}</td>
@@ -1126,7 +1187,8 @@ if all_data:
         <td>{ticker_html}</td>
         <td>{cloud_html}</td>
         <td>{cloud_21ema_html}</td>
-        <td>{cloud_wick_html}</td></tr>"""
+        <td>{cloud_wick_html}</td>
+        <td>{ma50_bounce_html}</td></tr>"""
 
     table_html += "</tbody></table>"
     st.markdown(table_html, unsafe_allow_html=True)
