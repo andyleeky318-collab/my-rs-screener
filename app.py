@@ -475,24 +475,27 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             if len(sma50_series_full) >= 2 and len(low_data[ticker]) >= 2:
                 sma50_today = sma50_series_full.iloc[-1]
                 sma50_yest  = sma50_series_full.iloc[-2]
-
-                fiftyday_percent  = (close_data[ticker].iloc[-1] - sma50_today) / sma50_today * 100
-                # truncate to 1 decimal place (mirrors Pine Script truncate())
-                fiftyday_percent2 = int(fiftyday_percent * 10) / 10
-
-                touchMA50_yest = low_data[ticker].iloc[-2] <= sma50_yest
-                recover1       = touchMA50_yest and (close_data[ticker].iloc[-1] > sma50_today)
-
-                ma50_bounce_cond = (
-                    recover1 and
-                    cond1 and
-                    fiftyday_percent2 <= 8 and
-                    ma50Rising and
-                    close_data[ticker].iloc[-1] >= 20
-                )
-
-                if ma50_bounce_cond:
-                    ma50_bounce_tickers.append(ticker)
+ 
+                if pd.isna(sma50_today) or pd.isna(sma50_yest) or sma50_today == 0:
+                    pass
+                else:
+                    fiftyday_percent  = (close_data[ticker].iloc[-1] - sma50_today) / sma50_today * 100
+                    # truncate to 1 decimal place (mirrors Pine Script truncate())
+                    fiftyday_percent2 = int(fiftyday_percent * 10) / 10
+ 
+                    touchMA50_yest = low_data[ticker].iloc[-2] <= sma50_yest
+                    recover1       = touchMA50_yest and (close_data[ticker].iloc[-1] > sma50_today)
+ 
+                    ma50_bounce_cond = (
+                        recover1 and
+                        cond1 and
+                        fiftyday_percent2 <= 8 and
+                        ma50Rising and
+                        close_data[ticker].iloc[-1] >= 20
+                    )
+ 
+                    if ma50_bounce_cond:
+                        ma50_bounce_tickers.append(ticker)
 
         # Convert dictionary metrics to Pandas Series
         rs_perf_raw = pd.Series(stock_scores).astype(int)
