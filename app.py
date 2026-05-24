@@ -1232,7 +1232,12 @@ if not historical_df.empty and len(historical_df) >= 10:
                 <span style="font-size: 0.9em; color: #888;">Structure: <b>{structure_desc}</b></span>
             </div>
             <p style="margin: 0; font-size: 0.95em; color: #e0e0e0; line-height: 1.5;">
-                <b>Breadth Matrix:</b> Current active Minervini pool rests at <b>{current_count}</b> setups (5-Day Trend Avg: {ma_short:.1f} vs 20-Day Trend Avg: {ma_long:.1f}). <br>
+                <b>Breadth Matrix:</b> Current active Minervini pool rests at 
+                <b style="color: #FFD700;">{current_count}</b> setups 
+                (5-Day Trend Avg: 
+                <b style="color: #FFD700;">{ma_short:.1f}</b> 
+                vs 20-Day Trend Avg: 
+                <b style="color: #FFD700;">{ma_long:.1f}</b>). <br>
                 <b>Tactical Playbook:</b> {action_note}
             </p>
         </div>
@@ -1242,7 +1247,7 @@ if not historical_df.empty and len(historical_df) >= 10:
 
 #st.markdown("---")
 
-st.markdown(f"### Total Count ({know_total_count})")
+#st.markdown(f"### Total Count ({know_total_count})")
 if not historical_df.empty:
     # 1. THE ORIGINAL CHART: Updated to pass the full dataframe to show 90 days instead of 30
     st.line_chart(data=historical_df, x="Date", y="Total Count", use_container_width=True)
