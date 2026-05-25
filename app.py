@@ -518,7 +518,8 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
                         cond1 and
                         fiftyday_percent2 <= 8 and
                         ma50Rising and
-                        close_data[ticker].iloc[-1] >= 20
+                        close_data[ticker].iloc[-1] >= 20 and 
+                        is_pine_7_valid
                     )
  
                     if ma50_bounce_cond:
