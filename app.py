@@ -376,6 +376,32 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             pbb_cond2 = gradient >= 0
             pbb_cond3 = True
 
+            is_pine_7_valid = False
+            if len(close_data) >= 260:
+                # 1. Moving Averages
+                sma150_series = close_data[ticker].rolling(window=150).mean()
+                sma200_series = close_data[ticker].rolling(window=200).mean()
+                
+                c_sma150 = sma150_series.iloc[-1]
+                c_sma200 = sma200_series.iloc[-1]
+                c_sma200_22 = sma200_series.iloc[-23] if len(sma200_series) >= 23 else c_sma200
+                
+                # 2. 52-Week (260 Days) Lookback Highs and Lows
+                c_highest = high_data[ticker].rolling(window=260).max().iloc[-1]
+                c_lowest = low_data[ticker].rolling(window=260).min().iloc[-1]
+                
+                # 3. Calculate 7 Flag Criteria
+                c1 = 1 if (close.iloc[-1] > c_sma150 and close.iloc[-1] > c_sma200) else 0
+                c2 = 1 if (c_sma150 > c_sma200) else 0
+                c3 = 1 if (c_sma200 > c_sma200_22) else 0
+                c4 = 1 if (sma50 > c_sma150 and sma50 > c_sma200) else 0
+                c5 = 1 if (close.iloc[-1] > sma50) else 0
+                c6 = 1 if (((close.iloc[-1] / c_lowest) - 1) * 100 >= 25) else 0
+                c7 = 1 if ((1 - (close.iloc[-1] / c_highest)) * 100 <= 25) else 0
+                
+                pine_count = c1 + c2 + c3 + c4 + c5 + c6 + c7
+                is_pine_7_valid = (pine_count == 7)
+
             # --- FINAL BUYABLE FILTER ---
             buyable = (
                 cond1 and
@@ -385,7 +411,8 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
                 pbb_cond2 and
                 (pbb_cond1 or pbb_cond3) and
                 ma50Rising and
-                close.iloc[-1] >= 20 #left count8_and_TML
+                close.iloc[-1] >= 20 and 
+                is_pine_7_valid
             )
 
             # ================================
