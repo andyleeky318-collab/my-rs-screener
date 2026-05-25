@@ -1977,6 +1977,46 @@ if extra_52wk_high_symbols or extra_52wk_high_removed:
 else:
     st.text("None")
 
+st.markdown("---")
+
+#st.write(f"Percentage of stock above EMA200: {pct_above_ema200:.2f}%")
+
+# --- LEADERS SECTION ---
+st.markdown(f"#### 🚀 RS Leaders ({len(leader_list)})")
+
+if leader_list or leader_yest:
+
+    html_leader = ""
+
+    for sym in leader_list:
+        cls = "new-pattern-badge" if sym not in leader_yest else ""
+
+        html_leader += (
+            f'<div class="ticker-badge {cls}">{sym}</div>'
+        )
+
+    # Removed leaders
+    removed_leaders = [sym for sym in leader_yest if sym not in leader_list]
+
+    for sym in sorted(removed_leaders):
+        html_leader += (
+            f'<div class="ticker-badge removed-badge">{sym}</div>'
+        )
+
+    st.markdown(html_leader, unsafe_allow_html=True)
+
+else:
+    st.info("No active RS leaders discovered.")
+
+st.write("")
+if not leader_hist.empty:
+    st.bar_chart(
+        data=leader_hist,
+        x="Date",
+        y="Leader Count",
+        use_container_width=True
+    )
+    
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
 
@@ -2143,42 +2183,3 @@ else:
     st.info("No active setups discovered.")
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
-st.markdown("---")
-
-#st.write(f"Percentage of stock above EMA200: {pct_above_ema200:.2f}%")
-
-# --- LEADERS SECTION ---
-st.markdown(f"#### 🚀 RS Leaders ({len(leader_list)})")
-
-if leader_list or leader_yest:
-
-    html_leader = ""
-
-    for sym in leader_list:
-        cls = "new-pattern-badge" if sym not in leader_yest else ""
-
-        html_leader += (
-            f'<div class="ticker-badge {cls}">{sym}</div>'
-        )
-
-    # Removed leaders
-    removed_leaders = [sym for sym in leader_yest if sym not in leader_list]
-
-    for sym in sorted(removed_leaders):
-        html_leader += (
-            f'<div class="ticker-badge removed-badge">{sym}</div>'
-        )
-
-    st.markdown(html_leader, unsafe_allow_html=True)
-
-else:
-    st.info("No active RS leaders discovered.")
-
-st.write("")
-if not leader_hist.empty:
-    st.bar_chart(
-        data=leader_hist,
-        x="Date",
-        y="Leader Count",
-        use_container_width=True
-    )
