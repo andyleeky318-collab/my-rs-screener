@@ -1566,12 +1566,107 @@ def compute_powertrend_history(stocks_list):
 
     except Exception:
         return pd.DataFrame()
-    
+
+@st.cache_data(ttl=3600)
+def compute_leader_history(stocks_list):
+    try:
+        raw_data = yf.download(list(stocks_list), period="2y", interval="1d", progress=False)
+
+        ticker_dfs = {}
+        for ticker in stocks_list:
+            if len(stocks_list) > 1:
+                df = pd.DataFrame({
+                    'Open': raw_data['Open'][ticker],
+                    'High': raw_data['High'][ticker],
+                    'Low': raw_data['Low'][ticker],
+                    'Close': raw_data['Close'][ticker],
+                    'Volume': raw_data['Volume'][ticker]
+                }).dropna()
+            else:
+                df = raw_data.dropna().copy()
+
+            if not df.empty:
+                ticker_dfs[ticker] = df
+
+        if not ticker_dfs:
+            return pd.DataFrame()
+
+        timeline = ticker_dfs[list(ticker_dfs.keys())[0]].index
+        days = min(60, len(timeline))
+
+        records = []
+
+        # Recalculate global baseline metrics for each historical day to handle the RS calculation properly
+        for i in range(days - 1, -1, -1):
+            idx = -1 - i
+            date = timeline[idx]
+
+            # 1. First pass: Collect raw RS metrics for all stocks on this specific historical day
+            day_rs_scores = {}
+            for ticker, df in ticker_dfs.items():
+                if len(df) <= abs(idx) or len(df) < 52:
+                    continue
+                
+                # Get the slice up to the historical index
+                df_slice = df.iloc[:len(df) + idx + 1] if idx != -1 else df
+                
+                close_current = df_slice['Close'].iloc[-1]
+                close_3m = df_slice['Close'].iloc[-63] if len(df_slice) >= 63 else df_slice['Close'].iloc[0]
+                close_6m = df_slice['Close'].iloc[-126] if len(df_slice) >= 126 else df_slice['Close'].iloc[0]
+                close_9m = df_slice['Close'].iloc[-189] if len(df_slice) >= 189 else df_slice['Close'].iloc[0]
+                close_12m = df_slice['Close'].iloc[-252] if len(df_slice) >= 252 else df_slice['Close'].iloc[0]
+
+                raw_rs = (close_current / close_3m * 2) + (close_current / close_6m * 1) + (close_current / close_9m * 1) + (close_current / close_12m * 1)
+                day_rs_scores[ticker] = (raw_rs, df_slice)
+
+            if not day_rs_scores:
+                continue
+
+            # 2. Second pass: Calculate percentile ranking for this day
+            raw_values = [v[0] for v in day_rs_scores.values()]
+            min_raw = min(raw_values)
+            max_raw = max(raw_values)
+            span = (max_raw - min_raw) if max_raw != min_raw else 1
+
+            count_leaders = 0
+
+            # 3. Third pass: Evaluate Leader status criteria for this historical day
+            for ticker, (raw_rs, df_slice) in day_rs_scores.items():
+                norm_rs = 1 + 98 * (raw_rs - min_raw) / span
+                
+                # Dynamic technical parameters matching your main script
+                ema21 = df_slice['Close'].ewm(span=21, adjust=False).mean().iloc[-1]
+                ema50 = df_slice['Close'].ewm(span=50, adjust=False).mean().iloc[-1]
+                sma200 = df_slice['Close'].rolling(window=200).mean().iloc[-1] if len(df_slice) >= 200 else None
+                close = df_slice['Close'].iloc[-1]
+
+                # Leader Criteria
+                is_leader = (
+                    (norm_rs >= 80) and 
+                    (ema21 > ema50) and 
+                    (sma200 is not None and close > sma200) and 
+                    (close >= 20)
+                )
+
+                if is_leader:
+                    count_leaders += 1
+
+            records.append({
+                "Date": date.strftime("%Y-%m-%d"),
+                "Leader Count": count_leaders
+            })
+
+        return pd.DataFrame(records)
+
+    except Exception:
+        return pd.DataFrame()
+        
 with st.spinner("Scanning pattern anomalies across known instruments..."):
     results = process_pattern_scanners(tuple(KNOWN_STOCKS))
     two_botak_hist = compute_two_botak_history(tuple(KNOWN_STOCKS))
     engulf_hist = compute_engulfing_history(tuple(KNOWN_STOCKS))
     powertrend_hist = compute_powertrend_history(tuple(KNOWN_STOCKS))
+    leader_hist = compute_leader_history(tuple(KNOWN_STOCKS))
     b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list, leader_list = results[:8]
     b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest, leader_yest = results[8:16]
     know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200 = results[16:]
@@ -2120,3 +2215,17 @@ if leader_list or leader_yest:
 
 else:
     st.info("No active RS leaders discovered.")
+
+# --- HISTORICAL LEADER TREND CHART ---
+#st.markdown("### 📊 Historical Leader Trend (Last 60 Days)")
+#leader_hist = compute_leader_history(ALL_STOCKS)
+st.write("")
+if not leader_hist.empty:
+    st.bar_chart(
+        data=leader_hist,
+        x="Date",
+        y="Leader Count",
+        use_container_width=True
+    )
+else:
+    st.info("Insufficient historical data to generate Leader Trend.")
