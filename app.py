@@ -711,11 +711,22 @@ def scan_leader(df, benchmark_df, lookback=0):
         twoCircles30 = circleCount30.iloc[idx] >= 2
 
         # =========================
+        # MA CONDITIONS
+        # =========================
+        sma50 = df['Close'].rolling(50).mean()
+        sma200 = df['Close'].rolling(200).mean()
+
+        sma50_now = sma50.iloc[idx]
+        sma200_now = sma200.iloc[idx]
+
+        # =========================
         # FINAL LEADER CONDITION
         # =========================
         leader_cond = (
             (twoCircles30 or rs_now == histNH_now) and
             (rs_now > rsMA_now) and
+            (close_now > sma50_now) and
+            (close_now > sma200_now) and
             (close_now >= 20)
         )
 
@@ -2079,7 +2090,7 @@ else:
     st.info("No active setups discovered.")
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
-#st.markdown("---")
+st.markdown("---")
 
 #st.write(f"Percentage of stock above EMA200: {pct_above_ema200:.2f}%")
 
