@@ -673,10 +673,71 @@ def scan_ppp(df, lookback=0):
     )
     return bool(ppp.iloc[idx])
 
+def scan_leader(df, benchmark_df, lookback=0):
+    idx = -1 - lookback
+
+    if len(df) < 250 + lookback or len(benchmark_df) < 250 + lookback:
+        return False
+
+    try:
+        # =========================
+        # MATCH PINE SCRIPT LOGIC
+        # =========================
+
+        # RS Curve
+        rs = df['Close'] / benchmark_df['Close']
+
+        # RS Moving Average
+        rsMA = rs.ewm(span=21, adjust=False).mean()
+
+        # Historical RS High
+        histNH = rs.rolling(250).max()
+
+        # Current values
+        rs_now = rs.iloc[idx]
+        rsMA_now = rsMA.iloc[idx]
+        histNH_now = histNH.iloc[idx]
+        close_now = df['Close'].iloc[idx]
+
+        # =========================
+        # circleCond
+        # =========================
+        circleCond = rs == histNH
+
+        # =========================
+        # twoCircles30
+        # =========================
+        circleCount30 = circleCond.rolling(30).sum()
+        twoCircles30 = circleCount30.iloc[idx] >= 2
+
+        # =========================
+        # FINAL LEADER CONDITION
+        # =========================
+        leader_cond = (
+            (twoCircles30 or rs_now == histNH_now) and
+            (rs_now > rsMA_now) and
+            (close_now >= 20)
+        )
+
+        return bool(leader_cond)
+
+    except:
+        return False
+    
 @st.cache_data(ttl=3600)
 def process_pattern_scanners(stocks_list):
     try:
-        raw_data = yf.download(stocks_list, period="2y", interval="1d", progress=False)
+        #raw_data = yf.download(stocks_list, period="2y", interval="1d", progress=False)
+        benchmark_symbol = "^GSPC"
+
+        all_symbols = list(stocks_list) + [benchmark_symbol]
+
+        raw_data = yf.download(
+            all_symbols,
+            period="2y",
+            interval="1d",
+            progress=False
+        )
         
         # Today's Matches
         botak_matches = []
@@ -686,6 +747,7 @@ def process_pattern_scanners(stocks_list):
         powertrend_ne_matches = []
         value_trap_matches = []
         ppp_matches = []
+        leader_matches = []
         
         # Yesterday's Matches (for color logic)
         botak_yest = []
@@ -695,6 +757,7 @@ def process_pattern_scanners(stocks_list):
         powertrend_ne_yest = []
         value_trap_yest = []
         ppp_yest = []
+        leader_yest = []
 
         # Initialize internal metrics tracking variables
         # --- Inside process_pattern_scanners loop setup ---
@@ -811,6 +874,13 @@ def process_pattern_scanners(stocks_list):
                     elif total_yesterday >= 10:
                         email_content_removed.append(ticker)
 
+                # =========================
+                # BENCHMARK DATAFRAME
+                # =========================
+                benchmark_df = pd.DataFrame({
+                    'Close': raw_data['Close'][benchmark_symbol]
+                }).dropna()
+
                 # Scan Today
                 if scan_two_botak(ticker_df, 0): botak_matches.append(ticker)
                 e2, e3 = scan_engulfing(ticker_df, 0)
@@ -820,6 +890,8 @@ def process_pattern_scanners(stocks_list):
                 if scan_powertrend_not_extended(ticker_df, 0): powertrend_ne_matches.append(ticker)
                 if scan_value_trap(ticker_df, 0): value_trap_matches.append(ticker)
                 if scan_ppp(ticker_df, 0): ppp_matches.append(ticker)
+                if scan_leader(ticker_df, benchmark_df, 0):
+                    leader_matches.append(ticker)
 
                 # Scan Yesterday
                 if scan_two_botak(ticker_df, 1): botak_yest.append(ticker)
@@ -830,6 +902,8 @@ def process_pattern_scanners(stocks_list):
                 if scan_powertrend_not_extended(ticker_df, 1): powertrend_ne_yest.append(ticker)
                 if scan_value_trap(ticker_df, 1): value_trap_yest.append(ticker)
                 if scan_ppp(ticker_df, 1): ppp_yest.append(ticker)
+                if scan_leader(ticker_df, benchmark_df, 1):
+                    leader_yest.append(ticker)
 
             except:
                 continue
@@ -841,16 +915,41 @@ def process_pattern_scanners(stocks_list):
         powertrend_ne_matches.sort()
         value_trap_matches.sort()
         ppp_matches.sort()
+        leader_matches.sort()
         
         know_pos_pct = (know_positive_count / know_total_count * 100) if know_total_count > 0 else 0
         pct_above_ema200 = (ema200_above_count / ema200_total_count * 100) if ema200_total_count > 0 else 0
         
-        return (botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, value_trap_matches, ppp_matches,
-                botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, value_trap_yest, ppp_yest, 
-                know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed,
-                extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200)
+        return (
+            botak_matches,
+            engulf2_matches,
+            engulf3_matches,
+            powertrend_matches,
+            powertrend_ne_matches,
+            value_trap_matches,
+            ppp_matches,
+            leader_matches,
+
+            botak_yest,
+            engulf2_yest,
+            engulf3_yest,
+            powertrend_yest,
+            powertrend_ne_yest,
+            value_trap_yest,
+            ppp_yest,
+            leader_yest,
+
+            know_pos_pct,
+            know_positive_count,
+            know_total_count,
+            email_content_stocks,
+            email_content_removed,
+            extra_52wk_high_symbols,
+            extra_52wk_high_removed,
+            pct_above_ema200
+        )
     except:
-        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, [], [], [], [], 0
+        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, [], [], [], [], 0
 
 # 5. UI Layout & Logic
 #st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
@@ -1462,9 +1561,9 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
     two_botak_hist = compute_two_botak_history(tuple(KNOWN_STOCKS))
     engulf_hist = compute_engulfing_history(tuple(KNOWN_STOCKS))
     powertrend_hist = compute_powertrend_history(tuple(KNOWN_STOCKS))
-    b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list = results[:7]
-    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:14]
-    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200 = results[14:]
+    b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list, leader_list = results[:8]
+    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest, leader_yest = results[8:16]
+    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200 = results[16:]
 
 st.markdown("---")
 
@@ -1984,3 +2083,29 @@ else:
 
 #st.write(f"Percentage of stock above EMA200: {pct_above_ema200:.2f}%")
 
+# --- LEADERS SECTION ---
+st.markdown(f"#### 🚀 RS Leaders ({len(leader_list)})")
+
+if leader_list or leader_yest:
+
+    html_leader = ""
+
+    for sym in leader_list:
+        cls = "new-pattern-badge" if sym not in leader_yest else ""
+
+        html_leader += (
+            f'<div class="ticker-badge {cls}">{sym}</div>'
+        )
+
+    # Removed leaders
+    removed_leaders = [sym for sym in leader_yest if sym not in leader_list]
+
+    for sym in sorted(removed_leaders):
+        html_leader += (
+            f'<div class="ticker-badge removed-badge">{sym}</div>'
+        )
+
+    st.markdown(html_leader, unsafe_allow_html=True)
+
+else:
+    st.info("No active RS leaders discovered.")
