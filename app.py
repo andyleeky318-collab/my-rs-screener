@@ -2102,37 +2102,10 @@ if leader_list or leader_yest:
     html_leader = ""
 
     for sym in leader_list:
-
         cls = "new-pattern-badge" if sym not in leader_yest else ""
 
-        # =========================
-        # LIME CORNER ACCENT
-        # =========================
-        lime_corner = ""
-
-        if sym in KNOWN_STOCKS:
-            lime_corner = """
-            <span style="
-                position:absolute;
-                top:0;
-                right:0;
-                width:0;
-                height:0;
-                border-top:10px solid lime;
-                border-left:10px solid transparent;
-            "></span>
-            """
-
         html_leader += (
-            f'''
-            <div class="ticker-badge {cls}" style="
-                position:relative;
-                overflow:hidden;
-            ">
-                {lime_corner}
-                {sym}
-            </div>
-            '''
+            f'<div class="ticker-badge {cls}">{sym}</div>'
         )
 
     # Removed leaders
