@@ -796,18 +796,8 @@ def download_known_stocks_data(stocks_tuple):
 @st.cache_data(ttl=3600)
 def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
     try:
-        #raw_data = yf.download(stocks_list, period="2y", interval="1d", progress=False)
         benchmark_symbol = "^GSPC"
 
-        all_symbols = list(stocks_list) + [benchmark_symbol]
-
-        raw_data = yf.download(
-            all_symbols,
-            period="2y",
-            interval="1d",
-            progress=False
-        )
-        
         # Today's Matches
         botak_matches = []
         engulf2_matches = []
@@ -1359,8 +1349,6 @@ if all_data:
 @st.cache_data(ttl=3600)
 def compute_two_botak_history(stocks_list, ticker_dfs):
     try:
-        pass
-
         if not ticker_dfs:
             return pd.DataFrame()
 
@@ -1424,8 +1412,6 @@ def compute_two_botak_history(stocks_list, ticker_dfs):
 @st.cache_data(ttl=3600)
 def compute_engulfing_history(stocks_list, ticker_dfs):
     try:
-        pass
-
         if not ticker_dfs:
             return pd.DataFrame()
 
@@ -1512,7 +1498,8 @@ def compute_engulfing_history(stocks_list, ticker_dfs):
 @st.cache_data(ttl=3600)
 def compute_powertrend_history(stocks_list, ticker_dfs):
     try:
-        pass
+        if not ticker_dfs:
+            return pd.DataFrame()
 
         timeline = ticker_dfs[list(ticker_dfs.keys())[0]].index
         days = min(60, len(timeline))
@@ -1563,8 +1550,6 @@ def compute_powertrend_history(stocks_list, ticker_dfs):
 @st.cache_data(ttl=3600)
 def compute_leader_history(stocks_list, ticker_dfs, benchmark_df_leader):
     try:
-        pass
-
         if not ticker_dfs:
             return pd.DataFrame()
 
@@ -1590,13 +1575,14 @@ def compute_leader_history(stocks_list, ticker_dfs, benchmark_df_leader):
 
     except Exception:
         return pd.DataFrame()
-
+    
 # ==============================================================================
 # 8. HISTORICAL KNOW_TOTAL_COUNT 30-DAY CHART (Completely New Logic at Bottom)
 # ==============================================================================
 @st.cache_data(ttl=3600)
 def compute_historical_know_counts(stocks_list, ticker_dfs):
     try:
+        # Attach SMA columns needed by this function only (non-destructive copy)
         enriched_dfs = {}
         for ticker, df in ticker_dfs.items():
             if len(df) >= 261:
@@ -1604,7 +1590,7 @@ def compute_historical_know_counts(stocks_list, ticker_dfs):
                 df2["SMA_50"]  = round(df2['Close'].rolling(window=50).mean(), 2)
                 df2["SMA_200"] = round(df2['Close'].rolling(window=200).mean(), 2)
                 enriched_dfs[ticker] = df2
-        ticker_dfs = enriched_dfs
+        ticker_dfs = enriched_dfs  # shadow with enriched version for rest of function
 
         if not ticker_dfs:
             return pd.DataFrame()
@@ -1669,30 +1655,27 @@ def compute_historical_know_counts(stocks_list, ticker_dfs):
         return pd.DataFrame(historical_records)
     except Exception as e:
         return pd.DataFrame()
-    
-# AFTER
+
+# ============================================================
+# SINGLE DOWNLOAD + SPINNER: all compute fns share one fetch
+# ============================================================
 stocks_tuple = tuple(KNOWN_STOCKS)
 
-# Single download — all history fns share this
+# Single download — all history fns share this cached result
 ticker_dfs_shared, benchmark_df_shared = download_known_stocks_data(stocks_tuple)
 
 with st.spinner("Scanning pattern anomalies across known instruments..."):
-    results          = process_pattern_scanners(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
-    historical_df    = compute_historical_know_counts(stocks_tuple, ticker_dfs_shared)  # moved here: renders first
-    two_botak_hist   = compute_two_botak_history(stocks_tuple, ticker_dfs_shared)
-    engulf_hist      = compute_engulfing_history(stocks_tuple, ticker_dfs_shared)
-    powertrend_hist  = compute_powertrend_history(stocks_tuple, ticker_dfs_shared)
-    leader_hist      = compute_leader_history(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
+    results         = process_pattern_scanners(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
+    historical_df   = compute_historical_know_counts(stocks_tuple, ticker_dfs_shared)   # moved here: renders first
+    two_botak_hist  = compute_two_botak_history(stocks_tuple, ticker_dfs_shared)
+    engulf_hist     = compute_engulfing_history(stocks_tuple, ticker_dfs_shared)
+    powertrend_hist = compute_powertrend_history(stocks_tuple, ticker_dfs_shared)
+    leader_hist     = compute_leader_history(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
     b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list, leader_list = results[:8]
     b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest, leader_yest = results[8:16]
     know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200 = results[16:]
 
 st.markdown("---")
-
-
-
-# Process full 90-day data asset
-#historical_df = compute_historical_know_counts(tuple(KNOWN_STOCKS))
 
 # ==============================================================================
 # 9. AUTOMATED BREADTH MARKET REGIME INTERPRETATION
