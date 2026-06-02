@@ -1999,7 +1999,7 @@ if not leader_hist.empty:
         color="Bar_Color",  # Direct Streamlit to read colors line-by-line from this column
         use_container_width=True
     )
-    
+
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
 
@@ -2113,11 +2113,37 @@ else:
     st.text("None")
 
 st.write("")
+# if not powertrend_hist.empty:
+#     st.bar_chart(
+#         data=powertrend_hist,
+#         x="Date",
+#         y="PowerTrend Count",
+#         use_container_width=True
+#     )
+
 if not powertrend_hist.empty:
+    # 1. Create a temporary copy to prevent altering your original dataframe
+    chart_df = powertrend_hist.copy()
+    
+    # 2. Determine if the most recent row (today) holds the absolute maximum value
+    today_value = chart_df["PowerTrend Count"].iloc[-1]
+    max_value = chart_df["PowerTrend Count"].max()
+    
+    # 3. Add an explicit 'Bar_Color' column to your dataframe
+    if today_value == max_value:
+        # Define base color, then override the last row (today) with your accent color
+        chart_df["Bar_Color"] = "#29B5E8"
+        chart_df.iloc[-1, chart_df.columns.get_loc("Bar_Color")] = "#FF4B4B"
+    else:
+        # Standard uniform blue color if today isn't the highest
+        chart_df["Bar_Color"] = "#29B5E8"
+
+    # 4. Render chart mapping color directly to the new dataframe column
     st.bar_chart(
-        data=powertrend_hist,
+        data=chart_df,
         x="Date",
         y="PowerTrend Count",
+        color="Bar_Color",  # Direct Streamlit to read colors line-by-line from this column
         use_container_width=True
     )
 
