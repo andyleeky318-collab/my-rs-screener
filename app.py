@@ -1966,11 +1966,33 @@ else:
     st.info("No active RS leaders discovered.")
 
 st.write("")
+# if not leader_hist.empty:
+#     st.bar_chart(
+#         data=leader_hist,
+#         x="Date",
+#         y="Leader Count",
+#         use_container_width=True
+#     )
+
 if not leader_hist.empty:
+    # 1. Determine if the most recent row (today) holds the absolute maximum value
+    today_value = leader_hist["Leader Count"].iloc[-1]
+    max_value = leader_hist["Leader Count"].max()
+    
+    # 2. Assign bar color rule dynamically based on your condition
+    if today_value == max_value:
+        # Create a mapping list: highlight the final element, color others standard blue
+        bar_colors = ["#29B5E8"] * (len(leader_hist) - 1) + ["#FF4B4B"]
+    else:
+        # Standard uniform blue color if today isn't the highest
+        bar_colors = "#29B5E8"
+
+    # 3. Render chart with native color mapping configuration
     st.bar_chart(
         data=leader_hist,
         x="Date",
         y="Leader Count",
+        color=bar_colors,  # Passes the dynamic custom styling array
         use_container_width=True
     )
     
