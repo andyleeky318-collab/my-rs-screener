@@ -1666,16 +1666,19 @@ ticker_dfs_shared, benchmark_df_shared = download_known_stocks_data(stocks_tuple
 
 with st.spinner("Scanning pattern anomalies across known instruments..."):
     results         = process_pattern_scanners(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
-    historical_df   = compute_historical_know_counts(stocks_tuple, ticker_dfs_shared)   # moved here: renders first
-    two_botak_hist  = compute_two_botak_history(stocks_tuple, ticker_dfs_shared)
-    engulf_hist     = compute_engulfing_history(stocks_tuple, ticker_dfs_shared)
-    powertrend_hist = compute_powertrend_history(stocks_tuple, ticker_dfs_shared)
-    leader_hist     = compute_leader_history(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
+    # historical_df   = compute_historical_know_counts(stocks_tuple, ticker_dfs_shared)   # moved here: renders first
+    # two_botak_hist  = compute_two_botak_history(stocks_tuple, ticker_dfs_shared)
+    # engulf_hist     = compute_engulfing_history(stocks_tuple, ticker_dfs_shared)
+    # powertrend_hist = compute_powertrend_history(stocks_tuple, ticker_dfs_shared)
+    # leader_hist     = compute_leader_history(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
     b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list, leader_list = results[:8]
     b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest, leader_yest = results[8:16]
     know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200 = results[16:]
 
 st.markdown("---")
+
+with st.spinner("Computing Historical Known Counts..."):
+    historical_df = compute_historical_know_counts(stocks_tuple, ticker_dfs_shared)
 
 # ==============================================================================
 # 9. AUTOMATED BREADTH MARKET REGIME INTERPRETATION
@@ -1930,6 +1933,9 @@ else:
 
 st.markdown("---")
 
+with st.spinner("Scanning for Leader History..."):
+    leader_hist = compute_leader_history(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
+
 #st.write(f"Percentage of stock above EMA200: {pct_above_ema200:.2f}%")
 
 # --- LEADERS SECTION ---
@@ -1971,6 +1977,9 @@ if not leader_hist.empty:
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
 
+with st.spinner("📉 Scanning for Two Botak History..."):
+    two_botak_hist = compute_two_botak_history(stocks_tuple, ticker_dfs_shared)
+
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
 st.markdown(f"#### 🔥 Two Botak = Awareness short term group burst ({len(b_list)})")
 if b_list or b_yest:
@@ -2003,6 +2012,9 @@ if not two_botak_hist.empty:
     )
 
 st.markdown("---")
+
+with st.spinner("Scanning for Bullish Engulfing History..."):
+    engulf_hist = compute_engulfing_history(stocks_tuple, ticker_dfs_shared)
 
 # --- 3. BULLISH ENGULFING (Full Horizontal Row Below Tight PPP) ---
 total_engulf = len(e2_list) + len(e3_list)
@@ -2053,6 +2065,9 @@ if not engulf_hist.empty:
 #st.markdown("### 📊 Extra Trend Metrics (PowerTrend Indicators)")
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
+
+with st.spinner("Scanning for PowerTrend History..."):
+    powertrend_hist = compute_powertrend_history(stocks_tuple, ticker_dfs_shared)
 
 # --- 4. POWERTREND (Full Horizontal Row) ---
 st.markdown(f"#### ⚡ PowerTrend = Awareness thematic leaders extended ({len(pt_list)})")
