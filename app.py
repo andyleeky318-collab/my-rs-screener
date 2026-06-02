@@ -762,9 +762,39 @@ def scan_leader(df, benchmark_df, lookback=0):
 
     except:
         return False
-    
+
+# ============================================================
+# SHARED DOWNLOAD: runs once, feeds all history compute fns
+# ============================================================
 @st.cache_data(ttl=3600)
-def process_pattern_scanners(stocks_list):
+def download_known_stocks_data(stocks_tuple):
+    benchmark_symbol = "^GSPC"
+    all_symbols = list(stocks_tuple) + [benchmark_symbol]
+    raw_data = yf.download(all_symbols, period="2y", interval="1d", progress=False)
+
+    ticker_dfs = {}
+    for ticker in stocks_tuple:
+        try:
+            df = pd.DataFrame({
+                'Open':   raw_data['Open'][ticker],
+                'High':   raw_data['High'][ticker],
+                'Low':    raw_data['Low'][ticker],
+                'Close':  raw_data['Close'][ticker],
+                'Volume': raw_data['Volume'][ticker]
+            }).dropna()
+            if not df.empty:
+                ticker_dfs[ticker] = df
+        except Exception:
+            continue
+
+    benchmark_df = pd.DataFrame({
+        'Close': raw_data['Close'][benchmark_symbol]
+    }).dropna()
+
+    return ticker_dfs, benchmark_df
+
+@st.cache_data(ttl=3600)
+def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
     try:
         #raw_data = yf.download(stocks_list, period="2y", interval="1d", progress=False)
         benchmark_symbol = "^GSPC"
@@ -811,18 +841,8 @@ def process_pattern_scanners(stocks_list):
 
         for ticker in stocks_list:
             try:
-                if len(stocks_list) > 1:
-                    ticker_df = pd.DataFrame({
-                        'Open': raw_data['Open'][ticker],
-                        'High': raw_data['High'][ticker],
-                        'Low': raw_data['Low'][ticker],
-                        'Close': raw_data['Close'][ticker],
-                        'Volume': raw_data['Volume'][ticker]
-                    }).dropna()
-                else:
-                    ticker_df = raw_data.dropna().copy()
-                
-                if ticker_df.empty or len(ticker_df) < 50:
+                ticker_df = ticker_dfs.get(ticker)
+                if ticker_df is None or ticker_df.empty or len(ticker_df) < 50:
                     continue
 
                 # Calculate EMA 200 for the current stock
@@ -916,9 +936,7 @@ def process_pattern_scanners(stocks_list):
                 # =========================
                 # BENCHMARK DATAFRAME
                 # =========================
-                benchmark_df = pd.DataFrame({
-                    'Close': raw_data['Close'][benchmark_symbol]
-                }).dropna()
+                benchmark_df = benchmark_df_input
 
                 # Scan Today
                 if scan_two_botak(ticker_df, 0): botak_matches.append(ticker)
@@ -1339,25 +1357,9 @@ if all_data:
 #st.markdown("### 🔍 Technical Pattern Screener (KNOWN_STOCKS Database)")
 
 @st.cache_data(ttl=3600)
-def compute_two_botak_history(stocks_list):
+def compute_two_botak_history(stocks_list, ticker_dfs):
     try:
-        chart_raw_data = yf.download(list(stocks_list), period="2y", interval="1d", progress=False)
-
-        ticker_dfs = {}
-        for ticker in stocks_list:
-            if len(stocks_list) > 1:
-                t_df = pd.DataFrame({
-                    'Open': chart_raw_data['Open'][ticker],
-                    'High': chart_raw_data['High'][ticker],
-                    'Low': chart_raw_data['Low'][ticker],
-                    'Close': chart_raw_data['Close'][ticker],
-                    'Volume': chart_raw_data['Volume'][ticker]
-                }).dropna()
-            else:
-                t_df = chart_raw_data.dropna().copy()
-
-            if not t_df.empty:
-                ticker_dfs[ticker] = t_df
+        pass
 
         if not ticker_dfs:
             return pd.DataFrame()
@@ -1420,26 +1422,9 @@ def compute_two_botak_history(stocks_list):
         return pd.DataFrame()
 
 @st.cache_data(ttl=3600)
-def compute_engulfing_history(stocks_list):
+def compute_engulfing_history(stocks_list, ticker_dfs):
     try:
-        raw_data = yf.download(list(stocks_list), period="2y", interval="1d", progress=False)
-
-        ticker_dfs = {}
-
-        for ticker in stocks_list:
-            if len(stocks_list) > 1:
-                df = pd.DataFrame({
-                    'Open': raw_data['Open'][ticker],
-                    'High': raw_data['High'][ticker],
-                    'Low': raw_data['Low'][ticker],
-                    'Close': raw_data['Close'][ticker],
-                    'Volume': raw_data['Volume'][ticker]
-                }).dropna()
-            else:
-                df = raw_data.dropna().copy()
-
-            if not df.empty:
-                ticker_dfs[ticker] = df
+        pass
 
         if not ticker_dfs:
             return pd.DataFrame()
@@ -1525,29 +1510,9 @@ def compute_engulfing_history(stocks_list):
         return pd.DataFrame()
     
 @st.cache_data(ttl=3600)
-def compute_powertrend_history(stocks_list):
+def compute_powertrend_history(stocks_list, ticker_dfs):
     try:
-        raw_data = yf.download(list(stocks_list), period="2y", interval="1d", progress=False)
-
-        ticker_dfs = {}
-
-        for ticker in stocks_list:
-            if len(stocks_list) > 1:
-                df = pd.DataFrame({
-                    'Open': raw_data['Open'][ticker],
-                    'High': raw_data['High'][ticker],
-                    'Low': raw_data['Low'][ticker],
-                    'Close': raw_data['Close'][ticker],
-                    'Volume': raw_data['Volume'][ticker]
-                }).dropna()
-            else:
-                df = raw_data.dropna().copy()
-
-            if not df.empty:
-                ticker_dfs[ticker] = df
-
-        if not ticker_dfs:
-            return pd.DataFrame()
+        pass
 
         timeline = ticker_dfs[list(ticker_dfs.keys())[0]].index
         days = min(60, len(timeline))
@@ -1596,30 +1561,9 @@ def compute_powertrend_history(stocks_list):
         return pd.DataFrame()
 
 @st.cache_data(ttl=3600)
-def compute_leader_history(stocks_list):
+def compute_leader_history(stocks_list, ticker_dfs, benchmark_df_leader):
     try:
-        benchmark_symbol = "^GSPC"
-        all_symbols = list(stocks_list) + [benchmark_symbol]
-        raw_data = yf.download(all_symbols, period="2y", interval="1d", progress=False)
-
-        ticker_dfs = {}
-        for ticker in stocks_list:
-            if len(stocks_list) > 1:
-                df = pd.DataFrame({
-                    'Open': raw_data['Open'][ticker],
-                    'High': raw_data['High'][ticker],
-                    'Low': raw_data['Low'][ticker],
-                    'Close': raw_data['Close'][ticker],
-                    'Volume': raw_data['Volume'][ticker]
-                }).dropna()
-            else:
-                df = raw_data.dropna().copy()
-            if not df.empty:
-                ticker_dfs[ticker] = df
-
-        benchmark_df_leader = pd.DataFrame({
-            'Close': raw_data['Close'][benchmark_symbol]
-        }).dropna()
+        pass
 
         if not ticker_dfs:
             return pd.DataFrame()
@@ -1646,46 +1590,21 @@ def compute_leader_history(stocks_list):
 
     except Exception:
         return pd.DataFrame()
-    
-with st.spinner("Scanning pattern anomalies across known instruments..."):
-    results = process_pattern_scanners(tuple(KNOWN_STOCKS))
-    two_botak_hist = compute_two_botak_history(tuple(KNOWN_STOCKS))
-    engulf_hist = compute_engulfing_history(tuple(KNOWN_STOCKS))
-    powertrend_hist = compute_powertrend_history(tuple(KNOWN_STOCKS))
-    leader_hist = compute_leader_history(tuple(KNOWN_STOCKS))
-    b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list, leader_list = results[:8]
-    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest, leader_yest = results[8:16]
-    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200 = results[16:]
-
-st.markdown("---")
 
 # ==============================================================================
 # 8. HISTORICAL KNOW_TOTAL_COUNT 30-DAY CHART (Completely New Logic at Bottom)
 # ==============================================================================
 @st.cache_data(ttl=3600)
-def compute_historical_know_counts(stocks_list):
+def compute_historical_know_counts(stocks_list, ticker_dfs):
     try:
-        # Download historical data spanning long enough timeline to process 52w highs and 90-day index shifts safely
-        chart_raw_data = yf.download(list(stocks_list), period="2y", interval="1d", progress=False)
-        
-        # Isolate individual ticker structures into isolated dataframes matching your setup logic
-        ticker_dfs = {}
-        for ticker in stocks_list:
-            if len(stocks_list) > 1:
-                t_df = pd.DataFrame({
-                    'Open': chart_raw_data['Open'][ticker],
-                    'High': chart_raw_data['High'][ticker],
-                    'Low': chart_raw_data['Low'][ticker],
-                    'Close': chart_raw_data['Close'][ticker],
-                    'Volume': chart_raw_data['Volume'][ticker]
-                }).dropna()
-            else:
-                t_df = chart_raw_data.dropna().copy()
-            
-            if not t_df.empty and len(t_df) >= 261:
-                t_df["SMA_50"] = round(t_df['Close'].rolling(window=50).mean(), 2)
-                t_df["SMA_200"] = round(t_df['Close'].rolling(window=200).mean(), 2)
-                ticker_dfs[ticker] = t_df
+        enriched_dfs = {}
+        for ticker, df in ticker_dfs.items():
+            if len(df) >= 261:
+                df2 = df.copy()
+                df2["SMA_50"]  = round(df2['Close'].rolling(window=50).mean(), 2)
+                df2["SMA_200"] = round(df2['Close'].rolling(window=200).mean(), 2)
+                enriched_dfs[ticker] = df2
+        ticker_dfs = enriched_dfs
 
         if not ticker_dfs:
             return pd.DataFrame()
@@ -1750,9 +1669,30 @@ def compute_historical_know_counts(stocks_list):
         return pd.DataFrame(historical_records)
     except Exception as e:
         return pd.DataFrame()
+    
+# AFTER
+stocks_tuple = tuple(KNOWN_STOCKS)
+
+# Single download — all history fns share this
+ticker_dfs_shared, benchmark_df_shared = download_known_stocks_data(stocks_tuple)
+
+with st.spinner("Scanning pattern anomalies across known instruments..."):
+    results          = process_pattern_scanners(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
+    historical_df    = compute_historical_know_counts(stocks_tuple, ticker_dfs_shared)  # moved here: renders first
+    two_botak_hist   = compute_two_botak_history(stocks_tuple, ticker_dfs_shared)
+    engulf_hist      = compute_engulfing_history(stocks_tuple, ticker_dfs_shared)
+    powertrend_hist  = compute_powertrend_history(stocks_tuple, ticker_dfs_shared)
+    leader_hist      = compute_leader_history(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
+    b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list, leader_list = results[:8]
+    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest, leader_yest = results[8:16]
+    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200 = results[16:]
+
+st.markdown("---")
+
+
 
 # Process full 90-day data asset
-historical_df = compute_historical_know_counts(tuple(KNOWN_STOCKS))
+#historical_df = compute_historical_know_counts(tuple(KNOWN_STOCKS))
 
 # ==============================================================================
 # 9. AUTOMATED BREADTH MARKET REGIME INTERPRETATION
