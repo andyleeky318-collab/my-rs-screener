@@ -1975,24 +1975,28 @@ st.write("")
 #     )
 
 if not leader_hist.empty:
-    # 1. Determine if the most recent row (today) holds the absolute maximum value
-    today_value = leader_hist["Leader Count"].iloc[-1]
-    max_value = leader_hist["Leader Count"].max()
+    # 1. Create a temporary copy to prevent altering your original global dataframe
+    chart_df = leader_hist.copy()
     
-    # 2. Assign bar color rule dynamically based on your condition
+    # 2. Determine if the most recent row (today) holds the absolute maximum value
+    today_value = chart_df["Leader Count"].iloc[-1]
+    max_value = chart_df["Leader Count"].max()
+    
+    # 3. Add a explicit 'Bar_Color' column to your dataframe
     if today_value == max_value:
-        # Create a mapping list: highlight the final element, color others standard blue
-        bar_colors = ["#29B5E8"] * (len(leader_hist) - 1) + ["#FF4B4B"]
+        # Define base color array, then override the last row (today) with your accent color
+        chart_df["Bar_Color"] = "#29B5E8"
+        chart_df.iloc[-1, chart_df.columns.get_loc("Bar_Color")] = "#FF4B4B"
     else:
         # Standard uniform blue color if today isn't the highest
-        bar_colors = "#29B5E8"
+        chart_df["Bar_Color"] = "#29B5E8"
 
-    # 3. Render chart with native color mapping configuration
+    # 4. Render chart mapping color directly to the new dataframe column
     st.bar_chart(
-        data=leader_hist,
+        data=chart_df,
         x="Date",
         y="Leader Count",
-        color=bar_colors,  # Passes the dynamic custom styling array
+        color="Bar_Color",  # Direct Streamlit to read colors line-by-line from this column
         use_container_width=True
     )
     
