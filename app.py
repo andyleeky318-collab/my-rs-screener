@@ -2087,23 +2087,23 @@ if e2_list or e3_list or e2_yest or e3_yest:
             
         st.markdown(html_e2, unsafe_allow_html=True)
     
-    st.write("")
-    if len(e3_list) == 0 and len(e3_yest) == 0:
-        st.markdown("**3x Engulfing Conditions Matched (0):**")
-        st.text("None") # Optional: explicit visual feedback for an empty scanner
-    elif e3_list or e3_yest:
-        st.markdown(f"<div style='margin-top:10px;'><b>3x Engulfing Conditions Matched ({len(e3_list)}):</b></div>", unsafe_allow_html=True)
-        html_e3 = ""
-        for sym in e3_list:
-            cls = "new-pattern-badge" if sym not in e3_yest else ""
-            html_e3 += f'<div class="ticker-badge {cls}">{sym}</div>'
+    # st.write("")
+    # if len(e3_list) == 0 and len(e3_yest) == 0:
+    #     st.markdown("**3x Engulfing Conditions Matched (0):**")
+    #     #st.text("None") # Optional: explicit visual feedback for an empty scanner
+    # if e3_list or e3_yest:
+    #     st.markdown(f"<div style='margin-top:10px;'><b>3x Engulfing Conditions Matched ({len(e3_list)}):</b></div>", unsafe_allow_html=True)
+    #     html_e3 = ""
+    #     for sym in e3_list:
+    #         cls = "new-pattern-badge" if sym not in e3_yest else ""
+    #         html_e3 += f'<div class="ticker-badge {cls}">{sym}</div>'
             
-        # Process and append removed 3x engulfing stocks
-        removed_e3 = [sym for sym in e3_yest if sym not in e3_list]
-        for sym in sorted(removed_e3):
-            html_e3 += f'<div class="ticker-badge removed-badge">{sym}</div>'
+    #     # Process and append removed 3x engulfing stocks
+    #     removed_e3 = [sym for sym in e3_yest if sym not in e3_list]
+    #     for sym in sorted(removed_e3):
+    #         html_e3 += f'<div class="ticker-badge removed-badge">{sym}</div>'
             
-        st.markdown(html_e3, unsafe_allow_html=True)
+    #     st.markdown(html_e3, unsafe_allow_html=True)
 else:
     st.info("No active setups discovered.")
 
@@ -2136,6 +2136,28 @@ if not engulf_hist.empty:
         use_container_width=True
     )
 
+if e3_list or e3_yest:
+    st.write("")
+    if len(e3_list) == 0 and len(e3_yest) == 0:
+        st.markdown("**3x Engulfing Conditions Matched (0):**")
+        #st.text("None") # Optional: explicit visual feedback for an empty scanner
+    elif e3_list or e3_yest:
+        st.markdown(f"<div style='margin-top:10px;'><b>3x Engulfing Conditions Matched ({len(e3_list)}):</b></div>", unsafe_allow_html=True)
+        html_e3 = ""
+        for sym in e3_list:
+            cls = "new-pattern-badge" if sym not in e3_yest else ""
+            html_e3 += f'<div class="ticker-badge {cls}">{sym}</div>'
+            
+        # Process and append removed 3x engulfing stocks
+        removed_e3 = [sym for sym in e3_yest if sym not in e3_list]
+        for sym in sorted(removed_e3):
+            html_e3 += f'<div class="ticker-badge removed-badge">{sym}</div>'
+            
+        st.markdown(html_e3, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
+
+if not engulf_hist.empty:
     # --- 2. 3x Engulfing Chart ---
     chart_df_3x = engulf_hist.copy()
     today_3x = chart_df_3x["3x Engulfing Count"].iloc[-1]
