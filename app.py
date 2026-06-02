@@ -2088,7 +2088,9 @@ if e2_list or e3_list or e2_yest or e3_yest:
         st.markdown(html_e2, unsafe_allow_html=True)
     
     st.write("")
-    if e3_list or e3_yest:
+    if e3_list == 0:
+        st.markdown("**3x Engulfing Conditions Matched (0):**")
+    elif e3_list or e3_yest:
         st.markdown(f"<div style='margin-top:10px;'><b>3x Engulfing Conditions Matched ({len(e3_list)}):</b></div>", unsafe_allow_html=True)
         html_e3 = ""
         for sym in e3_list:
@@ -2152,7 +2154,7 @@ if not engulf_hist.empty:
         color="Bar_Color",
         use_container_width=True
     )
-    
+
 # --- EXTRA TREND METRICS (Stacked Horizontally Below Patterns) ---
 #st.markdown("---")
 #st.markdown("### 📊 Extra Trend Metrics (PowerTrend Indicators)")
