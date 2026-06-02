@@ -2028,15 +2028,41 @@ else:
 st.write("")
 
 # ===================== TWO BOTAK 60-DAY BREADTH CHART =====================
+# if not two_botak_hist.empty:
+#     #st.markdown("#### 📊 Two Botak Breadth (60 Days)")
+#     st.bar_chart(
+#         data=two_botak_hist,
+#         x="Date",
+#         y="Two Botak Count",
+#         use_container_width=True
+#     )
+
 if not two_botak_hist.empty:
-    #st.markdown("#### 📊 Two Botak Breadth (60 Days)")
+    # 1. Create a temporary copy to prevent altering your original dataframe
+    chart_df = two_botak_hist.copy()
+    
+    # 2. Determine if the most recent row (today) holds the absolute maximum value
+    today_value = chart_df["Two Botak Count"].iloc[-1]
+    max_value = chart_df["Two Botak Count"].max()
+    
+    # 3. Add an explicit 'Bar_Color' column to your dataframe
+    if today_value == max_value:
+        # Define base color, then override the last row (today) with your accent color
+        chart_df["Bar_Color"] = "#29B5E8"
+        chart_df.iloc[-1, chart_df.columns.get_loc("Bar_Color")] = "#FF4B4B"
+    else:
+        # Standard uniform blue color if today isn't the highest
+        chart_df["Bar_Color"] = "#29B5E8"
+
+    # 4. Render chart mapping color directly to the new dataframe column
     st.bar_chart(
-        data=two_botak_hist,
+        data=chart_df,
         x="Date",
         y="Two Botak Count",
+        color="Bar_Color",  # Direct Streamlit to read colors line-by-line from this column
         use_container_width=True
     )
-
+    
 st.markdown("---")
 
 with st.spinner("Scanning for Bullish Engulfing History..."):
