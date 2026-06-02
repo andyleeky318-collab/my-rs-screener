@@ -56,7 +56,7 @@ INDUSTRIES = {
     'ENERGY COAL': ['HCC', 'BTU', 'ARLP', 'AMR'],
     'MEDIA-DIVERSIFIED': ['WMG', 'SPOT', 'LYV', 'DIS', 'WBD'],
     'COMPTER-NETWRKING': ['ANET', 'CSCO', 'CALX'],
-    'COMPTR-DATA STRGE': ['DRAM', 'WDC', 'STX', 'MU', 'SNDK', 'SIMO'],
+    'COMPTR-DATA STRGE': ['DRAM', 'WDC', 'STX', 'MU', 'SNDK'],
     'CMP-HRDWRE/PERIP': ['DELL', 'HPQ', 'SMCI', 'HPE', 'ZBRA', 'NATL'],
     'CONTAINERS/PACKAGING': ['SW', 'BALL', 'PKG', 'AVY', 'AMCR', 'OC', 'CCK', 'ATR', 'GPK', 'SLGN', 'SON', 'SEE', 'GEF', 'OI'],
     'OIL&GAS-DRILLING': ['SLB', 'BKR', 'NE', 'VAL', 'HP', 'SDRL'],
@@ -176,7 +176,7 @@ INDUSTRIES = {
     'MCHNRY-CNSTR/MNG': ['CAT', 'PCAR', 'LGN'],
     'UTILITY-WATER SUPPLY': ['AWK', 'WTRG', 'AWR', 'CWT'],
     'TELCOM SVC-WIRLES': ['TMUS', 'VZ', 'T', 'LBRDA', 'USM', 'TIGO', 'TDS'],
-    'ELEC-SEMICON FBLSS': ['ARM', 'NVDA', 'AVGO', 'AMD', 'QCOM', 'ADI', 'MRVL', 'NXPI', 'MPWR', 'MCHP', 'ON', 'SWKS', 'QRVO', 'ALAB', 'CRDO', 'MTSI', 'LSCC', 'CRUS', 'PI', 'RMBS', 'SITM', 'ALGM', 'SLAB', 'POWI', 'IPGP', 'SMTC', 'DIOD', 'SYNA', 'AMBA'],
+    'ELEC-SEMICON FBLSS': ['SMH', 'SIMO', 'ARM', 'NVDA', 'AVGO', 'AMD', 'QCOM', 'ADI', 'MRVL', 'NXPI', 'MPWR', 'MCHP', 'ON', 'SWKS', 'QRVO', 'ALAB', 'CRDO', 'MTSI', 'LSCC', 'CRUS', 'PI', 'RMBS', 'SITM', 'ALGM', 'SLAB', 'POWI', 'IPGP', 'SMTC', 'DIOD', 'SYNA', 'AMBA'],
     'ELEC-SEMICON MFG': ['TSM', 'TXN', 'INTC', 'GFS', 'AMKR', 'TSEM', 'FORM', 'STM']
 }
 
