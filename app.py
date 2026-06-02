@@ -2062,7 +2062,7 @@ if not two_botak_hist.empty:
         color="Bar_Color",  # Direct Streamlit to read colors line-by-line from this column
         use_container_width=True
     )
-    
+
 st.markdown("---")
 
 with st.spinner("Scanning for Bullish Engulfing History..."):
@@ -2105,13 +2105,54 @@ else:
     st.info("No active setups discovered.")
 
 st.write("")
+# if not engulf_hist.empty:
+#     #st.markdown("#### 🐳 2x Engulfing Breadth (60 Days)")
+#     st.bar_chart(engulf_hist, x="Date", y="2x Engulfing Count", use_container_width=True)
+
+#     #st.markdown("#### 🐳 3x Engulfing Breadth (60 Days)")
+#     st.bar_chart(engulf_hist, x="Date", y="3x Engulfing Count", use_container_width=True)
+
 if not engulf_hist.empty:
-    #st.markdown("#### 🐳 2x Engulfing Breadth (60 Days)")
-    st.bar_chart(engulf_hist, x="Date", y="2x Engulfing Count", use_container_width=True)
+    # --- 1. 2x Engulfing Chart ---
+    chart_df_2x = engulf_hist.copy()
+    today_2x = chart_df_2x["2x Engulfing Count"].iloc[-1]
+    max_2x = chart_df_2x["2x Engulfing Count"].max()
+    
+    if today_2x == max_2x:
+        chart_df_2x["Bar_Color"] = "#29B5E8"
+        chart_df_2x.iloc[-1, chart_df_2x.columns.get_loc("Bar_Color")] = "#FF4B4B"
+    else:
+        chart_df_2x["Bar_Color"] = "#29B5E8"
 
-    #st.markdown("#### 🐳 3x Engulfing Breadth (60 Days)")
-    st.bar_chart(engulf_hist, x="Date", y="3x Engulfing Count", use_container_width=True)
+    # st.markdown("#### 🐳 2x Engulfing Breadth (60 Days)")
+    st.bar_chart(
+        data=chart_df_2x,
+        x="Date",
+        y="2x Engulfing Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
 
+    # --- 2. 3x Engulfing Chart ---
+    chart_df_3x = engulf_hist.copy()
+    today_3x = chart_df_3x["3x Engulfing Count"].iloc[-1]
+    max_3x = chart_df_3x["3x Engulfing Count"].max()
+    
+    if today_3x == max_3x:
+        chart_df_3x["Bar_Color"] = "#29B5E8"
+        chart_df_3x.iloc[-1, chart_df_3x.columns.get_loc("Bar_Color")] = "#FF4B4B"
+    else:
+        chart_df_3x["Bar_Color"] = "#29B5E8"
+
+    # st.markdown("#### 🐳 3x Engulfing Breadth (60 Days)")
+    st.bar_chart(
+        data=chart_df_3x,
+        x="Date",
+        y="3x Engulfing Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
+    
 # --- EXTRA TREND METRICS (Stacked Horizontally Below Patterns) ---
 #st.markdown("---")
 #st.markdown("### 📊 Extra Trend Metrics (PowerTrend Indicators)")
