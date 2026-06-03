@@ -1206,9 +1206,9 @@ if all_data:
         text-decoration: line-through;
     }
     .lime-badge {
-        background-color: #00FF00;
-        border: 1px solid #009900;
-        color: #000000;
+        background-color: #99004d; /* Dark Pink background */
+        border: 1px solid #ff0080;     /* Vibrant Pink border for contrast */
+        color: #ffffff;                /* White text for better readability against dark pink */
         font-weight: bold;
     }
     .ticker-name { font-weight: bold; color: #ffffff; margin-right: 4px; }
