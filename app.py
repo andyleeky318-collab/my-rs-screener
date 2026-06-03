@@ -1242,7 +1242,16 @@ if all_data:
         prv_r_1m = row['1M Rank']
         shift_1m = prv_r_1m - cur_r
         if shift_1m > 0:
-            rank_str_1m = f'<span style="color: #00FF00; font-weight: bold;">+{shift_1m}</span>'
+            # Check if it's in the top 20 industries and the 1M value is greater than +20
+            if shift_1m >= 20 and row_num <= 20:
+                rank_str_1m = (
+                    f'<span style="color: #00FF00; font-weight: bold; '
+                    f'border: 2px solid #00FF00; border-radius: 50%; '
+                    f'display: inline-flex; align-items: center; justify-content: center; '
+                    f'width: 32px; height: 32px;">+{shift_1m}</span>'
+                )
+            else:
+                rank_str_1m = f'<span style="color: #00FF00; font-weight: bold;">+{shift_1m}</span>'
         elif shift_1m < 0:
             rank_str_1m = f'<span style="color: #FF7F7F; font-weight: bold;">{shift_1m}</span>'
         else:
