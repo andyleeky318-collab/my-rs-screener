@@ -606,11 +606,19 @@ def scan_gapper(df, lookback=0):
             counter += 1
             if not np.isnan(running_min_low):
                 running_min_low = min(running_min_low, df['Low'].iloc[i])
+                
+                # --- THE FIX: Check if the gap was filled on this bar ---
+                if running_min_low <= last_floor:
+                    # Gap is filled! Reset variables so it doesn't carry forward
+                    counter         = np.inf
+                    last_floor      = np.nan
+                    last_ceiling    = np.nan
+                    running_min_low = np.nan
 
-        bars_since.iloc[i]        = counter
-        gap_floor.iloc[i]         = last_floor
-        gap_ceiling.iloc[i]       = last_ceiling
-        min_low_since_gap.iloc[i] = running_min_low
+        bars_since.iloc[i]         = counter
+        gap_floor.iloc[i]          = last_floor
+        gap_ceiling.iloc[i]        = last_ceiling
+        min_low_since_gap.iloc[i]  = running_min_low
 
     gapIn20 = bars_since <= 20
 
