@@ -892,10 +892,9 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
         gapper_yest = []
 
         # Initialize internal metrics tracking variables
-        # --- Inside process_pattern_scanners loop setup ---
         know_total_count = 0
         know_positive_count = 0
-        email_content_stocks = []  # Now tracks tuples of (ticker, is_new_addition)
+        email_content_stocks = []  # Tracks tuples of (ticker, is_new_addition)
         email_content_removed = [] # Tracks dropped Minervini stocks compared to yesterday
         extra_52wk_high_symbols = []
         extra_52wk_high_removed = []
@@ -905,39 +904,50 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
         for ticker in stocks_list:
             try:
                 ticker_df = ticker_dfs.get(ticker)
-                if ticker_df is None or ticker_df.empty or len(ticker_df) < 50:
+                if ticker_df is None or ticker_df.empty:
+                    continue
+                
+                df_len = len(ticker_df)
+                if df_len < 50:
                     continue
 
+                # Cache Close series to reduce repeatedly accessing a string key index on DataFrame
+                close_series = ticker_df['Close']
+
                 # Calculate EMA 200 for the current stock
-                if len(ticker_df) >= 200:
-                    current_close = ticker_df['Close'].iloc[-1]
-                    ema200 = ticker_df['Close'].ewm(span=200, adjust=False).mean().iloc[-1]
+                if df_len >= 200:
+                    current_close = close_series.iloc[-1]
+                    ema200 = close_series.ewm(span=200, adjust=False).mean().iloc[-1]
                     ema200_total_count += 1
                     if current_close > ema200:
                         ema200_above_count += 1
                 
-                # --- ADJUSTED FOR NEW ADDITIONS TODAY VS YESTERDAY ---
-                if ticker in KNOWN_STOCKS and len(ticker_df) >= 261:
-                    # Setup SMA structures
-                    ticker_df["SMA_50"] = round(ticker_df['Close'].rolling(window=50).mean(), 2)
-                    ticker_df["SMA_150"] = round(ticker_df['Close'].rolling(window=150).mean(), 2)
-                    ticker_df["SMA_200"] = round(ticker_df['Close'].rolling(window=200).mean(), 2)
+                # ==============================================================
+                # OPTIMIZED MINERVINI SCRIPTS BLOCK (TOP 1 PERFORMANCE BOOST)
+                # ==============================================================
+                if ticker in KNOWN_STOCKS and df_len >= 261:
+                    # 1. Compute rolling averages as local temporary series (avoids costly df column allocation updates)
+                    sma50_series = close_series.rolling(window=50).mean()
+                    sma150_series = close_series.rolling(window=150).mean()
+                    sma200_series = close_series.rolling(window=200).mean()
 
-                    # --- EVALUATE TODAY (Index -1) ---
-                    currentClose = ticker_df["Close"].iloc[-1]
-                    prevClose = ticker_df["Close"].iloc[-2]
+                    # 2. Extract Today's Scalar Points (Index -1)
+                    currentClose = close_series.iloc[-1]
+                    prevClose = close_series.iloc[-2]
                     Volume = ticker_df["Volume"].iloc[-1]
-                    moving_average_50 = ticker_df["SMA_50"].iloc[-1]
-                    moving_average_200 = ticker_df["SMA_200"].iloc[-1]
-                    moving_average_200_20 = ticker_df["SMA_200"].iloc[-20] if len(ticker_df) >= 20 else 0
+                    moving_average_50 = sma50_series.iloc[-1]
+                    moving_average_200 = sma200_series.iloc[-1]
+                    moving_average_200_20 = sma200_series.iloc[-20]
                     
-                    low_of_52week = round(min(ticker_df["Low"].iloc[-260:]), 2)
-                    high_of_52week = round(ticker_df["High"].iloc[-260:-1].max(), 2)
+                    # Massively speed up 52-week min/max ranges by utilizing raw NumPy array views (.values)
+                    low_of_52week = round(ticker_df["Low"].values[-260:].min(), 2)
+                    high_of_52week = round(ticker_df["High"].values[-260:-1].max(), 2)
 
+                    # Today's Evaluation Matrix
                     cond1_t = int(currentClose > moving_average_50 > moving_average_200)
                     cond2_t = int(moving_average_50 > moving_average_200)
                     cond3_t = int(moving_average_200 > moving_average_200_20)
-                    cond4_t = int(moving_average_50 > moving_average_200)
+                    cond4_t = cond2_t  # Derived directly from cond2_t to completely eliminate a redundant boolean check
                     cond5_t = int(currentClose > moving_average_50)
                     cond6_t = int(currentClose >= (1.3 * low_of_52week))
                     cond7_t = int(currentClose >= (0.75 * high_of_52week))
@@ -948,20 +958,21 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                     total_today = (cond1_t + cond2_t + cond3_t + cond4_t + cond5_t + 
                                    cond6_t + cond7_t + cond8_t + cond9_t + cond10_t)
 
-                    # --- EVALUATE YESTERDAY (Index -2) ---
-                    yestClose = ticker_df["Close"].iloc[-2]
+                    # 3. Extract Yesterday's Scalar Points (Index -2)
+                    yestClose = close_series.iloc[-2]
                     yestVolume = ticker_df["Volume"].iloc[-2]
-                    yest_ma_50 = ticker_df["SMA_50"].iloc[-2]
-                    yest_ma_200 = ticker_df["SMA_200"].iloc[-2]
-                    yest_ma_200_20 = ticker_df["SMA_200"].iloc[-21] if len(ticker_df) >= 21 else 0
+                    yest_ma_50 = sma50_series.iloc[-2]
+                    yest_ma_200 = sma200_series.iloc[-2]
+                    yest_ma_200_20 = sma200_series.iloc[-21]
                     
-                    yest_low_of_52week = round(min(ticker_df["Low"].iloc[-261:-1]), 2)
-                    yest_high_of_52week = round(ticker_df["High"].iloc[-261:-2].max(), 2)
+                    yest_low_of_52week = round(ticker_df["Low"].values[-261:-1].min(), 2)
+                    yest_high_of_52week = round(ticker_df["High"].values[-261:-2].max(), 2)
 
+                    # Yesterday's Evaluation Matrix
                     cond1_y = int(yestClose > yest_ma_50 > yest_ma_200)
                     cond2_y = int(yest_ma_50 > yest_ma_200)
                     cond3_y = int(yest_ma_200 > yest_ma_200_20)
-                    cond4_y = int(yest_ma_50 > yest_ma_200)
+                    cond4_y = cond2_y
                     cond5_y = int(yestClose > yest_ma_50)
                     cond6_y = int(yestClose >= (1.3 * yest_low_of_52week))
                     cond7_y = int(yestClose >= (0.75 * yest_high_of_52week))
@@ -984,7 +995,7 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                     elif was_qualified_yest:
                         extra_52wk_high_removed.append(ticker)
 
-                    # --- SET CONTROLLER FLAGS ---
+                    # Set flags
                     if total_today >= 10:
                         know_total_count += 1
                         is_new_addition = (total_yesterday < 10)
@@ -995,10 +1006,9 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                             know_positive_count += 1
                     elif total_yesterday >= 10:
                         email_content_removed.append(ticker)
+                # ==============================================================
 
-                # =========================
-                # BENCHMARK DATAFRAME
-                # =========================
+                # Benchmark setup
                 benchmark_df = benchmark_df_input
 
                 # Scan Today
