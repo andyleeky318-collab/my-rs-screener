@@ -2455,6 +2455,7 @@ else:
     st.info("No active setups discovered.")
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
+st.markdown("---")
 
 # --- GAPPER SECTION ---
 st.markdown(f"#### 🚀 Gapper ({len(gapper_list)})")
@@ -2583,8 +2584,6 @@ if gapper_list or gapper_yest:
 
 else:
     st.info("No active gapper setups discovered.")
-
-st.markdown("---")
 
 # ── Timing Summary ───────────────────────────────────────────────────────────
 st.markdown("---")
