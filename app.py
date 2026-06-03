@@ -580,24 +580,28 @@ def scan_gapper(df, lookback=0):
     idx = -1 - lookback
     if len(df) < 22 + lookback: return False
 
+    df = df.copy().reset_index(drop=True)  # guarantee clean integer index
+
     strictGapUp = df['Low'] > df['High'].shift(1)
     gapPercent  = (df['Close'] / df['Close'].shift(1)) - 1
     gapUp10     = strictGapUp & (gapPercent >= 0.10)
 
-    bars_since  = pd.Series(np.inf, index=df.index)
-    gap_floor   = pd.Series(np.nan, index=df.index)
-    # track the lowest low seen since the gap opened
-    min_low_since_gap = pd.Series(np.nan, index=df.index)
+    bars_since        = pd.Series(np.inf,  index=df.index)
+    gap_floor         = pd.Series(np.nan,  index=df.index)
+    gap_ceiling       = pd.Series(np.nan,  index=df.index)
+    min_low_since_gap = pd.Series(np.nan,  index=df.index)
 
-    counter        = np.inf
-    last_floor     = np.nan
+    counter         = np.inf
+    last_floor      = np.nan
+    last_ceiling    = np.nan
     running_min_low = np.nan
 
-    for i in range(len(df)):
+    for i in range(1, len(df)):   # start at 1 — need i-1 to always be valid
         if gapUp10.iloc[i]:
             counter         = 0
-            last_floor      = df['High'].iloc[i - 1]   # pre-gap candle high = gap floor
-            running_min_low = df['Low'].iloc[i]         # reset: start tracking from gap bar
+            last_floor      = df['High'].iloc[i - 1]   # top of pre-gap candle = gap bottom
+            last_ceiling    = df['Low'].iloc[i]         # bottom of gap candle  = gap top
+            running_min_low = df['Low'].iloc[i]
         else:
             counter += 1
             if not np.isnan(running_min_low):
@@ -605,17 +609,23 @@ def scan_gapper(df, lookback=0):
 
         bars_since.iloc[i]        = counter
         gap_floor.iloc[i]         = last_floor
+        gap_ceiling.iloc[i]       = last_ceiling
         min_low_since_gap.iloc[i] = running_min_low
 
-    # gapIn20: gap happened within last 20 bars
     gapIn20 = bars_since <= 20
 
-    # strictUnfilled: the LOWEST low seen across every bar since the gap
-    # has never touched or breached the pre-gap candle's high
+    # Gap is unfilled only if the lowest low since gap never touched the gap floor
+    # Use gap_ceiling as an extra sanity check: floor must be below ceiling
+    validGap       = gap_floor < gap_ceiling
     strictUnfilled = min_low_since_gap > gap_floor
 
-    result = gapIn20 & strictUnfilled & (df['Close'] >= 20)
-    return bool(result.iloc[idx])
+    result = gapIn20 & strictUnfilled & validGap & (df['Close'] >= 20)
+
+    # remap idx back since we reset_index
+    mapped_idx = len(df) + idx
+    if mapped_idx < 0 or mapped_idx >= len(df):
+        return False
+    return bool(result.iloc[mapped_idx])
 
 def scan_engulfing(df, lookback=0):
     idx = -1 - lookback
