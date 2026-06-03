@@ -243,6 +243,7 @@ with st.sidebar:
     rs_length = st.number_input("RS Lookback Length", value=90, min_value=10)
     top_n = st.number_input("Top N for Group Avg", value=5, min_value=1)
     show_all_rs = st.toggle("Show RS < 80 Tickers", value=False)
+    show_ppp_charts = st.toggle("Show PPP Charts", value=False)
     
     if st.button("Clear Cache & Refresh"):
         st.cache_data.clear()
@@ -2342,7 +2343,7 @@ if ppp_list or ppp_yest:
     st.markdown(html_p, unsafe_allow_html=True)
 
     # ── All charts together, 3 per row ────────────────────────────────────
-    if ppp_list:
+    if ppp_list and show_ppp_charts:
         st.write("")
         CHARTS_PER_ROW = 5
         CHART_SIZE     = 280   # square: width == height
@@ -2483,11 +2484,7 @@ if gapper_list or gapper_yest:
 
             for col_idx, sym in enumerate(row_tickers):
                 with cols[col_idx]:
-                    ohlcv_json = timed(
-                        f"get_gapper_ohlcv [{sym}]",
-                        get_gapper_ohlcv_json,
-                        sym
-                    )
+                    ohlcv_json = get_gapper_ohlcv_json(sym)
                     chart_id = f"gapper_{sym}_{row_start}_{col_idx}"
 
                     chart_html = f"""
