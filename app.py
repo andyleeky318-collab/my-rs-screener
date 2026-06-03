@@ -52,7 +52,7 @@ INDUSTRIES = {
     'ENERGY-ALT/OTHER': ['BIP', 'TLN', 'CWEN', 'BEPC'],
     'MINING-METAL ORES': ['AA', 'SCCO', 'FCX', 'CCJ', 'CRS', 'ATI', 'MP', 'TECK'],
     'APPAREL-SHOES & REL': ['NKE', 'DECK', 'ONON', 'RL', 'BIRK', 'CROX', 'LEVI', 'VFC', 'GIL', 'PVH', 'COLM', 'KTB', 'SHOO'],
-    'RETAIL-APPRL/SHOES/ACC': ['TJX', 'ROST', 'BURL', 'TPR', 'GAP', 'ANF', 'BBWI', 'CPRI', 'BOOT', 'AEO', 'URBN', 'CRI', 'BKE', 'VSCO'],
+    'RETAIL-APPRL/SHOES/ACC': ['TJX', 'ROST', 'BURL', 'TPR', 'GAP', 'ANF', 'BBWI', 'CPRI', 'BOOT', 'AEO', 'URBN', 'CRI', 'BKE', 'VSXY'],
     'AUTO/TRCK-ORGNL EQP': ['ITW', 'CMI', 'APTV', 'ITT', 'DCI', 'ALSN', 'ALV', 'GNTX', 'LEA', 'BC', 'ATMU', 'VC', 'BWA'],
     'AUTO/TRCK-RPLC PRTS': ['LKQ', 'DORM', 'AAP'],
     'BEVERAGES-ALCOHOLIC': ['STZ', 'TAP', 'SAM'],
@@ -200,7 +200,7 @@ KNOWN_STOCKS = [
     'IYZ', 'LNG', 'AAOI', 'AXTI', 'TSEM', 'USO', 'JNJ', 
     'HP', 'GLD', 'ALB', 'BUG', 'BX', 'DOW', 'VZ', 'REMX', 'GDX', 'SIL', 'VEEV', 'SNDK', 'TLT', 'APH', 'ARM', 'FANG', 
     'NBIS', 'NVT', 'OXY', 'FORM', 'IBIT', 'QTUM', 'IAI', 'KWEB', 'IHI', 'UFO', 'ITA', 'IYT', 'CVS', 'HUM', 'NEE', 
-    'HPE', 'PLAB', 'INOD', 'TTMI', 'CCJ', 'BE', 'SLV', 'PICK', 'COPX', 'MAR', 'XAR', 'VSCO', 'GLW', 'ANF', 'AEO', 
+    'HPE', 'PLAB', 'INOD', 'TTMI', 'CCJ', 'BE', 'SLV', 'PICK', 'COPX', 'MAR', 'XAR', 'VSXY', 'GLW', 'ANF', 'AEO', 
     'AEP', 'GH', 'SANM', 'ROK', 'PSN', 'IAT', 'HROW', 'PL', 'AVAV', 'CIEN', 'COHR', 'NU', 'WULF', 'IREN', 'CIFR', 
     'RDW', 'PH', 'LITE', 'ACHR', 'CACI', 'CRS', 'URA', 'NVO', 'NLR', 'ITB', 'MVST', 'EOSE', 'APP', 'RKLB', 'ASTS', 
     'IONQ', 'RMBS', 'RTX', 'NOC', 'LMT', 'HON', 'ONDS', 'CLS', 'LEU', 'VRT', 'VST', 'NRG', 'CEG', 'SMCI', 'CRDO', 
@@ -575,6 +575,26 @@ def scan_two_botak(df, lookback=0):
     )
     return bool(twoBotak.iloc[idx])
 
+def scan_gapper(df, lookback=0):
+    idx = -1 - lookback
+    if len(df) < 22 + lookback: return False
+    strictGapUp = df['Low'] > df['High'].shift(1)
+    gapPercent  = (df['Close'] / df['Close'].shift(1)) - 1
+    gapUp10     = strictGapUp & (gapPercent >= 0.10)
+    barsSince   = gapUp10[::-1].cumsum()[::-1]  # rolling bars-since via reverse cumsum trick
+    # Proper barssince: count bars since last True
+    bars_since_series = pd.Series(index=df.index, dtype=float)
+    counter = np.inf
+    for i in range(len(gapUp10)):
+        if gapUp10.iloc[i]:
+            counter = 0
+        else:
+            counter += 1
+        bars_since_series.iloc[i] = counter
+    gapIn20 = bars_since_series <= 20
+    result  = gapIn20 & (df['Close'] >= 20)
+    return bool(result.iloc[idx])
+
 def scan_engulfing(df, lookback=0):
     idx = -1 - lookback
     if len(df) < 30 + lookback: return False, False
@@ -818,6 +838,7 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
         value_trap_matches = []
         ppp_matches = []
         leader_matches = []
+        gapper_matches = []
         
         # Yesterday's Matches (for color logic)
         botak_yest = []
@@ -828,6 +849,7 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
         value_trap_yest = []
         ppp_yest = []
         leader_yest = []
+        gapper_yest = []
 
         # Initialize internal metrics tracking variables
         # --- Inside process_pattern_scanners loop setup ---
@@ -950,6 +972,7 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                 if scan_ppp(ticker_df, 0): ppp_matches.append(ticker)
                 if scan_leader(ticker_df, benchmark_df, 0):
                     leader_matches.append(ticker)
+                if scan_gapper(ticker_df, 0): gapper_matches.append(ticker)
 
                 # Scan Yesterday
                 if scan_two_botak(ticker_df, 1): botak_yest.append(ticker)
@@ -962,6 +985,7 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                 if scan_ppp(ticker_df, 1): ppp_yest.append(ticker)
                 if scan_leader(ticker_df, benchmark_df, 1):
                     leader_yest.append(ticker)
+                if scan_gapper(ticker_df, 1): gapper_yest.append(ticker)
 
             except:
                 continue
@@ -974,7 +998,8 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
         value_trap_matches.sort()
         ppp_matches.sort()
         leader_matches.sort()
-        
+        gapper_matches.sort()
+
         know_pos_pct = (know_positive_count / know_total_count * 100) if know_total_count > 0 else 0
         pct_above_ema200 = (ema200_above_count / ema200_total_count * 100) if ema200_total_count > 0 else 0
         
@@ -987,6 +1012,7 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
             value_trap_matches,
             ppp_matches,
             leader_matches,
+            gapper_matches,
 
             botak_yest,
             engulf2_yest,
@@ -996,7 +1022,8 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
             value_trap_yest,
             ppp_yest,
             leader_yest,
-
+            gapper_yest,
+            
             know_pos_pct,
             know_positive_count,
             know_total_count,
@@ -1386,6 +1413,27 @@ def get_ppp_ohlcv_json(ticker):
         return "[]"
 
 @st.cache_data(ttl=3600)
+def get_gapper_ohlcv_json(ticker):
+    try:
+        df = yf.download(ticker, period="3mo", interval="1d", progress=False)
+        if df.empty:
+            return "[]"
+        df = df.tail(42)
+        records = []
+        for ts, row in df.iterrows():
+            records.append({
+                "time":  ts.strftime("%Y-%m-%d"),
+                "open":  round(float(row["Open"].iloc[0])  if hasattr(row["Open"],  "iloc") else float(row["Open"]),  2),
+                "high":  round(float(row["High"].iloc[0])  if hasattr(row["High"],  "iloc") else float(row["High"]),  2),
+                "low":   round(float(row["Low"].iloc[0])   if hasattr(row["Low"],   "iloc") else float(row["Low"]),   2),
+                "close": round(float(row["Close"].iloc[0]) if hasattr(row["Close"], "iloc") else float(row["Close"]), 2),
+            })
+        import json
+        return json.dumps(records)
+    except Exception:
+        return "[]"
+    
+@st.cache_data(ttl=3600)
 def compute_two_botak_history(stocks_list, ticker_dfs):
     try:
         if not ticker_dfs:
@@ -1672,9 +1720,9 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
     # engulf_hist     = compute_engulfing_history(stocks_tuple, ticker_dfs_shared)
     # powertrend_hist = compute_powertrend_history(stocks_tuple, ticker_dfs_shared)
     # leader_hist     = compute_leader_history(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
-    b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list, leader_list = results[:8]
-    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest, leader_yest = results[8:16]
-    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200 = results[16:]
+    b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list, leader_list, gapper_list = results[:9]
+    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest, leader_yest, gapper_yest = results[9:18]
+    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200 = results[18:]
 
 st.markdown("---")
 
@@ -2406,6 +2454,140 @@ else:
     st.info("No active setups discovered.")
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
+
+# --- GAPPER SECTION ---
+st.markdown(f"#### 🚀 Gapper ({len(gapper_list)})")
+
+if gapper_list or gapper_yest:
+    # ── Badge row ─────────────────────────────────────────────────────────
+    html_g = ""
+    for sym in gapper_list:
+        cls = "new-pattern-badge" if sym not in gapper_yest else ""
+        html_g += f'<div class="ticker-badge {cls}">{sym}</div>'
+
+    removed_gapper = [sym for sym in gapper_yest if sym not in gapper_list]
+    for sym in sorted(removed_gapper):
+        html_g += f'<div class="ticker-badge removed-badge">{sym}</div>'
+
+    st.markdown(html_g, unsafe_allow_html=True)
+
+    # ── All charts together, 5 per row ────────────────────────────────────
+    if gapper_list:
+        st.write("")
+        GAPPER_CHARTS_PER_ROW = 5
+        GAPPER_CHART_SIZE     = 280
+
+        for row_start in range(0, len(gapper_list), GAPPER_CHARTS_PER_ROW):
+            row_tickers = gapper_list[row_start : row_start + GAPPER_CHARTS_PER_ROW]
+            cols = st.columns(GAPPER_CHARTS_PER_ROW)
+
+            for col_idx, sym in enumerate(row_tickers):
+                with cols[col_idx]:
+                    ohlcv_json = timed(
+                        f"get_gapper_ohlcv [{sym}]",
+                        get_gapper_ohlcv_json,
+                        sym
+                    )
+                    chart_id = f"gapper_{sym}_{row_start}_{col_idx}"
+
+                    chart_html = f"""
+<div style="font-family:'JetBrains Mono','Fira Code',monospace;">
+  <div style="display:flex;align-items:center;justify-content:space-between;
+              padding:5px 8px;background:#161b22;
+              border-radius:6px 6px 0 0;border:1px solid #30363d;border-bottom:none;">
+    <span style="color:#e6edf3;font-size:12px;font-weight:600;letter-spacing:0.04em;">{sym}</span>
+  </div>
+  <div id="{chart_id}"
+       style="width:{GAPPER_CHART_SIZE}px;height:{GAPPER_CHART_SIZE}px;
+              border:1px solid #30363d;border-radius:0 0 6px 6px;
+              background:#0d1117;">
+  </div>
+</div>
+
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+(function(){{
+  var ohlcv = {ohlcv_json};
+  var el = document.getElementById('{chart_id}');
+  if (!ohlcv || ohlcv.length === 0) {{
+    el.innerHTML = '<p style="color:#7d8590;padding:12px;font-size:11px;">No data.</p>';
+    return;
+  }}
+
+  var chart = LightweightCharts.createChart(el, {{
+    width:  {GAPPER_CHART_SIZE},
+    height: {GAPPER_CHART_SIZE},
+    layout: {{
+      background: {{ type:'solid', color:'#0d1117' }},
+      textColor:  '#c9d1d9',
+    }},
+    grid: {{
+      vertLines: {{ color:'#21262d', style:1 }},
+      horzLines: {{ color:'#21262d', style:1 }},
+    }},
+    crosshair: {{
+      mode: LightweightCharts.CrosshairMode.Normal,
+      vertLine: {{ color:'#58a6ff', width:1, style:1, labelBackgroundColor:'#1f6feb' }},
+      horzLine: {{ color:'#58a6ff', width:1, style:1, labelBackgroundColor:'#1f6feb' }},
+    }},
+    rightPriceScale: {{ borderColor:'#30363d', textColor:'#8b949e' }},
+    timeScale: {{
+      borderColor:'#30363d', textColor:'#8b949e',
+      timeVisible:true, secondsVisible:false,
+      fixLeftEdge:true, fixRightEdge:true,
+    }},
+  }});
+
+  var candles = chart.addCandlestickSeries({{
+    upColor:'#26a641',   downColor:'#f85149',
+    borderUpColor:'#26a641', borderDownColor:'#f85149',
+    wickUpColor:'#26a641',   wickDownColor:'#f85149',
+  }});
+  candles.setData(ohlcv);
+
+  function calcEMA(data, span) {{
+    var k = 2/(span+1), ema = data[0].close, out = [];
+    for (var i=0;i<data.length;i++) {{
+      ema = data[i].close*k + ema*(1-k);
+      if (i >= span-1) out.push({{time:data[i].time, value:parseFloat(ema.toFixed(4))}});
+    }}
+    return out;
+  }}
+
+  function calcSMA(data, period) {{
+    var out = [];
+    for (var i=period-1;i<data.length;i++) {{
+      var s=0; for(var j=i-period+1;j<=i;j++) s+=data[j].close;
+      out.push({{time:data[i].time, value:parseFloat((s/period).toFixed(4))}});
+    }}
+    return out;
+  }}
+
+  chart.addLineSeries({{color:'#e3b341',lineWidth:1,
+    priceLineVisible:false,lastValueVisible:false}})
+    .setData(calcEMA(ohlcv,21));
+
+  chart.addLineSeries({{color:'#58a6ff',lineWidth:1,
+    priceLineVisible:false,lastValueVisible:false}})
+    .setData(calcSMA(ohlcv,50));
+
+  chart.timeScale().fitContent();
+
+  new ResizeObserver(function(entries){{
+    for(var e of entries){{
+      chart.applyOptions({{width:e.contentRect.width}});
+    }}
+  }}).observe(el);
+}})();
+</script>
+"""
+                    import streamlit.components.v1 as components
+                    components.html(chart_html, height=GAPPER_CHART_SIZE + 32, scrolling=False)
+
+else:
+    st.info("No active gapper setups discovered.")
+
+st.markdown("---")
 
 # ── Timing Summary ───────────────────────────────────────────────────────────
 st.markdown("---")
