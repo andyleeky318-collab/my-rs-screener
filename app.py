@@ -1005,6 +1005,15 @@ all_data = []
 progress_bar = st.progress(0)
 status_text = st.empty()
 
+stocks_tuple = tuple(KNOWN_STOCKS)
+
+import threading
+def _warm_known_stocks_cache():
+    download_known_stocks_data(stocks_tuple)
+
+warm_thread = threading.Thread(target=_warm_known_stocks_cache, daemon=True)
+warm_thread.start()
+
 industry_items = list(INDUSTRIES.items())
 for idx, (industry_name, tickers) in enumerate(industry_items):
     status_text.text(f"Processing {industry_name}...")
@@ -1659,10 +1668,12 @@ def compute_historical_know_counts(stocks_list, ticker_dfs):
 # ============================================================
 # SINGLE DOWNLOAD + SPINNER: all compute fns share one fetch
 # ============================================================
-stocks_tuple = tuple(KNOWN_STOCKS)
+# stocks_tuple = tuple(KNOWN_STOCKS)
 
 # Single download — all history fns share this cached result
+warm_thread.join()  # ensure it finished before we use it
 ticker_dfs_shared, benchmark_df_shared = download_known_stocks_data(stocks_tuple)
+
 
 with st.spinner("Scanning pattern anomalies across known instruments..."):
     results         = process_pattern_scanners(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
@@ -2003,7 +2014,7 @@ if not leader_hist.empty:
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
 
-with st.spinner("📉 Scanning for Two Botak History..."):
+with st.spinner("Scanning for Two Botak History..."):
     two_botak_hist = compute_two_botak_history(stocks_tuple, ticker_dfs_shared)
 
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
