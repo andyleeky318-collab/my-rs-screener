@@ -194,7 +194,7 @@ INDUSTRIES = {
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
     'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EXC', 'FIGR', 
-    'GEV', 'GILD', 'GXC', 'JEF', 'JKS', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'NTAP', 'OR', 
+    'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'NTAP', 'OR', 
     'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
     'VUG', 'WGMI', 'WMB', 'XEL', 'XMAG', 'XYZ', 'ZIM','VICR', 'SLX', 'CBOE', 'SIMO', 'FLEX', 'POWL', 'VLO', 'DOCN', 
     'IYZ', 'LNG', 'AAOI', 'AXTI', 'TSEM', 'USO', 'JNJ', 
@@ -1367,61 +1367,41 @@ def compute_two_botak_history(stocks_list, ticker_dfs):
         if not ticker_dfs:
             return pd.DataFrame()
 
-        any_ticker = list(ticker_dfs.keys())[0]
-        full_timeline = ticker_dfs[any_ticker].index
+        all_series = []
+        for ticker, df in ticker_dfs.items():
+            if len(df) < 2:
+                continue
 
-        days_to_compute = min(60, len(full_timeline))
-        records = []
+            botak = (
+                (abs(df['Close'] - df['High']) < 0.05) &
+                (df['Close'] > df['Open'])
+            )
+            percentile = (
+                (df['Close'] > df['Open']) &
+                (((df['Close'] - df['Open']) /
+                  ((df['High'] - df['Open']).replace(0, 0.001))) > 0.9)
+            )
+            two_botak_series = (
+                ((botak & botak.shift(1)) |
+                 (botak & percentile.shift(1)) |
+                 (percentile & botak.shift(1)) |
+                 (percentile & percentile.shift(1))) &
+                (df['Close'] > 20)
+            ).astype(int)
 
-        for i in range(days_to_compute - 1, -1, -1):
-            idx = -1 - i
-            current_date = full_timeline[idx]
+            all_series.append(two_botak_series)
 
-            day_total_count = 0
+        if not all_series:
+            return pd.DataFrame()
 
-            for ticker, df in ticker_dfs.items():
-                if len(df) < 2:
-                    continue
+        combined = pd.concat(all_series, axis=1).fillna(0)
+        daily_counts = combined.sum(axis=1)
 
-                # =========================
-                # FULL SERIES LOGIC (FIXED)
-                # =========================
-                df_full = df
-
-                botak = (
-                    (abs(df_full['Close'] - df_full['High']) < 0.05) &
-                    (df_full['Close'] > df_full['Open'])
-                )
-
-                percentile = (
-                    (df_full['Close'] > df_full['Open']) &
-                    (((df_full['Close'] - df_full['Open']) /
-                      ((df_full['High'] - df_full['Open']).replace(0, 0.001))) > 0.9)
-                )
-
-                two_botak_series = (
-                    ((botak & botak.shift(1)) |
-                     (botak & percentile.shift(1)) |
-                     (percentile & botak.shift(1)) |
-                     (percentile & percentile.shift(1))) &
-                    (df_full['Close'] > 20)
-                )
-
-                # =========================
-                # SAFE HISTORICAL PROJECTION
-                # =========================
-                if len(two_botak_series) > abs(idx):
-                    if bool(two_botak_series.iloc[idx]):
-                        day_total_count += 1
-
-            records.append({
-                "Date": current_date.strftime("%Y-%m-%d"),
-                "Two Botak Count": day_total_count
-            })
-
-        return pd.DataFrame(records)
-
-    except Exception as e:
+        result = daily_counts.tail(60).reset_index()
+        result.columns = ["Date", "Two Botak Count"]
+        result["Date"] = result["Date"].dt.strftime("%Y-%m-%d")
+        return result
+    except Exception:
         return pd.DataFrame()
 
 @st.cache_data(ttl=3600)
@@ -1430,81 +1410,59 @@ def compute_engulfing_history(stocks_list, ticker_dfs):
         if not ticker_dfs:
             return pd.DataFrame()
 
-        timeline = ticker_dfs[list(ticker_dfs.keys())[0]].index
-        days = min(60, len(timeline))
+        all_2x = []
+        all_3x = []
 
-        records = []
+        for ticker, df in ticker_dfs.items():
+            if len(df) < 30:
+                continue
 
-        for i in range(days - 1, -1, -1):
+            bullish_engulfing = (
+                (df['Open'] < df['Low'].shift(1)) &
+                (df['Close'] > df['High'].shift(1))
+            )
 
-            lookback = i
-            idx = -1 - lookback
-            date = timeline[idx]
+            # Rolling count of engulfing candles in last 30 days
+            engulf_count = bullish_engulfing.rolling(30).sum()
 
-            count_2x = 0
-            count_3x = 0
+            # For the "close above prior engulf closes" condition:
+            # Get the last engulfing close via a forward-filled masked series
+            eng_close = df['Close'].where(bullish_engulfing, other=pd.NA).ffill()
+            eng_close_2 = df['Close'].where(bullish_engulfing, other=pd.NA).shift(1).ffill()
+            eng_close_3 = df['Close'].where(bullish_engulfing, other=pd.NA).shift(2).ffill()
 
-            for ticker, df in ticker_dfs.items():
+            two_engulf = (
+                (engulf_count >= 2) &
+                (df['Close'] > 20) &
+                (df['Close'] > eng_close.shift(1)) &   # above most recent prior
+                (df['Close'] > eng_close_2.shift(1))
+            ).astype(int)
 
-                if len(df) < 30 + lookback:
-                    continue
+            three_engulf = (
+                (engulf_count >= 3) &
+                (df['Close'] > 20) &
+                (df['Close'] > eng_close.shift(1)) &
+                (df['Close'] > eng_close_2.shift(1)) &
+                (df['Close'] > eng_close_3.shift(1))
+            ).astype(int)
 
-                # =========================
-                # SAME LOGIC AS scan_engulfing()
-                # =========================
-                bullish_engulfing = (
-                    (df['Open'] < df['Low'].shift(1)) &
-                    (df['Close'] > df['High'].shift(1))
-                )
+            all_2x.append(two_engulf)
+            all_3x.append(three_engulf)
 
-                engulf_count_series = bullish_engulfing.rolling(window=30).sum()
+        if not all_2x:
+            return pd.DataFrame()
 
-                # Historical slice
-                df_temp = df.iloc[:len(df)-lookback] if lookback > 0 else df
+        count_2x = pd.concat(all_2x, axis=1).fillna(0).sum(axis=1)
+        count_3x = pd.concat(all_3x, axis=1).fillna(0).sum(axis=1)
 
-                if len(df_temp) < 30:
-                    continue
-
-                current_idx = df_temp.index[-1]
-
-                engulf_closes = df_temp.loc[bullish_engulfing, 'Close']
-                prior_engulfs = engulf_closes[engulf_closes.index < current_idx]
-
-                eng1 = prior_engulfs.iloc[-1] if len(prior_engulfs) >= 1 else 0
-                eng2 = prior_engulfs.iloc[-2] if len(prior_engulfs) >= 2 else 0
-                eng3 = prior_engulfs.iloc[-3] if len(prior_engulfs) >= 3 else 0
-
-                current_close = df_temp['Close'].iloc[-1]
-                current_count = engulf_count_series.iloc[idx]
-
-                two_engulf = (
-                    (current_count >= 2) and
-                    (current_close > 20) and
-                    (current_close > eng1) and
-                    (current_close > eng2)
-                )
-
-                three_engulf = (
-                    (current_count >= 3) and
-                    (current_close > 20) and
-                    (current_close > eng1) and
-                    (current_close > eng2) and
-                    (current_close > eng3)
-                )
-
-                if two_engulf:
-                    count_2x += 1
-
-                if three_engulf:
-                    count_3x += 1
-
-            records.append({
-                "Date": date.strftime("%Y-%m-%d"),
-                "2x Engulfing Count": count_2x,
-                "3x Engulfing Count": count_3x
-            })
-
-        return pd.DataFrame(records)
+        # Align on common index, take last 60 rows
+        result = pd.DataFrame({
+            "Date": count_2x.index,
+            "2x Engulfing Count": count_2x.values,
+            "3x Engulfing Count": count_3x.values
+        }).tail(60)
+        result["Date"] = pd.to_datetime(result["Date"]).dt.strftime("%Y-%m-%d")
+        return result.reset_index(drop=True)
 
     except Exception as e:
         print(e)
@@ -1516,49 +1474,31 @@ def compute_powertrend_history(stocks_list, ticker_dfs):
         if not ticker_dfs:
             return pd.DataFrame()
 
-        timeline = ticker_dfs[list(ticker_dfs.keys())[0]].index
-        days = min(60, len(timeline))
+        # Compute full powertrend boolean series per ticker ONCE
+        all_series = []
+        for ticker, df in ticker_dfs.items():
+            if len(df) < 52:
+                continue
+            powerma = df['Close'].ewm(span=50, adjust=False).mean()
+            gradientPct = ((powerma - powerma.shift(1)) / powerma.shift(1)) * 100
+            pt_series = (
+                (powerma > powerma.shift(1)) &
+                (abs(gradientPct) >= 1.0) &
+                (df['Close'] >= 20)
+            ).astype(int)
+            all_series.append(pt_series)
 
-        records = []
+        if not all_series:
+            return pd.DataFrame()
 
-        for i in range(days - 1, -1, -1):
-            idx = -1 - i
-            date = timeline[idx]
+        # Sum across all tickers for each date — one operation
+        combined = pd.concat(all_series, axis=1).fillna(0)
+        daily_counts = combined.sum(axis=1)
 
-            count_powertrend = 0
-
-            for ticker, df in ticker_dfs.items():
-
-                if len(df) < 52:
-                    continue
-
-                # =========================
-                # CLONED LOGIC (DO NOT TOUCH ORIGINAL FUNCTION)
-                # =========================
-                powerma = df['Close'].ewm(span=50, adjust=False).mean()
-                gradient = powerma - powerma.shift(1)
-                gradientPct = ((powerma - powerma.shift(1)) / powerma.shift(1)) * 100
-                absGradient = abs(gradientPct)
-
-                powertrend_series = (
-                    (gradient > 0) &
-                    (absGradient >= 1.0) &
-                    (df['Close'] >= 20)
-                )
-
-                if len(powertrend_series) <= abs(idx):
-                    continue
-
-                if bool(powertrend_series.iloc[idx]):
-                    count_powertrend += 1
-
-            records.append({
-                "Date": date.strftime("%Y-%m-%d"),
-                "PowerTrend Count": count_powertrend
-            })
-
-        return pd.DataFrame(records)
-
+        result = daily_counts.tail(60).reset_index()
+        result.columns = ["Date", "PowerTrend Count"]
+        result["Date"] = result["Date"].dt.strftime("%Y-%m-%d")
+        return result.iloc[::-1].reset_index(drop=True).iloc[::-1]  # keep chronological
     except Exception:
         return pd.DataFrame()
 
@@ -1568,26 +1508,44 @@ def compute_leader_history(stocks_list, ticker_dfs, benchmark_df_leader):
         if not ticker_dfs:
             return pd.DataFrame()
 
-        timeline = ticker_dfs[list(ticker_dfs.keys())[0]].index
-        days = min(60, len(timeline))
-        records = []
+        all_series = []
 
-        for i in range(days - 1, -1, -1):
-            idx = -1 - i
-            date = timeline[idx]
-            count_leader = 0
+        for ticker, df in ticker_dfs.items():
+            if len(df) < 250:
+                continue
+            try:
+                rs = df['Close'] / benchmark_df_leader['Close']
+                rsMA = rs.ewm(span=21, adjust=False).mean()
+                histNH = rs.rolling(250).max()
+                sma50 = df['Close'].rolling(50).mean()
+                sma200 = df['Close'].rolling(200).mean()
 
-            for ticker, df in ticker_dfs.items():
-                if scan_leader(df, benchmark_df_leader, i):
-                    count_leader += 1
+                circleCond = (rs == histNH)
+                circleCount30 = circleCond.rolling(30).sum()
+                twoCircles30 = circleCount30 >= 2
 
-            records.append({
-                "Date": date.strftime("%Y-%m-%d"),
-                "Leader Count": count_leader
-            })
+                leader_series = (
+                    (twoCircles30 | circleCond) &
+                    (rs > rsMA) &
+                    (df['Close'] > sma50) &
+                    (df['Close'] > sma200) &
+                    (df['Close'] >= 20)
+                ).astype(int)
 
-        return pd.DataFrame(records)
+                all_series.append(leader_series)
+            except Exception:
+                continue
 
+        if not all_series:
+            return pd.DataFrame()
+
+        combined = pd.concat(all_series, axis=1).fillna(0)
+        daily_counts = combined.sum(axis=1)
+
+        result = daily_counts.tail(60).reset_index()
+        result.columns = ["Date", "Leader Count"]
+        result["Date"] = result["Date"].dt.strftime("%Y-%m-%d")
+        return result
     except Exception:
         return pd.DataFrame()
     
