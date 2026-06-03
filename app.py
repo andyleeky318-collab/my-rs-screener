@@ -584,29 +584,37 @@ def scan_gapper(df, lookback=0):
     gapPercent  = (df['Close'] / df['Close'].shift(1)) - 1
     gapUp10     = strictGapUp & (gapPercent >= 0.10)
 
-    # For each bar, compute bars-since-last-gap and the gap floor (high of pre-gap bar)
     bars_since  = pd.Series(np.inf, index=df.index)
     gap_floor   = pd.Series(np.nan, index=df.index)
-    counter     = np.inf
-    last_floor  = np.nan
+    # track the lowest low seen since the gap opened
+    min_low_since_gap = pd.Series(np.nan, index=df.index)
+
+    counter        = np.inf
+    last_floor     = np.nan
+    running_min_low = np.nan
 
     for i in range(len(df)):
         if gapUp10.iloc[i]:
-            counter    = 0
-            last_floor = df['High'].iloc[i - 1]   # high[1] at gap bar = pre-gap candle high
+            counter         = 0
+            last_floor      = df['High'].iloc[i - 1]   # pre-gap candle high = gap floor
+            running_min_low = df['Low'].iloc[i]         # reset: start tracking from gap bar
         else:
             counter += 1
-        bars_since.iloc[i] = counter
-        gap_floor.iloc[i]  = last_floor
+            if not np.isnan(running_min_low):
+                running_min_low = min(running_min_low, df['Low'].iloc[i])
+
+        bars_since.iloc[i]        = counter
+        gap_floor.iloc[i]         = last_floor
+        min_low_since_gap.iloc[i] = running_min_low
 
     # gapIn20: gap happened within last 20 bars
     gapIn20 = bars_since <= 20
 
-    # gapUnfilled: since the gap bar, no LOW has traded at or below the gap floor
-    # i.e. the current low is still above the pre-gap candle's high
-    gapUnfilled = df['Low'] > gap_floor
+    # strictUnfilled: the LOWEST low seen across every bar since the gap
+    # has never touched or breached the pre-gap candle's high
+    strictUnfilled = min_low_since_gap > gap_floor
 
-    result = gapIn20 & gapUnfilled & (df['Close'] >= 20)
+    result = gapIn20 & strictUnfilled & (df['Close'] >= 20)
     return bool(result.iloc[idx])
 
 def scan_engulfing(df, lookback=0):
