@@ -2645,7 +2645,7 @@ if _timing_log:
     # Top-level functions table
     # timing_records = [{"Function": k, "Time (ms)": f"{v:,.0f}", "Time (s)": f"{v/1000:.2f}"}
     #                   for k, v in sorted(main_rows.items(), key=lambda x: -x[1])]
-    timing_records = [{"Function": k, "Time (ms)": f"{v:,.0f}", "Time (s)": f"{v/1000:.2f}"}
+    timing_records = [{"Function": k, "Time (s)": f"{v/1000:.2f}"}
                       for k, v in main_rows.items()]
 
     if timing_records:
@@ -2667,7 +2667,6 @@ if _timing_log:
             # ]
             industry_records = [
                 {"Industry": k.replace("RS+Cloud [", "").replace("]", ""),
-                 "Time (ms)": f"{v:,.0f}",
                  "Time (s)": f"{v/1000:.2f}"}
                 for k, v in industry_rows.items()
             ]
