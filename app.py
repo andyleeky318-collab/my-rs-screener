@@ -579,21 +579,34 @@ def scan_two_botak(df, lookback=0):
 def scan_gapper(df, lookback=0):
     idx = -1 - lookback
     if len(df) < 22 + lookback: return False
+
     strictGapUp = df['Low'] > df['High'].shift(1)
     gapPercent  = (df['Close'] / df['Close'].shift(1)) - 1
     gapUp10     = strictGapUp & (gapPercent >= 0.10)
-    barsSince   = gapUp10[::-1].cumsum()[::-1]  # rolling bars-since via reverse cumsum trick
-    # Proper barssince: count bars since last True
-    bars_since_series = pd.Series(index=df.index, dtype=float)
-    counter = np.inf
-    for i in range(len(gapUp10)):
+
+    # For each bar, compute bars-since-last-gap and the gap floor (high of pre-gap bar)
+    bars_since  = pd.Series(np.inf, index=df.index)
+    gap_floor   = pd.Series(np.nan, index=df.index)
+    counter     = np.inf
+    last_floor  = np.nan
+
+    for i in range(len(df)):
         if gapUp10.iloc[i]:
-            counter = 0
+            counter    = 0
+            last_floor = df['High'].iloc[i - 1]   # high[1] at gap bar = pre-gap candle high
         else:
             counter += 1
-        bars_since_series.iloc[i] = counter
-    gapIn20 = bars_since_series <= 20
-    result  = gapIn20 & (df['Close'] >= 20)
+        bars_since.iloc[i] = counter
+        gap_floor.iloc[i]  = last_floor
+
+    # gapIn20: gap happened within last 20 bars
+    gapIn20 = bars_since <= 20
+
+    # gapUnfilled: since the gap bar, no LOW has traded at or below the gap floor
+    # i.e. the current low is still above the pre-gap candle's high
+    gapUnfilled = df['Low'] > gap_floor
+
+    result = gapIn20 & gapUnfilled & (df['Close'] >= 20)
     return bool(result.iloc[idx])
 
 def scan_engulfing(df, lookback=0):
