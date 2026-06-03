@@ -2296,7 +2296,7 @@ if ppp_list or ppp_yest:
     # ── All charts together, 3 per row ────────────────────────────────────
     if ppp_list:
         st.write("")
-        CHARTS_PER_ROW = 3
+        CHARTS_PER_ROW = 5
         CHART_SIZE     = 280   # square: width == height
 
         for row_start in range(0, len(ppp_list), CHARTS_PER_ROW):
@@ -2314,7 +2314,6 @@ if ppp_list or ppp_yest:
               padding:5px 8px;background:#161b22;
               border-radius:6px 6px 0 0;border:1px solid #30363d;border-bottom:none;">
     <span style="color:#e6edf3;font-size:12px;font-weight:600;letter-spacing:0.04em;">{sym}</span>
-    <span style="color:#7d8590;font-size:10px;">2mo · Daily</span>
   </div>
   <div id="{chart_id}"
        style="width:{CHART_SIZE}px;height:{CHART_SIZE}px;
