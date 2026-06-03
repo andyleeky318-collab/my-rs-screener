@@ -2,6 +2,17 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import time
+
+_timing_log = {}  # module-level dict, accumulates across all call sites
+
+def timed(label, fn, *args, **kwargs):
+    """Call fn(*args, **kwargs), record elapsed ms in _timing_log, return result."""
+    t0 = time.perf_counter()
+    result = fn(*args, **kwargs)
+    elapsed = (time.perf_counter() - t0) * 1000
+    _timing_log[label] = elapsed
+    return result
 
 # 1. Setup Streamlit Page
 st.set_page_config(page_title="Chrome Sector RS", layout="wide")
@@ -1008,7 +1019,11 @@ status_text = st.empty()
 industry_items = list(INDUSTRIES.items())
 for idx, (industry_name, tickers) in enumerate(industry_items):
     status_text.text(f"Processing {industry_name}...")
-    perf, rs_scores, cloud_list, price_lookup, rs_scores_prev, rs_scores_1m, cloud_21ema_list, cloud_wick_list, ma50_bounce_list = get_rs_and_cloud_data_cached(tuple(tickers), benchmark, 90)
+    perf, rs_scores, cloud_list, price_lookup, rs_scores_prev, rs_scores_1m, cloud_21ema_list, cloud_wick_list, ma50_bounce_list = timed(
+        f"RS+Cloud [{industry_name}]",
+        get_rs_and_cloud_data_cached,
+        tuple(tickers), benchmark, 90
+    )
     
     if rs_scores is not None:
         top_n_scores = rs_scores.nlargest(int(top_n))
@@ -1662,10 +1677,14 @@ def compute_historical_know_counts(stocks_list, ticker_dfs):
 stocks_tuple = tuple(KNOWN_STOCKS)
 
 # Single download — all history fns share this cached result
-ticker_dfs_shared, benchmark_df_shared = download_known_stocks_data(stocks_tuple)
+ticker_dfs_shared, benchmark_df_shared = timed(
+    "download_known_stocks_data",
+    download_known_stocks_data,
+    stocks_tuple
+)
 
 with st.spinner("Scanning pattern anomalies across known instruments..."):
-    results         = process_pattern_scanners(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
+    results       = timed("process_pattern_scanners",      process_pattern_scanners,      stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
     # historical_df   = compute_historical_know_counts(stocks_tuple, ticker_dfs_shared)   # moved here: renders first
     # two_botak_hist  = compute_two_botak_history(stocks_tuple, ticker_dfs_shared)
     # engulf_hist     = compute_engulfing_history(stocks_tuple, ticker_dfs_shared)
@@ -1678,7 +1697,7 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
 st.markdown("---")
 
 with st.spinner("Computing Historical Known Counts..."):
-    historical_df = compute_historical_know_counts(stocks_tuple, ticker_dfs_shared)
+    historical_df = timed("compute_historical_know_counts", compute_historical_know_counts, stocks_tuple, ticker_dfs_shared)
 
 # ==============================================================================
 # 9. AUTOMATED BREADTH MARKET REGIME INTERPRETATION
@@ -1934,7 +1953,7 @@ else:
 st.markdown("---")
 
 with st.spinner("Scanning for Leader History..."):
-    leader_hist = compute_leader_history(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
+    leader_hist   = timed("compute_leader_history",        compute_leader_history,        stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
 
 #st.write(f"Percentage of stock above EMA200: {pct_above_ema200:.2f}%")
 
@@ -2004,7 +2023,7 @@ if not leader_hist.empty:
 st.markdown("---")
 
 with st.spinner("Scanning for Two Botak History..."):
-    two_botak_hist = compute_two_botak_history(stocks_tuple, ticker_dfs_shared)
+    two_botak_hist= timed("compute_two_botak_history",     compute_two_botak_history,     stocks_tuple, ticker_dfs_shared)
 
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
 st.markdown(f"#### 🔥 Two Botak = Awareness short term group burst ({len(b_list)})")
@@ -2066,7 +2085,7 @@ if not two_botak_hist.empty:
 st.markdown("---")
 
 with st.spinner("Scanning for Bullish Engulfing History..."):
-    engulf_hist = compute_engulfing_history(stocks_tuple, ticker_dfs_shared)
+    engulf_hist   = timed("compute_engulfing_history",     compute_engulfing_history,     stocks_tuple, ticker_dfs_shared)
 
 # --- 3. BULLISH ENGULFING (Full Horizontal Row Below Tight PPP) ---
 total_engulf = len(e2_list) + len(e3_list)
@@ -2186,7 +2205,7 @@ if not engulf_hist.empty:
 st.markdown("---")
 
 with st.spinner("Scanning for PowerTrend History..."):
-    powertrend_hist = compute_powertrend_history(stocks_tuple, ticker_dfs_shared)
+    powertrend_hist=timed("compute_powertrend_history",    compute_powertrend_history,    stocks_tuple, ticker_dfs_shared)
 
 # --- 4. POWERTREND (Full Horizontal Row) ---
 st.markdown(f"#### ⚡ PowerTrend = Awareness thematic leaders extended ({len(pt_list)})")
@@ -2294,3 +2313,42 @@ else:
     st.info("No active setups discovered.")
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
+
+# ── Timing Summary ───────────────────────────────────────────────────────────
+st.markdown("---")
+st.markdown("#### ⏱ Function Timing")
+
+if _timing_log:
+    # Separate industry-level rows from top-level function rows
+    industry_rows = {k: v for k, v in _timing_log.items() if k.startswith("RS+Cloud")}
+    main_rows     = {k: v for k, v in _timing_log.items() if not k.startswith("RS+Cloud")}
+
+    # Top-level functions table
+    timing_records = [{"Function": k, "Time (ms)": f"{v:,.0f}", "Time (s)": f"{v/1000:.2f}"}
+                      for k, v in sorted(main_rows.items(), key=lambda x: -x[1])]
+
+    if timing_records:
+        st.dataframe(
+            pd.DataFrame(timing_records),
+            use_container_width=True,
+            hide_index=True
+        )
+
+    # Industry RS breakdown — collapsed by default
+    if industry_rows:
+        total_rs_ms = sum(industry_rows.values())
+        with st.expander(f"RS+Cloud per industry — {len(industry_rows)} groups, total {total_rs_ms/1000:.2f}s"):
+            industry_records = [
+                {"Industry": k.replace("RS+Cloud [", "").replace("]", ""),
+                 "Time (ms)": f"{v:,.0f}",
+                 "Time (s)": f"{v/1000:.2f}"}
+                for k, v in sorted(industry_rows.items(), key=lambda x: -x[1])
+            ]
+            st.dataframe(
+                pd.DataFrame(industry_records),
+                use_container_width=True,
+                hide_index=True
+            )
+
+    total_ms = sum(_timing_log.values())
+    st.caption(f"Total measured wall-clock time: **{total_ms/1000:.2f}s** across {len(_timing_log)} tracked calls")
