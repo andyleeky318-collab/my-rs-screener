@@ -1278,8 +1278,8 @@ if all_data:
                 if ticker_sym in LIME_STOCKS:
                     ticker_html += (
                         f'<div class="ticker-badge lime-badge">'
-                        f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{ticker_sym}</span>' 
-                        f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{rs_score:.0f}</span>' 
+                        f'<span class="ticker-name" style="color: #ffffff; font-weight: bold;">{ticker_sym}</span>' 
+                        f'<span class="ticker-rs" style="color: #ffffff; font-weight: bold; margin-left: 5px;">{rs_score:.0f}</span>' 
                         f'</div>'
                     )
                 elif ticker_sym in KNOWN_STOCKS:
@@ -1312,8 +1312,8 @@ if all_data:
             if cloud_sym in LIME_STOCKS:
                 cloud_html += (
                     f'<div class="ticker-badge lime-badge">'
-                    f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{cloud_sym}</span>'
-                    f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{cloud_rs:.0f}</span>'
+                    f'<span class="ticker-name" style="color: #ffffff; font-weight: bold;">{cloud_sym}</span>'
+                    f'<span class="ticker-rs" style="color: #ffffff; font-weight: bold; margin-left: 5px;">{cloud_rs:.0f}</span>'
                     f'</div>'
                 )
             elif cloud_sym in KNOWN_STOCKS:
@@ -1344,8 +1344,8 @@ if all_data:
             if cloud_sym in LIME_STOCKS:
                 cloud_21ema_html += (
                     f'<div class="ticker-badge lime-badge">'
-                    f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{cloud_sym}</span>'
-                    f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{cloud_rs:.0f}</span>'
+                    f'<span class="ticker-name" style="color: #ffffff; font-weight: bold;">{cloud_sym}</span>'
+                    f'<span class="ticker-rs" style="color: #ffffff; font-weight: bold; margin-left: 5px;">{cloud_rs:.0f}</span>'
                     f'</div>'
                 )
             elif cloud_sym in KNOWN_STOCKS:
@@ -1377,8 +1377,8 @@ if all_data:
             if cloud_sym in LIME_STOCKS:
                 cloud_wick_html += (
                     f'<div class="ticker-badge lime-badge">'
-                    f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{cloud_sym}</span>'
-                    f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{cloud_rs:.0f}</span>'
+                    f'<span class="ticker-name" style="color: #ffffff; font-weight: bold;">{cloud_sym}</span>'
+                    f'<span class="ticker-rs" style="color: #ffffff; font-weight: bold; margin-left: 5px;">{cloud_rs:.0f}</span>'
                     f'</div>'
                 )
             elif cloud_sym in KNOWN_STOCKS:
@@ -1409,8 +1409,8 @@ if all_data:
             if cloud_sym in LIME_STOCKS:
                 ma50_bounce_html += (
                     f'<div class="ticker-badge lime-badge">'
-                    f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{cloud_sym}</span>'
-                    f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{cloud_rs:.0f}</span>'
+                    f'<span class="ticker-name" style="color: #ffffff; font-weight: bold;">{cloud_sym}</span>'
+                    f'<span class="ticker-rs" style="color: #ffffff; font-weight: bold; margin-left: 5px;">{cloud_rs:.0f}</span>'
                     f'</div>'
                 )
             elif cloud_sym in KNOWN_STOCKS:
