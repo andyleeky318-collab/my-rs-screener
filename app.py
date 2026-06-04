@@ -1065,9 +1065,16 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                 # --- Gapper ---
                 if df_len >= 22:
                     df_g = ticker_df.copy().reset_index(drop=True)
-                    strict_gap  = df_g['Low'] > df_g['High'].shift(1)
-                    gap_pct     = (df_g['Close'] / df_g['Close'].shift(1)) - 1
-                    gapUp10     = strict_gap & (gap_pct >= 0.10)
+                    strict_gap = df_g['Low'] > df_g['High'].shift(1)
+
+                    gap_pct = (df_g['Close'] / df_g['Close'].shift(1)) - 1
+
+                    max_gap_200 = gap_pct.shift(1).rolling(200, min_periods=1).max()
+
+                    gapUp10 = strict_gap & (
+                        (gap_pct >= 0.10) |
+                        (gap_pct >= max_gap_200 * 0.99)
+                    )
 
                     bars_since_g        = pd.Series(np.inf,  index=df_g.index)
                     gap_floor_g         = pd.Series(np.nan,  index=df_g.index)
