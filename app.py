@@ -2436,7 +2436,7 @@ if e3_list or e3_yest:
         st.markdown(html_e3, unsafe_allow_html=True)
 else:
     #st.info("No active setups discovered.")
-    st.markdown("**3x Engulfing Conditions Matched (0):**")
+    st.markdown("**3x Engulfing (0):**")
 
 if not engulf_hist.empty:
     # --- 2. 3x Engulfing Chart ---
@@ -2688,7 +2688,7 @@ else:
 st.markdown("---")
 
 # --- GAPPER SECTION ---
-st.markdown(f"#### 🚀 Gapper ({len(gapper_list)})")
+st.markdown(f"#### 🚀 Gapper Earning Drift ({len(gapper_list)})")
 
 if gapper_list or gapper_yest:
     # ── Badge row ─────────────────────────────────────────────────────────
