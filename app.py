@@ -1112,14 +1112,15 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                         (open_series  < low_series.shift(1)) &
                         (close_series > high_series.shift(1))
                     )
-                    eng_close  = close_series.where(be_s, other=pd.NA).ffill()
-                    eng_close_2= close_series.where(be_s, other=pd.NA).shift(1).ffill()
-                    eng_close_3= close_series.where(be_s, other=pd.NA).shift(2).ffill()
-                    cnt30      = be_s.rolling(30).sum()
+                    ec_s        = close_series.where(be_s, other=pd.NA)
+                    eng1_s      = ec_s.shift(1).ffill()   # most recent prior engulf close
+                    eng2_s      = ec_s.shift(2).ffill()   # 2nd most recent prior engulf close
+                    eng3_s      = ec_s.shift(3).ffill()   # 3rd most recent prior engulf close
+                    cnt30       = be_s.rolling(30).sum()
 
-                    two_e  = (cnt30 >= 2) & (close_series > 20) & (close_series > eng_close.shift(1)) & (close_series > eng_close_2.shift(1))
-                    three_e= (cnt30 >= 3) & (close_series > 20) & (close_series > eng_close.shift(1)) & (close_series > eng_close_2.shift(1)) & (close_series > eng_close_3.shift(1))
-
+                    two_e  = (cnt30 >= 2) & (close_series > 20) & (close_series > eng1_s) & (close_series > eng2_s)
+                    three_e= (cnt30 >= 3) & (close_series > 20) & (close_series > eng1_s) & (close_series > eng2_s) & (close_series > eng3_s)
+                    
                     # today
                     if bool(two_e.iloc[-1]):   engulf2_matches.append(ticker)
                     if bool(three_e.iloc[-1]): engulf3_matches.append(ticker)
