@@ -902,6 +902,8 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
         ema200_above_count = 0
         ema200_total_count = 0
 
+        benchmark_df = benchmark_df_input
+
         for ticker in stocks_list:
             try:
                 ticker_df = ticker_dfs.get(ticker)
@@ -914,81 +916,107 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
 
                 # Cache Close series to reduce repeatedly accessing a string key index on DataFrame
                 close_series = ticker_df['Close']
+                high_series  = ticker_df['High']
+                low_series   = ticker_df['Low']
+                open_series  = ticker_df['Open']
+                vol_series   = ticker_df['Volume']
 
-                # Calculate EMA 200 for the current stock
+                # ── Pre-compute shared indicator series ONCE per ticker ──────────────────
+                # These are reused by multiple scan blocks below for both today and yesterday
+
+                # EMA 200
                 if df_len >= 200:
-                    current_close = close_series.iloc[-1]
-                    ema200 = close_series.ewm(span=200, adjust=False).mean().iloc[-1]
+                    ema200_val = close_series.ewm(span=200, adjust=False).mean().iloc[-1]
                     ema200_total_count += 1
-                    if current_close > ema200:
+                    if close_series.iloc[-1] > ema200_val:
                         ema200_above_count += 1
-                
+
+                # SMA 50 / 150 / 200
+                sma50_series  = close_series.rolling(50).mean()  if df_len >= 50  else None
+                sma150_series = close_series.rolling(150).mean() if df_len >= 150 else None
+                sma200_series = close_series.rolling(200).mean() if df_len >= 200 else None
+
+                # ATR (14) — used by powertrend_ne, value_trap, scan_ppp
+                if df_len >= 15:
+                    high_low   = high_series - low_series
+                    high_close = (high_series - close_series.shift(1)).abs()
+                    low_close  = (low_series  - close_series.shift(1)).abs()
+                    tr_series  = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+                    atr14      = tr_series.rolling(14).mean()
+                    atr_pct    = (atr14 / close_series) * 100
+                else:
+                    atr14 = atr_pct = None
+
+                # EMA 50 (PowerTrend)
+                powerma = close_series.ewm(span=50, adjust=False).mean() if df_len >= 52 else None
+
+                # RS (Leader)
+                rs_series = (close_series / benchmark_df['Close']) if df_len >= 250 else None
+
                 # ==============================================================
                 # OPTIMIZED MINERVINI SCRIPTS BLOCK (TOP 1 PERFORMANCE BOOST)
                 # ==============================================================
                 if ticker in KNOWN_STOCKS and df_len >= 261:
                     # 1. Compute rolling averages as local temporary series (avoids costly df column allocation updates)
-                    sma50_series = close_series.rolling(window=50).mean()
-                    sma150_series = close_series.rolling(window=150).mean()
-                    sma200_series = close_series.rolling(window=200).mean()
+                    # sma50_series / sma200_series already computed above
 
                     # 2. Extract Today's Scalar Points (Index -1)
                     currentClose = close_series.iloc[-1]
-                    prevClose = close_series.iloc[-2]
-                    Volume = ticker_df["Volume"].iloc[-1]
-                    moving_average_50 = sma50_series.iloc[-1]
+                    prevClose    = close_series.iloc[-2]
+                    Volume       = vol_series.iloc[-1]
+                    moving_average_50  = sma50_series.iloc[-1]
                     moving_average_200 = sma200_series.iloc[-1]
                     moving_average_200_20 = sma200_series.iloc[-20]
                     
                     # Massively speed up 52-week min/max ranges by utilizing raw NumPy array views (.values)
-                    low_of_52week = round(ticker_df["Low"].values[-260:].min(), 2)
+                    low_of_52week  = round(ticker_df["Low"].values[-260:].min(), 2)
                     high_of_52week = round(ticker_df["High"].values[-260:-1].max(), 2)
 
                     # Today's Evaluation Matrix
-                    cond1_t = int(currentClose > moving_average_50 > moving_average_200)
-                    cond2_t = int(moving_average_50 > moving_average_200)
-                    cond3_t = int(moving_average_200 > moving_average_200_20)
-                    cond4_t = cond2_t  # Derived directly from cond2_t to completely eliminate a redundant boolean check
-                    cond5_t = int(currentClose > moving_average_50)
-                    cond6_t = int(currentClose >= (1.3 * low_of_52week))
-                    cond7_t = int(currentClose >= (0.75 * high_of_52week))
-                    cond8_t = int(currentClose >= 20)
-                    cond9_t = int(Volume > 20000)
+                    cond1_t  = int(currentClose > moving_average_50 > moving_average_200)
+                    cond2_t  = int(moving_average_50 > moving_average_200)
+                    cond3_t  = int(moving_average_200 > moving_average_200_20)
+                    cond4_t  = cond2_t  # Derived directly from cond2_t to completely eliminate a redundant boolean check
+                    cond5_t  = int(currentClose > moving_average_50)
+                    cond6_t  = int(currentClose >= (1.3 * low_of_52week))
+                    cond7_t  = int(currentClose >= (0.75 * high_of_52week))
+                    cond8_t  = int(currentClose >= 20)
+                    cond9_t  = int(Volume > 20000)
                     cond10_t = int((Volume * currentClose) > 2000000)
                     
                     total_today = (cond1_t + cond2_t + cond3_t + cond4_t + cond5_t + 
                                    cond6_t + cond7_t + cond8_t + cond9_t + cond10_t)
 
                     # 3. Extract Yesterday's Scalar Points (Index -2)
-                    yestClose = close_series.iloc[-2]
-                    yestVolume = ticker_df["Volume"].iloc[-2]
-                    yest_ma_50 = sma50_series.iloc[-2]
-                    yest_ma_200 = sma200_series.iloc[-2]
-                    yest_ma_200_20 = sma200_series.iloc[-21]
+                    yestClose  = close_series.iloc[-2]
+                    yestVolume = vol_series.iloc[-2]
+                    yest_ma_50       = sma50_series.iloc[-2]
+                    yest_ma_200      = sma200_series.iloc[-2]
+                    yest_ma_200_20   = sma200_series.iloc[-21]
                     
-                    yest_low_of_52week = round(ticker_df["Low"].values[-261:-1].min(), 2)
+                    yest_low_of_52week  = round(ticker_df["Low"].values[-261:-1].min(), 2)
                     yest_high_of_52week = round(ticker_df["High"].values[-261:-2].max(), 2)
 
                     # Yesterday's Evaluation Matrix
-                    cond1_y = int(yestClose > yest_ma_50 > yest_ma_200)
-                    cond2_y = int(yest_ma_50 > yest_ma_200)
-                    cond3_y = int(yest_ma_200 > yest_ma_200_20)
-                    cond4_y = cond2_y
-                    cond5_y = int(yestClose > yest_ma_50)
-                    cond6_y = int(yestClose >= (1.3 * yest_low_of_52week))
-                    cond7_y = int(yestClose >= (0.75 * yest_high_of_52week))
-                    cond8_y = int(yestClose >= 20)
-                    cond9_y = int(yestVolume > 20000)
+                    cond1_y  = int(yestClose > yest_ma_50 > yest_ma_200)
+                    cond2_y  = int(yest_ma_50 > yest_ma_200)
+                    cond3_y  = int(yest_ma_200 > yest_ma_200_20)
+                    cond4_y  = cond2_y
+                    cond5_y  = int(yestClose > yest_ma_50)
+                    cond6_y  = int(yestClose >= (1.3 * yest_low_of_52week))
+                    cond7_y  = int(yestClose >= (0.75 * yest_high_of_52week))
+                    cond8_y  = int(yestClose >= 20)
+                    cond9_y  = int(yestVolume > 20000)
                     cond10_y = int((yestVolume * yestClose) > 2000000)
 
                     total_yesterday = (cond1_y + cond2_y + cond3_y + cond4_y + cond5_y + 
                                        cond6_y + cond7_y + cond8_y + cond9_y + cond10_y)
                     
                     is_at_52wk_high_today = currentClose >= high_of_52week
-                    is_at_52wk_high_yest = yestClose >= yest_high_of_52week
+                    is_at_52wk_high_yest  = yestClose >= yest_high_of_52week
                     
                     qualified_today_52w = (is_at_52wk_high_today and total_today < 10)
-                    was_qualified_yest = (is_at_52wk_high_yest and total_yesterday < 10)
+                    was_qualified_yest  = (is_at_52wk_high_yest  and total_yesterday < 10)
                     
                     if qualified_today_52w:
                         is_new_addition_52w = not was_qualified_yest
@@ -999,8 +1027,8 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                     # Set flags
                     if total_today >= 10:
                         know_total_count += 1
-                        is_new_addition = (total_yesterday < 10)
-                        is_positive_today = (currentClose > prevClose)
+                        is_new_addition    = (total_yesterday < 10)
+                        is_positive_today  = (currentClose > prevClose)
                         email_content_stocks.append((ticker, is_new_addition, is_positive_today))
                         
                         if currentClose > prevClose:
@@ -1009,34 +1037,162 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                         email_content_removed.append(ticker)
                 # ==============================================================
 
-                # Benchmark setup
-                benchmark_df = benchmark_df_input
+                # ── INLINE SCAN LOGIC (replaces all scan_* function calls) ───────────────
+                # Each block evaluates today (idx=-1) and yesterday (idx=-2) in one pass.
+                # Original scan_* functions are preserved above and unchanged.
 
-                # Scan Today
-                if scan_two_botak(ticker_df, 0): botak_matches.append(ticker)
-                e2, e3 = scan_engulfing(ticker_df, 0)
-                if e2: engulf2_matches.append(ticker)
-                if e3: engulf3_matches.append(ticker)
-                if scan_powertrend(ticker_df, 0): powertrend_matches.append(ticker)
-                if scan_powertrend_not_extended(ticker_df, 0): powertrend_ne_matches.append(ticker)
-                if scan_value_trap(ticker_df, 0): value_trap_matches.append(ticker)
-                if scan_ppp(ticker_df, 0): ppp_matches.append(ticker)
-                if scan_leader(ticker_df, benchmark_df, 0):
-                    leader_matches.append(ticker)
-                if scan_gapper(ticker_df, 0): gapper_matches.append(ticker)
+                # --- Two Botak ---
+                if df_len >= 2:
+                    botak_s = (
+                        (close_series - high_series).abs() < 0.05
+                    ) & (close_series > open_series)
+                    pct_s = (
+                        (close_series > open_series) &
+                        (((close_series - open_series) /
+                          (high_series - open_series).replace(0, 0.001)) > 0.9)
+                    )
+                    two_botak_s = (
+                        ((botak_s & botak_s.shift(1)) |
+                         (botak_s & pct_s.shift(1))   |
+                         (pct_s   & botak_s.shift(1)) |
+                         (pct_s   & pct_s.shift(1)))  &
+                        (close_series > 20)
+                    )
+                    if bool(two_botak_s.iloc[-1]): botak_matches.append(ticker)
+                    if bool(two_botak_s.iloc[-2]): botak_yest.append(ticker)
 
-                # Scan Yesterday
-                if scan_two_botak(ticker_df, 1): botak_yest.append(ticker)
-                e2y, e3y = scan_engulfing(ticker_df, 1)
-                if e2y: engulf2_yest.append(ticker)
-                if e3y: engulf3_yest.append(ticker)
-                if scan_powertrend(ticker_df, 1): powertrend_yest.append(ticker)
-                if scan_powertrend_not_extended(ticker_df, 1): powertrend_ne_yest.append(ticker)
-                if scan_value_trap(ticker_df, 1): value_trap_yest.append(ticker)
-                if scan_ppp(ticker_df, 1): ppp_yest.append(ticker)
-                if scan_leader(ticker_df, benchmark_df, 1):
-                    leader_yest.append(ticker)
-                if scan_gapper(ticker_df, 1): gapper_yest.append(ticker)
+                # --- Gapper ---
+                if df_len >= 22:
+                    df_g = ticker_df.copy().reset_index(drop=True)
+                    strict_gap  = df_g['Low'] > df_g['High'].shift(1)
+                    gap_pct     = (df_g['Close'] / df_g['Close'].shift(1)) - 1
+                    gapUp10     = strict_gap & (gap_pct >= 0.10)
+
+                    bars_since_g        = pd.Series(np.inf,  index=df_g.index)
+                    gap_floor_g         = pd.Series(np.nan,  index=df_g.index)
+                    gap_ceiling_g       = pd.Series(np.nan,  index=df_g.index)
+                    min_low_since_gap_g = pd.Series(np.nan,  index=df_g.index)
+
+                    ctr_g = np.inf; fl_g = np.nan; ceil_g = np.nan; run_min_g = np.nan
+
+                    for i in range(1, len(df_g)):
+                        if gapUp10.iloc[i]:
+                            ctr_g     = 0
+                            fl_g      = df_g['High'].iloc[i - 1]
+                            ceil_g    = df_g['Low'].iloc[i]
+                            run_min_g = df_g['Low'].iloc[i]
+                        else:
+                            ctr_g += 1
+                            if not np.isnan(run_min_g):
+                                run_min_g = min(run_min_g, df_g['Low'].iloc[i])
+                                # --- THE FIX: Check if the gap was filled on this bar ---
+                                if run_min_g <= fl_g:
+                                    # Gap is filled! Reset variables so it doesn't carry forward
+                                    ctr_g     = np.inf
+                                    fl_g      = np.nan
+                                    ceil_g    = np.nan
+                                    run_min_g = np.nan
+                        bars_since_g.iloc[i]         = ctr_g
+                        gap_floor_g.iloc[i]          = fl_g
+                        gap_ceiling_g.iloc[i]        = ceil_g
+                        min_low_since_gap_g.iloc[i]  = run_min_g
+
+                    gapIn20_g      = bars_since_g        <= 20
+                    validGap_g     = gap_floor_g         <  gap_ceiling_g
+                    strictUnfill_g = min_low_since_gap_g >  gap_floor_g
+                    result_g       = gapIn20_g & strictUnfill_g & validGap_g & (df_g['Close'] >= 20)
+
+                    if bool(result_g.iloc[-1]):  gapper_matches.append(ticker)
+                    if bool(result_g.iloc[-2]):  gapper_yest.append(ticker)
+
+                # --- Bullish Engulfing ---
+                if df_len >= 31:
+                    be_s = (
+                        (open_series  < low_series.shift(1)) &
+                        (close_series > high_series.shift(1))
+                    )
+                    ec_s   = close_series.where(be_s, other=pd.NA)
+                    eng1_s = ec_s.shift(1).ffill()
+                    eng2_s = ec_s.shift(2).ffill()
+                    eng3_s = ec_s.shift(3).ffill()
+                    cnt30  = be_s.rolling(30).sum()
+
+                    two_e  = (cnt30 >= 2) & (close_series > 20) & (close_series > eng1_s) & (close_series > eng2_s)
+                    three_e= (cnt30 >= 3) & (close_series > 20) & (close_series > eng1_s) & (close_series > eng2_s) & (close_series > eng3_s)
+
+                    # today
+                    if bool(two_e.iloc[-1]):   engulf2_matches.append(ticker)
+                    if bool(three_e.iloc[-1]): engulf3_matches.append(ticker)
+                    # yesterday
+                    if bool(two_e.iloc[-2]):   engulf2_yest.append(ticker)
+                    if bool(three_e.iloc[-2]): engulf3_yest.append(ticker)
+
+                # --- PowerTrend & PowerTrend Not Extended ---
+                if powerma is not None and df_len >= 52:
+                    grad_s     = powerma - powerma.shift(1)
+                    grad_pct_s = (grad_s / powerma.shift(1)) * 100
+                    abs_grad_s = grad_pct_s.abs()
+
+                    pt_s = (grad_s > 0) & (abs_grad_s >= 1.0) & (close_series >= 20)
+
+                    if bool(pt_s.iloc[-1]): powertrend_matches.append(ticker)
+                    if bool(pt_s.iloc[-2]): powertrend_yest.append(ticker)
+
+                    if atr_pct is not None and sma50_series is not None:
+                        pct_gain_s  = ((close_series - sma50_series) / sma50_series) * 100
+                        atr_mult2_s = pct_gain_s / atr_pct.replace(0, 0.001)
+                        atr_mult_s  = (atr_mult2_s * 10).fillna(0).astype(int) / 10
+                        ptne_s = pt_s & (atr_mult_s <= 4)
+
+                        if bool(ptne_s.iloc[-1]): powertrend_ne_matches.append(ticker)
+                        if bool(ptne_s.iloc[-2]): powertrend_ne_yest.append(ticker)
+
+                # --- Value Trap ---
+                if atr_pct is not None and sma50_series is not None and df_len >= 50:
+                    pct_gain_vt  = ((close_series - sma50_series) / sma50_series) * 100
+                    atr_mult2_vt = pct_gain_vt / atr_pct.replace(0, 0.001)
+                    atr_mult2_vt = atr_mult2_vt.replace([float('inf'), -float('inf')], pd.NA)
+                    atr_mult_vt  = (atr_mult2_vt.fillna(0) * 10).astype(int) / 10
+                    vt_s = (atr_mult_vt < -4) & (close_series >= 20)
+
+                    if bool(vt_s.iloc[-1]): value_trap_matches.append(ticker)
+                    if bool(vt_s.iloc[-2]): value_trap_yest.append(ticker)
+
+                # --- PPP ---
+                if df_len >= 200 and sma50_series is not None and sma200_series is not None and atr_pct is not None:
+                    dyn_sens = atr_pct * 0.2
+                    day0_s   = (open_series + close_series) / 2
+                    day1_s   = day0_s.shift(1)
+                    day2_s   = day0_s.shift(2)
+                    diff0_s  = ((day0_s - day1_s) / day1_s.replace(0, 0.001) * 100).abs()
+                    diff1_s  = ((day1_s - day2_s) / day2_s.replace(0, 0.001) * 100).abs()
+                    ma_filt  = (
+                        (close_series >= sma200_series) &
+                        (close_series >= sma50_series)  &
+                        (close_series >= 20)
+                    )
+                    ppp_s = (diff0_s < dyn_sens) & (diff1_s < dyn_sens) & ma_filt
+
+                    if bool(ppp_s.iloc[-1]): ppp_matches.append(ticker)
+                    if bool(ppp_s.iloc[-2]): ppp_yest.append(ticker)
+
+                # --- Leader ---
+                if rs_series is not None and df_len >= 250 and sma50_series is not None and sma200_series is not None:
+                    rs_ma_s    = rs_series.ewm(span=21, adjust=False).mean()
+                    hist_nh_s  = rs_series.rolling(250).max()
+                    circle_s   = (rs_series == hist_nh_s)
+                    cc30_s     = circle_s.rolling(30).sum()
+                    two_c_s    = cc30_s >= 2
+
+                    leader_s = (
+                        (two_c_s | circle_s)         &
+                        (rs_series > rs_ma_s)         &
+                        (close_series > sma50_series) &
+                        (close_series > sma200_series)&
+                        (close_series >= 20)
+                    )
+                    if bool(leader_s.iloc[-1]): leader_matches.append(ticker)
+                    if bool(leader_s.iloc[-2]): leader_yest.append(ticker)
 
             except:
                 continue
@@ -1086,7 +1242,7 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
         )
     except:
         return [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, [], [], [], [], 0
-
+    
 # 5. UI Layout & Logic
 #st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
 
