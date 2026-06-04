@@ -1112,14 +1112,13 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                         (open_series  < low_series.shift(1)) &
                         (close_series > high_series.shift(1))
                     )
-                    ec_s   = close_series.where(be_s, other=pd.NA)
-                    eng1_s = ec_s.shift(1).ffill()
-                    eng2_s = ec_s.shift(2).ffill()
-                    eng3_s = ec_s.shift(3).ffill()
-                    cnt30  = be_s.rolling(30).sum()
+                    eng_close  = close_series.where(be_s, other=pd.NA).ffill()
+                    eng_close_2= close_series.where(be_s, other=pd.NA).shift(1).ffill()
+                    eng_close_3= close_series.where(be_s, other=pd.NA).shift(2).ffill()
+                    cnt30      = be_s.rolling(30).sum()
 
-                    two_e  = (cnt30 >= 2) & (close_series > 20) & (close_series > eng1_s) & (close_series > eng2_s)
-                    three_e= (cnt30 >= 3) & (close_series > 20) & (close_series > eng1_s) & (close_series > eng2_s) & (close_series > eng3_s)
+                    two_e  = (cnt30 >= 2) & (close_series > 20) & (close_series > eng_close.shift(1)) & (close_series > eng_close_2.shift(1))
+                    three_e= (cnt30 >= 3) & (close_series > 20) & (close_series > eng_close.shift(1)) & (close_series > eng_close_2.shift(1)) & (close_series > eng_close_3.shift(1))
 
                     # today
                     if bool(two_e.iloc[-1]):   engulf2_matches.append(ticker)
@@ -2366,27 +2365,6 @@ if e2_list or e3_list or e2_yest or e3_yest:
             html_e2 += f'<div class="ticker-badge removed-badge">{sym}</div>'
             
         st.markdown(html_e2, unsafe_allow_html=True)
-
-        # DEBUG
-        for sym in e2_list:
-            ticker_df = ticker_dfs_shared.get(sym)
-            if ticker_df is not None:
-                close_series = ticker_df['Close']
-                open_series  = ticker_df['Open']
-                high_series  = ticker_df['High']
-                low_series   = ticker_df['Low']
-                be_s   = (open_series < low_series.shift(1)) & (close_series > high_series.shift(1))
-                ec_s   = close_series.where(be_s, other=pd.NA)
-                eng1_s = ec_s.shift(1).ffill()
-                eng2_s = ec_s.shift(2).ffill()
-                cnt30  = be_s.rolling(30).sum()
-                two_e  = (cnt30 >= 2) & (close_series > 20) & (close_series > eng1_s) & (close_series > eng2_s)
-                with st.expander(f"🔍 Debug: {sym}"):
-                    st.write(f"**close_series** (last 5):", close_series.tail(5))
-                    st.write(f"**eng1_s** (last 5):", eng1_s.tail(5))
-                    st.write(f"**eng2_s** (last 5):", eng2_s.tail(5))
-                    st.write(f"**two_e** (last 5):", two_e.tail(5))
-        # END DEBUG
     
     # st.write("")
     # if len(e3_list) == 0 and len(e3_yest) == 0:
