@@ -1112,10 +1112,10 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                         (open_series  < low_series.shift(1)) &
                         (close_series > high_series.shift(1))
                     )
-                    ec_s        = close_series.where(be_s, other=pd.NA)
-                    eng1_s      = ec_s.shift(1).ffill()   # most recent prior engulf close
-                    eng2_s      = ec_s.shift(2).ffill()   # 2nd most recent prior engulf close
-                    eng3_s      = ec_s.shift(3).ffill()   # 3rd most recent prior engulf close
+                    ec_s   = close_series.where(be_s, other=pd.NA)
+                    eng1_s = ec_s.shift(1).ffill()                    # most recent prior engulf
+                    eng2_s = ec_s.shift(1).where(ec_s.shift(1) != eng1_s).ffill()   # 2nd most recent
+                    eng3_s = ec_s.shift(1).where((ec_s.shift(1) != eng1_s) & (ec_s.shift(1) != eng2_s)).ffill()  # 3rd
                     cnt30       = be_s.rolling(30).sum()
 
                     two_e  = (cnt30 >= 2) & (close_series > 20) & (close_series > eng1_s) & (close_series > eng2_s)
@@ -2863,36 +2863,36 @@ if _timing_log:
 
 st.markdown(html_e2, unsafe_allow_html=True)
 
-# DEBUG ENGULFING
-for sym in e2_list:
-    ticker_df = ticker_dfs_shared.get(sym)
-    if ticker_df is None:
-        continue
-    close_series = ticker_df['Close']
-    open_series  = ticker_df['Open']
-    high_series  = ticker_df['High']
-    low_series   = ticker_df['Low']
+# # DEBUG ENGULFING
+# for sym in e2_list:
+#     ticker_df = ticker_dfs_shared.get(sym)
+#     if ticker_df is None:
+#         continue
+#     close_series = ticker_df['Close']
+#     open_series  = ticker_df['Open']
+#     high_series  = ticker_df['High']
+#     low_series   = ticker_df['Low']
 
-    be_s   = (open_series < low_series.shift(1)) & (close_series > high_series.shift(1))
-    ec_s   = close_series.where(be_s, other=pd.NA)
-    eng1_s = ec_s.shift(1).ffill()
-    eng2_s = ec_s.shift(2).ffill()
-    eng3_s = ec_s.shift(3).ffill()
-    cnt30  = be_s.rolling(30).sum()
-    two_e  = (cnt30 >= 2) & (close_series > 20) & (close_series > eng1_s) & (close_series > eng2_s)
+#     be_s   = (open_series < low_series.shift(1)) & (close_series > high_series.shift(1))
+#     ec_s   = close_series.where(be_s, other=pd.NA)
+#     eng1_s = ec_s.shift(1).ffill()
+#     eng2_s = ec_s.shift(2).ffill()
+#     eng3_s = ec_s.shift(3).ffill()
+#     cnt30  = be_s.rolling(30).sum()
+#     two_e  = (cnt30 >= 2) & (close_series > 20) & (close_series > eng1_s) & (close_series > eng2_s)
 
-    with st.expander(f"🔍 Engulf Debug: {sym}"):
-        st.markdown("**Last 5 rows — all variables**")
-        debug_df = pd.DataFrame({
-            "close"  : close_series,
-            "eng1"   : eng1_s,
-            "eng2"   : eng2_s,
-            "cnt30"  : cnt30,
-            "be_s"   : be_s,
-            "two_e"  : two_e,
-            "c>20"   : close_series > 20,
-            "c>eng1" : close_series > eng1_s,
-            "c>eng2" : close_series > eng2_s,
-        }).tail(5)
-        st.dataframe(debug_df, use_container_width=True)
-# END DEBUG ENGULFING
+#     with st.expander(f"🔍 Engulf Debug: {sym}"):
+#         st.markdown("**Last 5 rows — all variables**")
+#         debug_df = pd.DataFrame({
+#             "close"  : close_series,
+#             "eng1"   : eng1_s,
+#             "eng2"   : eng2_s,
+#             "cnt30"  : cnt30,
+#             "be_s"   : be_s,
+#             "two_e"  : two_e,
+#             "c>20"   : close_series > 20,
+#             "c>eng1" : close_series > eng1_s,
+#             "c>eng2" : close_series > eng2_s,
+#         }).tail(5)
+#         st.dataframe(debug_df, use_container_width=True)
+# # END DEBUG ENGULFING
