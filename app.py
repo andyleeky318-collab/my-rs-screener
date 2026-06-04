@@ -1114,9 +1114,9 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                     )
                     ec_s        = close_series.where(be_s, other=pd.NA)
                     # Reindex engulf closes positionally: shift(1) = prev engulf, shift(2) = 2nd prev, etc.
-                    ec_filled   = ec_s.ffill()                         # carry each engulf close forward
-                    ec_1back    = ec_s.shift(1).ffill()                # 1 engulf event back
-                    ec_2back    = ec_s.shift(1).ffill().where(be_s.shift(1)).shift(1).ffill()  # 2 engulf events back
+                    # ec_filled   = ec_s.ffill()                         # carry each engulf close forward
+                    # ec_1back    = ec_s.shift(1).ffill()                # 1 engulf event back
+                    # ec_2back    = ec_s.shift(1).ffill().where(be_s.shift(1)).shift(1).ffill()  # 2 engulf events back
 
                     # Build nth-prior correctly by working on the sparse engulf-only series
                     engulf_closes = ec_s.dropna()                      # only rows where engulf fired
