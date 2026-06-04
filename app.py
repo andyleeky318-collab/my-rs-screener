@@ -2354,7 +2354,7 @@ st.markdown(f"#### 🐳 Engulfing = Awareness HL ({total_engulf})")
 
 if e2_list or e3_list or e2_yest or e3_yest:
     if e2_list or e2_yest:
-        st.markdown(f"**2x Engulfing Conditions Matched ({len(e2_list)}):**")
+        st.markdown(f"**2x Engulfing ({len(e2_list)}):**")
         html_e2 = ""
         for sym in e2_list:
             cls = "new-pattern-badge" if sym not in e2_yest else ""
@@ -2419,10 +2419,10 @@ if not engulf_hist.empty:
 if e3_list or e3_yest:
     st.write("")
     if len(e3_list) == 0 and len(e3_yest) == 0:
-        st.markdown("**3x Engulfing Conditions Matched (0):**")
+        st.markdown("**3x Engulfing (0):**")
         #st.text("None") # Optional: explicit visual feedback for an empty scanner
     elif e3_list or e3_yest:
-        st.markdown(f"<div style='margin-top:10px;'><b>3x Engulfing Conditions Matched ({len(e3_list)}):</b></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='margin-top:10px;'><b>3x Engulfing ({len(e3_list)}):</b></div>", unsafe_allow_html=True)
         html_e3 = ""
         for sym in e3_list:
             cls = "new-pattern-badge" if sym not in e3_yest else ""
