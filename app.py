@@ -1208,7 +1208,7 @@ if all_data:
     }
     .lime-badge {
         background-color: #FFB7C5; /* Dark Pink background */
-        border: 1px solid #FFB7C5;     /* Vibrant Pink border for contrast */
+        border: 1px solid #ff0080;     /* Vibrant Pink border for contrast */
         color: #000000;                /* Black text for better readability against dark pink */
         font-weight: bold;
     }
