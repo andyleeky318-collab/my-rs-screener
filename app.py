@@ -1106,42 +1106,104 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                     if bool(result_g.iloc[-1]):  gapper_matches.append(ticker)
                     if bool(result_g.iloc[-2]):  gapper_yest.append(ticker)
 
-                # --- Bullish Engulfing ---
+                # --- Bullish Engulfing (OPTIMIZED) ---
                 if df_len >= 31:
+
+                    # Only need recent bars
+                    recent = ticker_df.tail(35)
+
+                    o = recent["Open"]
+                    h = recent["High"]
+                    l = recent["Low"]
+                    c = recent["Close"]
+
+                    # Bullish engulfing
                     be_s = (
-                        (open_series  < low_series.shift(1)) &
-                        (close_series > high_series.shift(1))
+                        (o < l.shift(1)) &
+                        (c > h.shift(1))
                     )
-                    ec_s        = close_series.where(be_s, other=pd.NA)
-                    # Reindex engulf closes positionally: shift(1) = prev engulf, shift(2) = 2nd prev, etc.
-                    # ec_filled   = ec_s.ffill()                         # carry each engulf close forward
-                    # ec_1back    = ec_s.shift(1).ffill()                # 1 engulf event back
-                    # ec_2back    = ec_s.shift(1).ffill().where(be_s.shift(1)).shift(1).ffill()  # 2 engulf events back
 
-                    # Build nth-prior correctly by working on the sparse engulf-only series
-                    engulf_closes = ec_s.dropna()                      # only rows where engulf fired
+                    engulf_closes = c[be_s]
 
-                    eng1_s = pd.Series(index=close_series.index, dtype=float)
-                    eng2_s = pd.Series(index=close_series.index, dtype=float)
-                    eng3_s = pd.Series(index=close_series.index, dtype=float)
-                    cnt30  = be_s.rolling(30).sum()
+                    # ==========================
+                    # TODAY
+                    # ==========================
+                    today_close = c.iloc[-1]
 
-                    for date in close_series.index:
-                        cutoff = close_series.index[max(0, close_series.index.get_loc(date) - 30)]
-                        prior  = engulf_closes[(engulf_closes.index >= cutoff) & (engulf_closes.index < date)]
-                        eng1_s[date] = prior.iloc[-1] if len(prior) >= 1 else float('nan')
-                        eng2_s[date] = prior.iloc[-2] if len(prior) >= 2 else float('nan')
-                        eng3_s[date] = prior.iloc[-3] if len(prior) >= 3 else float('nan')
+                    prior_today = engulf_closes.iloc[:-1] if bool(be_s.iloc[-1]) else engulf_closes
 
-                    two_e  = (cnt30 >= 2) & (close_series > 20) & (close_series > eng1_s) & (close_series > eng2_s)
-                    three_e= (cnt30 >= 3) & (close_series > 20) & (close_series > eng1_s) & (close_series > eng2_s) & (close_series > eng3_s)
+                    eng1_today = prior_today.iloc[-1] if len(prior_today) >= 1 else np.nan
+                    eng2_today = prior_today.iloc[-2] if len(prior_today) >= 2 else np.nan
+                    eng3_today = prior_today.iloc[-3] if len(prior_today) >= 3 else np.nan
 
-                    # today
-                    if bool(two_e.iloc[-1]):   engulf2_matches.append(ticker)
-                    if bool(three_e.iloc[-1]): engulf3_matches.append(ticker)
-                    # yesterday
-                    if bool(two_e.iloc[-2]):   engulf2_yest.append(ticker)
-                    if bool(three_e.iloc[-2]): engulf3_yest.append(ticker)
+                    cnt30_today = be_s.iloc[-30:].sum()
+
+                    two_today = (
+                        cnt30_today >= 2 and
+                        today_close >= 20 and
+                        pd.notna(eng1_today) and
+                        pd.notna(eng2_today) and
+                        today_close > eng1_today and
+                        today_close > eng2_today
+                    )
+
+                    three_today = (
+                        cnt30_today >= 3 and
+                        today_close >= 20 and
+                        pd.notna(eng1_today) and
+                        pd.notna(eng2_today) and
+                        pd.notna(eng3_today) and
+                        today_close > eng1_today and
+                        today_close > eng2_today and
+                        today_close > eng3_today
+                    )
+
+                    if two_today:
+                        engulf2_matches.append(ticker)
+
+                    if three_today:
+                        engulf3_matches.append(ticker)
+
+                    # ==========================
+                    # YESTERDAY
+                    # ==========================
+                    yest_close = c.iloc[-2]
+
+                    engulf_yest = engulf_closes[
+                        engulf_closes.index < c.index[-2]
+                    ]
+
+                    eng1_yest = engulf_yest.iloc[-1] if len(engulf_yest) >= 1 else np.nan
+                    eng2_yest = engulf_yest.iloc[-2] if len(engulf_yest) >= 2 else np.nan
+                    eng3_yest = engulf_yest.iloc[-3] if len(engulf_yest) >= 3 else np.nan
+
+                    cnt30_yest = be_s.iloc[-31:-1].sum()
+
+                    two_yest = (
+                        cnt30_yest >= 2 and
+                        yest_close >= 20 and
+                        pd.notna(eng1_yest) and
+                        pd.notna(eng2_yest) and
+                        yest_close > eng1_yest and
+                        yest_close > eng2_yest
+                    )
+
+                    three_yest = (
+                        cnt30_yest >= 3 and
+                        yest_close >= 20 and
+                        pd.notna(eng1_yest) and
+                        pd.notna(eng2_yest) and
+                        pd.notna(eng3_yest) and
+                        yest_close > eng1_yest and
+                        yest_close > eng2_yest and
+                        yest_close > eng3_yest
+                    )
+
+                    if two_yest:
+                        engulf2_yest.append(ticker)
+
+                    if three_yest:
+                        engulf3_yest.append(ticker)
 
                 # --- PowerTrend & PowerTrend Not Extended ---
                 if powerma is not None and df_len >= 52:
