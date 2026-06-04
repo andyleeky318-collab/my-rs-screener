@@ -1121,6 +1121,15 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                     two_e  = (cnt30 >= 2) & (close_series > 20) & (close_series > eng1_s) & (close_series > eng2_s)
                     three_e= (cnt30 >= 3) & (close_series > 20) & (close_series > eng1_s) & (close_series > eng2_s) & (close_series > eng3_s)
 
+                    # DEBUG
+                    if bool(two_e.iloc[-1]):
+                        print(f"\n=== ENGULF DEBUG: {ticker} ===")
+                        print(f"close_series (last 5):\n{close_series.tail(5).to_string()}")
+                        print(f"eng1_s (last 5):\n{eng1_s.tail(5).to_string()}")
+                        print(f"eng2_s (last 5):\n{eng2_s.tail(5).to_string()}")
+                        print(f"two_e (last 5):\n{two_e.tail(5).to_string()}")
+                    # END DEBUG
+
                     # today
                     if bool(two_e.iloc[-1]):   engulf2_matches.append(ticker)
                     if bool(three_e.iloc[-1]): engulf3_matches.append(ticker)
