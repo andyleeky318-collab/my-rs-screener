@@ -2218,18 +2218,18 @@ if leader_list or leader_yest:
     for sym in leader_list:
         cls = "new-pattern-badge" if sym not in leader_yest else ""
 
-        dot = (                                                        # ADD
-            '<span style="'                                            # ADD
-            'display:inline-block;width:7px;height:7px;'              # ADD
-            'border-radius:50%;background:#FF4B4B;'                   # ADD
-            'box-shadow:0 0 5px 2px #FF4B4B;'                        # ADD
-            'margin-left:4px;vertical-align:middle;'                  # ADD
-            '"></span>'                                                # ADD
-            if sym in leader_rs_nh_matches else ""                    # ADD
-        )                                                              # ADD
+        dot = (
+            '<span style="'
+            'display:inline-block;width:7px;height:7px;'
+            'border-radius:50%;background:#FF4B4B;'
+            'box-shadow:0 0 5px 2px #FF4B4B;'
+            'margin-right:4px;vertical-align:middle;'
+            '"></span>'
+            if sym in leader_rs_nh_matches else ""
+        )
 
         html_leader += (
-            f'<div class="ticker-badge {cls}">{sym}{dot}</div>'       # CHANGE: add {dot}
+            f'<div class="ticker-badge {cls}">{dot}{sym}</div>'
         )
 
     # Removed leaders
