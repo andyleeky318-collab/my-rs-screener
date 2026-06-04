@@ -1112,11 +1112,26 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                         (open_series  < low_series.shift(1)) &
                         (close_series > high_series.shift(1))
                     )
-                    ec_s   = close_series.where(be_s, other=pd.NA)
-                    eng1_s = ec_s.shift(1).ffill()                    # most recent prior engulf
-                    eng2_s = ec_s.shift(1).where(ec_s.shift(1) != eng1_s).ffill()   # 2nd most recent
-                    eng3_s = ec_s.shift(1).where((ec_s.shift(1) != eng1_s) & (ec_s.shift(1) != eng2_s)).ffill()  # 3rd
-                    cnt30       = be_s.rolling(30).sum()
+                    ec_s        = close_series.where(be_s, other=pd.NA)
+                    # Reindex engulf closes positionally: shift(1) = prev engulf, shift(2) = 2nd prev, etc.
+                    ec_filled   = ec_s.ffill()                         # carry each engulf close forward
+                    ec_1back    = ec_s.shift(1).ffill()                # 1 engulf event back
+                    ec_2back    = ec_s.shift(1).ffill().where(be_s.shift(1)).shift(1).ffill()  # 2 engulf events back
+
+                    # Build nth-prior correctly by working on the sparse engulf-only series
+                    engulf_closes = ec_s.dropna()                      # only rows where engulf fired
+
+                    eng1_s = pd.Series(index=close_series.index, dtype=float)
+                    eng2_s = pd.Series(index=close_series.index, dtype=float)
+                    eng3_s = pd.Series(index=close_series.index, dtype=float)
+                    cnt30  = be_s.rolling(30).sum()
+
+                    for date in close_series.index:
+                        cutoff = close_series.index[max(0, close_series.index.get_loc(date) - 30)]
+                        prior  = engulf_closes[(engulf_closes.index >= cutoff) & (engulf_closes.index < date)]
+                        eng1_s[date] = prior.iloc[-1] if len(prior) >= 1 else float('nan')
+                        eng2_s[date] = prior.iloc[-2] if len(prior) >= 2 else float('nan')
+                        eng3_s[date] = prior.iloc[-3] if len(prior) >= 3 else float('nan')
 
                     two_e  = (cnt30 >= 2) & (close_series > 20) & (close_series > eng1_s) & (close_series > eng2_s)
                     three_e= (cnt30 >= 3) & (close_series > 20) & (close_series > eng1_s) & (close_series > eng2_s) & (close_series > eng3_s)
@@ -2861,7 +2876,7 @@ if _timing_log:
     total_ms = sum(_timing_log.values())
     st.caption(f"Total measured wall-clock time: **{total_ms/1000:.2f}s** across {len(_timing_log)} tracked calls")
 
-st.markdown(html_e2, unsafe_allow_html=True)
+#st.markdown(html_e2, unsafe_allow_html=True)
 
 # # DEBUG ENGULFING
 # for sym in e2_list:
