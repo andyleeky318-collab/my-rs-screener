@@ -1098,7 +1098,7 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                         gap_ceiling_g.iloc[i]        = ceil_g
                         min_low_since_gap_g.iloc[i]  = run_min_g
 
-                    gapIn20_g      = bars_since_g        <= 20
+                    gapIn20_g      = bars_since_g        <= 30
                     validGap_g     = gap_floor_g         <  gap_ceiling_g
                     strictUnfill_g = min_low_since_gap_g >  gap_floor_g
                     result_g       = gapIn20_g & strictUnfill_g & validGap_g & (df_g['Close'] >= 20)
