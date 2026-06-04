@@ -2350,7 +2350,7 @@ with st.spinner("Scanning for Bullish Engulfing History..."):
 
 # --- 3. BULLISH ENGULFING (Full Horizontal Row Below Tight PPP) ---
 total_engulf = len(e2_list) + len(e3_list)
-st.markdown(f"#### 🐳 Bullish Engulfing = Awareness HL ({total_engulf})")
+st.markdown(f"#### 🐳 Engulfing = Awareness HL ({total_engulf})")
 
 if e2_list or e3_list or e2_yest or e3_yest:
     if e2_list or e2_yest:
