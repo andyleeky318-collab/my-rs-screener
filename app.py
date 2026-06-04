@@ -193,7 +193,7 @@ INDUSTRIES = {
 
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
-    'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EXC', 'FIGR', 
+    'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'NTAP', 'OR', 
     'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
     'VUG', 'WGMI', 'WMB', 'XEL', 'XMAG', 'XYZ', 'ZIM','VICR', 'SLX', 'CBOE', 'SIMO', 'FLEX', 'POWL', 'VLO', 'DOCN', 
@@ -244,6 +244,7 @@ with st.sidebar:
     top_n = st.number_input("Top N for Group Avg", value=5, min_value=1)
     show_all_rs = st.toggle("Show RS < 80 Tickers", value=False)
     show_ppp_charts = st.toggle("Show PPP Charts", value=False)
+    show_gap_charts = st.toggle("Show Gap Charts", value=True)
     
     if st.button("Clear Cache & Refresh"):
         st.cache_data.clear()
@@ -2532,7 +2533,7 @@ if gapper_list or gapper_yest:
     st.markdown(html_g, unsafe_allow_html=True)
 
     # ── All charts together, 5 per row ────────────────────────────────────
-    if gapper_list:
+    if gapper_list and show_gap_charts:
         st.write("")
         GAPPER_CHARTS_PER_ROW = 5
         GAPPER_CHART_SIZE     = 280
