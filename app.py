@@ -879,6 +879,7 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
         value_trap_matches = []
         ppp_matches = []
         leader_matches = []
+        leader_rs_nh_matches = []
         gapper_matches = []
         
         # Yesterday's Matches (for color logic)
@@ -1193,6 +1194,9 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                     )
                     if bool(leader_s.iloc[-1]): leader_matches.append(ticker)
                     if bool(leader_s.iloc[-2]): leader_yest.append(ticker)
+                    if bool(leader_s.iloc[-1]):
+                        if bool(circle_s.iloc[-1]):          # ADD THIS BLOCK
+                            leader_rs_nh_matches.append(ticker)
 
             except:
                 continue
@@ -1238,7 +1242,8 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
             email_content_removed,
             extra_52wk_high_symbols,
             extra_52wk_high_removed,
-            pct_above_ema200
+            pct_above_ema200,
+            leader_rs_nh_matches
         )
     except:
         return [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, [], [], [], [], 0
@@ -1938,7 +1943,7 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
     # leader_hist     = compute_leader_history(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
     b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list, leader_list, gapper_list = results[:9]
     b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest, leader_yest, gapper_yest = results[9:18]
-    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200 = results[18:]
+    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200, leader_rs_nh_matches = results[18:]
 
 st.markdown("---")
 
@@ -2213,8 +2218,18 @@ if leader_list or leader_yest:
     for sym in leader_list:
         cls = "new-pattern-badge" if sym not in leader_yest else ""
 
+        dot = (                                                        # ADD
+            '<span style="'                                            # ADD
+            'display:inline-block;width:7px;height:7px;'              # ADD
+            'border-radius:50%;background:#FF4B4B;'                   # ADD
+            'box-shadow:0 0 5px 2px #FF4B4B;'                        # ADD
+            'margin-left:4px;vertical-align:middle;'                  # ADD
+            '"></span>'                                                # ADD
+            if sym in leader_rs_nh_matches else ""                    # ADD
+        )                                                              # ADD
+
         html_leader += (
-            f'<div class="ticker-badge {cls}">{sym}</div>'
+            f'<div class="ticker-badge {cls}">{sym}{dot}</div>'       # CHANGE: add {dot}
         )
 
     # Removed leaders
