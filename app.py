@@ -244,7 +244,7 @@ with st.sidebar:
     top_n = st.number_input("Top N for Group Avg", value=5, min_value=1)
     show_all_rs = st.toggle("Show RS < 80 Tickers", value=False)
     show_ppp_charts = st.toggle("Show PPP Charts", value=False)
-    show_gap_charts = st.toggle("Show Gap Charts", value=True)
+    show_gap_charts = st.toggle("Show Gap Charts", value=False)
     
     if st.button("Clear Cache & Refresh"):
         st.cache_data.clear()
@@ -2263,7 +2263,7 @@ st.markdown("---")
 # )
 # st.markdown(extra_header_html, unsafe_allow_html=True)
 
-st.markdown(f"#### 🚀 ATH , but fail Minervini criteria ({len(extra_52wk_high_symbols)})")
+st.markdown(f"#### 🌟 ATH , but fail Minervini criteria ({len(extra_52wk_high_symbols)})")
 # Render if there are either active items OR removed items to show
 if extra_52wk_high_symbols or extra_52wk_high_removed:
     extra_html = ""
@@ -2293,7 +2293,7 @@ with st.spinner("Scanning for Leader History..."):
 #st.write(f"Percentage of stock above EMA200: {pct_above_ema200:.2f}%")
 
 # --- LEADERS SECTION ---
-st.markdown(f"#### 🚀 RS Leaders Long term ({len(leader_list)}) | 🔵 Blue Dot Short term ({len(leader_rs_nh_matches)})")
+st.markdown(f"#### 🏆 RS Leaders Long term ({len(leader_list)}) | 🔵 Blue Dot Short term ({len(leader_rs_nh_matches)})")
 
 if leader_list or leader_yest:
 
