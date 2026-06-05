@@ -2850,56 +2850,45 @@ if gapper_list or gapper_yest:
     }},
   }});
 
+  
   var gapBottom = null, gapTop = null;
   for (var i = 1; i < ohlcv.length; i++) {{
     var timeDiff = ohlcv[i].time - ohlcv[i-1].time;
-    if (timeDiff > 4 * 3600) {{                    // gap across overnight boundary
+    if (timeDiff > 4 * 3600) {{
       var prevClose = ohlcv[i-1].close;
       var todayOpen = ohlcv[i].open;
-      if (todayOpen > prevClose) {{                 // confirmed gap UP
+      if (todayOpen > prevClose) {{
         gapBottom = prevClose;
         gapTop    = todayOpen;
       }}
-      break;                                        // only shade the most recent gap
+      break;
     }}
   }}
 
   if (gapBottom !== null && gapTop !== null) {{
     var t0 = ohlcv[0].time;
     var t1 = ohlcv[ohlcv.length - 1].time;
-    var gapArea = chart.addAreaSeries({{
-      topColor:       'rgba(180,180,180,0.18)',
-      bottomColor:    'rgba(180,180,180,0.18)',
-      lineColor:      'rgba(180,180,180,0.0)',
-      lineWidth:      0,
+
+    // Upper area: fills from gapTop DOWN with grey — bleeds to chart bottom
+    chart.addAreaSeries({{
+      topColor:    'rgba(160,160,160,0.25)',
+      bottomColor: 'rgba(160,160,160,0.25)',
+      lineColor:   'rgba(160,160,160,0.6)',
+      lineWidth: 1,
       priceLineVisible: false,
       lastValueVisible: false,
       crosshairMarkerVisible: false,
-    }});
-    // Area series fills from the line value DOWN to the bottomValue baseline.
-    // We want a horizontal band, so we add a second series for the lower bound
-    // and use the upper series' topColor fill between them.
-    // Simpler: use two overlapping area series to sandwich the band.
-    var gapBand = chart.addAreaSeries({{
-      topColor:       'rgba(180,180,180,0.15)',
-      bottomColor:    'rgba(0,0,0,0)',
-      lineColor:      'rgba(180,180,180,0.35)',
-      lineWidth:      1,
-      lineStyle:      1,
-      priceLineVisible: false,
-      lastValueVisible: false,
-      crosshairMarkerVisible: false,
-    }});
-    gapBand.setData([
+    }}).setData([
       {{ time: t0, value: gapTop }},
       {{ time: t1, value: gapTop }},
-    ]); 
+    ]);
 
-    // Lower boundary line (prev close level)
-    chart.addLineSeries({{
-      color:            'rgba(180,180,180,0.35)',
-      lineWidth:        1,
-      lineStyle:        1,
+    // Lower area: fills from gapBottom DOWN with solid background — erases bleed below gap
+    chart.addAreaSeries({{
+      topColor:    '#0d1117',
+      bottomColor: '#0d1117',
+      lineColor:   'rgba(160,160,160,0.6)',
+      lineWidth: 1,
       priceLineVisible: false,
       lastValueVisible: false,
       crosshairMarkerVisible: false,
@@ -2908,6 +2897,7 @@ if gapper_list or gapper_yest:
       {{ time: t1, value: gapBottom }},
     ]);
   }}
+  
 
   var candles = chart.addCandlestickSeries({{
     upColor:'#26a641',   downColor:'#f85149',
