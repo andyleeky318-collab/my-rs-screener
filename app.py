@@ -275,7 +275,24 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         open_data = data['Open']
         
         valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= length]
-        if not valid_tickers: return None, None, None, {}, None, None, None
+        for t in tickers:
+            if t == benchmark_ticker:
+                continue
+            if t not in close_data.columns:
+                print(f"[MISSING COLUMN] {t} — not in close_data.columns")
+            elif close_data[t].notna().sum() < length:
+                print(f"[INSUFFICIENT BARS] {t} — only {close_data[t].notna().sum()} bars, need {length}")
+            else:
+                price = close_data[t].iloc[-1]
+                high  = high_data[t].iloc[-1]  if t in high_data.columns  else float('nan')
+                low   = low_data[t].iloc[-1]   if t in low_data.columns   else float('nan')
+                if pd.isna(price):
+                    print(f"[NaN PRICE] {t} — latest close is NaN")
+                if pd.isna(high):
+                    print(f"[NaN HIGH] {t} — latest high is NaN")
+                if pd.isna(low):
+                    print(f"[NaN LOW] {t} — latest low is NaN")
+        if not valid_tickers: return None, None, None, {}, None, None, None, None, None
 
         # --- New RS Logic ---
         bench_close = close_data[benchmark_ticker]
