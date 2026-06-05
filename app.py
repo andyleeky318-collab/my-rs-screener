@@ -881,6 +881,7 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
         leader_matches = []
         leader_rs_nh_matches = []
         gapper_matches = []
+        gapper_gap_levels = {}
         
         # Yesterday's Matches (for color logic)
         botak_yest = []
@@ -1110,7 +1111,12 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                     strictUnfill_g = min_low_since_gap_g >  gap_floor_g
                     result_g       = gapIn20_g & strictUnfill_g & validGap_g & (df_g['Close'] >= 20)
 
-                    if bool(result_g.iloc[-1]):  gapper_matches.append(ticker)
+                    if bool(result_g.iloc[-1]):
+                        gapper_matches.append(ticker)
+                        gapper_gap_levels[ticker] = {          # ← add these 3 lines
+                            "floor":   round(float(fl_g),   2),
+                            "ceiling": round(float(ceil_g), 2),
+                        }
                     if bool(result_g.iloc[-2]):  gapper_yest.append(ticker)
 
                 # --- Bullish Engulfing (OPTIMIZED) ---
@@ -1327,7 +1333,8 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
             extra_52wk_high_symbols,
             extra_52wk_high_removed,
             pct_above_ema200,
-            leader_rs_nh_matches
+            leader_rs_nh_matches,
+            gapper_gap_levels
         )
     except:
         return [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, [], [], [], [], 0
@@ -2027,7 +2034,7 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
     # leader_hist     = compute_leader_history(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
     b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list, leader_list, gapper_list = results[:9]
     b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest, leader_yest, gapper_yest = results[9:18]
-    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200, leader_rs_nh_matches = results[18:]
+    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200, leader_rs_nh_matches, gapper_gap_levels = results[18:]
 
 st.markdown("---")
 
@@ -2800,7 +2807,10 @@ if gapper_list or gapper_yest:
             for col_idx, sym in enumerate(row_tickers):
                 with cols[col_idx]:
                     ohlcv_json = get_gapper_ohlcv_json(sym)
-                    chart_id = f"gapper_{sym}_{row_start}_{col_idx}"
+                    chart_id   = f"gapper_{sym}_{row_start}_{col_idx}"
+                    _levels        = gapper_gap_levels.get(sym, {})
+                    gap_floor_js   = str(_levels["floor"])   if _levels else "null"
+                    gap_ceiling_js = str(_levels["ceiling"]) if _levels else "null"
 
                     chart_html = f"""
 <div style="font-family:'JetBrains Mono','Fira Code',monospace;">
@@ -2850,18 +2860,8 @@ if gapper_list or gapper_yest:
     }},
   }});
 
-  
-  var gapBottom = null, gapTop = null;
-  for (var i = ohlcv.length - 1; i >= 1; i--) {{
-    var prevClose = ohlcv[i-1].close;
-    var todayOpen = ohlcv[i].open;
-    if (todayOpen > prevClose) {{
-      gapBottom = prevClose;
-      gapTop    = todayOpen;
-      break;
-    }}
-  }}
-  
+  var gapBottom = {gap_floor_js};
+  var gapTop    = {gap_ceiling_js};
 
   var candles = chart.addCandlestickSeries({{
     upColor:'#26a641',   downColor:'#f85149',
