@@ -245,6 +245,7 @@ with st.sidebar:
     show_all_rs = st.toggle("Show RS < 80 Tickers", value=False)
     show_ppp_charts = st.toggle("Show PPP Charts", value=False)
     show_gap_charts = st.toggle("Show Gap Charts", value=False)
+    show_all_tickers = st.toggle("Show All Tickers", value=True)
     
     if st.button("Clear Cache & Refresh"):
         st.cache_data.clear()
@@ -437,8 +438,8 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
                 is_pine_7_valid
             )
 
-            if ticker == "KLAC":
-                st.sidebar.warning("⚠️ DEBUGGING FOR KLAC ACTIVATED")
+            if ticker == "SNDK":
+                st.sidebar.warning("⚠️ DEBUGGING FOR SNDK ACTIVATED")
                 
                 # Check metrics availability
                 debug_info = {
@@ -1555,7 +1556,7 @@ if all_data:
             rs_score = r["RS Score"]
             ticker_price = item["Prices"].get(ticker_sym, 0)
             
-            if (show_all_rs or rs_score >= 80) and ticker_price > 20:
+            if show_all_tickers or ((show_all_rs or rs_score >= 80) and ticker_price > 20):
                 # If the ticker is inside KNOWN_STOCKS, apply high-contrast dark text rules
                 if ticker_sym in LIME_STOCKS:
                     ticker_html += (
