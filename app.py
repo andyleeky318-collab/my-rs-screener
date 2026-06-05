@@ -251,95 +251,63 @@ with st.sidebar:
 
 # 4. IMPLEMENTATION OF NEW NORMALIZED RS METHOD AND EMA CLOUD
 @st.cache_data(ttl=3600)
-def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, ticker_dfs_input, benchmark_df_input):
+def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <-- Added length parameter
     tickers = list(tickers_tuple)
     try:
-        # ticker_dfs_input is already pre-sliced to just this industry
-        ticker_dfs = ticker_dfs_input.copy()
+        all_tickers = tickers + [benchmark_ticker]
+        # Download data (ensuring enough historical data to compute the rolling min/max lookback window)
+        data = yf.download(all_tickers, period="2y", interval="1d", progress=False)
+        
+        close_data = data['Close']
+        high_data = data['High']
+        low_data = data['Low']
+        open_data = data['Open']
+        
+        valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= length]
+        if not valid_tickers: return None, None, None, {}, None, None, None, None, None
 
-        # Download any tickers missing from the pre-sliced input
-        missing_tickers = [t for t in tickers if t not in ticker_dfs]
-        if missing_tickers:
-            all_to_fetch = missing_tickers + [benchmark_ticker]
-            raw = yf.download(all_to_fetch, period="2y", interval="1d", progress=False)
-            for t in missing_tickers:
-                try:
-                    df = pd.DataFrame({
-                        'Open':   raw['Open'][t],
-                        'High':   raw['High'][t],
-                        'Low':    raw['Low'][t],
-                        'Close':  raw['Close'][t],
-                        'Volume': raw['Volume'][t],
-                    }).dropna()
-                    if not df.empty:
-                        ticker_dfs[t] = df
-                    else:
-                        print(f"[EMPTY DF] {t}")
-                except Exception as e:
-                    print(f"[DOWNLOAD FAIL] {t} — {e}")
-
-        bench_close = benchmark_df_input['Close']
-
-        # Now building DataFrames from only 5-30 tickers — fast
-        close_data = pd.DataFrame({t: df['Close'] for t, df in ticker_dfs.items()})
-        high_data  = pd.DataFrame({t: df['High']  for t, df in ticker_dfs.items()})
-        low_data   = pd.DataFrame({t: df['Low']   for t, df in ticker_dfs.items()})
-        open_data  = pd.DataFrame({t: df['Open']  for t, df in ticker_dfs.items()})
-
-        # ... rest unchanged
-
-        valid_tickers = [
-            t for t in ticker_dfs
-            if close_data[t].notna().sum() >= length
-        ]
-
-        # ── Debug: report dropped tickers ─────────────────────────────────
-        for t in tickers:
-            if t not in ticker_dfs:
-                print(f"[MISSING] {t} — not returned by yfinance")
-            elif t not in valid_tickers:
-                print(f"[INSUFFICIENT BARS] {t} — {close_data[t].notna().sum()} bars, need {length}")
-            else:
-                price = close_data[t].iloc[-1]
-                high  = high_data[t].iloc[-1]
-                if pd.isna(price): print(f"[NaN PRICE] {t}")
-                if pd.isna(high):  print(f"[NaN HIGH] {t}")
-
-        if not valid_tickers:
-            return None, None, None, {}, None, None, None, None, None
-
-        # ── RS + Cloud logic (unchanged) ───────────────────────────────────
-        stock_scores      = {}
+        # --- New RS Logic ---
+        bench_close = close_data[benchmark_ticker]
+        stock_scores = {}
         stock_scores_prev = {}
-        stock_scores_1m   = {}
-        cloud_tickers        = []
-        cloud_21ema_tickers  = []
-        cloud_wick_tickers   = []
-        ma50_bounce_tickers  = []
-        price_lookup         = {}
+        stock_scores_1m = {}
+        cloud_tickers = []
+        cloud_21ema_tickers = []
+        cloud_wick_tickers = []
+        ma50_bounce_tickers = []
+        price_lookup = {}  # Added to track individual stock prices out of cache cleanly
 
         for ticker in valid_tickers:
+            # 1. rsClose = close / indexClose
             rs_ratio_series = close_data[ticker] / bench_close
+            
+            # 2. hh = ta.highest(rsClose, length) | ll = ta.lowest(rsClose, length)
+            # Use rolling window to get historical highs and lows of the ratio
             hh = rs_ratio_series.rolling(window=length).max()
             ll = rs_ratio_series.rolling(window=length).min()
-
+            
+            # Get the absolute most recent values (today's values)
             current_rs = rs_ratio_series.iloc[-1]
             current_hh = hh.iloc[-1]
             current_ll = ll.iloc[-1]
 
+            # Get values from 1 week ago (5 trading days ago)
             prev_rs = rs_ratio_series.iloc[-6]
             prev_hh = hh.iloc[-6]
             prev_ll = ll.iloc[-6]
 
+            # Get values from 1 month ago (21 trading days ago)
             m1_rs = rs_ratio_series.iloc[-22]
             m1_hh = hh.iloc[-22]
             m1_ll = ll.iloc[-22]
-
+            
+            # 3. Normalized logic: ((99 - 1) * (rsClose - ll) / (hh - ll)) + 1
             if pd.isna(current_hh) or pd.isna(current_ll) or current_hh == current_ll:
                 total_score = 0
             else:
+                # Convert the entire formula directly into an integer
                 total_score = int(((99 - 1) * (current_rs - current_ll) / (current_hh - current_ll)) + 1)
-
+            
             if pd.isna(prev_hh) or pd.isna(prev_ll) or prev_hh == prev_ll:
                 total_score_prev = 0
             else:
@@ -350,61 +318,92 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, ticker
             else:
                 total_score_1m = int(((99 - 1) * (m1_rs - m1_ll) / (m1_hh - m1_ll)) + 1)
 
-            stock_scores[ticker]      = total_score
+            # This will now store a clean whole number (e.g., 85 instead of 85.34)
+            stock_scores[ticker] = total_score
             stock_scores_prev[ticker] = total_score_prev
-            stock_scores_1m[ticker]   = total_score_1m
+            stock_scores_1m[ticker] = total_score_1m
 
-            current_price        = close_data[ticker].iloc[-1]
-            price_lookup[ticker] = current_price
+            # EMA Cloud Calculation (21 EMA of High/Low) - Kept Unchanged
+            ema_low = low_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
+            ema_high = high_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
+            current_price = close_data[ticker].iloc[-1]
+            price_lookup[ticker] = current_price  # Cache current price reference maps
+            
+            #if ema_low <= current_price <= ema_high:
+            #    cloud_tickers.append(ticker)
+
+            # ================================
+            # BUYABLE-STYLE 21 EMA CLOUD LOGIC
+            # ================================
 
             ema21_close = close_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
             ema21_low   = low_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
 
             sma50_series = close_data[ticker].rolling(50).mean()
-            sma50        = sma50_series.iloc[-1]
-            sma50_prev1  = sma50_series.iloc[-2] if len(sma50_series) > 2 else sma50
-            sma50_prev2  = sma50_series.iloc[-3] if len(sma50_series) > 3 else sma50
-            ma50Rising   = (sma50 > sma50_prev1) and (sma50_prev1 > sma50_prev2)
+            sma50 = sma50_series.iloc[-1]
+            sma50_prev1 = sma50_series.iloc[-2] if len(sma50_series) > 2 else sma50
+            sma50_prev2 = sma50_series.iloc[-3] if len(sma50_series) > 3 else sma50
 
-            powerma  = close_data[ticker].ewm(span=50, adjust=False).mean()
+            # --- MA50 Rising ---
+            ma50Rising = (sma50 > sma50_prev1) and (sma50_prev1 > sma50_prev2)
+
+            # --- EMA50 gradient ---
+            powerma = close_data[ticker].ewm(span=50, adjust=False).mean()
             gradient = (powerma.iloc[-1] - powerma.iloc[-2]) if len(powerma) > 1 else 0
 
-            high  = high_data[ticker]
-            low   = low_data[ticker]
+            # --- ATR% ---
+            high = high_data[ticker]
+            low = low_data[ticker]
             close = close_data[ticker]
 
             tr = pd.concat([
                 high - low,
                 abs(high - close.shift(1)),
-                abs(low  - close.shift(1))
+                abs(low - close.shift(1))
             ], axis=1).max(axis=1)
-            atr        = tr.rolling(14).mean()
+
+            atr = tr.rolling(14).mean()
             atrPercent = (atr / close) * 100
 
-            atr21_R       = (((close.iloc[-1] - ema21_close) / close.iloc[-1]) * 100) / (atrPercent.iloc[-1] + 1e-6)
-            atr50_R       = (((close.iloc[-1] - sma50)       / close.iloc[-1]) * 100) / (atrPercent.iloc[-1] + 1e-6)
-            emaDistPercent = ((close.iloc[-1] - ema21_low)   / close.iloc[-1]) * 100
+            atr21_R = (((close.iloc[-1] - ema21_close) / close.iloc[-1]) * 100) / (atrPercent.iloc[-1] + 1e-6)
+            atr50_R = (((close.iloc[-1] - sma50) / close.iloc[-1]) * 100) / (atrPercent.iloc[-1] + 1e-6)
 
-            hl_ratio   = high_data[ticker] / low_data[ticker]
-            adr_sma    = hl_ratio.rolling(20).mean()
+            # --- EMA distance filter ---
+            emaDistPercent = ((close.iloc[-1] - ema21_low) / close.iloc[-1]) * 100
+
+            # --- BUYABLE CONDITIONS ---
+            hl_ratio = high_data[ticker] / low_data[ticker]
+            adr_sma = hl_ratio.rolling(20).mean()
+
             adrPercent = 100 * (adr_sma - 1)
 
             cond1 = (adrPercent.iloc[-1] >= 2.45) and (adrPercent.iloc[-1] <= 8)
+
             cond2 = -0.5 <= atr21_R <= 1
             cond3 = 0 <= atr50_R <= 3
             cond4 = 0 < emaDistPercent <= 8
+            cond5 = close.iloc[-1] > ema21_low
 
+            # --- smoothing logic placeholders (simplified version) ---
+            pbb_cond1 = True
             pbb_cond2 = gradient >= 0
+            pbb_cond3 = True
 
             is_pine_7_valid = False
             if len(close_data) >= 260:
+                # 1. Moving Averages
                 sma150_series = close_data[ticker].rolling(window=150).mean()
                 sma200_series = close_data[ticker].rolling(window=200).mean()
-                c_sma150  = sma150_series.iloc[-1]
-                c_sma200  = sma200_series.iloc[-1]
+                
+                c_sma150 = sma150_series.iloc[-1]
+                c_sma200 = sma200_series.iloc[-1]
                 c_sma200_22 = sma200_series.iloc[-23] if len(sma200_series) >= 23 else c_sma200
+                
+                # 2. 52-Week (260 Days) Lookback Highs and Lows
                 c_highest = high_data[ticker].rolling(window=260).max().iloc[-1]
-                c_lowest  = low_data[ticker].rolling(window=260).min().iloc[-1]
+                c_lowest = low_data[ticker].rolling(window=260).min().iloc[-1]
+                
+                # 3. Calculate 7 Flag Criteria
                 c1 = 1 if (close.iloc[-1] > c_sma150 and close.iloc[-1] > c_sma200) else 0
                 c2 = 1 if (c_sma150 > c_sma200) else 0
                 c3 = 1 if (c_sma200 > c_sma200_22) else 0
@@ -412,36 +411,89 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, ticker
                 c5 = 1 if (close.iloc[-1] > sma50) else 0
                 c6 = 1 if (((close.iloc[-1] / c_lowest) - 1) * 100 >= 25) else 0
                 c7 = 1 if ((1 - (close.iloc[-1] / c_highest)) * 100 <= 25) else 0
-                is_pine_7_valid = ((c1 + c2 + c3 + c4 + c5 + c6 + c7) == 7)
+                
+                pine_count = c1 + c2 + c3 + c4 + c5 + c6 + c7
+                is_pine_7_valid = (pine_count == 7)
 
+            # --- FINAL BUYABLE FILTER ---
             buyable = (
-                cond1 and cond2 and cond3 and cond4 and
-                pbb_cond2 and ma50Rising and
-                close.iloc[-1] >= 20 and is_pine_7_valid
+                cond1 and
+                cond2 and
+                cond3 and
+                cond4 and
+                pbb_cond2 and
+                (pbb_cond1 or pbb_cond3) and
+                ma50Rising and
+                close.iloc[-1] >= 20 and 
+                is_pine_7_valid
             )
 
+            if ticker == "CRWD":
+                st.sidebar.warning("⚠️ DEBUGGING FOR CRWD ACTIVATED")
+                
+                # Check metrics availability
+                debug_info = {
+                    "Ticker Symbol": ticker,
+                    "Current Cached Price": round(current_price, 2) if 'current_price' in locals() else "N/A",
+                    "Total Raw RS Score": total_score,
+                    "Has Data Available": ticker in close_data.columns,
+                    "Historical Bars Fetched": int(close_data[ticker].notna().sum()),
+                    "Requested Window Length": length,
+                    "Is Current High NaN": pd.isna(current_hh),
+                    "Is Current Low NaN": pd.isna(current_ll)
+                }
+                st.sidebar.json(debug_info)            
+
+            # ================================
+            # DEBUG AMAT
+            # ================================
+            # if ticker == "AMAT":
+            #     debug_data = {"ticker": ticker,"close": round(close.iloc[-1], 2),"adrPercent": round(float(adrPercent.iloc[-1]), 2),"cond1_adr_2.45_to_8": cond1,"atr21_R": round(float(atr21_R), 2),"cond2_atr21": cond2,"atr50_R": round(float(atr50_R), 2),"cond3_atr50": cond3,"emaDistPercent": round(float(emaDistPercent), 2),"cond4_emaDist": cond4,"gradient": round(float(gradient), 4),"pbb_cond2_gradient_positive": pbb_cond2,"sma50": round(float(sma50), 2),"sma50_prev1": round(float(sma50_prev1), 2),"sma50_prev2": round(float(sma50_prev2), 2),"ma50Rising": ma50Rising,"close_gt_20": close.iloc[-1] >= 20,"FINAL_BUYABLE": buyable}
+            #     st.write(debug_data)
+
+            # ================================
+            # CLOUD CONDITION (UPDATED)
+            # ================================
             if buyable:
                 cloud_tickers.append(ticker)
 
+            # ================================
+            # 21 EMA CLOUD CONDITION (finalCondition)
+            # ================================
             if len(close_data[ticker]) >= 3 and len(low_data[ticker]) >= 3 and len(high_data[ticker]) >= 3 and len(open_data[ticker]) >= 3:
                 ema21_low_series  = low_data[ticker].ewm(span=21, adjust=False).mean()
                 ema21_high_series = high_data[ticker].ewm(span=21, adjust=False).mean()
-                MALow0  = ema21_low_series.iloc[-1];  MALow1  = ema21_low_series.iloc[-2];  MALow2  = ema21_low_series.iloc[-3]
-                MAHigh0 = ema21_high_series.iloc[-1]; MAHigh1 = ema21_high_series.iloc[-2]; MAHigh2 = ema21_high_series.iloc[-3]
-                c0 = close_data[ticker].iloc[-1]; c1_v = close_data[ticker].iloc[-2]; c2_v = close_data[ticker].iloc[-3]
-                o0 = open_data[ticker].iloc[-1];  o1   = open_data[ticker].iloc[-2];  o2   = open_data[ticker].iloc[-3]
-                h0 = high_data[ticker].iloc[-1];  h1   = high_data[ticker].iloc[-2];  h2   = high_data[ticker].iloc[-3]
-                l0 = low_data[ticker].iloc[-1];   l1   = low_data[ticker].iloc[-2];   l2   = low_data[ticker].iloc[-3]
+
+                MALow0  = ema21_low_series.iloc[-1]
+                MALow1  = ema21_low_series.iloc[-2]
+                MALow2  = ema21_low_series.iloc[-3]
+                MAHigh0 = ema21_high_series.iloc[-1]
+                MAHigh1 = ema21_high_series.iloc[-2]
+                MAHigh2 = ema21_high_series.iloc[-3]
+
+                c0 = close_data[ticker].iloc[-1]
+                c1 = close_data[ticker].iloc[-2]
+                c2 = close_data[ticker].iloc[-3]
+                o0 = open_data[ticker].iloc[-1]
+                o1 = open_data[ticker].iloc[-2]
+                o2 = open_data[ticker].iloc[-3]
+                h0 = high_data[ticker].iloc[-1]
+                h1 = high_data[ticker].iloc[-2]
+                h2 = high_data[ticker].iloc[-3]
+                l0 = low_data[ticker].iloc[-1]
+                l1 = low_data[ticker].iloc[-2]
+                l2 = low_data[ticker].iloc[-3]
 
                 insideCloud0 = MALow0 <= c0 <= MAHigh0
-                insideCloud1 = MALow1 <= c1_v <= MAHigh1
-                insideCloud2 = MALow2 <= c2_v <= MAHigh2
-                insideCloud3Days         = insideCloud0 and insideCloud1 and insideCloud2
-                insideCloud2DaysPositive = insideCloud0 and insideCloud1 and (c0 > c1_v) and (c0 > o0)
+                insideCloud1 = MALow1 <= c1 <= MAHigh1
+                insideCloud2 = MALow2 <= c2 <= MAHigh2
 
-                bodyTop0 = max(o0,c0); bodyBottom0 = min(o0,c0); bodySize0 = bodyTop0 - bodyBottom0
-                bodyTop1 = max(o1,c1_v); bodyBottom1 = min(o1,c1_v); bodySize1 = bodyTop1 - bodyBottom1
-                bodyTop2 = max(o2,c2_v); bodyBottom2 = min(o2,c2_v); bodySize2 = bodyTop2 - bodyBottom2
+                insideCloud3Days         = insideCloud0 and insideCloud1 and insideCloud2
+                insideCloud2DaysPositive = insideCloud0 and insideCloud1 and (c0 > c1) and (c0 > o0)
+
+                bodyTop0    = max(o0, c0);  bodyBottom0 = min(o0, c0);  bodySize0 = bodyTop0 - bodyBottom0
+                bodyTop1    = max(o1, c1);  bodyBottom1 = min(o1, c1);  bodySize1 = bodyTop1 - bodyBottom1
+                bodyTop2    = max(o2, c2);  bodyBottom2 = min(o2, c2);  bodySize2 = bodyTop2 - bodyBottom2
 
                 insideBody0 = max(0.0, min(bodyTop0, MAHigh0) - max(bodyBottom0, MALow0))
                 insideBody1 = max(0.0, min(bodyTop1, MAHigh1) - max(bodyBottom1, MALow1))
@@ -457,38 +509,65 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, ticker
                 if buyable and finalCondition and close_data[ticker].iloc[-1] >= 20:
                     cloud_21ema_tickers.append(ticker)
 
-            h_today = high_data[ticker].iloc[-1]; l_today = low_data[ticker].iloc[-1]
-            o_today = open_data[ticker].iloc[-1];  c_today = close_data[ticker].iloc[-1]
+            # ================================
+            # 21 EMA WICK CONDITION (longWickToday)
+            # ================================
+            h_today = high_data[ticker].iloc[-1]
+            l_today = low_data[ticker].iloc[-1]
+            o_today = open_data[ticker].iloc[-1]
+            c_today = close_data[ticker].iloc[-1]
+
             rangeToday     = h_today - l_today
             lowerWickToday = min(o_today, c_today) - l_today
             longWickToday  = (lowerWickToday / rangeToday) > 0.5 if rangeToday > 0 else False
+
             if buyable and longWickToday and c_today >= 20:
                 cloud_wick_tickers.append(ticker)
 
+            # ================================
+            # 50MA BOUNCE CONDITION (ma50_bounce_cond)
+            # ================================
             sma50_series_full = close_data[ticker].rolling(50).mean()
             if len(sma50_series_full) >= 2 and len(low_data[ticker]) >= 2:
                 sma50_today = sma50_series_full.iloc[-1]
                 sma50_yest  = sma50_series_full.iloc[-2]
-                if not (pd.isna(sma50_today) or pd.isna(sma50_yest) or sma50_today == 0):
+ 
+                if pd.isna(sma50_today) or pd.isna(sma50_yest) or sma50_today == 0:
+                    pass
+                else:
                     fiftyday_percent  = (close_data[ticker].iloc[-1] - sma50_today) / sma50_today * 100
+                    # truncate to 1 decimal place (mirrors Pine Script truncate())
                     fiftyday_percent2 = int(fiftyday_percent * 10) / 10
-                    touchMA50_yest    = low_data[ticker].iloc[-2] <= sma50_yest
-                    recover1          = touchMA50_yest and (close_data[ticker].iloc[-1] > sma50_today)
-                    if (recover1 and cond1 and fiftyday_percent2 <= 8 and
-                            ma50Rising and close_data[ticker].iloc[-1] >= 20 and is_pine_7_valid):
+ 
+                    touchMA50_yest = low_data[ticker].iloc[-2] <= sma50_yest
+                    recover1       = touchMA50_yest and (close_data[ticker].iloc[-1] > sma50_today)
+ 
+                    ma50_bounce_cond = (
+                        recover1 and
+                        cond1 and
+                        fiftyday_percent2 <= 8 and
+                        ma50Rising and
+                        close_data[ticker].iloc[-1] >= 20 and 
+                        is_pine_7_valid
+                    )
+ 
+                    if ma50_bounce_cond:
                         ma50_bounce_tickers.append(ticker)
 
-        rs_perf_raw      = pd.Series(stock_scores).astype(int)
+        # Convert dictionary metrics to Pandas Series
+        rs_perf_raw = pd.Series(stock_scores).astype(int)
         rs_perf_prev_raw = pd.Series(stock_scores_prev).astype(int)
-        rs_perf_1m_raw   = pd.Series(stock_scores_1m).astype(int)
-
-        valid_price_tickers = [t for t, p in price_lookup.items() if p > 20]
-        rs_perf      = rs_perf_raw[rs_perf_raw.index.isin(valid_price_tickers)]
+        rs_perf_1m_raw = pd.Series(stock_scores_1m).astype(int)
+        
+        # Build a list of tickers that strictly have a price greater than 20
+        valid_price_tickers = [ticker for ticker, price in price_lookup.items() if price > 20]
+        
+        # Filter the series so only stocks with a price > 20 remain
+        rs_perf = rs_perf_raw[rs_perf_raw.index.isin(valid_price_tickers)]
         rs_perf_prev = rs_perf_prev_raw[rs_perf_prev_raw.index.isin(valid_price_tickers)]
-        rs_perf_1m   = rs_perf_1m_raw[rs_perf_1m_raw.index.isin(valid_price_tickers)]
-
+        rs_perf_1m = rs_perf_1m_raw[rs_perf_1m_raw.index.isin(valid_price_tickers)]
+        
         return rs_perf, rs_perf, cloud_tickers, price_lookup, rs_perf_prev, rs_perf_1m, cloud_21ema_tickers, cloud_wick_tickers, ma50_bounce_tickers
-
     except Exception as e:
         st.error(f"Error: {e}")
         return None, None, None, {}, None, None, None, None, None
@@ -801,33 +880,6 @@ def download_known_stocks_data(stocks_tuple):
     }).dropna()
 
     return ticker_dfs, benchmark_df
-
-@st.cache_data(ttl=3600)
-def download_known_stocks_data2(stocks_tuple):
-    benchmark_symbol = "^GSPC"
-    all_symbols = list(stocks_tuple) + [benchmark_symbol]
-    raw_data = yf.download(all_symbols, period="2y", interval="1d", progress=False)
-
-    ticker_dfs2 = {}
-    for ticker in stocks_tuple:
-        try:
-            df = pd.DataFrame({
-                'Open':   raw_data['Open'][ticker],
-                'High':   raw_data['High'][ticker],
-                'Low':    raw_data['Low'][ticker],
-                'Close':  raw_data['Close'][ticker],
-                'Volume': raw_data['Volume'][ticker]
-            }).dropna()
-            if not df.empty:
-                ticker_dfs2[ticker] = df
-        except Exception:
-            continue
-
-    benchmark_df2 = pd.DataFrame({
-        'Close': raw_data['Close'][benchmark_symbol]
-    }).dropna()
-
-    return ticker_dfs2, benchmark_df2
 
 @st.cache_data(ttl=3600)
 def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
@@ -1314,38 +1366,13 @@ all_data = []
 progress_bar = st.progress(0)
 status_text = st.empty()
 
-all_industry_tickers = list(set(
-    ticker
-    for tickers in INDUSTRIES.values()
-    for ticker in tickers
-))
-
-combined_tickers = list(set(all_industry_tickers))
-combined_tuple = tuple(combined_tickers)
-
-ticker_dfs_shared2, benchmark_df_shared2 = timed(
-    "download_known_stocks_data2",
-    download_known_stocks_data2,
-    combined_tuple
-)
-
 industry_items = list(INDUSTRIES.items())
 for idx, (industry_name, tickers) in enumerate(industry_items):
     status_text.text(f"Processing {industry_name}...")
-
-    # Pre-slice: only pass relevant tickers, not the full 600+ dict
-    industry_ticker_dfs = {
-        t: ticker_dfs_shared2[t]
-        for t in tickers
-        if t in ticker_dfs_shared2
-    }
-
     perf, rs_scores, cloud_list, price_lookup, rs_scores_prev, rs_scores_1m, cloud_21ema_list, cloud_wick_list, ma50_bounce_list = timed(
         f"RS+Cloud [{industry_name}]",
         get_rs_and_cloud_data_cached,
-        tuple(tickers), benchmark, 90,
-        industry_ticker_dfs,    # ← only 5-30 tickers, not 600+
-        benchmark_df_shared2
+        tuple(tickers), benchmark, 90
     )
     
     if rs_scores is not None:
