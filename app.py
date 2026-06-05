@@ -257,6 +257,15 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         all_tickers = tickers + [benchmark_ticker]
         # Download data (ensuring enough historical data to compute the rolling min/max lookback window)
         data = yf.download(all_tickers, period="2y", interval="1d", progress=False)
+
+        # Check if the dataframe contains the ticker columns at all
+        if "SNDK" in tickers:
+            if "SNDK" not in data['Close'].columns:
+                st.sidebar.error("❌ yfinance dropped SNDK entirely from the returned Dataframe columns.")
+            else:
+                sndk_bars = data['Close']["SNDK"].notna().sum()
+                if sndk_bars < length:
+                    st.sidebar.error(f"❌ SNDK only has {sndk_bars} active bars, but lookback requires {length} bars.")
         
         close_data = data['Close']
         high_data = data['High']
@@ -427,6 +436,22 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
                 close.iloc[-1] >= 20 and 
                 is_pine_7_valid
             )
+
+            if ticker == "SNDK":
+                st.sidebar.warning("⚠️ DEBUGGING FOR SNDK ACTIVATED")
+                
+                # Check metrics availability
+                debug_info = {
+                    "Ticker Symbol": ticker,
+                    "Current Cached Price": round(current_price, 2) if 'current_price' in locals() else "N/A",
+                    "Total Raw RS Score": total_score,
+                    "Has Data Available": ticker in close_data.columns,
+                    "Historical Bars Fetched": int(close_data[ticker].notna().sum()),
+                    "Requested Window Length": length,
+                    "Is Current High NaN": pd.isna(current_hh),
+                    "Is Current Low NaN": pd.isna(current_ll)
+                }
+                st.sidebar.json(debug_info)
 
             # ================================
             # DEBUG AMAT
