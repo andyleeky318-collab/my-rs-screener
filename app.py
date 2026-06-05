@@ -251,20 +251,14 @@ with st.sidebar:
 
 # 4. IMPLEMENTATION OF NEW NORMALIZED RS METHOD AND EMA CLOUD
 @st.cache_data(ttl=3600)
-def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, ticker_dfs_shared_input, benchmark_df_shared_input):
+def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, ticker_dfs_input, benchmark_df_input):
     tickers = list(tickers_tuple)
     try:
-        # ── Reuse shared ticker_dfs where available, download the rest ─────
-        ticker_dfs = {}
-        missing_tickers = []
+        # ticker_dfs_input is already pre-sliced to just this industry
+        ticker_dfs = ticker_dfs_input.copy()
 
-        for t in tickers:
-            if t in ticker_dfs_shared_input:
-                ticker_dfs[t] = ticker_dfs_shared_input[t]
-            else:
-                missing_tickers.append(t)
-
-        # Download only tickers not already in shared pool
+        # Download any tickers missing from the pre-sliced input
+        missing_tickers = [t for t in tickers if t not in ticker_dfs]
         if missing_tickers:
             all_to_fetch = missing_tickers + [benchmark_ticker]
             raw = yf.download(all_to_fetch, period="2y", interval="1d", progress=False)
@@ -283,16 +277,16 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, ticker
                         print(f"[EMPTY DF] {t}")
                 except Exception as e:
                     print(f"[DOWNLOAD FAIL] {t} — {e}")
-                    continue
 
-        # ── Use shared benchmark if available ─────────────────────────────
-        bench_close = benchmark_df_shared_input['Close']
+        bench_close = benchmark_df_input['Close']
 
-        # ── Build aligned price DataFrames from per-ticker dfs ────────────
+        # Now building DataFrames from only 5-30 tickers — fast
         close_data = pd.DataFrame({t: df['Close'] for t, df in ticker_dfs.items()})
         high_data  = pd.DataFrame({t: df['High']  for t, df in ticker_dfs.items()})
         low_data   = pd.DataFrame({t: df['Low']   for t, df in ticker_dfs.items()})
         open_data  = pd.DataFrame({t: df['Open']  for t, df in ticker_dfs.items()})
+
+        # ... rest unchanged
 
         valid_tickers = [
             t for t in ticker_dfs
@@ -1338,12 +1332,20 @@ ticker_dfs_shared2, benchmark_df_shared2 = timed(
 industry_items = list(INDUSTRIES.items())
 for idx, (industry_name, tickers) in enumerate(industry_items):
     status_text.text(f"Processing {industry_name}...")
+
+    # Pre-slice: only pass relevant tickers, not the full 600+ dict
+    industry_ticker_dfs = {
+        t: ticker_dfs_shared2[t]
+        for t in tickers
+        if t in ticker_dfs_shared2
+    }
+
     perf, rs_scores, cloud_list, price_lookup, rs_scores_prev, rs_scores_1m, cloud_21ema_list, cloud_wick_list, ma50_bounce_list = timed(
         f"RS+Cloud [{industry_name}]",
         get_rs_and_cloud_data_cached,
         tuple(tickers), benchmark, 90,
-        ticker_dfs_shared2,      # ← pass shared pool
-        benchmark_df_shared2     # ← pass shared benchmark
+        industry_ticker_dfs,    # ← only 5-30 tickers, not 600+
+        benchmark_df_shared2
     )
     
     if rs_scores is not None:
