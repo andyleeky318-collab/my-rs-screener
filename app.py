@@ -2852,15 +2852,12 @@ if gapper_list or gapper_yest:
 
   
   var gapBottom = null, gapTop = null;
-  for (var i = 1; i < ohlcv.length; i++) {{
-    var timeDiff = ohlcv[i].time - ohlcv[i-1].time;
-    if (timeDiff > 4 * 3600) {{
-      var prevClose = ohlcv[i-1].close;
-      var todayOpen = ohlcv[i].open;
-      if (todayOpen > prevClose) {{
-        gapBottom = prevClose;
-        gapTop    = todayOpen;
-      }}
+  for (var i = ohlcv.length - 1; i >= 1; i--) {{
+    var prevClose = ohlcv[i-1].close;
+    var todayOpen = ohlcv[i].open;
+    if (todayOpen > prevClose) {{
+      gapBottom = prevClose;
+      gapTop    = todayOpen;
       break;
     }}
   }}
