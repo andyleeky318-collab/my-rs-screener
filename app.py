@@ -2585,7 +2585,6 @@ if pt_list or pt_yest:
     html_pt = ""
     for sym in pt_list:
         cls = "new-pattern-badge" if sym not in pt_yest else ""
-
         # Get close price from shared ticker data
         pt_price = ""
         ticker_df_pt = ticker_dfs_shared.get(sym)
@@ -2593,8 +2592,8 @@ if pt_list or pt_yest:
             pt_close = ticker_df_pt['Close'].iloc[-1]
             if not pd.isna(pt_close):
                 pt_price = f'<span style="color:#aaaaaa; font-size:10px; margin-left:4px;">${pt_close:.2f}</span>'
-                
-        html_pt += f'<div class="ticker-badge {cls}">{sym}</div>'
+        
+        html_pt += f'<div class="ticker-badge {cls}">{sym}{pt_price}</div>'
     
     # Process and append removed stocks
     removed_pt = [sym for sym in pt_yest if sym not in pt_list]
