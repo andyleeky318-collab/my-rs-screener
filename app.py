@@ -256,7 +256,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
     try:
         all_tickers = tickers + [benchmark_ticker]
         # Download data (ensuring enough historical data to compute the rolling min/max lookback window)
-        data = yf.download(all_tickers, period="2y", interval="1d", progress=False)
+        data = yf.download(all_tickers, period="1y", interval="1d", progress=False)
         
         close_data = data['Close']
         high_data = data['High']
