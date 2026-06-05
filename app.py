@@ -258,7 +258,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         all_tickers = tickers + [benchmark_ticker]
         # Download data (ensuring enough historical data to compute the rolling min/max lookback window)
         # data = yf.download(all_tickers, period="2y", interval="1d", progress=False)
-        data = yf.download(all_tickers,period="2y",interval="1d",progress=False,group_by="ticker", auto_adjust=True,threads=True,ignore_tz=True)
+        data = yf.download(all_tickers,period="2y",interval="1d",progress=False,group_by="ticker",threads=True,ignore_tz=True)
 
         # # Check if the dataframe contains the ticker columns at all
         # if "SNDK" in tickers:
