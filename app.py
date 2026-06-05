@@ -193,7 +193,7 @@ INDUSTRIES = {
 
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
-    'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EXC', 'FIGR', 
+    'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'NTAP', 'OR', 
     'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
     'VUG', 'WGMI', 'WMB', 'XEL', 'XMAG', 'XYZ', 'ZIM','VICR', 'SLX', 'CBOE', 'SIMO', 'FLEX', 'POWL', 'VLO', 'DOCN', 
@@ -2849,6 +2849,65 @@ if gapper_list or gapper_yest:
       fixLeftEdge:true, fixRightEdge:true,
     }},
   }});
+
+  var gapBottom = null, gapTop = null;
+  for (var i = 1; i < ohlcv.length; i++) {{
+    var timeDiff = ohlcv[i].time - ohlcv[i-1].time;
+    if (timeDiff > 4 * 3600) {{                    // gap across overnight boundary
+      var prevClose = ohlcv[i-1].close;
+      var todayOpen = ohlcv[i].open;
+      if (todayOpen > prevClose) {{                 // confirmed gap UP
+        gapBottom = prevClose;
+        gapTop    = todayOpen;
+      }}
+      break;                                        // only shade the most recent gap
+    }}
+  }}
+
+  if (gapBottom !== null && gapTop !== null) {{
+    var t0 = ohlcv[0].time;
+    var t1 = ohlcv[ohlcv.length - 1].time;
+    var gapArea = chart.addAreaSeries({{
+      topColor:       'rgba(180,180,180,0.18)',
+      bottomColor:    'rgba(180,180,180,0.18)',
+      lineColor:      'rgba(180,180,180,0.0)',
+      lineWidth:      0,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      crosshairMarkerVisible: false,
+    }});
+    // Area series fills from the line value DOWN to the bottomValue baseline.
+    // We want a horizontal band, so we add a second series for the lower bound
+    // and use the upper series' topColor fill between them.
+    // Simpler: use two overlapping area series to sandwich the band.
+    var gapBand = chart.addAreaSeries({{
+      topColor:       'rgba(180,180,180,0.15)',
+      bottomColor:    'rgba(0,0,0,0)',
+      lineColor:      'rgba(180,180,180,0.35)',
+      lineWidth:      1,
+      lineStyle:      1,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      crosshairMarkerVisible: false,
+    }});
+    gapBand.setData([
+      {{ time: t0, value: gapTop }},
+      {{ time: t1, value: gapTop }},
+    ]); 
+
+    // Lower boundary line (prev close level)
+    chart.addLineSeries({{
+      color:            'rgba(180,180,180,0.35)',
+      lineWidth:        1,
+      lineStyle:        1,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      crosshairMarkerVisible: false,
+    }}).setData([
+      {{ time: t0, value: gapBottom }},
+      {{ time: t1, value: gapBottom }},
+    ]);
+  }}
 
   var candles = chart.addCandlestickSeries({{
     upColor:'#26a641',   downColor:'#f85149',
