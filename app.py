@@ -2864,21 +2864,6 @@ if gapper_list or gapper_yest:
       break;
     }}
   }}
-
-  if (gapBottom !== null && gapTop !== null) {{
-    var t0 = ohlcv[0].time;
-    var t1 = ohlcv[ohlcv.length - 1].time;
-    var lineOpts = {{
-      color: 'rgba(180,180,180,0.6)',
-      lineWidth: 1,
-      lineStyle: 1,
-      priceLineVisible: false,
-      lastValueVisible: false,
-      crosshairMarkerVisible: false,
-    }};
-    chart.addLineSeries(lineOpts).setData([{{ time: t0, value: gapTop    }}, {{ time: t1, value: gapTop    }}]);
-    chart.addLineSeries(lineOpts).setData([{{ time: t0, value: gapBottom }}, {{ time: t1, value: gapBottom }}]);
-  }}
   
 
   var candles = chart.addCandlestickSeries({{
@@ -2887,6 +2872,23 @@ if gapper_list or gapper_yest:
     wickUpColor:'#26a641',   wickDownColor:'#f85149',
   }});
   candles.setData(ohlcv);
+
+  if (gapBottom !== null && gapTop !== null) {{
+    candles.createPriceLine({{
+      price: gapTop,
+      color: 'rgba(200,200,200,0.8)',
+      lineWidth: 1,
+      lineStyle: LightweightCharts.LineStyle.Dashed,
+      axisLabelVisible: false,
+    }});
+    candles.createPriceLine({{
+      price: gapBottom,
+      color: 'rgba(200,200,200,0.8)',
+      lineWidth: 1,
+      lineStyle: LightweightCharts.LineStyle.Dashed,
+      axisLabelVisible: false,
+    }});
+  }}
 
   function calcEMA(data, span) {{
     var k = 2/(span+1), ema = data[0].close, out = [];
