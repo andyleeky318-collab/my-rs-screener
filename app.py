@@ -2868,34 +2868,16 @@ if gapper_list or gapper_yest:
   if (gapBottom !== null && gapTop !== null) {{
     var t0 = ohlcv[0].time;
     var t1 = ohlcv[ohlcv.length - 1].time;
-
-    // Upper area: fills from gapTop DOWN with grey — bleeds to chart bottom
-    chart.addAreaSeries({{
-      topColor:    'rgba(160,160,160,0.25)',
-      bottomColor: 'rgba(160,160,160,0.25)',
-      lineColor:   'rgba(160,160,160,0.6)',
+    var lineOpts = {{
+      color: 'rgba(180,180,180,0.6)',
       lineWidth: 1,
+      lineStyle: 1,
       priceLineVisible: false,
       lastValueVisible: false,
       crosshairMarkerVisible: false,
-    }}).setData([
-      {{ time: t0, value: gapTop }},
-      {{ time: t1, value: gapTop }},
-    ]);
-
-    // Lower area: fills from gapBottom DOWN with solid background — erases bleed below gap
-    chart.addAreaSeries({{
-      topColor:    '#0d1117',
-      bottomColor: '#0d1117',
-      lineColor:   'rgba(160,160,160,0.6)',
-      lineWidth: 1,
-      priceLineVisible: false,
-      lastValueVisible: false,
-      crosshairMarkerVisible: false,
-    }}).setData([
-      {{ time: t0, value: gapBottom }},
-      {{ time: t1, value: gapBottom }},
-    ]);
+    }};
+    chart.addLineSeries(lineOpts).setData([{{ time: t0, value: gapTop    }}, {{ time: t1, value: gapTop    }}]);
+    chart.addLineSeries(lineOpts).setData([{{ time: t0, value: gapBottom }}, {{ time: t1, value: gapBottom }}]);
   }}
   
 
