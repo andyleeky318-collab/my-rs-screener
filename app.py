@@ -2293,7 +2293,7 @@ with st.spinner("Scanning for Leader History..."):
 #st.write(f"Percentage of stock above EMA200: {pct_above_ema200:.2f}%")
 
 # --- LEADERS SECTION ---
-st.markdown(f"#### 🏆 RS Leaders Long term ({len(leader_list)}) | 🔵 Blue Dot Short term ({len(leader_rs_nh_matches)})")
+st.markdown(f"#### 🏆 RS Leader = Long term ({len(leader_list)}) | Blue Dot = Short term ({len(leader_rs_nh_matches)})")
 
 if leader_list or leader_yest:
 
