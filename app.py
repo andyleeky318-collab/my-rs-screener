@@ -33,7 +33,7 @@ st.markdown(
 
 # 2. Cleaned Industry Database (Preserved as requested)
 INDUSTRIES = {
-    '3D printing': ['XMTR', 'VELO', 'DDD', 'PRLB', 'MTLS', 'SSYS', 'NNDM'],
+    '3D Printing': ['XMTR', 'VELO', 'DDD', 'PRLB', 'MTLS', 'SSYS', 'NNDM'],
     'Crypto': ['MSTR', 'CRCL', 'COIN', 'IBIT'],
     'Nuclear': ['URA', 'NLR', 'CEG', 'CCJ', 'OKLO', 'UUUU', 'SMR', 'LEU'],
     'MAG7': ['MAGS', 'AAPL', 'GOOGL', 'NVDA', 'META', 'MSFT', 'AMZN', 'TSLA'],
@@ -41,8 +41,8 @@ INDUSTRIES = {
     'SPACE': ['UFO', 'VSAT', 'RKLB', 'SATL', 'RDW', 'LUNR', 'BKSY', 'PL', 'IRDM', 'SATS', 'GSAT', 'ASTS', 'ARKX', 'FLY', 'SPCE', 'AVAV', 'KRMN', 'SIDU'],
     'CATHIE WOOD': ['ARKG', 'ARKK', 'ARKQ', 'ARKW', 'ARKF', 'ARKX'],
     'CHINA': ['FUTU', 'LI', 'KWEB', 'XPEV', 'NIO', 'PDD', 'BIDU', 'JD', 'BABA'],
-    'DATA CENTER / AI HOSTING': ['WGMI', 'CRWV', 'NBIS', 'IREN', 'WULF', 'CORZ', 'CIFR', 'HUT', 'BTDR'],
-    'ENERGY SOLAR': ['TAN', 'SEDG', 'ENPH', 'FSLR', 'ARRY', 'SHLS', 'CSIQ', 'RUN', 'NOVA','DQ'],
+    'DATA CENTER / AI HOST': ['WGMI', 'CRWV', 'NBIS', 'IREN', 'WULF', 'CORZ', 'CIFR', 'HUT', 'BTDR'],
+    'ENERGY SOLAR': ['TAN', 'SEDG', 'ENPH', 'FSLR', 'ARRY', 'SHLS', 'CSIQ', 'RUN', 'NOVA', 'DQ'],
     'COML SVCS-ADVRTSNG': ['OMC', 'DJT'],
     'AEROSPACE/DEFENSE': ['ITA', 'RTX', 'LMT', 'HON', 'BA', 'GD', 'NOC', 'TDG', 'LHX', 'HWM', 'AXON', 'HEI', 'LDOS', 'TDY', 'TXT', 'FTAI', 'CW', 'BWXT', 'HII', 'CR', 'DRS', 'LOAR', 'AVAV', 'HXL', 'KTOS', 'MIR', 'OSIS', 'AIR', 'MRCY'],
     'AGRICULTURAL OPRTIONS': ['ADM', 'BG', 'PPC', 'CALM', 'SEB'],
@@ -58,12 +58,12 @@ INDUSTRIES = {
     'BEVERAGES-ALCOHOLIC': ['STZ', 'TAP', 'SAM'],
     'BEV-NON-ALCOHOLIC': ['KO', 'MNST', 'CCEP', 'COKE', 'BRBR', 'CELH', 'FIZZ'],
     'MEDICAL-BIOMED/BTH': ['BNTX', 'AMGN', 'GILD', 'MRNA', 'ILMN', 'SMMT', 'PCVX', 'BMRN', 'TECH', 'NUVL', 'ELAN', 'HALO', 'RNA', 'KRYS', 'ADMA', 'BBIO', 'IMVT', 'ACLX', 'AXSM', 'CRSP', 'DNLI', 'ALVO', 'APGE', 'DYN', 'RYTM', 'KYMR', 'EWTX', 'PTGX', 'TWST', 'TXG', 'CGON', 'JANX', 'ARWR', 'VERA', 'NVAX', 'CLDX'],
-    'MEDIA-RADIO/TV': ['FOX', 'SIRI', 'NXST', 'TGNA'],
+    'MEDIA-RADIO/TV': ['FOX', 'SIRI', 'NXST'],
     'TELCOM-SVC-CBL/SAT': ['CMCSA', 'CHTR'],
     'LEISRE-GAMNG/EQUIP': ['FLUT', 'LVS', 'MGM', 'WYNN', 'CZR', 'LNW', 'BYD', 'RSI', 'DKNG', 'CHDN', 'PENN'],
     'CHEMICALS-AG': ['NTR', 'CTVA', 'CF', 'MOS', 'FMC', 'SMG'],
     'CHEMICALS-BASIC': ['DD', 'ESI', 'AVNT', 'HUN', 'IOSP', 'DOW', 'LYB', 'WLK', 'AVTR', 'CE', 'EMN', 'CC'],
-    'CHEMICALS-SPECIALTY': ['LIN', 'ECL', 'APD', 'ALB', 'CHX', 'CBT', 'NEU', 'KWR', 'HWKN', 'MTX', 'TROX', 'OLN', 'FUL', 'WDFC', 'AZZ', 'UFPT'],
+    'CHEMICALS-SPECIALTY': ['LIN', 'ECL', 'APD', 'ALB', 'CBT', 'NEU', 'KWR', 'HWKN', 'MTX', 'TROX', 'OLN', 'FUL', 'WDFC', 'AZZ', 'UFPT'],
     'ENERGY COAL': ['HCC', 'BTU', 'ARLP', 'AMR'],
     'MEDIA-DIVERSIFIED': ['WMG', 'SPOT', 'LYV', 'DIS', 'WBD'],
     'COMPTER-NETWRKING': ['ANET', 'CSCO', 'CALX'],
@@ -77,7 +77,7 @@ INDUSTRIES = {
     'RETAIL-DISCNT&VARI': ['DG', 'DLTR', 'FIVE', 'OLLI'],
     'RETAIL-DRUG STORES': ['CVS', 'UNH', 'ELV', 'HUM'],
     'UTILITY-ELCTRIC PWR': ['NEE', 'SO', 'CEG', 'DUK', 'AEP', 'SRE', 'D', 'VST', 'PEG', 'PCG', 'EXC', 'XEL', 'ED', 'EIX', 'WEC', 'ETR', 'DTE', 'FE', 'PPL', 'AEE', 'ES', 'CMS', 'NRG', 'CNP', 'LNT', 'EVRG', 'AES', 'PNW', 'OGE', 'IDA', 'POR', 'ORA', 'BKH', 'TXNM', 'NWE', 'MGEE'],
-    'ELECTRICAL POWER/EQPMT': ['ETN', 'GEV', 'AME', 'ROK', 'HUBB', 'RRX', 'GNRC', 'AYI', 'BDC', 'ENS', 'FLNC', 'SMR', 'ATKR', 'PBW', 'POWL', 'VICR', 'BE', 'ENVX'],
+    'ELEC-POWER/EQPMT': ['ETN', 'GEV', 'AME', 'ROK', 'HUBB', 'RRX', 'GNRC', 'AYI', 'BDC', 'ENS', 'FLNC', 'SMR', 'ATKR', 'PBW', 'POWL', 'VICR', 'BE', 'ENVX'],
     'TELCOM-FIBR OPTCS': ['XTL', 'AAOI', 'COHR', 'CIEN', 'FN', 'LITE', 'AXTI'],
     'ELEC-PARTS': ['APH', 'GLW', 'NVT', 'CAMT', 'TEL'],
     'ELEC-SCNTIFIC/MSRNG': ['PH', 'EMR', 'KEYS', 'FTV', 'CGNX', 'NOVT', 'ST', 'NXT', 'ITRI', 'ESE', 'SXI', 'MTRN'],
@@ -139,31 +139,31 @@ INDUSTRIES = {
     'BANKS-FOREIGN': ['UBS', 'BAP'],
     'BANKS-SUPR RGIONAL': ['PNC', 'HBAN', 'RF', 'CFG', 'KEY', 'ZION', 'FITB', 'TFC', 'MTB', 'ALLY', 'WAL'],
     'BANKS-WST/STHWST': ['BOKF', 'ONB', 'TCBI', 'WAFD', 'PRK', 'BKU', 'IBOC', 'BANF', 'UCB', 'AUB', 'FIBK', 'CATY', 'FHB', 'BOH', 'CVBF'],
-    'BANKS-SOUTHEAST': ['KBE', 'CADE', 'FNB', 'FBK', 'SNV', 'HOMB', 'OZK', 'ABCB'],
+    'BANKS-SOUTHEAST': ['KBE', 'FNB', 'FBK', 'HOMB', 'OZK', 'ABCB'],
     'BANKS-MIDWEST': ['KRE', 'FFIN', 'UMBF', 'ASB', 'FULT', 'CBU', 'SFNC', 'FRME', 'NBTB', 'CBSH', 'COLB', 'GBCI', 'UBSI', 'HWC', 'TOWN'],
     'BANKS-NORTHEAST': ['IAT', 'FCNCA', 'EWBC', 'FHN', 'CFR', 'PNFP', 'SSB', 'WTFC', 'BPOP', 'PB', 'WU', 'EBC', 'FBP', 'TBBK'],
-    'FINANC-SVINGS & LO': ['WBS', 'NYCB', 'TFSL', 'WSFS', 'PFS'],
+    'FINANC-SVINGS & LO': ['WBS', 'TFSL', 'WSFS', 'PFS'],
     'MED-MANAGED CARE': ['UNH', 'ELV', 'CI', 'CNC', 'HUM', 'MOH', 'OSCR', 'ALHC'],
-    'TRANSPORTATION-SHIP': ['KEX', 'FRO', 'MATX', 'GLNG', 'STNG', 'TDW', 'INSW', 'SBLK', 'GOGL', 'ZIM', 'TNK'],
+    'TRANSPORTATION-SHIP': ['KEX', 'FRO', 'MATX', 'GLNG', 'STNG', 'TDW', 'INSW', 'SBLK', 'ZIM', 'TNK'],
     'MDCAL-WHLSLE DRG': ['MCK', 'COR', 'CAH', 'HSIC'],
-    'MEDICAL-PRODUCTS': ['TMO', 'ABT', 'DHR', 'A', 'IDXX', 'RMD', 'MTD', 'RVTY', 'EXAS', 'BRKR', 'QGEN', 'BIO', 'GMEN', 'LNTH', 'MASI', 'GKOS', 'BLCO', 'MMSI'],
+    'MEDICAL-PRODUCTS': ['TMO', 'ABT', 'DHR', 'A', 'IDXX', 'RMD', 'MTD', 'RVTY', 'BRKR', 'QGEN', 'BIO', 'LNTH', 'MASI', 'GKOS', 'BLCO', 'MMSI'],
     'MEDICAL-SYSTEMS/EQP': ['IHI', 'ISRG', 'SYK', 'BSX', 'MDT', 'BDX', 'GEHC', 'EW', 'DXCM', 'STE', 'WST', 'COO', 'ZBH', 'WAT', 'HOLX', 'BAX', 'ALGN', 'PODD', 'NTRA', 'TFX', 'PEN', 'INSP'],
     'METAL PROC & FABRICA': ['RBC', 'MLI', 'VMI', 'ROCK'],
-    'CMML SVCS-CNSLTNG': ['TNET', 'LOPE', 'CNXC', 'ABM', 'RCM', 'LAUR', 'QXO', 'G'],
+    'CMML SVCS-CNSLTNG': ['TNET', 'LOPE', 'CNXC', 'ABM', 'LAUR', 'QXO', 'G'],
     'AUTO MANUFACTURERS': ['TSLA', 'GM', 'F', 'RIVN'],
     'TRNSPRT-EQP MFG': ['OSK', 'HOG', 'WAB', 'TEX', 'TRN', 'ALG'],
     'LEISRE-MVIES & REL': ['DIS', 'LYV', 'FWONA', 'TKO', 'MSGS', 'FUN', 'CNK', 'PRKS', 'MANU', 'BATRA'],
-    'INSRNCE-DIVRSIFIED': ['PGR', 'AFL', 'MET', 'ACGL', 'HIG', 'CINF', 'RGA', 'CNA', 'UNM', 'KNSL', 'GL', 'RLI', 'AXS', 'BWIN', 'ACT', 'FG', 'ESGR', 'WTM', 'CNO'],
+    'INSRNCE-DIVRSIFIED': ['PGR', 'AFL', 'MET', 'ACGL', 'HIG', 'CINF', 'RGA', 'CNA', 'UNM', 'KNSL', 'GL', 'RLI', 'AXS', 'BWIN', 'ACT', 'FG', 'WTM', 'CNO'],
     'OFFICE SUPPLIES MFG': ['HNI', 'MLKN', 'ACCO'],
-    'OIL&GAS-TRNSPRT/PIP': ['EPD', 'WMB', 'ET', 'OKE', 'KMI', 'MPLX', 'LNG', 'WES', 'PAA', 'DTM', 'KNTK', 'AM', 'ENLC', 'SOBO', 'PAGP', 'DKL'],
+    'OIL&GAS-TRNSPRT/PIP': ['EPD', 'WMB', 'ET', 'OKE', 'KMI', 'MPLX', 'LNG', 'WES', 'PAA', 'DTM', 'KNTK', 'AM', 'SOBO', 'PAGP', 'DKL'],
     'OIL&GAS-RFING/MKT': ['PSX', 'MPC', 'VLO', 'DINO', 'IEP', 'PBF', 'CVI', 'SUN'],
-    'OIL&GAS-FIELD SERVIC': ['HAL', 'FIT', 'WFRD', 'NOV', 'WHD', 'AROC', 'LBRT', 'USAC', 'KGS', 'AESI'],
-    'LEISURE-SERVICES': ['CTAS', 'ROL', 'SCI', 'HRB', 'PLNT', 'LTH', 'VVV', 'GHC', 'UNF', 'LRN', 'ATGE', 'DRVN', 'STRA'],
-    'CONSUMR PROD-SPECI': ['MSA', 'HAS', 'AS', 'MAT', 'THO', 'PII', 'GOLF', 'HAYW', 'VSTO', 'SIG'],
+    'OIL&GAS-FIELD SERVIC': ['HAL', 'WFRD', 'NOV', 'WHD', 'AROC', 'LBRT', 'USAC', 'KGS', 'AESI'],
+    'LEISURE-SERVICES': ['CTAS', 'ROL', 'SCI', 'HRB', 'PLNT', 'LTH', 'VVV', 'GHC', 'UNF', 'LRN', 'DRVN', 'STRA'],
+    'CONSUMR PROD-SPECI': ['MSA', 'HAS', 'AS', 'MAT', 'THO', 'PII', 'GOLF', 'HAYW', 'SIG'],
     'CMP SFTWR-SPC-ENTR': ['TTD', 'MGNI', 'PUBM'],
-    'MEDICAL-ETHICAL DRGS': ['NVO', 'LLY', 'JNJ', 'ABBV', 'MRK', 'PFE', 'VRTX', 'REGN', 'BMY', 'ZTS', 'ALNY', 'BIIB', 'RPRX', 'UTHR', 'VTRS', 'INCY', 'INSM', 'SRPT', 'NBIX', 'CTLT', 'ROIV', 'ITCI', 'RGEN', 'VKTX', 'EXEL', 'JAZZ', 'CYTK', 'IONS', 'BHVN', 'RARE', 'CORT', 'MDGL', 'OGN', 'ALKS', 'CRNX', 'TGTX', 'PHB', 'PRGO', 'APLS', 'RVMD'],
+    'MEDICAL-ETHICAL DRGS': ['NVO', 'LLY', 'JNJ', 'ABBV', 'MRK', 'PFE', 'VRTX', 'REGN', 'BMY', 'ZTS', 'ALNY', 'BIIB', 'RPRX', 'UTHR', 'VTRS', 'INCY', 'INSM', 'SRPT', 'NBIX', 'ROIV', 'RGEN', 'VKTX', 'EXEL', 'JAZZ', 'CYTK', 'IONS', 'BHVN', 'RARE', 'CORT', 'MDGL', 'OGN', 'ALKS', 'CRNX', 'TGTX', 'PHB', 'PRGO', 'APLS', 'RVMD'],
     'MINING-GLD/SILVR/GMS': ['NEM', 'RGLD'],
-    'INSRNCE-PRP/CAS/TITL': ['BRK.B', 'CB', 'TRV', 'ALL', 'AIG', 'ERIE', 'WRB', 'MKL', 'L', 'EG', 'RNR', 'AFG', 'AIZ', 'MTG', 'SIGI', 'THG', 'KMPR', 'HGTY', 'MCY', 'NMIH', 'PLMR', 'SPNT', 'FNF', 'ORI', 'ESNT', 'FAF', 'RDN', 'AGO'],
+    'INSRNCE-PRP/CAS/TITL': ['BRK-B','CB', 'TRV', 'ALL', 'AIG', 'ERIE', 'WRB', 'MKL', 'L', 'EG', 'RNR', 'AFG', 'AIZ', 'MTG', 'SIGI', 'THG', 'KMPR', 'HGTY', 'MCY', 'NMIH', 'PLMR', 'SPNT', 'FNF', 'ORI', 'ESNT', 'FAF', 'RDN', 'AGO'],
     'MEDIA-BOOKS': ['WLY', 'SCHL', 'NYT'],
     'MEDIA-NEWSPAPERS': ['NWS', 'NYT'],
     'PAPER & PAPER PRODUC': ['IP', 'SLVM'],
@@ -175,25 +175,25 @@ INDUSTRIES = {
     'RETAIL/WSL-AUTO PRT': ['ORLY', 'AZO'],
     'RETAIL-SPECIALTY': ['MUSA', 'CASY', 'HZO', 'COST', 'BJ', 'ARKO', 'WMT', 'PSMT', 'TBBB', 'TGT', 'DKS', 'FIVE', 'BOBS', 'BBW', 'WINA', 'GME', 'MNSO', 'BBY', 'ULTA', 'EVGO', 'BWMX', 'OLLI', 'DLTR', 'RH', 'ASO', 'WSM', 'WOOF', 'DG', 'BBWI', 'SVV', 'SBH', 'BNED', 'ARHS', 'TSCO', 'EYE'],
     'RETAIL-RESTAURANTS': ['MCD', 'SBUX', 'CMG', 'YUM', 'QSR', 'DRI', 'YUMC', 'CAVA', 'DPZ', 'WING', 'TXRH', 'ARMK', 'SHAK', 'SG', 'EAT', 'WEN', 'CAKE'],
-    'TELECOM SVCS-FOREIGN': ['FYBR', 'CCOI', 'LBTYA'],
+    'TELECOM SVCS-FOREIGN': ['CCOI', 'LBTYA'],
     'TELCOM-INFRASTR': ['SATS', 'ASTS', 'IRDM'],
     'STEEL-PRODUCERS': ['NWPX', 'PKX', 'NUE', 'STLD', 'WS', 'WS', 'RS', 'ASTL', 'CLF', 'GGB', 'CMC', 'RIO', 'TX', 'MTUS', 'MT', 'HCC', 'MSB', 'VALE', 'SID'],
     'TELCOM-CONS PROD': ['MSI', 'GRMN', 'UI'],
-    'TEXTILES': ['AIN', 'CULP', 'UFI'],
+    #'TEXTILES': ['AIN', 'CULP', 'UFI'],
     'TOBACCO': ['PM', 'MO'],
     'BLDG-HAND TOOLS': ['SWK', 'SNA'],
     'TRNSPORTATION-TRCK': ['ODFL', 'JBHT', 'XPO', 'SAIA', 'KNX', 'LSTR', 'SNDR', 'ARCB', 'WERN'],
     'MACHINERY-FARM': ['DE', 'CNH', 'TTC', 'AGCO', 'SITE', 'FSS', 'ACA'],
     'MCHNRY-CNSTR/MNG': ['CAT', 'PCAR', 'LGN'],
     'UTILITY-WATER SUPPLY': ['AWK', 'WTRG', 'AWR', 'CWT'],
-    'TELCOM SVC-WIRLES': ['TMUS', 'VZ', 'T', 'LBRDA', 'USM', 'TIGO', 'TDS'],
+    'TELCOM SVC-WIRLES': ['TMUS', 'VZ', 'T', 'LBRDA', 'TIGO', 'TDS'],
     'ELEC-SEMICON FBLSS': ['SMH', 'SIMO', 'ARM', 'NVDA', 'AVGO', 'AMD', 'QCOM', 'ADI', 'MRVL', 'NXPI', 'MPWR', 'MCHP', 'ON', 'SWKS', 'QRVO', 'ALAB', 'CRDO', 'MTSI', 'LSCC', 'CRUS', 'PI', 'RMBS', 'SITM', 'ALGM', 'SLAB', 'POWI', 'IPGP', 'SMTC', 'DIOD', 'SYNA', 'AMBA'],
-    'ELEC-SEMICON FNDRY': ['TSM', 'TXN', 'INTC', 'GFS', 'AMKR', 'TSEM', 'FORM', 'STM']
+    'ELEC-SEMICON FNDRY': ['TSM', 'TXN', 'INTC', 'GFS', 'AMKR', 'TSEM', 'FORM', 'STM'],
 }
 
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
-    'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EXC', 'FIGR', 
+    'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'NTAP', 'OR', 
     'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
     'VUG', 'WGMI', 'WMB', 'XEL', 'XMAG', 'XYZ', 'ZIM','VICR', 'SLX', 'CBOE', 'SIMO', 'FLEX', 'POWL', 'VLO', 'DOCN', 
@@ -214,7 +214,7 @@ KNOWN_STOCKS = [
     'Z', 'OPEN', 'CHWY', 'CVNA', 'BARK', 'GM', 'BLNK', 'QS', 'F', 'RIVN', 'FCEL', 'CHPT', 'LCID', 
     'UPST', 'PYPL', 'AFRM', 'V', 'MA', 'AXP', 'BITO', 'COIN', 'RIOT', 'MARA', 'MSTR', 'SI', 
     'DKNG', 'PENN', 'BETZ', 'REGN', 'VRTX', 'MRK', 'UNH', 'TMO', 'ISRG', 'ABT', 'IDXX', 'TDOC', 'CRSP', 
-    'BRK.B', 'ETN', 'CAT', 'BLD', 'U', 'RBLX', 'SKLZ', 'FSLY', 'TRIP', 'EXPE', 'BKNG', 'ABNB', 'DIS', 'WMT', 
+    'BRK-B', 'ETN', 'CAT', 'BLD', 'U', 'RBLX', 'SKLZ', 'FSLY', 'TRIP', 'EXPE', 'BKNG', 'ABNB', 'DIS', 'WMT', 
     'COST', 'TGT', 'LOW', 'HD', 'DT', 'SNPS', 'CDNS', 'MDB', 'ORCL', 'NOW', 'ADP', 'SNOW', 'ANSS', 'DDOG', 
     'FROG', 'ADSK', 'INTU', 'TEAM', 'WDAY', 'CRM', 'PAYC', 'ANET', 'ADBE', 'ACN', 'EPAM', 'ZM', 'TTD', 'TWLO', 
     'DASH', 'APPS', 'DOCU', 'AI', 'AKAM', 'QLYS', 'PANW', 'FTNT', 'CRWD', 'TENB', 'OKTA', 'ZS', 
@@ -881,6 +881,7 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
         leader_matches = []
         leader_rs_nh_matches = []
         gapper_matches = []
+        gapper_gap_levels = {}
         
         # Yesterday's Matches (for color logic)
         botak_yest = []
@@ -1110,7 +1111,16 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                     strictUnfill_g = min_low_since_gap_g >  gap_floor_g
                     result_g       = gapIn20_g & strictUnfill_g & validGap_g & (df_g['Close'] >= 20)
 
-                    if bool(result_g.iloc[-1]):  gapper_matches.append(ticker)
+                    if bool(result_g.iloc[-1]):
+                        gapper_matches.append(ticker)
+                        gap_bar_positions = [i for i in range(1, len(df_g)) if gapUp10.iloc[i]]
+                        gap_bar_pos       = gap_bar_positions[-1]  # most recent gap bar
+                        gap_bar_date      = ticker_df.index[gap_bar_pos].strftime("%Y-%m-%d")
+                        gapper_gap_levels[ticker] = {
+                            "floor":   round(float(fl_g),   2),
+                            "ceiling": round(float(ceil_g), 2),
+                            "date":    gap_bar_date,
+                        }
                     if bool(result_g.iloc[-2]):  gapper_yest.append(ticker)
 
                 # --- Bullish Engulfing (OPTIMIZED) ---
@@ -1327,7 +1337,8 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
             extra_52wk_high_symbols,
             extra_52wk_high_removed,
             pct_above_ema200,
-            leader_rs_nh_matches
+            leader_rs_nh_matches,
+            gapper_gap_levels
         )
     except:
         return [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, [], [], [], [], 0
@@ -2027,7 +2038,7 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
     # leader_hist     = compute_leader_history(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
     b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list, leader_list, gapper_list = results[:9]
     b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest, leader_yest, gapper_yest = results[9:18]
-    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200, leader_rs_nh_matches = results[18:]
+    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200, leader_rs_nh_matches, gapper_gap_levels = results[18:]
 
 st.markdown("---")
 
@@ -2293,7 +2304,7 @@ with st.spinner("Scanning for Leader History..."):
 #st.write(f"Percentage of stock above EMA200: {pct_above_ema200:.2f}%")
 
 # --- LEADERS SECTION ---
-st.markdown(f"#### 🏆 RS Leaders Long term ({len(leader_list)}) | 🔵 Blue Dot Short term ({len(leader_rs_nh_matches)})")
+st.markdown(f"#### 🏆 RS Leader = Long term ({len(leader_list)}) | Blue Dot = Short term ({len(leader_rs_nh_matches)})")
 
 if leader_list or leader_yest:
 
@@ -2800,7 +2811,11 @@ if gapper_list or gapper_yest:
             for col_idx, sym in enumerate(row_tickers):
                 with cols[col_idx]:
                     ohlcv_json = get_gapper_ohlcv_json(sym)
-                    chart_id = f"gapper_{sym}_{row_start}_{col_idx}"
+                    chart_id   = f"gapper_{sym}_{row_start}_{col_idx}"
+                    _levels        = gapper_gap_levels.get(sym, {})
+                    gap_floor_js   = str(_levels["floor"])   if _levels else "null"
+                    gap_ceiling_js = str(_levels["ceiling"]) if _levels else "null"
+                    gap_date_js    = f'"{_levels["date"]}"'  if _levels else "null"
 
                     chart_html = f"""
 <div style="font-family:'JetBrains Mono','Fira Code',monospace;">
@@ -2849,6 +2864,44 @@ if gapper_list or gapper_yest:
       fixLeftEdge:true, fixRightEdge:true,
     }},
   }});
+
+  var gapBottom = {gap_floor_js};
+  var gapTop    = {gap_ceiling_js};
+
+if (gapBottom !== null && gapTop !== null && {gap_date_js} !== null) {{
+    var gapStartDate = {gap_date_js};
+    var t1 = ohlcv[ohlcv.length - 1].time;
+
+    // Upper boundary — fills grey DOWN from gapTop
+    var upperArea = chart.addAreaSeries({{
+      topColor:    'rgba(160,160,160,0.20)',
+      bottomColor: 'rgba(160,160,160,0.20)',
+      lineColor:   'rgba(160,160,160,0.55)',
+      lineWidth:   1,
+      priceLineVisible:       false,
+      lastValueVisible:       false,
+      crosshairMarkerVisible: false,
+    }});
+    upperArea.setData([
+      {{ time: gapStartDate, value: gapTop }},
+      {{ time: t1,           value: gapTop }},
+    ]);
+
+    // Lower boundary — fills solid background DOWN from gapBottom to erase bleed
+    var lowerArea = chart.addAreaSeries({{
+      topColor:    '#0d1117',
+      bottomColor: '#0d1117',
+      lineColor:   'rgba(160,160,160,0.55)',
+      lineWidth:   1,
+      priceLineVisible:       false,
+      lastValueVisible:       false,
+      crosshairMarkerVisible: false,
+    }});
+    lowerArea.setData([
+      {{ time: gapStartDate, value: gapBottom }},
+      {{ time: t1,           value: gapBottom }},
+    ]);
+  }}  
 
   var candles = chart.addCandlestickSeries({{
     upColor:'#26a641',   downColor:'#f85149',
