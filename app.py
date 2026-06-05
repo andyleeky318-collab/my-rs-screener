@@ -90,7 +90,7 @@ INDUSTRIES = {
     "DVRSIFIED OPRTIONS": ["MMM", "RLX", "WMS", "AWI", "BRC", "YETI", "LCII"],
     "MCHNRY-GEN INDSTRL": ["GE", "TT", "CARR", "JCI", "IR", "XYL", "DOV", "LII", "PNR", "IEX", "GGG", "NDSN", "LECO", "WWD", "AAON", "FLS", "MIDD", "MOD", "WTS", "BMI", "ZWS", "ESAB", "TKR", "GTLS", "GTES", "FELE", "KAI", "MWA", "NPO", "CXT", "OII", "SYM"],
     "CHEMICALS-PAINTS": ["SHW", "PPG", "RPM", "AXTA"],
-    "COMPTER SFTWR-SCRITY": ["BUG", "FTNT", "PANW", "CRWD", "CHKP", "RBRK", "RPD"],
+    "COMPTER SFTWR-SCRITY": ["FTNT", "PANW", "CRWD"],
     "COMPTER SFTWR-ENTR": ["IGV", "TWLO", "MSFT", "ORCL", "CRM", "IBM", "NOW", "ADP", "DOCN", "PLTR", "ADSK", "ROP", "TEAM", "SNOW", "VEEV", "HUBS", "PTC", "MDB", "MANH", "TOST", "MNDY", "WDAY", "SSNC", "GWRE", "BSY", "PEGA", "QTWO", "APPF", "BOX", "WK"],
     "COMPTER SFTWR-DSGN": ["ADBE", "INTU", "SNPS", "CDNS", "IOT", "DT", "TRMB", "WIX"],
     "CMPTR SFTWR-FINCL": ["FICO", "FIS", "NU", "SHOP"],
