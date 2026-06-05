@@ -264,7 +264,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         open_data = data['Open']
         
         valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= length]
-        if not valid_tickers: return None, None, None, {}, None, None, None
+        if not valid_tickers: return None, None, None, {}, None, None, None, None, None
 
         # --- New RS Logic ---
         bench_close = close_data[benchmark_ticker]
