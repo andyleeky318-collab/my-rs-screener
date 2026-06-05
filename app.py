@@ -2590,9 +2590,13 @@ if pt_list or pt_yest:
         ticker_df_pt = ticker_dfs_shared.get(sym)
         if ticker_df_pt is not None and not ticker_df_pt.empty:
             pt_close = ticker_df_pt['Close'].iloc[-1]
-            if not pd.isna(pt_close):
-                pt_price = f'<span style="color:#aaaaaa; font-size:10px; margin-left:4px;">${pt_close:.2f}</span>'
-        
+            pt_high  = ticker_df_pt['High'].iloc[-1]
+            if not pd.isna(pt_close) and not pd.isna(pt_high):
+                pt_price = (
+                    f'<span style="color:#aaaaaa; font-size:10px; margin-left:4px;">'
+                    f'C${pt_close:.2f} H${pt_high:.2f}'
+                    f'</span>'
+                )
         html_pt += f'<div class="ticker-badge {cls}">{sym}{pt_price}</div>'
     
     # Process and append removed stocks
