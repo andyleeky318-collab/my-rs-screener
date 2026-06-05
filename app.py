@@ -781,32 +781,59 @@ def scan_leader(df, benchmark_df, lookback=0):
 # ============================================================
 # SHARED DOWNLOAD: runs once, feeds all history compute fns
 # ============================================================
-# @st.cache_data(ttl=3600)
-# def download_known_stocks_data(stocks_tuple):
-#     benchmark_symbol = "^GSPC"
-#     all_symbols = list(stocks_tuple) + [benchmark_symbol]
-#     raw_data = yf.download(all_symbols, period="2y", interval="1d", progress=False)
+@st.cache_data(ttl=3600)
+def download_known_stocks_data(stocks_tuple):
+    benchmark_symbol = "^GSPC"
+    all_symbols = list(stocks_tuple) + [benchmark_symbol]
+    raw_data = yf.download(all_symbols, period="2y", interval="1d", progress=False)
 
-#     ticker_dfs = {}
-#     for ticker in stocks_tuple:
-#         try:
-#             df = pd.DataFrame({
-#                 'Open':   raw_data['Open'][ticker],
-#                 'High':   raw_data['High'][ticker],
-#                 'Low':    raw_data['Low'][ticker],
-#                 'Close':  raw_data['Close'][ticker],
-#                 'Volume': raw_data['Volume'][ticker]
-#             }).dropna()
-#             if not df.empty:
-#                 ticker_dfs[ticker] = df
-#         except Exception:
-#             continue
+    ticker_dfs = {}
+    for ticker in stocks_tuple:
+        try:
+            df = pd.DataFrame({
+                'Open':   raw_data['Open'][ticker],
+                'High':   raw_data['High'][ticker],
+                'Low':    raw_data['Low'][ticker],
+                'Close':  raw_data['Close'][ticker],
+                'Volume': raw_data['Volume'][ticker]
+            }).dropna()
+            if not df.empty:
+                ticker_dfs[ticker] = df
+        except Exception:
+            continue
 
-#     benchmark_df = pd.DataFrame({
-#         'Close': raw_data['Close'][benchmark_symbol]
-#     }).dropna()
+    benchmark_df = pd.DataFrame({
+        'Close': raw_data['Close'][benchmark_symbol]
+    }).dropna()
 
-#     return ticker_dfs, benchmark_df
+    return ticker_dfs, benchmark_df
+
+@st.cache_data(ttl=3600)
+def download_known_stocks_data2(stocks_tuple):
+    benchmark_symbol = "^GSPC"
+    all_symbols = list(stocks_tuple) + [benchmark_symbol]
+    raw_data = yf.download(all_symbols, period="2y", interval="1d", progress=False)
+
+    ticker_dfs2 = {}
+    for ticker in stocks_tuple:
+        try:
+            df = pd.DataFrame({
+                'Open':   raw_data['Open'][ticker],
+                'High':   raw_data['High'][ticker],
+                'Low':    raw_data['Low'][ticker],
+                'Close':  raw_data['Close'][ticker],
+                'Volume': raw_data['Volume'][ticker]
+            }).dropna()
+            if not df.empty:
+                ticker_dfs2[ticker] = df
+        except Exception:
+            continue
+
+    benchmark_df2 = pd.DataFrame({
+        'Close': raw_data['Close'][benchmark_symbol]
+    }).dropna()
+
+    return ticker_dfs2, benchmark_df2
 
 @st.cache_data(ttl=3600)
 def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
@@ -1293,56 +1320,18 @@ all_data = []
 progress_bar = st.progress(0)
 status_text = st.empty()
 
-# ============================================================
-# SINGLE DOWNLOAD + SPINNER: all compute fns share one fetch
-# ============================================================
-# ============================================================
-# BUILD COMBINED TICKER POOL: KNOWN_STOCKS + ALL INDUSTRY TICKERS
-# ============================================================
 all_industry_tickers = list(set(
     ticker
     for tickers in INDUSTRIES.values()
     for ticker in tickers
 ))
 
-combined_tickers = list(set(KNOWN_STOCKS + all_industry_tickers))
-stocks_tuple = tuple(KNOWN_STOCKS)
+combined_tickers = list(set(all_industry_tickers))
 combined_tuple = tuple(combined_tickers)
 
-@st.cache_data(ttl=3600)
-def download_all_tickers_data(combined_tuple):
-    benchmark_symbol = "^GSPC"
-    all_symbols = list(combined_tuple) + [benchmark_symbol]
-    raw_data = yf.download(all_symbols, period="2y", interval="1d", progress=False)
-
-    ticker_dfs = {}
-    for ticker in combined_tuple:
-        try:
-            df = pd.DataFrame({
-                'Open':   raw_data['Open'][ticker],
-                'High':   raw_data['High'][ticker],
-                'Low':    raw_data['Low'][ticker],
-                'Close':  raw_data['Close'][ticker],
-                'Volume': raw_data['Volume'][ticker]
-            }).dropna()
-            if not df.empty:
-                ticker_dfs[ticker] = df
-            else:
-                print(f"[EMPTY DF] {ticker}")
-        except Exception as e:
-            print(f"[DOWNLOAD FAIL] {ticker} — {e}")
-            continue
-
-    benchmark_df = pd.DataFrame({
-        'Close': raw_data['Close'][benchmark_symbol]
-    }).dropna()
-
-    return ticker_dfs, benchmark_df
-
-# Single download — feeds industry table, pattern scanners, and all history fns
-ticker_dfs_shared, benchmark_df_shared = timed(
-    "download_all_tickers_data",
-    download_all_tickers_data,
+ticker_dfs_shared2, benchmark_df_shared2 = timed(
+    "download_known_stocks_data2",
+    download_known_stocks_data2,
     combined_tuple
 )
 
@@ -1353,8 +1342,8 @@ for idx, (industry_name, tickers) in enumerate(industry_items):
         f"RS+Cloud [{industry_name}]",
         get_rs_and_cloud_data_cached,
         tuple(tickers), benchmark, 90,
-        ticker_dfs_shared,      # ← pass shared pool
-        benchmark_df_shared     # ← pass shared benchmark
+        ticker_dfs_shared2,      # ← pass shared pool
+        benchmark_df_shared2     # ← pass shared benchmark
     )
     
     if rs_scores is not None:
@@ -2015,6 +2004,17 @@ def compute_historical_know_counts(stocks_list, ticker_dfs):
     except Exception as e:
         return pd.DataFrame()
 
+# ============================================================
+# SINGLE DOWNLOAD + SPINNER: all compute fns share one fetch
+# ============================================================
+stocks_tuple = tuple(KNOWN_STOCKS)
+
+# Single download — all history fns share this cached result
+ticker_dfs_shared, benchmark_df_shared = timed(
+    "download_known_stocks_data",
+    download_known_stocks_data,
+    stocks_tuple
+)
 
 with st.spinner("Scanning pattern anomalies across known instruments..."):
     results       = timed("process_pattern_scanners",      process_pattern_scanners,      stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
