@@ -1113,9 +1113,13 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
 
                     if bool(result_g.iloc[-1]):
                         gapper_matches.append(ticker)
-                        gapper_gap_levels[ticker] = {          # ← add these 3 lines
+                        gap_bar_positions = [i for i in range(1, len(df_g)) if gapUp10.iloc[i]]
+                        gap_bar_pos       = gap_bar_positions[-1]  # most recent gap bar
+                        gap_bar_date      = ticker_df.index[gap_bar_pos].strftime("%Y-%m-%d")
+                        gapper_gap_levels[ticker] = {
                             "floor":   round(float(fl_g),   2),
                             "ceiling": round(float(ceil_g), 2),
+                            "date":    gap_bar_date,
                         }
                     if bool(result_g.iloc[-2]):  gapper_yest.append(ticker)
 
@@ -2811,6 +2815,7 @@ if gapper_list or gapper_yest:
                     _levels        = gapper_gap_levels.get(sym, {})
                     gap_floor_js   = str(_levels["floor"])   if _levels else "null"
                     gap_ceiling_js = str(_levels["ceiling"]) if _levels else "null"
+                    gap_date_js    = f'"{_levels["date"]}"'  if _levels else "null"
 
                     chart_html = f"""
 <div style="font-family:'JetBrains Mono','Fira Code',monospace;">
@@ -2863,29 +2868,47 @@ if gapper_list or gapper_yest:
   var gapBottom = {gap_floor_js};
   var gapTop    = {gap_ceiling_js};
 
+if (gapBottom !== null && gapTop !== null && {gap_date_js} !== null) {{
+    var gapStartDate = {gap_date_js};
+    var t1 = ohlcv[ohlcv.length - 1].time;
+
+    // Upper boundary — fills grey DOWN from gapTop
+    var upperArea = chart.addAreaSeries({{
+      topColor:    'rgba(160,160,160,0.20)',
+      bottomColor: 'rgba(160,160,160,0.20)',
+      lineColor:   'rgba(160,160,160,0.55)',
+      lineWidth:   1,
+      priceLineVisible:       false,
+      lastValueVisible:       false,
+      crosshairMarkerVisible: false,
+    }});
+    upperArea.setData([
+      {{ time: gapStartDate, value: gapTop }},
+      {{ time: t1,           value: gapTop }},
+    ]);
+
+    // Lower boundary — fills solid background DOWN from gapBottom to erase bleed
+    var lowerArea = chart.addAreaSeries({{
+      topColor:    '#0d1117',
+      bottomColor: '#0d1117',
+      lineColor:   'rgba(160,160,160,0.55)',
+      lineWidth:   1,
+      priceLineVisible:       false,
+      lastValueVisible:       false,
+      crosshairMarkerVisible: false,
+    }});
+    lowerArea.setData([
+      {{ time: gapStartDate, value: gapBottom }},
+      {{ time: t1,           value: gapBottom }},
+    ]);
+  }}  
+
   var candles = chart.addCandlestickSeries({{
     upColor:'#26a641',   downColor:'#f85149',
     borderUpColor:'#26a641', borderDownColor:'#f85149',
     wickUpColor:'#26a641',   wickDownColor:'#f85149',
   }});
   candles.setData(ohlcv);
-
-  if (gapBottom !== null && gapTop !== null) {{
-    candles.createPriceLine({{
-      price: gapTop,
-      color: 'rgba(200,200,200,0.8)',
-      lineWidth: 1,
-      lineStyle: LightweightCharts.LineStyle.Dashed,
-      axisLabelVisible: false,
-    }});
-    candles.createPriceLine({{
-      price: gapBottom,
-      color: 'rgba(200,200,200,0.8)',
-      lineWidth: 1,
-      lineStyle: LightweightCharts.LineStyle.Dashed,
-      axisLabelVisible: false,
-    }});
-  }}
 
   function calcEMA(data, span) {{
     var k = 2/(span+1), ema = data[0].close, out = [];
