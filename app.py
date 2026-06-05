@@ -84,7 +84,7 @@ LIME_STOCKS = [
 # 3. Sidebar Inputs
 with st.sidebar:
     st.header("Settings")
-    benchmark = st.selectbox("Benchmark", ["^GSPC", "^IXIC"], index=0)
+    benchmark = st.selectbox("Benchmark", ["AAPL", "AAPL"], index=0)
     rs_length = st.number_input("RS Lookback Length", value=90, min_value=10)
     top_n = st.number_input("Top N for Group Avg", value=5, min_value=1)
     show_all_rs = st.toggle("Show RS < 80 Tickers", value=False)
@@ -685,7 +685,7 @@ def scan_leader(df, benchmark_df, lookback=0):
 # ============================================================
 @st.cache_data(ttl=3600)
 def download_known_stocks_data(stocks_tuple):
-    benchmark_symbol = "^GSPC"
+    benchmark_symbol = "AAPL"
     all_symbols = list(stocks_tuple) + [benchmark_symbol]
     raw_data = yf.download(all_symbols, period="2y", interval="1d", progress=False)
 
@@ -713,7 +713,7 @@ def download_known_stocks_data(stocks_tuple):
 @st.cache_data(ttl=3600)
 def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
     try:
-        benchmark_symbol = "^GSPC"
+        benchmark_symbol = "AAPL"
 
         # Today's Matches
         botak_matches = []
