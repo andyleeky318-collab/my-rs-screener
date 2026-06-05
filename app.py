@@ -256,46 +256,51 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
     tickers = list(tickers_tuple)
     try:
         all_tickers = tickers + [benchmark_ticker]
-        # Download data (ensuring enough historical data to compute the rolling min/max lookback window)
-        # data = yf.download(all_tickers, period="2y", interval="1d", progress=False)
-        data = yf.download(all_tickers,period="2y",interval="1d",progress=False)
+        
+        # ── Same method as download_known_stocks_data ──────────────────────
+        raw_data = yf.download(all_tickers, period="2y", interval="1d", progress=False)
 
-        # # Check if the dataframe contains the ticker columns at all
-        # if "SNDK" in tickers:
-        #     if "SNDK" not in data['Close'].columns:
-        #         st.sidebar.error("❌ yfinance dropped SNDK entirely from the returned Dataframe columns.")
-        #     else:
-        #         sndk_bars = data['Close']["SNDK"].notna().sum()
-        #         if sndk_bars < length:
-        #             st.sidebar.error(f"❌ SNDK only has {sndk_bars} active bars, but lookback requires {length} bars.")
-        
-        close_data = data['Close']
-        high_data = data['High']
-        low_data = data['Low']
-        open_data = data['Open']
-        
-        valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= length]
-        for t in tickers:
-            if t == benchmark_ticker:
+        ticker_dfs = {}
+        for ticker in tickers:
+            try:
+                df = pd.DataFrame({
+                    'Open':   raw_data['Open'][ticker],
+                    'High':   raw_data['High'][ticker],
+                    'Low':    raw_data['Low'][ticker],
+                    'Close':  raw_data['Close'][ticker],
+                    'Volume': raw_data['Volume'][ticker]
+                }).dropna()
+                if not df.empty:
+                    ticker_dfs[ticker] = df
+                else:
+                    print(f"[EMPTY DF] {ticker}")
+            except Exception as e:
+                print(f"[DOWNLOAD FAIL] {ticker} — {e}")
                 continue
-            if t not in close_data.columns:
-                print(f"[MISSING COLUMN] {t} — not in close_data.columns")
-            elif close_data[t].notna().sum() < length:
-                print(f"[INSUFFICIENT BARS] {t} — only {close_data[t].notna().sum()} bars, need {length}")
-            else:
-                price = close_data[t].iloc[-1]
-                high  = high_data[t].iloc[-1]  if t in high_data.columns  else float('nan')
-                low   = low_data[t].iloc[-1]   if t in low_data.columns   else float('nan')
-                if pd.isna(price):
-                    print(f"[NaN PRICE] {t} — latest close is NaN")
-                if pd.isna(high):
-                    print(f"[NaN HIGH] {t} — latest high is NaN")
-                if pd.isna(low):
-                    print(f"[NaN LOW] {t} — latest low is NaN")
-        if not valid_tickers: return None, None, None, {}, None, None, None, None, None
+
+        bench_df = pd.DataFrame({
+            'Close': raw_data['Close'][benchmark_ticker]
+        }).dropna()
+
+        if bench_df.empty:
+            print(f"[MISSING BENCHMARK] {benchmark_ticker}")
+            return None, None, None, {}, None, None, None, None, None
+
+        # ── Build close/high/low/open data from ticker_dfs ────────────────
+        close_data = pd.DataFrame({t: df['Close'] for t, df in ticker_dfs.items()})
+        high_data  = pd.DataFrame({t: df['High']  for t, df in ticker_dfs.items()})
+        low_data   = pd.DataFrame({t: df['Low']   for t, df in ticker_dfs.items()})
+        open_data  = pd.DataFrame({t: df['Open']  for t, df in ticker_dfs.items()})
+
+        bench_close = bench_df['Close']
+
+        valid_tickers = [
+            t for t in ticker_dfs
+            if close_data[t].notna().sum() >= length
+        ]
 
         # --- New RS Logic ---
-        bench_close = close_data[benchmark_ticker]
+        #bench_close = close_data[benchmark_ticker]
         stock_scores = {}
         stock_scores_prev = {}
         stock_scores_1m = {}
