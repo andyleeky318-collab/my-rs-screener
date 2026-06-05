@@ -101,13 +101,35 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
     try:
         all_tickers = tickers + [benchmark_ticker]
         # Download data (ensuring enough historical data to compute the rolling min/max lookback window)
-        data = yf.download(all_tickers, period="1y", interval="1d", progress=False)
+        data = yf.download(all_tickers, period="2y", interval="1d", progress=False)
         
         close_data = data['Close']
         high_data = data['High']
         low_data = data['Low']
         open_data = data['Open']
-        
+
+        # --- FALLBACK: individually re-download any ticker that came back empty ---
+        empty_tickers = [t for t in tickers if t not in close_data.columns or close_data[t].notna().sum() < length]
+        for _t in empty_tickers:
+            try:
+                _d = yf.download(_t, period="2y", interval="1d", progress=False)
+                if _d.empty:
+                    continue
+                # yfinance single-ticker download returns flat columns (no MultiIndex)
+                _close = _d['Close'] if 'Close' in _d.columns else None
+                _high  = _d['High']  if 'High'  in _d.columns else None
+                _low   = _d['Low']   if 'Low'   in _d.columns else None
+                _open  = _d['Open']  if 'Open'  in _d.columns else None
+                if _close is None or _close.notna().sum() < length:
+                    continue
+                close_data[_t] = _close
+                high_data[_t]  = _high
+                low_data[_t]   = _low
+                open_data[_t]  = _open
+            except Exception:
+                continue
+        # --- END FALLBACK ---
+
         valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= length]
         if not valid_tickers: return None, None, None, {}, None, None, None, None, None
 
