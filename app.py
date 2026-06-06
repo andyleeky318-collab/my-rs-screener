@@ -2313,7 +2313,7 @@ if breadth_total > 0:
     with col_nh:
         with st.expander(f""):
             if new_high_tickers:
-                nh_html = ""
+                nh_html = "<div style='padding: 12px 4px 12px 4px;'>"
                 for sym in sorted(new_high_tickers):
                     if sym in LIME_STOCKS:
                         nh_html += f'<div class="ticker-badge lime-badge"><span style="color:#000;font-weight:bold;">{sym}</span></div>'
@@ -2321,10 +2321,11 @@ if breadth_total > 0:
                         nh_html += f'<div class="ticker-badge new-pattern-badge"><span style="color:#111;font-weight:bold;">{sym}</span></div>'
                     else:
                         nh_html += f'<div class="ticker-badge">{sym}</div>'
+                nh_html += "</div>"
                 st.markdown(nh_html, unsafe_allow_html=True)
             else:
                 st.info("None.")
-                
+
     # Remaining 4 breadth bars unchanged
     breadth_html = (
         breadth_bar_html('Advance vs Decline',            breadth_stats.get('advance', 0),      breadth_stats.get('decline', 0))
