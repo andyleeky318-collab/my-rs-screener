@@ -1484,6 +1484,12 @@ if all_data:
         color: #000000;                /* Black text for better readability against dark pink */
         font-weight: bold;
     }
+    .purple-badge {
+        background-color: #3d1f5e;
+        border: 1px solid #a855f7;
+        color: #e9d5ff;
+        font-weight: bold;
+    }
     .ticker-name { font-weight: bold; color: #ffffff; margin-right: 4px; }
     .ticker-rs { color: #4ecdc4; font-weight: normal; }
     table { width:100%; border-collapse: collapse; }
@@ -1623,7 +1629,7 @@ if all_data:
                 )
             elif cloud_sym in KNOWN_STOCKS:
                 cloud_21ema_html += (
-                    f'<div class="ticker-badge new-pattern-badge">'
+                    f'<div class="ticker-badge purple-badge">'
                     f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{cloud_sym}</span>'
                     f'<span class="ticker-rs" style="color: #004d26; font-weight: bold;">{cloud_rs:.0f}</span>'
                     f'</div>'
