@@ -3150,84 +3150,60 @@ st.markdown(f"#### 📊 Market Breadth & Stage Analysis (n={breadth_total})")
 
 if breadth_total > 0:
 
-    # ── Helper: one breadth row ───────────────────────────────────────────
-    def breadth_bar_html(left_label, right_label, val, counterpart):
+    def breadth_bar_html(left_label, val, counterpart):
         pair_total = val + counterpart
         if pair_total == 0:
             pct_val, pct_counter = 0, 0
         else:
-            pct_val    = round((val / pair_total) * 100)
+            pct_val     = (val / pair_total) * 100
             pct_counter = 100 - pct_val
 
-        BAR_W   = 20
-        filled  = round((pct_val / 100) * BAR_W)
-        bar_str = "█" * filled + "░" * (BAR_W - filled)
+        is_bullish   = pct_val >= 50
+        bull_color   = "#378ADD" if is_bullish else "#FF69B4"
+        bear_color   = "#D3D3D3"
 
-        # Color: left side green if majority, red otherwise
-        left_color  = "#4ecdc4" if pct_val >= 50 else "#ff6b6b"
-        right_color = "#ff6b6b" if pct_val >= 50 else "#4ecdc4"
-
-        return (
-            f"<tr>"
-            f"<td style='text-align:right; color:{left_color}; font-weight:bold; width:160px;'>"
-            f"{left_label} <span style='color:#aaa;'>({pct_val}%)</span></td>"
-            f"<td style='text-align:center; color:{left_color}; font-family:monospace; font-size:12px;'>"
-            f"{bar_str}</td>"
-            f"<td style='text-align:left; color:{right_color}; font-weight:bold; width:160px;'>"
-            f"<span style='color:#aaa;'>({pct_counter}%)</span> {right_label}</td>"
-            f"</tr>"
-            f"<tr style='font-size:11px; color:#888;'>"
-            f"<td style='text-align:right;'>{val}</td>"
-            f"<td></td>"
-            f"<td style='text-align:left;'>{counterpart}</td>"
-            f"</tr>"
+        # Stacked bar segments
+        bar_segs = (
+            f"<div style='width:{pct_val:.2f}%; background:{bull_color}; height:100%; "
+            f"border-radius:999px 0 0 999px;'></div>"
+            f"<div style='width:{pct_counter:.2f}%; background:{bear_color}; height:100%; "
+            f"border-radius:0 999px 999px 0;'></div>"
         )
 
-    # ── Helper: one stage row ─────────────────────────────────────────────
-    def stage_bar_html(stage_num, stage_name, count, total):
-        pct    = round((count / total) * 100) if total > 0 else 0
-        BAR_W  = 30
-        filled = round((pct / 100) * BAR_W)
-        bar    = "█" * filled + "░" * (BAR_W - filled)
+        # Edge case: one side is 0% — full rounded bar
+        if pct_val == 0:
+            bar_segs = f"<div style='width:100%; background:{bear_color}; height:100%; border-radius:999px;'></div>"
+        elif pct_counter == 0:
+            bar_segs = f"<div style='width:100%; background:{bull_color}; height:100%; border-radius:999px;'></div>"
 
-        color_map = {
-            1: "#FFA500",   # Accumulation — amber
-            2: "#4ecdc4",   # Advancing    — teal
-            3: "#ff6b6b",   # Distribution — red
-            4: "#888888",   # Declining    — gray
-            0: "#555555",   # Unknown      — dark gray
-        }
-        color = color_map.get(stage_num, "#aaaaaa")
-
-        return (
-            f"<tr>"
-            f"<td style='white-space:nowrap; font-weight:bold; color:{color}; width:160px;'>"
-            f"Stage {stage_num} — {stage_name}</td>"
-            f"<td style='font-family:monospace; font-size:12px; color:{color};'>{bar}</td>"
-            f"<td style='color:{color}; font-weight:bold; width:80px;'>"
-            f"{count} <span style='color:#888; font-weight:normal;'>({pct}%)</span></td>"
-            f"</tr>"
+        legend = (
+            f"<div style='display:flex; justify-content:space-between; align-items:center; margin-top:6px;'>"
+            f"  <div style='display:flex; align-items:center; gap:5px;'>"
+            f"    <span style='width:9px; height:9px; border-radius:50%; background:{bull_color}; display:inline-block;'></span>"
+            f"    <span style='font-size:13px; font-weight:500; color:#ffffff;'>{left_label}</span>"
+            f"    <span style='font-size:12px; color:#888888;'>{val} · {pct_val:.0f}%</span>"
+            f"  </div>"
+            f"  <span style='font-size:12px; color:#888888;'>{counterpart} · {pct_counter:.0f}%</span>"
+            f"</div>"
         )
 
-    # ── Render breadth table ──────────────────────────────────────────────
-    breadth_html = f"""
-    <table style="border-collapse:collapse; width:100%; margin-bottom:8px;">
-      <thead>
-        <tr>
-          <th style="text-align:right; padding:4px 8px; color:#aaa; font-size:12px; font-weight:normal;">Bullish</th>
-          <th style="text-align:center; padding:4px 8px; color:#aaa; font-size:12px; font-weight:normal;">Distribution</th>
-          <th style="text-align:left; padding:4px 8px; color:#aaa; font-size:12px; font-weight:normal;">Bearish</th>
-        </tr>
-      </thead>
-      <tbody>
-        {breadth_bar_html('New Highs',    'New Lows',    breadth_stats.get('new_high',0),    breadth_stats.get('new_low',0))}
-        {breadth_bar_html('Advancers',    'Decliners',   breadth_stats.get('advance',0),     breadth_stats.get('decline',0))}
-        {breadth_bar_html('Up from Open', 'Dn from Open',breadth_stats.get('up_from_open',0),breadth_stats.get('down_from_open',0))}
-        {breadth_bar_html('Up on Volume', 'Dn on Volume',breadth_stats.get('up_volume',0),   breadth_stats.get('down_volume',0))}
-        {breadth_bar_html('Up 4%',        'Down 4%',     breadth_stats.get('up_4pct',0),     breadth_stats.get('down_4pct',0))}
-      </tbody>
-    </table>
-    """
+        return (
+            f"<div style='padding:6px 0 10px;'>"
+            f"  <div style='width:100%; height:12px; display:flex; overflow:hidden; border-radius:999px;'>"
+            f"    {bar_segs}"
+            f"  </div>"
+            f"  {legend}"
+            f"</div>"
+        )
+
+    # ── Render breadth bars ───────────────────────────────────────────────
+    breadth_html = (
+        breadth_bar_html('New Highs',     breadth_stats.get('new_high', 0),     breadth_stats.get('new_low', 0))
+        + breadth_bar_html('Advancers',   breadth_stats.get('advance', 0),      breadth_stats.get('decline', 0))
+        + breadth_bar_html('Up from Open',breadth_stats.get('up_from_open', 0), breadth_stats.get('down_from_open', 0))
+        + breadth_bar_html('Up on Volume',breadth_stats.get('up_volume', 0),    breadth_stats.get('down_volume', 0))
+        + breadth_bar_html('Up 4%',       breadth_stats.get('up_4pct', 0),      breadth_stats.get('down_4pct', 0))
+    )
     st.markdown(breadth_html, unsafe_allow_html=True)
 
     # ── Stage: single stacked bar ─────────────────────────────────────────
