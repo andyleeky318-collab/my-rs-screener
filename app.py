@@ -1485,7 +1485,7 @@ if all_data:
         font-weight: bold;
     }
     .purple-badge {
-        background-color: #f3e8ff;
+        background-color: #c084fc;
         border: 1px solid #c084fc;
         color: #000000;
         font-weight: bold;
