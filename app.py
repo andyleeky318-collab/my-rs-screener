@@ -3178,9 +3178,8 @@ if breadth_total > 0:
         return (
             f"<div style='margin-bottom:18px;'>"
             # Title row with pct on the right
-            f"  <div style='display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;'>"
-            f"    <span style='font-size:14px;font-weight:700;color:#ffffff;'>{title}</span>"
-            f"    <span style='font-size:14px;font-weight:700;color:{bull_color};'>{pct_display}</span>"
+            f"  <div style='margin-bottom:5px;font-size:14px;font-weight:700;color:#ffffff;'>"
+            f"    {title} <span style='color:{bull_color};'>({pct_display})</span>"
             f"  </div>"
             # Bar — 40% width, left-aligned
             f"  <div style='width:40%;height:7px;display:flex;overflow:hidden;border-radius:999px;background:{bear_color};'>"
