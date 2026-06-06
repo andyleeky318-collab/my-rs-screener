@@ -2271,7 +2271,7 @@ if email_content_stocks or email_content_removed:
         
     st.markdown(minervini_html, unsafe_allow_html=True)
 else:
-    st.text("None")
+    st.info("No active RS leaders discovered.")
 
 st.markdown("---")
 
@@ -2607,7 +2607,7 @@ if pt_list or pt_yest:
         
     st.markdown(html_pt, unsafe_allow_html=True)
 else:
-    st.text("None")
+    st.info("No active RS leaders discovered.")
 
 st.write("")
 # if not powertrend_hist.empty:
@@ -2657,7 +2657,7 @@ if ptne_list:
         html_ptne += f'<div class="ticker-badge {cls}">{sym}</div>'
     st.markdown(html_ptne, unsafe_allow_html=True)
 else:
-    st.text("None")
+    st.info("No active RS leaders discovered.")
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
@@ -2677,7 +2677,7 @@ if vt_list or vt_yest:
         
     st.markdown(html_vt, unsafe_allow_html=True)
 else:
-    st.text("None")
+    st.info("No active RS leaders discovered.")
 
 st.markdown("---")
 
