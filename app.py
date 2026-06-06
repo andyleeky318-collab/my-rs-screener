@@ -2299,6 +2299,16 @@ if breadth_total > 0:
         unsafe_allow_html=True
     )
 
+
+
+    st.markdown(
+        f"<div style='display:flex;justify-content:space-between;width:40%;margin-bottom:18px;'>"
+        f"<span style='font-size:12px;color:#888888;'>{new_high_count:,} New Highs</span>"
+        f"<span style='font-size:12px;color:#888888;'>{new_low_count:,} New Lows</span>"
+        f"</div>",
+        unsafe_allow_html=True
+    )
+
     col_nh, col_nl = st.columns([1, 9])
     with col_nh:
         with st.expander(f""):
@@ -2314,15 +2324,7 @@ if breadth_total > 0:
                 st.markdown(nh_html, unsafe_allow_html=True)
             else:
                 st.info("None.")
-
-    st.markdown(
-        f"<div style='display:flex;justify-content:space-between;width:40%;margin-bottom:18px;'>"
-        f"<span style='font-size:12px;color:#888888;'>{new_high_count:,} New Highs</span>"
-        f"<span style='font-size:12px;color:#888888;'>{new_low_count:,} New Lows</span>"
-        f"</div>",
-        unsafe_allow_html=True
-    )
-
+                
     # Remaining 4 breadth bars unchanged
     breadth_html = (
         breadth_bar_html('Advance vs Decline',            breadth_stats.get('advance', 0),      breadth_stats.get('decline', 0))
