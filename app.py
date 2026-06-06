@@ -2033,6 +2033,18 @@ def compute_historical_know_counts(stocks_list, ticker_dfs):
     except Exception as e:
         return pd.DataFrame()
 
+# ============================================================
+# SINGLE DOWNLOAD + SPINNER: all compute fns share one fetch
+# ============================================================
+stocks_tuple = tuple(KNOWN_STOCKS)
+
+# Single download — all history fns share this cached result
+ticker_dfs_shared, benchmark_df_shared = timed(
+    "download_known_stocks_data",
+    download_known_stocks_data,
+    stocks_tuple
+)
+
 # ==============================================================================
 # MARKET BREADTH & STAGE ANALYSIS FOR KNOWN_STOCKS
 # (Place this block ABOVE the Timing Summary section, after the Gapper section)
@@ -2308,18 +2320,6 @@ if breadth_total > 0:
 
 else:
     st.info("Insufficient data to compute breadth & stage analysis.")
-
-# ============================================================
-# SINGLE DOWNLOAD + SPINNER: all compute fns share one fetch
-# ============================================================
-stocks_tuple = tuple(KNOWN_STOCKS)
-
-# Single download — all history fns share this cached result
-ticker_dfs_shared, benchmark_df_shared = timed(
-    "download_known_stocks_data",
-    download_known_stocks_data,
-    stocks_tuple
-)
 
 with st.spinner("Scanning pattern anomalies across known instruments..."):
     results       = timed("process_pattern_scanners",      process_pattern_scanners,      stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
