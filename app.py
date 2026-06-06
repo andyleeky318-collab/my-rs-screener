@@ -3150,7 +3150,8 @@ st.markdown(f"#### 📊 Market Breadth & Stage Analysis (n={breadth_total})")
 
 if breadth_total > 0:
 
-    def breadth_bar_html(left_label, val, counterpart):
+# ── Helper: one breadth bar (compact, label above, counts below) ──────
+    def breadth_bar_html(title, val, counterpart):
         pair_total = val + counterpart
         if pair_total == 0:
             pct_val, pct_counter = 0, 0
@@ -3158,51 +3159,48 @@ if breadth_total > 0:
             pct_val     = (val / pair_total) * 100
             pct_counter = 100 - pct_val
 
-        is_bullish   = pct_val >= 50
-        bull_color   = "#378ADD" if is_bullish else "#FF69B4"
-        bear_color   = "#D3D3D3"
+        is_bullish  = pct_val >= 50
+        bull_color  = "#378ADD" if is_bullish else "#FF69B4"
+        bear_color  = "#D3D3D3"
+        pct_display = f"{pct_val:.1f}%"
 
-        # Stacked bar segments
-        bar_segs = (
-            f"<div style='width:{pct_val:.2f}%; background:{bull_color}; height:100%; "
-            f"border-radius:999px 0 0 999px;'></div>"
-            f"<div style='width:{pct_counter:.2f}%; background:{bear_color}; height:100%; "
-            f"border-radius:0 999px 999px 0;'></div>"
-        )
-
-        # Edge case: one side is 0% — full rounded bar
+        # Bar segments
         if pct_val == 0:
-            bar_segs = f"<div style='width:100%; background:{bear_color}; height:100%; border-radius:999px;'></div>"
+            bar_segs = f"<div style='width:100%;background:{bear_color};height:100%;border-radius:999px;'></div>"
         elif pct_counter == 0:
-            bar_segs = f"<div style='width:100%; background:{bull_color}; height:100%; border-radius:999px;'></div>"
-
-        legend = (
-            f"<div style='display:flex; justify-content:space-between; align-items:center; margin-top:6px;'>"
-            f"  <div style='display:flex; align-items:center; gap:5px;'>"
-            f"    <span style='width:9px; height:9px; border-radius:50%; background:{bull_color}; display:inline-block;'></span>"
-            f"    <span style='font-size:13px; font-weight:500; color:#ffffff;'>{left_label}</span>"
-            f"    <span style='font-size:12px; color:#888888;'>{val} · {pct_val:.0f}%</span>"
-            f"  </div>"
-            f"  <span style='font-size:12px; color:#888888;'>{counterpart} · {pct_counter:.0f}%</span>"
-            f"</div>"
-        )
+            bar_segs = f"<div style='width:100%;background:{bull_color};height:100%;border-radius:999px;'></div>"
+        else:
+            bar_segs = (
+                f"<div style='width:{pct_val:.2f}%;background:{bull_color};height:100%;border-radius:999px 0 0 999px;'></div>"
+                f"<div style='width:{pct_counter:.2f}%;background:{bear_color};height:100%;border-radius:0 999px 999px 0;'></div>"
+            )
 
         return (
-            f"<div style='padding:6px 0 10px;'>"
-            f"  <div style='width:100%; height:12px; display:flex; overflow:hidden; border-radius:999px;'>"
+            f"<div style='margin-bottom:18px;'>"
+            # Title row with pct on the right
+            f"  <div style='display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;'>"
+            f"    <span style='font-size:14px;font-weight:700;color:#ffffff;'>{title}</span>"
+            f"    <span style='font-size:14px;font-weight:700;color:{bull_color};'>{pct_display}</span>"
+            f"  </div>"
+            # Bar — 40% width, left-aligned
+            f"  <div style='width:40%;height:7px;display:flex;overflow:hidden;border-radius:999px;background:{bear_color};'>"
             f"    {bar_segs}"
             f"  </div>"
-            f"  {legend}"
+            # Counts row
+            f"  <div style='display:flex;justify-content:space-between;width:40%;margin-top:4px;'>"
+            f"    <span style='font-size:12px;color:#888888;'>{val:,} {title.split(' vs ')[0]}</span>"
+            f"    <span style='font-size:12px;color:#888888;'>{counterpart:,} {title.split(' vs ')[1]}</span>"
+            f"  </div>"
             f"</div>"
         )
 
-    # ── Render breadth bars ───────────────────────────────────────────────
+    # ── Render all 5 breadth bars ─────────────────────────────────────────
     breadth_html = (
-        breadth_bar_html('New Highs',     breadth_stats.get('new_high', 0),     breadth_stats.get('new_low', 0))
-        + breadth_bar_html('Advancers',   breadth_stats.get('advance', 0),      breadth_stats.get('decline', 0))
-        + breadth_bar_html('Up from Open',breadth_stats.get('up_from_open', 0), breadth_stats.get('down_from_open', 0))
-        + breadth_bar_html('Up on Volume',breadth_stats.get('up_volume', 0),    breadth_stats.get('down_volume', 0))
-        + breadth_bar_html('Up 4%',       breadth_stats.get('up_4pct', 0),      breadth_stats.get('down_4pct', 0))
+        breadth_bar_html('New Highs vs New Lows',           breadth_stats.get('new_high', 0),     breadth_stats.get('new_low', 0))
+        + breadth_bar_html('Advance vs Decline',            breadth_stats.get('advance', 0),      breadth_stats.get('decline', 0))
+        + breadth_bar_html('Up from Open vs Down from Open',breadth_stats.get('up_from_open', 0), breadth_stats.get('down_from_open', 0))
+        + breadth_bar_html('Up on Volume vs Down on Volume',breadth_stats.get('up_volume', 0),    breadth_stats.get('down_volume', 0))
+        + breadth_bar_html('Up 4% vs Down 4%',              breadth_stats.get('up_4pct', 0),      breadth_stats.get('down_4pct', 0))
     )
     st.markdown(breadth_html, unsafe_allow_html=True)
 
