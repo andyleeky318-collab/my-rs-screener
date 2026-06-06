@@ -2982,6 +2982,273 @@ if (gapBottom !== null && gapTop !== null && {gap_date_js} !== null) {{
 else:
     st.info("No active gapper setups discovered.")
 
+# ==============================================================================
+# MARKET BREADTH & STAGE ANALYSIS FOR KNOWN_STOCKS
+# (Place this block ABOVE the Timing Summary section, after the Gapper section)
+# ==============================================================================
+
+@st.cache_data(ttl=3600)
+def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
+    """
+    Computes IBD-style market breadth stats and stage analysis
+    for the given stock list, mirroring the original Python screener logic.
+    """
+    try:
+        breadth_stats = {
+            'new_high': 0, 'new_low': 0,
+            'advance': 0, 'decline': 0,
+            'up_from_open': 0, 'down_from_open': 0,
+            'up_volume': 0, 'down_volume': 0,
+            'up_4pct': 0, 'down_4pct': 0
+        }
+        stage_counts = {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}
+        total_processed = 0
+
+        for ticker in stocks_list:
+            try:
+                df = ticker_dfs.get(ticker)
+                if df is None or len(df) < 5:
+                    continue
+
+                currentClose = df['Close'].iloc[-1]
+                prevClose    = df['Close'].iloc[-2]
+                currentOpen  = df['Open'].iloc[-1]
+                currentVol   = df['Volume'].iloc[-1]
+                prevVol      = df['Volume'].iloc[-2]
+
+                # 52-week high/low (exclude today for high, mirror original logic)
+                low_of_52week  = float(df['Low'].values[-260:].min())
+                high_of_52week = float(df['High'].values[-260:-1].max()) if len(df) >= 260 else float(df['High'].values[:-1].max())
+
+                pct_change = (currentClose - prevClose) / prevClose if prevClose != 0 else 0
+
+                total_processed += 1
+
+                # 1. New High / New Low
+                if currentClose >= high_of_52week:
+                    breadth_stats['new_high'] += 1
+                if currentClose <= low_of_52week:
+                    breadth_stats['new_low'] += 1
+
+                # 2. Advance / Decline
+                if currentClose > prevClose:
+                    breadth_stats['advance'] += 1
+                elif currentClose < prevClose:
+                    breadth_stats['decline'] += 1
+
+                # 3. Up from Open / Down from Open
+                if currentClose > currentOpen:
+                    breadth_stats['up_from_open'] += 1
+                elif currentClose < currentOpen:
+                    breadth_stats['down_from_open'] += 1
+
+                # 4. Up on Volume / Down on Volume
+                if currentClose > prevClose and currentVol > prevVol:
+                    breadth_stats['up_volume'] += 1
+                elif currentClose < prevClose and currentVol > prevVol:
+                    breadth_stats['down_volume'] += 1
+
+                # 5. Up 4% / Down 4%
+                if pct_change >= 0.04:
+                    breadth_stats['up_4pct'] += 1
+                elif pct_change <= -0.04:
+                    breadth_stats['down_4pct'] += 1
+
+                # ── Stage Analysis ──────────────────────────────────────────────
+                # Requires benchmark alignment and at least 260 bars
+                if len(df) < 260 or benchmark_df_input is None or benchmark_df_input.empty:
+                    stage_counts[0] += 1
+                    continue
+
+                df_idx = df.index.tz_localize(None) if df.index.tz is not None else df.index
+                bm_idx = benchmark_df_input.index.tz_localize(None) if benchmark_df_input.index.tz is not None else benchmark_df_input.index
+
+                df_aligned = df.copy()
+                df_aligned.index = df_idx
+                bm_aligned = benchmark_df_input.copy()
+                bm_aligned.index = bm_idx
+
+                combined = pd.merge(
+                    df_aligned[['Close', 'Open']],
+                    bm_aligned[['Close']].rename(columns={'Close': 'Close_bench'}),
+                    left_index=True, right_index=True, how='inner'
+                )
+
+                if combined.empty:
+                    stage_counts[0] += 1
+                    continue
+
+                # EMA 126 of stock close (for price vs trend line check)
+                ema126 = df_aligned['Close'].ewm(span=126, adjust=False).mean()
+
+                # RS Ratio
+                rs = combined['Close'] / combined['Close_bench']
+
+                # 8 EMAs of RS ratio (matches original screener)
+                ema_spans = [21, 42, 63, 72, 84, 126, 147, 168]
+                rs_emas = {span: rs.ewm(span=span, adjust=False).mean() for span in ema_spans}
+
+                last = combined.index[-1]
+                rsme  = rs.loc[last]
+                c     = combined['Close'].loc[last]
+                o     = combined['Open'].loc[last]
+
+                # Align ema126 to combined index
+                ema126_val = ema126.reindex(combined.index, method='ffill').loc[last]
+
+                r21  = rs_emas[21].loc[last]
+                r42  = rs_emas[42].loc[last]
+                r63  = rs_emas[63].loc[last]
+                r72  = rs_emas[72].loc[last]
+                r84  = rs_emas[84].loc[last]
+                r126 = rs_emas[126].loc[last]
+                r147 = rs_emas[147].loc[last]
+                r168 = rs_emas[168].loc[last]
+
+                # Stage logic (exact mirror of original screener, checked in order)
+                if rsme >= r84 and rsme < r126:
+                    stage = 1
+                elif (rsme < r42 and rsme >= r72 and rsme >= r84 and rsme >= r126
+                      and (r42 > r63 or rsme < r63) and r63 > r126 and c >= ema126_val):
+                    stage = 3
+                elif (rsme >= r168 and rsme >= r147 and rsme >= r126
+                      and c >= ema126_val and (r21 >= r42 or r42 >= r63)):
+                    stage = 2
+                elif rsme >= r126 and c >= ema126_val and (r21 >= r42 or r42 >= r63):
+                    stage = 2
+                elif (rsme < r63 and rsme < r126) or (r63 < r126 and rsme < r126):
+                    stage = 4
+                elif (o >= ema126_val or c >= ema126_val) and rsme >= r72 and rsme < r126:
+                    stage = 1
+                elif rsme >= r84 and rsme >= r72 and (o >= ema126_val or c >= ema126_val):
+                    stage = 1
+                else:
+                    stage = 0
+
+                stage_counts[stage] += 1
+
+            except Exception:
+                stage_counts[0] += 1
+                continue
+
+        return breadth_stats, stage_counts, total_processed
+
+    except Exception as e:
+        return {}, {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}, 0
+
+
+# ── Compute ─────────────────────────────────────────────────────────────────
+with st.spinner("Computing market breadth & stage analysis..."):
+    breadth_stats, stage_counts, breadth_total = timed(
+        "compute_breadth_and_stage",
+        compute_breadth_and_stage,
+        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
+    )
+
+st.markdown("---")
+st.markdown(f"#### 📊 Market Breadth & Stage Analysis (n={breadth_total})")
+
+if breadth_total > 0:
+
+    # ── Helper: one breadth row ───────────────────────────────────────────
+    def breadth_bar_html(left_label, right_label, val, counterpart):
+        pair_total = val + counterpart
+        if pair_total == 0:
+            pct_val, pct_counter = 0, 0
+        else:
+            pct_val    = round((val / pair_total) * 100)
+            pct_counter = 100 - pct_val
+
+        BAR_W   = 20
+        filled  = round((pct_val / 100) * BAR_W)
+        bar_str = "█" * filled + "░" * (BAR_W - filled)
+
+        # Color: left side green if majority, red otherwise
+        left_color  = "#4ecdc4" if pct_val >= 50 else "#ff6b6b"
+        right_color = "#ff6b6b" if pct_val >= 50 else "#4ecdc4"
+
+        return (
+            f"<tr>"
+            f"<td style='text-align:right; color:{left_color}; font-weight:bold; width:160px;'>"
+            f"{left_label} <span style='color:#aaa;'>({pct_val}%)</span></td>"
+            f"<td style='text-align:center; color:{left_color}; font-family:monospace; font-size:12px;'>"
+            f"{bar_str}</td>"
+            f"<td style='text-align:left; color:{right_color}; font-weight:bold; width:160px;'>"
+            f"<span style='color:#aaa;'>({pct_counter}%)</span> {right_label}</td>"
+            f"</tr>"
+            f"<tr style='font-size:11px; color:#888;'>"
+            f"<td style='text-align:right;'>{val}</td>"
+            f"<td></td>"
+            f"<td style='text-align:left;'>{counterpart}</td>"
+            f"</tr>"
+        )
+
+    # ── Helper: one stage row ─────────────────────────────────────────────
+    def stage_bar_html(stage_num, stage_name, count, total):
+        pct    = round((count / total) * 100) if total > 0 else 0
+        BAR_W  = 30
+        filled = round((pct / 100) * BAR_W)
+        bar    = "█" * filled + "░" * (BAR_W - filled)
+
+        color_map = {
+            1: "#FFA500",   # Accumulation — amber
+            2: "#4ecdc4",   # Advancing    — teal
+            3: "#ff6b6b",   # Distribution — red
+            4: "#888888",   # Declining    — gray
+            0: "#555555",   # Unknown      — dark gray
+        }
+        color = color_map.get(stage_num, "#aaaaaa")
+
+        return (
+            f"<tr>"
+            f"<td style='white-space:nowrap; font-weight:bold; color:{color}; width:160px;'>"
+            f"Stage {stage_num} — {stage_name}</td>"
+            f"<td style='font-family:monospace; font-size:12px; color:{color};'>{bar}</td>"
+            f"<td style='color:{color}; font-weight:bold; width:80px;'>"
+            f"{count} <span style='color:#888; font-weight:normal;'>({pct}%)</span></td>"
+            f"</tr>"
+        )
+
+    # ── Render breadth table ──────────────────────────────────────────────
+    breadth_html = f"""
+    <table style="border-collapse:collapse; width:100%; margin-bottom:8px;">
+      <thead>
+        <tr>
+          <th style="text-align:right; padding:4px 8px; color:#aaa; font-size:12px; font-weight:normal;">Bullish</th>
+          <th style="text-align:center; padding:4px 8px; color:#aaa; font-size:12px; font-weight:normal;">Distribution</th>
+          <th style="text-align:left; padding:4px 8px; color:#aaa; font-size:12px; font-weight:normal;">Bearish</th>
+        </tr>
+      </thead>
+      <tbody>
+        {breadth_bar_html('New Highs',    'New Lows',    breadth_stats.get('new_high',0),    breadth_stats.get('new_low',0))}
+        {breadth_bar_html('Advancers',    'Decliners',   breadth_stats.get('advance',0),     breadth_stats.get('decline',0))}
+        {breadth_bar_html('Up from Open', 'Dn from Open',breadth_stats.get('up_from_open',0),breadth_stats.get('down_from_open',0))}
+        {breadth_bar_html('Up on Volume', 'Dn on Volume',breadth_stats.get('up_volume',0),   breadth_stats.get('down_volume',0))}
+        {breadth_bar_html('Up 4%',        'Down 4%',     breadth_stats.get('up_4pct',0),     breadth_stats.get('down_4pct',0))}
+      </tbody>
+    </table>
+    """
+    st.markdown(breadth_html, unsafe_allow_html=True)
+
+    st.markdown("**Stage Analysis**")
+
+    # ── Render stage table ────────────────────────────────────────────────
+    stage_html = f"""
+    <table style="border-collapse:collapse; width:100%; margin-bottom:8px;">
+      <tbody>
+        {stage_bar_html(2, 'Advancing',    stage_counts.get(2, 0), breadth_total)}
+        {stage_bar_html(1, 'Accumulation', stage_counts.get(1, 0), breadth_total)}
+        {stage_bar_html(3, 'Distribution', stage_counts.get(3, 0), breadth_total)}
+        {stage_bar_html(4, 'Declining',    stage_counts.get(4, 0), breadth_total)}
+        {stage_bar_html(0, 'Unknown',      stage_counts.get(0, 0), breadth_total)}
+      </tbody>
+    </table>
+    """
+    st.markdown(stage_html, unsafe_allow_html=True)
+
+else:
+    st.info("Insufficient data to compute breadth & stage analysis.")
+
 # ── Timing Summary ───────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown("#### ⏱ Function Timing")
