@@ -2597,9 +2597,9 @@ st.markdown("---")
 
 st.markdown(
     f"#### ⭐ Minervini Qualified Stocks ("
-    f"Positive Pct: {know_pos_pct:.1f}% | "
-    f"Positive Count: {know_positive_count} | "
-    f"Total Count: {know_total_count})"
+    f"+ve Pct: {know_pos_pct:.1f}% | "
+    f"+ve Count: {know_positive_count} | "
+    f"Total: {know_total_count})"
 )
 
 if email_content_stocks or email_content_removed:
