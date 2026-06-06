@@ -2310,7 +2310,7 @@ if extra_52wk_high_symbols or extra_52wk_high_removed:
         
     st.markdown(extra_html, unsafe_allow_html=True)
 else:
-    st.text("None")
+    st.info("No active setups discovered.")
 
 st.markdown("---")
 
