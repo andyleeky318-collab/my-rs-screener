@@ -2301,7 +2301,7 @@ if breadth_total > 0:
 
     col_nh, col_nl = st.columns([1, 9])
     with col_nh:
-        with st.expander(f"🔼 {new_high_count} New Highs"):
+        with st.expander(f""):
             if new_high_tickers:
                 nh_html = ""
                 for sym in sorted(new_high_tickers):
