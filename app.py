@@ -3149,25 +3149,10 @@ if gapper_list or gapper_yest:
               border-radius:6px 6px 0 0;border:1px solid #30363d;border-bottom:none;">
     <span style="color:#e6edf3;font-size:12px;font-weight:600;letter-spacing:0.04em;">{sym}</span>
   </div>
-  <div style="position:relative;width:{GAPPER_CHART_SIZE}px;height:{GAPPER_CHART_SIZE}px;">
-    <div style="
-      position:absolute;top:50%;left:50%;
-      transform:translate(-50%,-50%);
-      font-size:48px;font-weight:900;
-      color:rgba(255,255,255,0.06);
-      letter-spacing:0.05em;
-      pointer-events:none;
-      z-index:0;
-      user-select:none;
-      white-space:nowrap;">
-      {sym}
-    </div>
-    <div id="{chart_id}"
-         style="position:relative;z-index:1;
-                width:{GAPPER_CHART_SIZE}px;height:{GAPPER_CHART_SIZE}px;
-                border:1px solid #30363d;border-radius:0 0 6px 6px;
-                background:#0d1117;">
-    </div>
+  <div id="{chart_id}"
+       style="width:{GAPPER_CHART_SIZE}px;height:{GAPPER_CHART_SIZE}px;
+              border:1px solid #30363d;border-radius:0 0 6px 6px;
+              background:#0d1117;">
   </div>
 </div>
 
