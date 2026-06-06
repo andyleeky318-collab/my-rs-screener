@@ -2033,6 +2033,282 @@ def compute_historical_know_counts(stocks_list, ticker_dfs):
     except Exception as e:
         return pd.DataFrame()
 
+# ==============================================================================
+# MARKET BREADTH & STAGE ANALYSIS FOR KNOWN_STOCKS
+# (Place this block ABOVE the Timing Summary section, after the Gapper section)
+# ==============================================================================
+
+@st.cache_data(ttl=3600)
+def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
+    """
+    Computes IBD-style market breadth stats and stage analysis
+    for the given stock list, mirroring the original Python screener logic.
+    """
+    try:
+        breadth_stats = {
+            'new_high': 0, 'new_low': 0,
+            'advance': 0, 'decline': 0,
+            'up_from_open': 0, 'down_from_open': 0,
+            'up_volume': 0, 'down_volume': 0,
+            'up_4pct': 0, 'down_4pct': 0
+        }
+        stage_counts = {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}
+        total_processed = 0
+
+        for ticker in stocks_list:
+            try:
+                df = ticker_dfs.get(ticker)
+                if df is None or len(df) < 5:
+                    continue
+
+                currentClose = df['Close'].iloc[-1]
+                prevClose    = df['Close'].iloc[-2]
+                currentOpen  = df['Open'].iloc[-1]
+                currentVol   = df['Volume'].iloc[-1]
+                prevVol      = df['Volume'].iloc[-2]
+
+                # 52-week high/low (exclude today for high, mirror original logic)
+                low_of_52week  = float(df['Low'].values[-260:].min())
+                high_of_52week = float(df['High'].values[-260:-1].max()) if len(df) >= 260 else float(df['High'].values[:-1].max())
+
+                pct_change = (currentClose - prevClose) / prevClose if prevClose != 0 else 0
+
+                total_processed += 1
+
+                # 1. New High / New Low
+                if currentClose >= high_of_52week:
+                    breadth_stats['new_high'] += 1
+                if currentClose <= low_of_52week:
+                    breadth_stats['new_low'] += 1
+
+                # 2. Advance / Decline
+                if currentClose > prevClose:
+                    breadth_stats['advance'] += 1
+                elif currentClose < prevClose:
+                    breadth_stats['decline'] += 1
+
+                # 3. Up from Open / Down from Open
+                if currentClose > currentOpen:
+                    breadth_stats['up_from_open'] += 1
+                elif currentClose < currentOpen:
+                    breadth_stats['down_from_open'] += 1
+
+                # 4. Up on Volume / Down on Volume
+                if currentClose > prevClose and currentVol > prevVol:
+                    breadth_stats['up_volume'] += 1
+                elif currentClose < prevClose and currentVol > prevVol:
+                    breadth_stats['down_volume'] += 1
+
+                # 5. Up 4% / Down 4%
+                if pct_change >= 0.04:
+                    breadth_stats['up_4pct'] += 1
+                elif pct_change <= -0.04:
+                    breadth_stats['down_4pct'] += 1
+
+                # ── Stage Analysis ──────────────────────────────────────────────
+                # Requires benchmark alignment and at least 260 bars
+                if len(df) < 260 or benchmark_df_input is None or benchmark_df_input.empty:
+                    stage_counts[0] += 1
+                    continue
+
+                df_idx = df.index.tz_localize(None) if df.index.tz is not None else df.index
+                bm_idx = benchmark_df_input.index.tz_localize(None) if benchmark_df_input.index.tz is not None else benchmark_df_input.index
+
+                df_aligned = df.copy()
+                df_aligned.index = df_idx
+                bm_aligned = benchmark_df_input.copy()
+                bm_aligned.index = bm_idx
+
+                combined = pd.merge(
+                    df_aligned[['Close', 'Open']],
+                    bm_aligned[['Close']].rename(columns={'Close': 'Close_bench'}),
+                    left_index=True, right_index=True, how='inner'
+                )
+
+                if combined.empty:
+                    stage_counts[0] += 1
+                    continue
+
+                # EMA 126 of stock close (for price vs trend line check)
+                ema126 = df_aligned['Close'].ewm(span=126, adjust=False).mean()
+
+                # RS Ratio
+                rs = combined['Close'] / combined['Close_bench']
+
+                # 8 EMAs of RS ratio (matches original screener)
+                ema_spans = [21, 42, 63, 72, 84, 126, 147, 168]
+                rs_emas = {span: rs.ewm(span=span, adjust=False).mean() for span in ema_spans}
+
+                last = combined.index[-1]
+                rsme  = rs.loc[last]
+                c     = combined['Close'].loc[last]
+                o     = combined['Open'].loc[last]
+
+                # Align ema126 to combined index
+                ema126_val = ema126.reindex(combined.index, method='ffill').loc[last]
+
+                r21  = rs_emas[21].loc[last]
+                r42  = rs_emas[42].loc[last]
+                r63  = rs_emas[63].loc[last]
+                r72  = rs_emas[72].loc[last]
+                r84  = rs_emas[84].loc[last]
+                r126 = rs_emas[126].loc[last]
+                r147 = rs_emas[147].loc[last]
+                r168 = rs_emas[168].loc[last]
+
+                # Stage logic (exact mirror of original screener, checked in order)
+                if rsme >= r84 and rsme < r126:
+                    stage = 1
+                elif (rsme < r42 and rsme >= r72 and rsme >= r84 and rsme >= r126
+                      and (r42 > r63 or rsme < r63) and r63 > r126 and c >= ema126_val):
+                    stage = 3
+                elif (rsme >= r168 and rsme >= r147 and rsme >= r126
+                      and c >= ema126_val and (r21 >= r42 or r42 >= r63)):
+                    stage = 2
+                elif rsme >= r126 and c >= ema126_val and (r21 >= r42 or r42 >= r63):
+                    stage = 2
+                elif (rsme < r63 and rsme < r126) or (r63 < r126 and rsme < r126):
+                    stage = 4
+                elif (o >= ema126_val or c >= ema126_val) and rsme >= r72 and rsme < r126:
+                    stage = 1
+                elif rsme >= r84 and rsme >= r72 and (o >= ema126_val or c >= ema126_val):
+                    stage = 1
+                else:
+                    stage = 0
+
+                stage_counts[stage] += 1
+
+            except Exception:
+                stage_counts[0] += 1
+                continue
+
+        return breadth_stats, stage_counts, total_processed
+
+    except Exception as e:
+        return {}, {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}, 0
+
+
+# ── Compute ─────────────────────────────────────────────────────────────────
+with st.spinner("Computing market breadth & stage analysis..."):
+    breadth_stats, stage_counts, breadth_total = timed(
+        "compute_breadth_and_stage",
+        compute_breadth_and_stage,
+        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
+    )
+
+st.markdown("---")
+st.markdown(f"#### 📊 Market Breadth")
+
+if breadth_total > 0:
+
+    # ── Helper: one breadth bar (compact, label above, counts below) ──────
+    def breadth_bar_html(title, val, counterpart):
+        pair_total = val + counterpart
+        if pair_total == 0:
+            pct_val, pct_counter = 0, 0
+        else:
+            pct_val     = (val / pair_total) * 100
+            pct_counter = 100 - pct_val
+
+        is_bullish  = pct_val >= 50
+        bull_color  = "#378ADD" if is_bullish else "#FF69B4"
+        bear_color  = "#D3D3D3"
+        pct_display = f"{pct_val:.1f}%"
+
+        # Bar segments
+        if pct_val == 0:
+            bar_segs = f"<div style='width:100%;background:{bear_color};height:100%;border-radius:999px;'></div>"
+        elif pct_counter == 0:
+            bar_segs = f"<div style='width:100%;background:{bull_color};height:100%;border-radius:999px;'></div>"
+        else:
+            bar_segs = (
+                f"<div style='width:{pct_val:.2f}%;background:{bull_color};height:100%;border-radius:999px 0 0 999px;'></div>"
+                f"<div style='width:{pct_counter:.2f}%;background:{bear_color};height:100%;border-radius:0 999px 999px 0;'></div>"
+            )
+
+        return (
+            f"<div style='margin-bottom:18px;'>"
+            # Title row with pct on the right
+            f"  <div style='margin-bottom:5px;font-size:14px;font-weight:700;color:#ffffff;'>"
+            f"    {title} <span style='color:{bull_color};'>({pct_display})</span>"
+            f"  </div>"
+            # Bar — 40% width, left-aligned
+            f"  <div style='width:40%;height:7px;display:flex;overflow:hidden;border-radius:999px;background:{bear_color};'>"
+            f"    {bar_segs}"
+            f"  </div>"
+            # Counts row
+            f"  <div style='display:flex;justify-content:space-between;width:40%;margin-top:4px;'>"
+            f"    <span style='font-size:12px;color:#888888;'>{val:,} {title.split(' vs ')[0]}</span>"
+            f"    <span style='font-size:12px;color:#888888;'>{counterpart:,} {title.split(' vs ')[1]}</span>"
+            f"  </div>"
+            f"</div>"
+        )
+
+    # ── Render all 5 breadth bars ─────────────────────────────────────────
+    breadth_html = (
+        breadth_bar_html('New Highs vs New Lows',           breadth_stats.get('new_high', 0),     breadth_stats.get('new_low', 0))
+        + breadth_bar_html('Advance vs Decline',            breadth_stats.get('advance', 0),      breadth_stats.get('decline', 0))
+        + breadth_bar_html('Up from Open vs Down from Open',breadth_stats.get('up_from_open', 0), breadth_stats.get('down_from_open', 0))
+        + breadth_bar_html('Up on Volume vs Down on Volume',breadth_stats.get('up_volume', 0),    breadth_stats.get('down_volume', 0))
+        + breadth_bar_html('Up 4% vs Down 4%',              breadth_stats.get('up_4pct', 0),      breadth_stats.get('down_4pct', 0))
+    )
+    st.markdown(breadth_html, unsafe_allow_html=True)
+
+st.markdown("---")
+st.markdown(f"#### 🎯 Stage Analysis")
+
+if breadth_total > 0:
+    # ── Stage: single stacked bar ─────────────────────────────────────────
+    stage_order  = [1, 2, 3, 4]
+    stage_colors = {1: "#D3D3D3", 2: "#378ADD", 3: "#EF9F27", 4: "#FF69B4"}
+    stage_labels = {1: "S1", 2: "S2", 3: "S3", 4: "S4"}
+
+    bar_total = sum(stage_counts.get(s, 0) for s in stage_order)
+
+    if bar_total > 0:
+        segs = [
+            {"s": s, "cnt": stage_counts.get(s, 0),
+             "pct": stage_counts.get(s, 0) / bar_total * 100,
+             "color": stage_colors[s]}
+            for s in stage_order
+        ]
+
+        bar_segs = ""
+        for i, seg in enumerate(segs):
+            r = ("border-radius:999px 0 0 999px;" if i == 0
+                 else "border-radius:0 999px 999px 0;" if i == len(segs) - 1
+                 else "")
+            bar_segs += (
+                f"<div style='width:{seg['pct']:.2f}%; background:{seg['color']};"
+                f"height:100%; {r}'></div>"
+            )
+
+        legend = ""
+        for seg in segs:
+            legend += (
+                f"<div style='display:flex;flex-direction:column;align-items:center;gap:2px;'>"
+                f"<div style='display:flex;align-items:center;gap:5px;'>"
+                f"<span style='width:9px;height:9px;border-radius:50%;"
+                f"background:{seg['color']};display:inline-block;'></span>"
+                f"<span style='font-size:13px;font-weight:500;color:#ffffff;'>"
+                f"{stage_labels[seg['s']]}</span></div>"
+                f"<span style='font-size:12px;color:#888888;'>"
+                f"{seg['cnt']} · {seg['pct']:.0f}%</span>"
+                f"</div>"
+            )
+
+        st.markdown(
+            f"<div style='padding:8px 0 4px;'>"
+            f"<div style='width:100%;height:12px;display:flex;"
+            f"overflow:hidden;border-radius:999px;'>{bar_segs}</div>"
+            f"<div style='display:flex;justify-content:space-around;margin-top:10px;'>"
+            f"{legend}</div></div>",
+            unsafe_allow_html=True
+        )
+
+else:
+    st.info("Insufficient data to compute breadth & stage analysis.")
+
 # ============================================================
 # SINGLE DOWNLOAD + SPINNER: all compute fns share one fetch
 # ============================================================
@@ -2981,278 +3257,6 @@ if (gapBottom !== null && gapTop !== null && {gap_date_js} !== null) {{
 
 else:
     st.info("No active gapper setups discovered.")
-
-# ==============================================================================
-# MARKET BREADTH & STAGE ANALYSIS FOR KNOWN_STOCKS
-# (Place this block ABOVE the Timing Summary section, after the Gapper section)
-# ==============================================================================
-
-@st.cache_data(ttl=3600)
-def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
-    """
-    Computes IBD-style market breadth stats and stage analysis
-    for the given stock list, mirroring the original Python screener logic.
-    """
-    try:
-        breadth_stats = {
-            'new_high': 0, 'new_low': 0,
-            'advance': 0, 'decline': 0,
-            'up_from_open': 0, 'down_from_open': 0,
-            'up_volume': 0, 'down_volume': 0,
-            'up_4pct': 0, 'down_4pct': 0
-        }
-        stage_counts = {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}
-        total_processed = 0
-
-        for ticker in stocks_list:
-            try:
-                df = ticker_dfs.get(ticker)
-                if df is None or len(df) < 5:
-                    continue
-
-                currentClose = df['Close'].iloc[-1]
-                prevClose    = df['Close'].iloc[-2]
-                currentOpen  = df['Open'].iloc[-1]
-                currentVol   = df['Volume'].iloc[-1]
-                prevVol      = df['Volume'].iloc[-2]
-
-                # 52-week high/low (exclude today for high, mirror original logic)
-                low_of_52week  = float(df['Low'].values[-260:].min())
-                high_of_52week = float(df['High'].values[-260:-1].max()) if len(df) >= 260 else float(df['High'].values[:-1].max())
-
-                pct_change = (currentClose - prevClose) / prevClose if prevClose != 0 else 0
-
-                total_processed += 1
-
-                # 1. New High / New Low
-                if currentClose >= high_of_52week:
-                    breadth_stats['new_high'] += 1
-                if currentClose <= low_of_52week:
-                    breadth_stats['new_low'] += 1
-
-                # 2. Advance / Decline
-                if currentClose > prevClose:
-                    breadth_stats['advance'] += 1
-                elif currentClose < prevClose:
-                    breadth_stats['decline'] += 1
-
-                # 3. Up from Open / Down from Open
-                if currentClose > currentOpen:
-                    breadth_stats['up_from_open'] += 1
-                elif currentClose < currentOpen:
-                    breadth_stats['down_from_open'] += 1
-
-                # 4. Up on Volume / Down on Volume
-                if currentClose > prevClose and currentVol > prevVol:
-                    breadth_stats['up_volume'] += 1
-                elif currentClose < prevClose and currentVol > prevVol:
-                    breadth_stats['down_volume'] += 1
-
-                # 5. Up 4% / Down 4%
-                if pct_change >= 0.04:
-                    breadth_stats['up_4pct'] += 1
-                elif pct_change <= -0.04:
-                    breadth_stats['down_4pct'] += 1
-
-                # ── Stage Analysis ──────────────────────────────────────────────
-                # Requires benchmark alignment and at least 260 bars
-                if len(df) < 260 or benchmark_df_input is None or benchmark_df_input.empty:
-                    stage_counts[0] += 1
-                    continue
-
-                df_idx = df.index.tz_localize(None) if df.index.tz is not None else df.index
-                bm_idx = benchmark_df_input.index.tz_localize(None) if benchmark_df_input.index.tz is not None else benchmark_df_input.index
-
-                df_aligned = df.copy()
-                df_aligned.index = df_idx
-                bm_aligned = benchmark_df_input.copy()
-                bm_aligned.index = bm_idx
-
-                combined = pd.merge(
-                    df_aligned[['Close', 'Open']],
-                    bm_aligned[['Close']].rename(columns={'Close': 'Close_bench'}),
-                    left_index=True, right_index=True, how='inner'
-                )
-
-                if combined.empty:
-                    stage_counts[0] += 1
-                    continue
-
-                # EMA 126 of stock close (for price vs trend line check)
-                ema126 = df_aligned['Close'].ewm(span=126, adjust=False).mean()
-
-                # RS Ratio
-                rs = combined['Close'] / combined['Close_bench']
-
-                # 8 EMAs of RS ratio (matches original screener)
-                ema_spans = [21, 42, 63, 72, 84, 126, 147, 168]
-                rs_emas = {span: rs.ewm(span=span, adjust=False).mean() for span in ema_spans}
-
-                last = combined.index[-1]
-                rsme  = rs.loc[last]
-                c     = combined['Close'].loc[last]
-                o     = combined['Open'].loc[last]
-
-                # Align ema126 to combined index
-                ema126_val = ema126.reindex(combined.index, method='ffill').loc[last]
-
-                r21  = rs_emas[21].loc[last]
-                r42  = rs_emas[42].loc[last]
-                r63  = rs_emas[63].loc[last]
-                r72  = rs_emas[72].loc[last]
-                r84  = rs_emas[84].loc[last]
-                r126 = rs_emas[126].loc[last]
-                r147 = rs_emas[147].loc[last]
-                r168 = rs_emas[168].loc[last]
-
-                # Stage logic (exact mirror of original screener, checked in order)
-                if rsme >= r84 and rsme < r126:
-                    stage = 1
-                elif (rsme < r42 and rsme >= r72 and rsme >= r84 and rsme >= r126
-                      and (r42 > r63 or rsme < r63) and r63 > r126 and c >= ema126_val):
-                    stage = 3
-                elif (rsme >= r168 and rsme >= r147 and rsme >= r126
-                      and c >= ema126_val and (r21 >= r42 or r42 >= r63)):
-                    stage = 2
-                elif rsme >= r126 and c >= ema126_val and (r21 >= r42 or r42 >= r63):
-                    stage = 2
-                elif (rsme < r63 and rsme < r126) or (r63 < r126 and rsme < r126):
-                    stage = 4
-                elif (o >= ema126_val or c >= ema126_val) and rsme >= r72 and rsme < r126:
-                    stage = 1
-                elif rsme >= r84 and rsme >= r72 and (o >= ema126_val or c >= ema126_val):
-                    stage = 1
-                else:
-                    stage = 0
-
-                stage_counts[stage] += 1
-
-            except Exception:
-                stage_counts[0] += 1
-                continue
-
-        return breadth_stats, stage_counts, total_processed
-
-    except Exception as e:
-        return {}, {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}, 0
-
-
-# ── Compute ─────────────────────────────────────────────────────────────────
-with st.spinner("Computing market breadth & stage analysis..."):
-    breadth_stats, stage_counts, breadth_total = timed(
-        "compute_breadth_and_stage",
-        compute_breadth_and_stage,
-        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
-    )
-
-st.markdown("---")
-st.markdown(f"#### 📊 Market Breadth & Stage Analysis (n={breadth_total})")
-
-if breadth_total > 0:
-
-# ── Helper: one breadth bar (compact, label above, counts below) ──────
-    def breadth_bar_html(title, val, counterpart):
-        pair_total = val + counterpart
-        if pair_total == 0:
-            pct_val, pct_counter = 0, 0
-        else:
-            pct_val     = (val / pair_total) * 100
-            pct_counter = 100 - pct_val
-
-        is_bullish  = pct_val >= 50
-        bull_color  = "#378ADD" if is_bullish else "#FF69B4"
-        bear_color  = "#D3D3D3"
-        pct_display = f"{pct_val:.1f}%"
-
-        # Bar segments
-        if pct_val == 0:
-            bar_segs = f"<div style='width:100%;background:{bear_color};height:100%;border-radius:999px;'></div>"
-        elif pct_counter == 0:
-            bar_segs = f"<div style='width:100%;background:{bull_color};height:100%;border-radius:999px;'></div>"
-        else:
-            bar_segs = (
-                f"<div style='width:{pct_val:.2f}%;background:{bull_color};height:100%;border-radius:999px 0 0 999px;'></div>"
-                f"<div style='width:{pct_counter:.2f}%;background:{bear_color};height:100%;border-radius:0 999px 999px 0;'></div>"
-            )
-
-        return (
-            f"<div style='margin-bottom:18px;'>"
-            # Title row with pct on the right
-            f"  <div style='margin-bottom:5px;font-size:14px;font-weight:700;color:#ffffff;'>"
-            f"    {title} <span style='color:{bull_color};'>({pct_display})</span>"
-            f"  </div>"
-            # Bar — 40% width, left-aligned
-            f"  <div style='width:40%;height:7px;display:flex;overflow:hidden;border-radius:999px;background:{bear_color};'>"
-            f"    {bar_segs}"
-            f"  </div>"
-            # Counts row
-            f"  <div style='display:flex;justify-content:space-between;width:40%;margin-top:4px;'>"
-            f"    <span style='font-size:12px;color:#888888;'>{val:,} {title.split(' vs ')[0]}</span>"
-            f"    <span style='font-size:12px;color:#888888;'>{counterpart:,} {title.split(' vs ')[1]}</span>"
-            f"  </div>"
-            f"</div>"
-        )
-
-    # ── Render all 5 breadth bars ─────────────────────────────────────────
-    breadth_html = (
-        breadth_bar_html('New Highs vs New Lows',           breadth_stats.get('new_high', 0),     breadth_stats.get('new_low', 0))
-        + breadth_bar_html('Advance vs Decline',            breadth_stats.get('advance', 0),      breadth_stats.get('decline', 0))
-        + breadth_bar_html('Up from Open vs Down from Open',breadth_stats.get('up_from_open', 0), breadth_stats.get('down_from_open', 0))
-        + breadth_bar_html('Up on Volume vs Down on Volume',breadth_stats.get('up_volume', 0),    breadth_stats.get('down_volume', 0))
-        + breadth_bar_html('Up 4% vs Down 4%',              breadth_stats.get('up_4pct', 0),      breadth_stats.get('down_4pct', 0))
-    )
-    st.markdown(breadth_html, unsafe_allow_html=True)
-
-    # ── Stage: single stacked bar ─────────────────────────────────────────
-    stage_order  = [1, 2, 3, 4]
-    stage_colors = {1: "#D3D3D3", 2: "#378ADD", 3: "#EF9F27", 4: "#FF69B4"}
-    stage_labels = {1: "S1", 2: "S2", 3: "S3", 4: "S4"}
-
-    bar_total = sum(stage_counts.get(s, 0) for s in stage_order)
-
-    if bar_total > 0:
-        segs = [
-            {"s": s, "cnt": stage_counts.get(s, 0),
-             "pct": stage_counts.get(s, 0) / bar_total * 100,
-             "color": stage_colors[s]}
-            for s in stage_order
-        ]
-
-        bar_segs = ""
-        for i, seg in enumerate(segs):
-            r = ("border-radius:999px 0 0 999px;" if i == 0
-                 else "border-radius:0 999px 999px 0;" if i == len(segs) - 1
-                 else "")
-            bar_segs += (
-                f"<div style='width:{seg['pct']:.2f}%; background:{seg['color']};"
-                f"height:100%; {r}'></div>"
-            )
-
-        legend = ""
-        for seg in segs:
-            legend += (
-                f"<div style='display:flex;flex-direction:column;align-items:center;gap:2px;'>"
-                f"<div style='display:flex;align-items:center;gap:5px;'>"
-                f"<span style='width:9px;height:9px;border-radius:50%;"
-                f"background:{seg['color']};display:inline-block;'></span>"
-                f"<span style='font-size:13px;font-weight:500;color:#ffffff;'>"
-                f"{stage_labels[seg['s']]}</span></div>"
-                f"<span style='font-size:12px;color:#888888;'>"
-                f"{seg['cnt']} · {seg['pct']:.0f}%</span>"
-                f"</div>"
-            )
-
-        st.markdown(
-            f"<div style='padding:8px 0 4px;'>"
-            f"<div style='width:100%;height:12px;display:flex;"
-            f"overflow:hidden;border-radius:999px;'>{bar_segs}</div>"
-            f"<div style='display:flex;justify-content:space-around;margin-top:10px;'>"
-            f"{legend}</div></div>",
-            unsafe_allow_html=True
-        )
-
-else:
-    st.info("Insufficient data to compute breadth & stage analysis.")
 
 # ── Timing Summary ───────────────────────────────────────────────────────────
 st.markdown("---")
