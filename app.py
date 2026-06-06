@@ -2076,6 +2076,7 @@ def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
             'up_volume': 0, 'down_volume': 0,
             'up_4pct': 0, 'down_4pct': 0
         }
+        new_high_tickers = []  # ADD THIS
         stage_counts = {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}
         total_processed = 0
 
@@ -2102,6 +2103,7 @@ def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
                 # 1. New High / New Low
                 if currentClose >= high_of_52week:
                     breadth_stats['new_high'] += 1
+                    new_high_tickers.append(ticker)  # ADD THIS
                 if currentClose <= low_of_52week:
                     breadth_stats['new_low'] += 1
 
@@ -2206,7 +2208,7 @@ def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
                 stage_counts[0] += 1
                 continue
 
-        return breadth_stats, stage_counts, total_processed
+        return breadth_stats, stage_counts, total_processed, new_high_tickers
 
     except Exception as e:
         return {}, {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}, 0
@@ -2214,7 +2216,7 @@ def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
 
 # ── Compute ─────────────────────────────────────────────────────────────────
 with st.spinner("Computing market breadth & stage analysis..."):
-    breadth_stats, stage_counts, breadth_total = timed(
+    breadth_stats, stage_counts, breadth_total, new_high_tickers = timed(
         "compute_breadth_and_stage",
         compute_breadth_and_stage,
         stocks_tuple, ticker_dfs_shared, benchmark_df_shared
@@ -2269,9 +2271,61 @@ if breadth_total > 0:
         )
 
     # ── Render all 5 breadth bars ─────────────────────────────────────────
+    # Render New Highs bar separately with expander
+    new_high_count = breadth_stats.get('new_high', 0)
+    new_low_count  = breadth_stats.get('new_low', 0)
+    pair_total = new_high_count + new_low_count
+    pct_val     = (new_high_count / pair_total * 100) if pair_total > 0 else 0
+    pct_counter = 100 - pct_val
+    bull_color  = "#378ADD" if pct_val >= 50 else "#FF69B4"
+    bear_color  = "#a9a9a9"
+
+    if pct_val == 0:
+        bar_segs_nh = f"<div style='width:100%;background:{bear_color};height:100%;border-radius:999px;'></div>"
+    elif pct_counter == 0:
+        bar_segs_nh = f"<div style='width:100%;background:{bull_color};height:100%;border-radius:999px;'></div>"
+    else:
+        bar_segs_nh = (
+            f"<div style='width:{pct_val:.2f}%;background:{bull_color};height:100%;border-radius:999px 0 0 999px;'></div>"
+            f"<div style='width:{pct_counter:.2f}%;background:{bear_color};height:100%;border-radius:0 999px 999px 0;'></div>"
+        )
+
+    st.markdown(
+        f"<div style='margin-bottom:6px;font-size:14px;font-weight:700;color:#ffffff;'>"
+        f"New Highs vs New Lows <span style='color:{bull_color};'>({pct_val:.1f}%)</span>"
+        f"</div>"
+        f"<div style='width:40%;height:7px;display:flex;overflow:hidden;border-radius:999px;background:{bear_color};margin-bottom:4px;'>"
+        f"{bar_segs_nh}</div>",
+        unsafe_allow_html=True
+    )
+
+    col_nh, col_nl = st.columns([1, 9])
+    with col_nh:
+        with st.expander(f"🔼 {new_high_count} New Highs"):
+            if new_high_tickers:
+                nh_html = ""
+                for sym in sorted(new_high_tickers):
+                    if sym in LIME_STOCKS:
+                        nh_html += f'<div class="ticker-badge lime-badge"><span style="color:#000;font-weight:bold;">{sym}</span></div>'
+                    elif sym in KNOWN_STOCKS:
+                        nh_html += f'<div class="ticker-badge new-pattern-badge"><span style="color:#111;font-weight:bold;">{sym}</span></div>'
+                    else:
+                        nh_html += f'<div class="ticker-badge">{sym}</div>'
+                st.markdown(nh_html, unsafe_allow_html=True)
+            else:
+                st.info("None.")
+
+    st.markdown(
+        f"<div style='display:flex;justify-content:space-between;width:40%;margin-bottom:18px;'>"
+        f"<span style='font-size:12px;color:#888888;'>{new_high_count:,} New Highs</span>"
+        f"<span style='font-size:12px;color:#888888;'>{new_low_count:,} New Lows</span>"
+        f"</div>",
+        unsafe_allow_html=True
+    )
+
+    # Remaining 4 breadth bars unchanged
     breadth_html = (
-        breadth_bar_html('New Highs vs New Lows',           breadth_stats.get('new_high', 0),     breadth_stats.get('new_low', 0))
-        + breadth_bar_html('Advance vs Decline',            breadth_stats.get('advance', 0),      breadth_stats.get('decline', 0))
+        breadth_bar_html('Advance vs Decline',            breadth_stats.get('advance', 0),      breadth_stats.get('decline', 0))
         + breadth_bar_html('Up from Open vs Down from Open',breadth_stats.get('up_from_open', 0), breadth_stats.get('down_from_open', 0))
         + breadth_bar_html('Up on Volume vs Down on Volume',breadth_stats.get('up_volume', 0),    breadth_stats.get('down_volume', 0))
         + breadth_bar_html('Up 4% vs Down 4%',              breadth_stats.get('up_4pct', 0),      breadth_stats.get('down_4pct', 0))
