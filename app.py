@@ -3230,21 +3230,53 @@ if breadth_total > 0:
     """
     st.markdown(breadth_html, unsafe_allow_html=True)
 
-    st.markdown("**Stage Analysis**")
+    # ── Stage: single stacked bar ─────────────────────────────────────────
+    stage_order  = [1, 2, 3, 4]
+    stage_colors = {1: "#378ADD", 2: "#EF9F27", 3: "#ED93B1", 4: "#FF69B4"}
+    stage_labels = {1: "S1", 2: "S2", 3: "S3", 4: "S4"}
 
-    # ── Render stage table ────────────────────────────────────────────────
-    stage_html = f"""
-    <table style="border-collapse:collapse; width:100%; margin-bottom:8px;">
-      <tbody>
-        {stage_bar_html(2, 'Advancing',    stage_counts.get(2, 0), breadth_total)}
-        {stage_bar_html(1, 'Accumulation', stage_counts.get(1, 0), breadth_total)}
-        {stage_bar_html(3, 'Distribution', stage_counts.get(3, 0), breadth_total)}
-        {stage_bar_html(4, 'Declining',    stage_counts.get(4, 0), breadth_total)}
-        {stage_bar_html(0, 'Unknown',      stage_counts.get(0, 0), breadth_total)}
-      </tbody>
-    </table>
-    """
-    st.markdown(stage_html, unsafe_allow_html=True)
+    bar_total = sum(stage_counts.get(s, 0) for s in stage_order)
+
+    if bar_total > 0:
+        segs = [
+            {"s": s, "cnt": stage_counts.get(s, 0),
+             "pct": stage_counts.get(s, 0) / bar_total * 100,
+             "color": stage_colors[s]}
+            for s in stage_order
+        ]
+
+        bar_segs = ""
+        for i, seg in enumerate(segs):
+            r = ("border-radius:999px 0 0 999px;" if i == 0
+                 else "border-radius:0 999px 999px 0;" if i == len(segs) - 1
+                 else "")
+            bar_segs += (
+                f"<div style='width:{seg['pct']:.2f}%; background:{seg['color']};"
+                f"height:100%; {r}'></div>"
+            )
+
+        legend = ""
+        for seg in segs:
+            legend += (
+                f"<div style='display:flex;flex-direction:column;align-items:center;gap:2px;'>"
+                f"<div style='display:flex;align-items:center;gap:5px;'>"
+                f"<span style='width:9px;height:9px;border-radius:50%;"
+                f"background:{seg['color']};display:inline-block;'></span>"
+                f"<span style='font-size:13px;font-weight:500;color:#ffffff;'>"
+                f"{stage_labels[seg['s']]}</span></div>"
+                f"<span style='font-size:12px;color:#888888;'>"
+                f"{seg['cnt']} · {seg['pct']:.0f}%</span>"
+                f"</div>"
+            )
+
+        st.markdown(
+            f"<div style='padding:8px 0 4px;'>"
+            f"<div style='width:100%;height:12px;display:flex;"
+            f"overflow:hidden;border-radius:999px;'>{bar_segs}</div>"
+            f"<div style='display:flex;justify-content:space-around;margin-top:10px;'>"
+            f"{legend}</div></div>",
+            unsafe_allow_html=True
+        )
 
 else:
     st.info("Insufficient data to compute breadth & stage analysis.")
