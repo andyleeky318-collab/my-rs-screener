@@ -2286,7 +2286,10 @@ if breadth_total > 0:
         ]
 
         bar_segs = ""
+        legend = ""
+        
         for i, seg in enumerate(segs):
+            # 1. Build the bar segment
             r = ("border-radius:999px 0 0 999px;" if i == 0
                  else "border-radius:0 999px 999px 0;" if i == len(segs) - 1
                  else "")
@@ -2295,25 +2298,28 @@ if breadth_total > 0:
                 f"height:100%; {r}'></div>"
             )
 
-        legend = ""
-        for seg in segs:
+            # 2. Build the perfectly aligned label area below it
+            # Hide text details entirely if the percentage is 0 to avoid overlapping strings
+            display_style = "display:flex;" if seg['pct'] > 0 else "display:none;"
+            
             legend += (
-                f"<div style='display:flex;flex-direction:column;align-items:center;gap:2px;'>"
-                f"<div style='display:flex;align-items:center;gap:5px;'>"
-                f"<span style='width:9px;height:9px;border-radius:50%;"
-                f"background:{seg['color']};display:inline-block;'></span>"
+                f"<div style='width:{seg['pct']:.2f}%; {display_style} flex-direction:column;"
+                f"align-items:center; text-align:center; box-sizing:border-box; padding:0 2px; overflow:hidden;'>"
+                f"<div style='display:flex;align-items:center;gap:5px;justify-content:center; white-space:nowrap;'>"
+                f"<span style='width:8px;height:8px;border-radius:50%;"
+                f"background:{seg['color']};display:inline-block;flex-shrink:0;'></span>"
                 f"<span style='font-size:13px;font-weight:500;color:#ffffff;'>"
                 f"{stage_labels[seg['s']]}</span></div>"
-                f"<span style='font-size:12px;color:#888888;'>"
+                f"<span style='font-size:11px;color:#888888;white-space:nowrap;'>"
                 f"{seg['cnt']} · {seg['pct']:.0f}%</span>"
                 f"</div>"
             )
 
         st.markdown(
-            f"<div style='padding:8px 0 4px;'>"
+            f"<div style='padding:8px 0 4px; width:100%;'>"
             f"<div style='width:100%;height:12px;display:flex;"
             f"overflow:hidden;border-radius:999px;'>{bar_segs}</div>"
-            f"<div style='display:flex;justify-content:space-around;margin-top:10px;'>"
+            f"<div style='display:flex; width:100%; margin-top:10px;'>"
             f"{legend}</div></div>",
             unsafe_allow_html=True
         )
