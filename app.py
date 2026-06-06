@@ -3232,7 +3232,7 @@ if breadth_total > 0:
 
     # ── Stage: single stacked bar ─────────────────────────────────────────
     stage_order  = [1, 2, 3, 4]
-    stage_colors = {1: "#378ADD", 2: "#EF9F27", 3: "#ED93B1", 4: "#FF69B4"}
+    stage_colors = {1: "#D3D3D3", 2: "#378ADD", 3: "#EF9F27", 4: "#FF69B4"}
     stage_labels = {1: "S1", 2: "S2", 3: "S3", 4: "S4"}
 
     bar_total = sum(stage_counts.get(s, 0) for s in stage_order)
