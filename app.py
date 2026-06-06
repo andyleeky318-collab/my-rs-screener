@@ -3155,7 +3155,7 @@ if gapper_list or gapper_yest:
          style="width:{GAPPER_CHART_SIZE}px;height:{GAPPER_CHART_SIZE}px;">
     </div>
     <div style="
-      position:absolute;top:8px;left:8px;
+      position:absolute;top:10%;left:10%;
       transform:translate(-50%,-50%);
       font-size:48px;font-weight:900;
       color:rgba(255,255,255,0.08);
