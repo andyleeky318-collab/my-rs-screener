@@ -2209,7 +2209,7 @@ with st.spinner("Computing market breadth & stage analysis..."):
     )
 
 st.markdown("---")
-st.markdown(f"#### 📊 Market Breadth")
+#st.markdown(f"#### 📊 Market Breadth")
 
 if breadth_total > 0:
 
@@ -2267,7 +2267,7 @@ if breadth_total > 0:
     st.markdown(breadth_html, unsafe_allow_html=True)
 
 st.markdown("---")
-st.markdown(f"#### 🎯 Stage Analysis")
+#st.markdown(f"#### 🎯 Stage Analysis")
 
 if breadth_total > 0:
     # ── Stage: single stacked bar ─────────────────────────────────────────
