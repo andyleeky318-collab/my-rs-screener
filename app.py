@@ -2682,7 +2682,7 @@ with st.spinner("Scanning for Two Botak History..."):
     two_botak_hist= timed("compute_two_botak_history",     compute_two_botak_history,     stocks_tuple, ticker_dfs_shared)
 
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
-st.markdown(f"#### 🔥 Two Botak = Awareness short term group burst ({len(b_list)})")
+st.markdown(f"#### 🔥 Two Botak = Short term group burst ({len(b_list)})")
 if b_list or b_yest:
     html_b = ""
     for sym in b_list:
@@ -2745,7 +2745,7 @@ with st.spinner("Scanning for Bullish Engulfing History..."):
 
 # --- 3. BULLISH ENGULFING (Full Horizontal Row Below Tight PPP) ---
 total_engulf = len(e2_list) + len(e3_list)
-st.markdown(f"#### 🐳 Engulfing = Awareness HL ({total_engulf})")
+st.markdown(f"#### 🐳 Engulfing = HL ({total_engulf})")
 
 if e2_list or e3_list or e2_yest or e3_yest:
     if e2_list or e2_yest:
@@ -2864,7 +2864,7 @@ with st.spinner("Scanning for PowerTrend History..."):
     powertrend_hist=timed("compute_powertrend_history",    compute_powertrend_history,    stocks_tuple, ticker_dfs_shared)
 
 # --- 4. POWERTREND (Full Horizontal Row) ---
-st.markdown(f"#### ⚡ PowerTrend = Awareness thematic leaders extended ({len(pt_list)})")
+st.markdown(f"#### ⚡ PowerTrend = Thematic extended ({len(pt_list)})")
 if pt_list or pt_yest:
     html_pt = ""
     for sym in pt_list:
