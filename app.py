@@ -2336,7 +2336,7 @@ if leader_list or leader_yest:
             'box-shadow:0 0 5px 2px #FF4B4B;'
             'margin-right:4px;vertical-align:middle;'
             '"></span>'
-            if sym in leader_rs_nh_matches else ""
+            if sym in leader_rs_nh_matches and sym != "SPY" else ""
         )
 
         html_leader += (
