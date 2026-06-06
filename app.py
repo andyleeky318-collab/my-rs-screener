@@ -2372,9 +2372,10 @@ if not leader_hist.empty:
     # 2. Determine if the most recent row (today) holds the absolute maximum value
     today_value = chart_df["Leader Count"].iloc[-1]
     max_value = chart_df["Leader Count"].max()
+    min_value = chart_df["Leader Count"].min()
     
     # 3. Add a explicit 'Bar_Color' column to your dataframe
-    if today_value == max_value:
+    if today_value == max_value or today_value == min_value:
         # Define base color array, then override the last row (today) with your accent color
         chart_df["Bar_Color"] = "#29B5E8"
         chart_df.iloc[-1, chart_df.columns.get_loc("Bar_Color")] = "#FF4B4B"
@@ -2624,9 +2625,10 @@ if not powertrend_hist.empty:
     # 2. Determine if the most recent row (today) holds the absolute maximum value
     today_value = chart_df["PowerTrend Count"].iloc[-1]
     max_value = chart_df["PowerTrend Count"].max()
+    min_value = chart_df["PowerTrend Count"].min()
     
     # 3. Add an explicit 'Bar_Color' column to your dataframe
-    if today_value == max_value:
+    if today_value == max_value or today_value == min_value:
         # Define base color, then override the last row (today) with your accent color
         chart_df["Bar_Color"] = "#29B5E8"
         chart_df.iloc[-1, chart_df.columns.get_loc("Bar_Color")] = "#FF4B4B"
