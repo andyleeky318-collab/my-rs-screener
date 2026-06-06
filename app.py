@@ -3208,10 +3208,10 @@ if gapper_list or gapper_yest:
 
                     chart_html = f"""
 <div style="font-family:'JetBrains Mono','Fira Code',monospace;">
-  <div style="position:relative;width:{GAPPER_CHART_SIZE}px;height:{GAPPER_CHART_SIZE}px;
+  <div style="position:relative;width:{GAPPER_CHART_SIZE+60}px;height:{GAPPER_CHART_SIZE}px;
               border:1px solid #30363d;border-radius:6px;background:#0d1117;">
     <div id="{chart_id}"
-         style="width:{GAPPER_CHART_SIZE}px;height:{GAPPER_CHART_SIZE}px;">
+         style="width:{GAPPER_CHART_SIZE+60}px;height:{GAPPER_CHART_SIZE}px;">
     </div>
     <div style="
       position:absolute;top:10%;left:50%;
