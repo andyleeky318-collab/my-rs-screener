@@ -3052,7 +3052,7 @@ if ppp_list or ppp_yest:
     # ── All charts together, 3 per row ────────────────────────────────────
     if ppp_list and show_ppp_charts:
         st.write("")
-        CHARTS_PER_ROW = 5
+        CHARTS_PER_ROW = 4
         CHART_SIZE     = 280   # square: width == height
 
         for row_start in range(0, len(ppp_list), CHARTS_PER_ROW):
@@ -3190,7 +3190,7 @@ if gapper_list or gapper_yest:
     # ── All charts together, 5 per row ────────────────────────────────────
     if gapper_list and show_gap_charts:
         st.write("")
-        GAPPER_CHARTS_PER_ROW = 5
+        GAPPER_CHARTS_PER_ROW = 4
         GAPPER_CHART_SIZE     = 280
 
         for row_start in range(0, len(gapper_list), GAPPER_CHARTS_PER_ROW):
