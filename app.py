@@ -2236,7 +2236,7 @@ if breadth_total > 0:
 
         is_bullish  = pct_val >= 50
         bull_color  = "#378ADD" if is_bullish else "#FF69B4"
-        bear_color  = "#D3D3D3"
+        bear_color  = "#a9a9a9"
         pct_display = f"{pct_val:.1f}%"
 
         # Bar segments
