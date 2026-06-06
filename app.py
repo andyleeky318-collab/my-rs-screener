@@ -3144,21 +3144,15 @@ if gapper_list or gapper_yest:
 
                     chart_html = f"""
 <div style="font-family:'JetBrains Mono','Fira Code',monospace;">
-  <div style="display:flex;align-items:center;justify-content:space-between;
-              padding:5px 8px;background:#161b22;
-              border-radius:6px 6px 0 0;border:1px solid #30363d;border-bottom:none;">
-    <span style="color:#e6edf3;font-size:12px;font-weight:600;letter-spacing:0.04em;">{sym}</span>
-  </div>
-  <div style="position:relative;width:{GAPPER_CHART_SIZE}px;height:{GAPPER_CHART_SIZE}px;
-              border:1px solid #30363d;border-radius:0 0 6px 6px;background:#0d1117;">
+  <div style="position:relative;width:{GAPPER_CHART_SIZE + 60}px;height:{GAPPER_CHART_SIZE}px;
+              border:1px solid #30363d;border-radius:6px;background:#0d1117;">
     <div id="{chart_id}"
-         style="width:{GAPPER_CHART_SIZE}px;height:{GAPPER_CHART_SIZE}px;">
+         style="width:{GAPPER_CHART_SIZE + 60}px;height:{GAPPER_CHART_SIZE}px;">
     </div>
     <div style="
       position:absolute;top:10%;left:50%;
-      transform:translate(-50%,-50%);
-      font-size:48px;font-weight:900;
-      color:rgba(255,255,255,0.08);
+      font-size:20px;font-weight:900;
+      color:rgba(255,255,255,0.15);
       letter-spacing:0.05em;
       pointer-events:none;
       z-index:999;
