@@ -1520,7 +1520,7 @@ if all_data:
     """, unsafe_allow_html=True)
 
     st.markdown(
-        f'<div style="text-align: right; font-size: 11px; color: #888888; margin-bottom: 4px; font-family: monospace;">'
+        f'<div style="text-align: right; font-size: 20px; color: #888888; margin-bottom: 4px; font-family: monospace;">'
         f'Setup = <span style="color: #4ecdc4; font-weight: bold;">{global_setup_count}</span></div>',
         unsafe_allow_html=True
     )
