@@ -3527,7 +3527,8 @@ if _timing_log:
     if timing_records:
         st.dataframe(
             pd.DataFrame(timing_records),
-            use_container_width=True,
+            use_container_width=False,
+            width=350,
             hide_index=True
         )
 
@@ -3548,7 +3549,8 @@ if _timing_log:
             ]
             st.dataframe(
                 pd.DataFrame(industry_records),
-                use_container_width=True,
+                use_container_width=False,
+                width=350,
                 hide_index=True
             )
 
