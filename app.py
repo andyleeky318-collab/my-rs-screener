@@ -1272,21 +1272,42 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
 
                 # --- PPP ---
                 if df_len >= 200 and sma50_series is not None and sma200_series is not None and atr_pct is not None:
-                    dyn_sens = atr_pct * 0.2
-                    day0_s   = (open_series + close_series) / 2
-                    day1_s   = day0_s.shift(1)
-                    day2_s   = day0_s.shift(2)
-                    diff0_s  = ((day0_s - day1_s) / day1_s.replace(0, 0.001) * 100).abs()
-                    diff1_s  = ((day1_s - day2_s) / day2_s.replace(0, 0.001) * 100).abs()
-                    ma_filt  = (
-                        (close_series >= sma200_series) &
-                        (close_series >= sma50_series)  &
-                        (close_series >= 20)
-                    )
-                    ppp_s = (diff0_s < dyn_sens) & (diff1_s < dyn_sens) & ma_filt
+                    hl_ratio_ppp = high_series / low_series
+                    adr_ppp = 100 * (hl_ratio_ppp.rolling(20).mean() - 1)
+                    adr_ok = (adr_ppp.iloc[-1] >= 2.45) and (adr_ppp.iloc[-1] <= 8)
 
-                    if bool(ppp_s.iloc[-1]): ppp_matches.append(ticker)
-                    if bool(ppp_s.iloc[-2]): ppp_yest.append(ticker)
+                    pine7_ok = False
+                    if df_len >= 260 and sma150_series is not None and sma200_series is not None:
+                        c_sma150    = sma150_series.iloc[-1]
+                        c_sma200    = sma200_series.iloc[-1]
+                        c_sma200_22 = sma200_series.iloc[-23] if df_len >= 23 else c_sma200
+                        c_highest   = high_series.rolling(260).max().iloc[-1]
+                        c_lowest    = low_series.rolling(260).min().iloc[-1]
+                        p2 = int(c_sma150 > c_sma200)
+                        pine7_ok = (
+                            int(close_series.iloc[-1] > c_sma150 and close_series.iloc[-1] > c_sma200)
+                            + p2 + int(c_sma200 > c_sma200_22) + p2
+                            + int(close_series.iloc[-1] > sma50_series.iloc[-1])
+                            + int(((close_series.iloc[-1] / c_lowest) - 1) * 100 >= 25)
+                            + int((1 - (close_series.iloc[-1] / c_highest)) * 100 <= 25)
+                        ) == 7
+
+                    if adr_ok and pine7_ok:
+                        dyn_sens = atr_pct * 0.2
+                        day0_s   = (open_series + close_series) / 2
+                        day1_s   = day0_s.shift(1)
+                        day2_s   = day0_s.shift(2)
+                        diff0_s  = ((day0_s - day1_s) / day1_s.replace(0, 0.001) * 100).abs()
+                        diff1_s  = ((day1_s - day2_s) / day2_s.replace(0, 0.001) * 100).abs()
+                        ma_filt  = (
+                            (close_series >= sma200_series) &
+                            (close_series >= sma50_series)  &
+                            (close_series >= 20)
+                        )
+                        ppp_s = (diff0_s < dyn_sens) & (diff1_s < dyn_sens) & ma_filt
+
+                        if bool(ppp_s.iloc[-1]): ppp_matches.append(ticker)
+                        if bool(ppp_s.iloc[-2]): ppp_yest.append(ticker)
 
                 # --- Leader ---
                 if rs_series is not None and df_len >= 250 and sma50_series is not None and sma200_series is not None:
