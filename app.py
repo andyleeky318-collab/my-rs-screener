@@ -2836,7 +2836,8 @@ else:
     with col_tbl:
         st.dataframe(
             pd.DataFrame(summary_rows),
-            use_container_width=True,
+            use_container_width=False,
+            width=350,
             hide_index=True,
             height=min(300, 36 * len(summary_rows) + 38)
         )
