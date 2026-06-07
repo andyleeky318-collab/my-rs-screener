@@ -2490,9 +2490,14 @@ def highlight_current_regime(row):
 styled_df = df_regime.style.apply(highlight_current_regime, axis=1)
 
 st.dataframe(
-    styled_df, 
-    use_container_width=True, 
-    hide_index=True
+    styled_df,
+    use_container_width=False,
+    width=620,
+    hide_index=True,
+    column_config={
+        "Market Condition": st.column_config.Column(width=250),
+        "What to do": st.column_config.Column(width=350),
+    }
 )
 
 st.markdown("---")
