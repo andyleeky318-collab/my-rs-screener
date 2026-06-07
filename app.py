@@ -2839,7 +2839,7 @@ else:
             use_container_width=False,
             width=350,
             hide_index=True,
-            height=min(300, 36 * len(summary_rows) + 38)
+            height=min(300, 36 * len(summary_rows) + 38),
             column_config={
                 "Leaders": st.column_config.Column(
                     alignment="left"
