@@ -1497,6 +1497,12 @@ if all_data:
         color: #000000;
         font-weight: bold;
     }
+    .orange-badge {
+        background-color: #FFE5CC; /* Light pastel orange */
+        border: 1px solid #FFA500; /* Classic orange border */
+        color: #000000;            /* Black text */
+        font-weight: bold;
+    }
     .ticker-name { font-weight: bold; color: #ffffff; margin-right: 4px; }
     .ticker-rs { color: #4ecdc4; font-weight: normal; }
     table { width:100%; border-collapse: collapse; }
@@ -1701,7 +1707,7 @@ if all_data:
                 )
             elif cloud_sym in KNOWN_STOCKS:
                 ma50_bounce_html += (
-                    f'<div class="ticker-badge new-pattern-badge">'
+                    f'<div class="ticker-badge orange-badge">'
                     f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{cloud_sym}</span>'
                     f'<span class="ticker-rs" style="color: #004d26; font-weight: bold;">{cloud_rs:.0f}</span>'
                     f'</div>'
