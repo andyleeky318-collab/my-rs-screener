@@ -2861,7 +2861,9 @@ else:
     # Auto-run Gemini only when leader list changes
     leader_list_key = str(sorted(leader_list))
 
-    if st.session_state.get("leader_ai_key") != leader_list_key:
+    force_rerun = st.button("🔄 Retry AI Analysis", key="retry_leader_ai")
+
+    if force_rerun or st.session_state.get("leader_ai_key") != leader_list_key:
         with st.spinner("Analyzing RS leader concentration via Gemini..."):
             analysis_result = timed(
                 "generate_leader_ai_analysis",
