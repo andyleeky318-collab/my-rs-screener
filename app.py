@@ -2417,6 +2417,156 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
 
 st.markdown("---")
 
+st.markdown(
+    f"#### ⭐ Minervini ("
+    f"Positive Pct = {know_pos_pct:.1f}% ... "
+    #f"+ve Count: {know_positive_count} ... "
+    f"Total = {know_total_count})"
+)
+
+if email_content_stocks or email_content_removed:
+    minervini_html = ""
+    
+    # 1. Active Symbols Layout (Sorted Alphabetically by the ticker name)
+    for sym, is_new_addition, is_positive_today in sorted(email_content_stocks, key=lambda x: x[0]):
+        
+        # Inject small up logo to the left side if the stock finished positive today
+        up_logo = "<span style='color:#00FF00; margin-right:4px; font-weight:bold;'>▲</span>" if is_positive_today else ""
+        
+        if is_new_addition:
+            minervini_html += f'<div class="ticker-badge new-pattern-badge">{up_logo}{sym}</div>'
+        else:
+            minervini_html += f'<div class="ticker-badge">{up_logo}{sym}</div>'
+            
+    # 2. Dropped/Removed Symbols Layout (Sorted Alphabetically with line-through)
+    for sym in sorted(email_content_removed):
+        minervini_html += f'<div class="ticker-badge removed-badge">{sym}</div>'
+        
+    st.markdown(minervini_html, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
+
+st.markdown("---")
+
+# ==============================================================================
+# BLOCK B: NEW EXTRA 52W HIGH SYMBOLS (Placed directly underneath)
+# ==============================================================================
+#st.markdown("<br>", unsafe_allow_html=True) # Spacer
+
+# active_52wk_high_count = len(extra_52wk_high_symbols)
+
+# extra_header_html = (
+#     f"<div style='font-size:1.15em; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
+#     f"<span>🚀 ATH , but fail Minervini criteria</span>"
+#     f"<span style='font-weight:normal; color:#ffffff;'>({active_52wk_high_count})</span>"
+#     f"</div>"
+# )
+# st.markdown(extra_header_html, unsafe_allow_html=True)
+
+st.markdown(f"#### 🌟 ATH , but fail Minervini criteria ({len(extra_52wk_high_symbols)})")
+# Render if there are either active items OR removed items to show
+if extra_52wk_high_symbols or extra_52wk_high_removed:
+    extra_html = ""
+    
+    # 1. Render Active Symbols (Sorted alphabetically)
+    for sym, is_new_addition_52w in sorted(extra_52wk_high_symbols, key=lambda x: x[0]):
+        if is_new_addition_52w:
+            # Uses your exact native gold badge class for brand new additions today
+            extra_html += f'<div class="ticker-badge new-pattern-badge">{sym}</div>'
+        else:
+            # Standard dark badge layout for stocks that were already on this list yesterday
+            extra_html += f'<div class="ticker-badge">{sym}</div>'
+            
+    # 2. Append Removed Symbols (Sorted alphabetically with the removed badge style)
+    for sym in sorted(extra_52wk_high_removed):
+        extra_html += f'<div class="ticker-badge removed-badge">{sym}</div>'
+        
+    st.markdown(extra_html, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
+
+st.markdown("---")
+
+# ==============================================================================
+# 11. MARKET REGIME REFERENCE TABLE (Dynamic Highlight)
+# ==============================================================================
+#st.markdown("---")
+st.markdown(f"#### 🧭 Market Regime ({pct_above_ema200:.2f}%)")
+# 1. Define raw data exactly from your reference image
+regime_data = {
+    "Market Condition": [
+        "Above 200 EMA > 70%",
+        "Above 200 EMA > 60%",
+        "Above 200 EMA 50–60%",
+        "Above 200 EMA 40–50%",
+        "Above 200 EMA < 40%"
+    ],
+    "What to do": [
+        "Strong bull participation",
+        "Good swing trading environment",
+        "Market improving",
+        "Recovery attempt",
+        "Be cautious, focus only on best setups"
+    ]
+}
+
+# 2. Convert to DataFrame
+df_regime = pd.DataFrame(regime_data)
+
+# 3. Determine which row index should be highlighted based on your live variable
+# (Using nested if/elif structure matching the hierarchy)
+highlight_idx = None
+
+if pct_above_ema200 > 70:
+    highlight_idx = 4
+elif pct_above_ema200 > 60:
+    highlight_idx = 3
+elif 50 <= pct_above_ema200 <= 60:
+    highlight_idx = 2
+elif 40 <= pct_above_ema200 < 50:
+    highlight_idx = 1
+elif pct_above_ema200 < 40:
+    highlight_idx = 0
+
+# 4. Create a styling function to apply the lime background
+def highlight_current_regime(row):
+    pct = pct_above_ema200
+
+    is_highlight = False
+    bg = ""
+
+    if pct > 70 and row["Market Condition"] == "Above 200 EMA > 70%":
+        bg = "#90EE90"
+        is_highlight = True
+    elif pct > 60 and row["Market Condition"] == "Above 200 EMA > 60%":
+        bg = "#90EE90"
+        is_highlight = True
+    elif 50 <= pct <= 60 and row["Market Condition"] == "Above 200 EMA 50–60%":
+        bg = "#FFD8A8"
+        is_highlight = True
+    elif 40 <= pct < 50 and row["Market Condition"] == "Above 200 EMA 40–50%":
+        bg = "#FFD8A8"
+        is_highlight = True
+    elif pct < 40 and row["Market Condition"] == "Above 200 EMA < 40%":
+        bg = "#FFCCCC"
+        is_highlight = True
+
+    if is_highlight:
+        return [f"background-color: {bg}; color: #000000; font-weight: bold;"] * len(row)
+    else:
+        return [""] * len(row)
+
+# 5. Apply the style and render via Streamlit dataframe (handles styling better than st.table)
+styled_df = df_regime.style.apply(highlight_current_regime, axis=1)
+
+st.dataframe(
+    styled_df, 
+    use_container_width=True, 
+    hide_index=True
+)
+
+st.markdown("---")
+
 with st.spinner("Computing Historical Known Counts..."):
     historical_df = timed("compute_historical_know_counts", compute_historical_know_counts, stocks_tuple, ticker_dfs_shared)
 
@@ -2510,85 +2660,7 @@ else:
 
 st.markdown("---")
 
-# ==============================================================================
-# 11. MARKET REGIME REFERENCE TABLE (Dynamic Highlight)
-# ==============================================================================
-#st.markdown("---")
-st.markdown(f"#### 🧭 Market Regime ({pct_above_ema200:.2f}%)")
-# 1. Define raw data exactly from your reference image
-regime_data = {
-    "Market Condition": [
-        "Above 200 EMA > 70%",
-        "Above 200 EMA > 60%",
-        "Above 200 EMA 50–60%",
-        "Above 200 EMA 40–50%",
-        "Above 200 EMA < 40%"
-    ],
-    "What to do": [
-        "Strong bull participation",
-        "Good swing trading environment",
-        "Market improving",
-        "Recovery attempt",
-        "Be cautious, focus only on best setups"
-    ]
-}
 
-# 2. Convert to DataFrame
-df_regime = pd.DataFrame(regime_data)
-
-# 3. Determine which row index should be highlighted based on your live variable
-# (Using nested if/elif structure matching the hierarchy)
-highlight_idx = None
-
-if pct_above_ema200 > 70:
-    highlight_idx = 4
-elif pct_above_ema200 > 60:
-    highlight_idx = 3
-elif 50 <= pct_above_ema200 <= 60:
-    highlight_idx = 2
-elif 40 <= pct_above_ema200 < 50:
-    highlight_idx = 1
-elif pct_above_ema200 < 40:
-    highlight_idx = 0
-
-# 4. Create a styling function to apply the lime background
-def highlight_current_regime(row):
-    pct = pct_above_ema200
-
-    is_highlight = False
-    bg = ""
-
-    if pct > 70 and row["Market Condition"] == "Above 200 EMA > 70%":
-        bg = "#90EE90"
-        is_highlight = True
-    elif pct > 60 and row["Market Condition"] == "Above 200 EMA > 60%":
-        bg = "#90EE90"
-        is_highlight = True
-    elif 50 <= pct <= 60 and row["Market Condition"] == "Above 200 EMA 50–60%":
-        bg = "#FFD8A8"
-        is_highlight = True
-    elif 40 <= pct < 50 and row["Market Condition"] == "Above 200 EMA 40–50%":
-        bg = "#FFD8A8"
-        is_highlight = True
-    elif pct < 40 and row["Market Condition"] == "Above 200 EMA < 40%":
-        bg = "#FFCCCC"
-        is_highlight = True
-
-    if is_highlight:
-        return [f"background-color: {bg}; color: #000000; font-weight: bold;"] * len(row)
-    else:
-        return [""] * len(row)
-
-# 5. Apply the style and render via Streamlit dataframe (handles styling better than st.table)
-styled_df = df_regime.style.apply(highlight_current_regime, axis=1)
-
-st.dataframe(
-    styled_df, 
-    use_container_width=True, 
-    hide_index=True
-)
-
-st.markdown("---")
 
 # --- Render Header with Inline Summary Metrics inside Parentheses ---
 # header_html = (
@@ -2602,75 +2674,7 @@ st.markdown("---")
 # )
 # st.markdown(header_html, unsafe_allow_html=True)
 
-st.markdown(
-    f"#### ⭐ Minervini ("
-    f"Positive Pct = {know_pos_pct:.1f}% ... "
-    #f"+ve Count: {know_positive_count} ... "
-    f"Total = {know_total_count})"
-)
 
-if email_content_stocks or email_content_removed:
-    minervini_html = ""
-    
-    # 1. Active Symbols Layout (Sorted Alphabetically by the ticker name)
-    for sym, is_new_addition, is_positive_today in sorted(email_content_stocks, key=lambda x: x[0]):
-        
-        # Inject small up logo to the left side if the stock finished positive today
-        up_logo = "<span style='color:#00FF00; margin-right:4px; font-weight:bold;'>▲</span>" if is_positive_today else ""
-        
-        if is_new_addition:
-            minervini_html += f'<div class="ticker-badge new-pattern-badge">{up_logo}{sym}</div>'
-        else:
-            minervini_html += f'<div class="ticker-badge">{up_logo}{sym}</div>'
-            
-    # 2. Dropped/Removed Symbols Layout (Sorted Alphabetically with line-through)
-    for sym in sorted(email_content_removed):
-        minervini_html += f'<div class="ticker-badge removed-badge">{sym}</div>'
-        
-    st.markdown(minervini_html, unsafe_allow_html=True)
-else:
-    st.info("No active setups discovered.")
-
-st.markdown("---")
-
-# ==============================================================================
-# BLOCK B: NEW EXTRA 52W HIGH SYMBOLS (Placed directly underneath)
-# ==============================================================================
-#st.markdown("<br>", unsafe_allow_html=True) # Spacer
-
-# active_52wk_high_count = len(extra_52wk_high_symbols)
-
-# extra_header_html = (
-#     f"<div style='font-size:1.15em; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
-#     f"<span>🚀 ATH , but fail Minervini criteria</span>"
-#     f"<span style='font-weight:normal; color:#ffffff;'>({active_52wk_high_count})</span>"
-#     f"</div>"
-# )
-# st.markdown(extra_header_html, unsafe_allow_html=True)
-
-st.markdown(f"#### 🌟 ATH , but fail Minervini criteria ({len(extra_52wk_high_symbols)})")
-# Render if there are either active items OR removed items to show
-if extra_52wk_high_symbols or extra_52wk_high_removed:
-    extra_html = ""
-    
-    # 1. Render Active Symbols (Sorted alphabetically)
-    for sym, is_new_addition_52w in sorted(extra_52wk_high_symbols, key=lambda x: x[0]):
-        if is_new_addition_52w:
-            # Uses your exact native gold badge class for brand new additions today
-            extra_html += f'<div class="ticker-badge new-pattern-badge">{sym}</div>'
-        else:
-            # Standard dark badge layout for stocks that were already on this list yesterday
-            extra_html += f'<div class="ticker-badge">{sym}</div>'
-            
-    # 2. Append Removed Symbols (Sorted alphabetically with the removed badge style)
-    for sym in sorted(extra_52wk_high_removed):
-        extra_html += f'<div class="ticker-badge removed-badge">{sym}</div>'
-        
-    st.markdown(extra_html, unsafe_allow_html=True)
-else:
-    st.info("No active setups discovered.")
-
-st.markdown("---")
 
 with st.spinner("Scanning for Leader History..."):
     leader_hist   = timed("compute_leader_history",        compute_leader_history,        stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
