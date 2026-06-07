@@ -2417,76 +2417,6 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
 
 st.markdown("---")
 
-st.markdown(
-    f"#### ⭐ Minervini ("
-    f"Positive Pct = {know_pos_pct:.1f}% ... "
-    #f"+ve Count: {know_positive_count} ... "
-    f"Total = {know_total_count})"
-)
-
-if email_content_stocks or email_content_removed:
-    minervini_html = ""
-    
-    # 1. Active Symbols Layout (Sorted Alphabetically by the ticker name)
-    for sym, is_new_addition, is_positive_today in sorted(email_content_stocks, key=lambda x: x[0]):
-        
-        # Inject small up logo to the left side if the stock finished positive today
-        up_logo = "<span style='color:#00FF00; margin-right:4px; font-weight:bold;'>▲</span>" if is_positive_today else ""
-        
-        if is_new_addition:
-            minervini_html += f'<div class="ticker-badge new-pattern-badge">{up_logo}{sym}</div>'
-        else:
-            minervini_html += f'<div class="ticker-badge">{up_logo}{sym}</div>'
-            
-    # 2. Dropped/Removed Symbols Layout (Sorted Alphabetically with line-through)
-    for sym in sorted(email_content_removed):
-        minervini_html += f'<div class="ticker-badge removed-badge">{sym}</div>'
-        
-    st.markdown(minervini_html, unsafe_allow_html=True)
-else:
-    st.info("No active setups discovered.")
-
-st.markdown("---")
-
-# ==============================================================================
-# BLOCK B: NEW EXTRA 52W HIGH SYMBOLS (Placed directly underneath)
-# ==============================================================================
-#st.markdown("<br>", unsafe_allow_html=True) # Spacer
-
-# active_52wk_high_count = len(extra_52wk_high_symbols)
-
-# extra_header_html = (
-#     f"<div style='font-size:1.15em; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
-#     f"<span>🚀 ATH , but fail Minervini criteria</span>"
-#     f"<span style='font-weight:normal; color:#ffffff;'>({active_52wk_high_count})</span>"
-#     f"</div>"
-# )
-# st.markdown(extra_header_html, unsafe_allow_html=True)
-
-st.markdown(f"#### 🌟 ATH , but fail Minervini criteria ({len(extra_52wk_high_symbols)})")
-# Render if there are either active items OR removed items to show
-if extra_52wk_high_symbols or extra_52wk_high_removed:
-    extra_html = ""
-    
-    # 1. Render Active Symbols (Sorted alphabetically)
-    for sym, is_new_addition_52w in sorted(extra_52wk_high_symbols, key=lambda x: x[0]):
-        if is_new_addition_52w:
-            # Uses your exact native gold badge class for brand new additions today
-            extra_html += f'<div class="ticker-badge new-pattern-badge">{sym}</div>'
-        else:
-            # Standard dark badge layout for stocks that were already on this list yesterday
-            extra_html += f'<div class="ticker-badge">{sym}</div>'
-            
-    # 2. Append Removed Symbols (Sorted alphabetically with the removed badge style)
-    for sym in sorted(extra_52wk_high_removed):
-        extra_html += f'<div class="ticker-badge removed-badge">{sym}</div>'
-        
-    st.markdown(extra_html, unsafe_allow_html=True)
-else:
-    st.info("No active setups discovered.")
-
-st.markdown("---")
-
 # ==============================================================================
 # 11. MARKET REGIME REFERENCE TABLE (Dynamic Highlight)
 # ==============================================================================
@@ -2566,6 +2496,78 @@ st.dataframe(
 )
 
 st.markdown("---")
+
+st.markdown(
+    f"#### ⭐ Minervini ("
+    f"Positive Pct = {know_pos_pct:.1f}% ... "
+    #f"+ve Count: {know_positive_count} ... "
+    f"Total = {know_total_count})"
+)
+
+if email_content_stocks or email_content_removed:
+    minervini_html = ""
+    
+    # 1. Active Symbols Layout (Sorted Alphabetically by the ticker name)
+    for sym, is_new_addition, is_positive_today in sorted(email_content_stocks, key=lambda x: x[0]):
+        
+        # Inject small up logo to the left side if the stock finished positive today
+        up_logo = "<span style='color:#00FF00; margin-right:4px; font-weight:bold;'>▲</span>" if is_positive_today else ""
+        
+        if is_new_addition:
+            minervini_html += f'<div class="ticker-badge new-pattern-badge">{up_logo}{sym}</div>'
+        else:
+            minervini_html += f'<div class="ticker-badge">{up_logo}{sym}</div>'
+            
+    # 2. Dropped/Removed Symbols Layout (Sorted Alphabetically with line-through)
+    for sym in sorted(email_content_removed):
+        minervini_html += f'<div class="ticker-badge removed-badge">{sym}</div>'
+        
+    st.markdown(minervini_html, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
+
+#st.markdown("---")
+st.write("")
+
+# ==============================================================================
+# BLOCK B: NEW EXTRA 52W HIGH SYMBOLS (Placed directly underneath)
+# ==============================================================================
+#st.markdown("<br>", unsafe_allow_html=True) # Spacer
+
+# active_52wk_high_count = len(extra_52wk_high_symbols)
+
+# extra_header_html = (
+#     f"<div style='font-size:1.15em; font-weight:bold; display:flex; align-items:center; gap:10px;'>"
+#     f"<span>🚀 ATH , but fail Minervini criteria</span>"
+#     f"<span style='font-weight:normal; color:#ffffff;'>({active_52wk_high_count})</span>"
+#     f"</div>"
+# )
+# st.markdown(extra_header_html, unsafe_allow_html=True)
+
+st.markdown(f"#### 🌟 ATH , but fail Minervini criteria ({len(extra_52wk_high_symbols)})")
+# Render if there are either active items OR removed items to show
+if extra_52wk_high_symbols or extra_52wk_high_removed:
+    extra_html = ""
+    
+    # 1. Render Active Symbols (Sorted alphabetically)
+    for sym, is_new_addition_52w in sorted(extra_52wk_high_symbols, key=lambda x: x[0]):
+        if is_new_addition_52w:
+            # Uses your exact native gold badge class for brand new additions today
+            extra_html += f'<div class="ticker-badge new-pattern-badge">{sym}</div>'
+        else:
+            # Standard dark badge layout for stocks that were already on this list yesterday
+            extra_html += f'<div class="ticker-badge">{sym}</div>'
+            
+    # 2. Append Removed Symbols (Sorted alphabetically with the removed badge style)
+    for sym in sorted(extra_52wk_high_removed):
+        extra_html += f'<div class="ticker-badge removed-badge">{sym}</div>'
+        
+    st.markdown(extra_html, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
+
+#st.markdown("---")
+st.write("")
 
 with st.spinner("Computing Historical Known Counts..."):
     historical_df = timed("compute_historical_know_counts", compute_historical_know_counts, stocks_tuple, ticker_dfs_shared)
