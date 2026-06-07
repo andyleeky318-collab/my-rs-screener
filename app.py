@@ -2821,8 +2821,8 @@ Be direct, use industry names, no fluff.
 # ==========================================
 # UI - RS LEADER AI ANALYSIS
 # ==========================================
-st.write("---")
-st.subheader("🤖 RS Leader Industry Analysis")
+#st.write("---")
+#st.subheader("🤖 RS Leader Industry Analysis")
 
 if not leader_list:
     st.info("No RS leaders found — run the screener first.")
