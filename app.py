@@ -2499,7 +2499,7 @@ st.write("")
 #st.markdown(f"### Total Count ({know_total_count})")
 if not historical_df.empty:
     # 1. THE ORIGINAL CHART: Updated to pass the full dataframe to show 90 days instead of 30
-    st.line_chart(data=historical_df, x="Date", y="Total Count", use_container_width=True)
+    st.line_chart(data=historical_df, x="Date", y="Minervini Count", use_container_width=True)
     
     #st.markdown("---")
     
@@ -2605,8 +2605,8 @@ st.markdown("---")
 
 st.markdown(
     f"#### ⭐ Minervini ("
-    f"+ve Pct: {know_pos_pct:.1f}% ... "
-    f"+ve Count: {know_positive_count} ... "
+    f"Positive Pct: {know_pos_pct:.1f}% ... "
+    #f"+ve Count: {know_positive_count} ... "
     f"Total: {know_total_count})"
 )
 
