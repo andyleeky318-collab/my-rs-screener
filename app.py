@@ -2515,7 +2515,7 @@ st.markdown("---")
 # 11. MARKET REGIME REFERENCE TABLE (Dynamic Highlight)
 # ==============================================================================
 #st.markdown("---")
-st.markdown(f"#### 🧭 Market Regime Reference ({pct_above_ema200:.2f}%)")
+st.markdown(f"#### 🧭 Market Regime ({pct_above_ema200:.2f}%)")
 # 1. Define raw data exactly from your reference image
 regime_data = {
     "Market Condition": [
@@ -2605,9 +2605,9 @@ st.markdown("---")
 
 st.markdown(
     f"#### ⭐ Minervini ("
-    f"Positive Pct: {know_pos_pct:.1f}% ... "
+    f"Positive Pct = {know_pos_pct:.1f}% ... "
     #f"+ve Count: {know_positive_count} ... "
-    f"Total: {know_total_count})"
+    f"Total = {know_total_count})"
 )
 
 if email_content_stocks or email_content_removed:
