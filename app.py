@@ -1367,8 +1367,6 @@ all_data = []
 progress_bar = st.progress(0)
 status_text = st.empty()
 
-leader_list_for_table = st.session_state.get("leader_list_cache", [])
-
 industry_items = list(INDUSTRIES.items())
 for idx, (industry_name, tickers) in enumerate(industry_items):
     status_text.text(f"Processing {industry_name}...")
@@ -1412,18 +1410,6 @@ for idx, (industry_name, tickers) in enumerate(industry_items):
 
 status_text.empty()
 progress_bar.empty()
-
-def trophy_html(sym, leader_list):
-    if sym in leader_list:
-        return (
-            '<span style="'
-            'display:inline-block;width:7px;height:7px;'
-            'border-radius:50%;background:#FFD700;'
-            'box-shadow:0 0 5px 2px #FFD700;'
-            'margin-right:4px;vertical-align:middle;'
-            '"></span>'
-        )
-    return ""
 
 # 6. Compact Display Logic
 if all_data:
@@ -1519,8 +1505,6 @@ if all_data:
     </style>
     """, unsafe_allow_html=True)
 
-
-
     table_html = """<table>
     <thead><tr>
     <th style="text-align: center; width: 30px;">#</th>
@@ -1580,7 +1564,6 @@ if all_data:
                 if ticker_sym in LIME_STOCKS:
                     ticker_html += (
                         f'<div class="ticker-badge lime-badge">'
-                        f'{trophy_html(ticker_sym, leader_list_for_table)}'
                         f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{ticker_sym}</span>' 
                         f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{rs_score:.0f}</span>' 
                         f'</div>'
@@ -1588,16 +1571,14 @@ if all_data:
                 elif ticker_sym in KNOWN_STOCKS:
                     ticker_html += (
                         f'<div class="ticker-badge new-pattern-badge">'
-                        f'{trophy_html(ticker_sym, leader_list_for_table)}'
-                        f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{ticker_sym}</span>'
-                        f'<span class="ticker-rs" style="color: #004d26; font-weight: bold;">{r["RS Score"]:.0f}</span>'
+                        f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{ticker_sym}</span>' # Clean high-contrast dark charcoal text
+                        f'<span class="ticker-rs" style="color: #004d26; font-weight: bold;">{r["RS Score"]:.0f}</span>' # Highly legible dark gold numbers
                         f'</div>'
                     )
                 else:
                     # Standard matching dark badge layout for everything else
                     ticker_html += (
                         f'<div class="ticker-badge">'
-                        f'{trophy_html(ticker_sym, leader_list_for_table)}'
                         f'<span class="ticker-name">{ticker_sym}</span>'
                         f'<span class="ticker-rs">{r["RS Score"]:.0f}</span>'
                         f'</div>'
@@ -2428,8 +2409,6 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
     know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200, leader_rs_nh_matches, gapper_gap_levels = results[18:]
 
 st.markdown("---")
-
-st.session_state["leader_list_cache"] = leader_list
 
 with st.spinner("Computing Historical Known Counts..."):
     historical_df = timed("compute_historical_know_counts", compute_historical_know_counts, stocks_tuple, ticker_dfs_shared)
