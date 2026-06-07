@@ -43,7 +43,7 @@ INDUSTRIES = {
     'CATHIE WOOD': ['ARKG', 'ARKK', 'ARKQ', 'ARKW', 'ARKF', 'ARKX'],
     'CHINA': ['FUTU', 'LI', 'KWEB', 'XPEV', 'NIO', 'PDD', 'BIDU', 'JD', 'BABA'],
     'DATA CENTER / AI HOST': ['WGMI', 'CRWV', 'NBIS', 'IREN', 'WULF', 'CORZ', 'CIFR', 'HUT', 'BTDR'],
-    'ENERGY SOLAR': ['TAN', 'SEDG', 'ENPH', 'FSLR', 'ARRY', 'SHLS', 'CSIQ', 'RUN', 'NOVA', 'DQ'],
+    'SOLAR': ['TAN', 'SEDG', 'ENPH', 'FSLR', 'ARRY', 'SHLS', 'CSIQ', 'RUN', 'NOVA', 'DQ'],
     'COML SVCS-ADVRTSNG': ['OMC', 'DJT'],
     'AEROSPACE/DEFENSE': ['ITA', 'RTX', 'LMT', 'HON', 'BA', 'GD', 'NOC', 'TDG', 'LHX', 'HWM', 'AXON', 'HEI', 'LDOS', 'TDY', 'TXT', 'FTAI', 'CW', 'BWXT', 'HII', 'CR', 'DRS', 'LOAR', 'AVAV', 'HXL', 'KTOS', 'MIR', 'OSIS', 'AIR', 'MRCY'],
     'AGRICULTURAL OPRTIONS': ['ADM', 'BG', 'PPC', 'CALM', 'SEB'],
@@ -178,7 +178,7 @@ INDUSTRIES = {
     'RETAIL-RESTAURANTS': ['MCD', 'SBUX', 'CMG', 'YUM', 'QSR', 'DRI', 'YUMC', 'CAVA', 'DPZ', 'WING', 'TXRH', 'ARMK', 'SHAK', 'SG', 'EAT', 'WEN', 'CAKE'],
     'TELECOM SVCS-FOREIGN': ['CCOI', 'LBTYA'],
     'TELCOM-INFRASTR': ['SATS', 'ASTS', 'IRDM'],
-    'STEEL-PRODUCERS': ['SLX', 'NWPX', 'PKX', 'NUE', 'STLD', 'WS', 'WS', 'RS', 'ASTL', 'CLF', 'GGB', 'CMC', 'RIO', 'TX', 'MTUS', 'MT', 'HCC', 'MSB', 'VALE', 'SID'],
+    'STEEL-PRODUCERS': ['SLX', 'NWPX', 'PKX', 'NUE', 'STLD', 'WS', 'RS', 'ASTL', 'CLF', 'GGB', 'CMC', 'RIO', 'TX', 'MTUS', 'MT', 'HCC', 'MSB', 'VALE', 'SID'],
     'TELCOM-CONS PROD': ['MSI', 'GRMN', 'UI'],
     #'TEXTILES': ['AIN', 'CULP', 'UFI'],
     'TOBACCO': ['PM', 'MO'],
@@ -1432,13 +1432,13 @@ for idx, (industry_name, tickers) in enumerate(industry_items):
 status_text.empty()
 progress_bar.empty()
 
-global_setup_count = sum(
-    len(
+global_setup_tickers = set()
+for item in all_data:
+    global_setup_tickers |= (
         (set(item["Cloud21EMA"]) | set(item["CloudWick"]) | set(item["MA50Bounce"]))
         & set(KNOWN_STOCKS)
     )
-    for item in all_data
-)
+global_setup_count = len(global_setup_tickers)
 
 # 6. Compact Display Logic
 if all_data:
