@@ -2393,7 +2393,7 @@ if breadth_total > 0:
 
         st.markdown(
             f"<div style='padding:8px 0 4px; width:100%;'>"
-            f"<div style='text-align: center; font-size: 30px; font-weight: bold; color: #ffffff; margin-bottom: 8px;'>Stage</div>"
+            f"<div style='text-align: center; font-size: 30px; font-weight: bold; color: #ffffff; margin-bottom: 18px;'>Stage</div>"
             f"<div style='width:100%;height:12px;display:flex;"
             f"overflow:hidden;border-radius:999px;'>{bar_segs}</div>"
             f"<div style='display:flex; width:100%; margin-top:10px;'>"
