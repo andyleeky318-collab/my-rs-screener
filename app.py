@@ -3350,51 +3350,7 @@ if (gapBottom !== null && gapTop !== null && {gap_date_js} !== null) {{
 else:
     st.info("No active gapper setups discovered.")
 
-# ── Timing Summary ───────────────────────────────────────────────────────────
-st.markdown("---")
-st.markdown("#### ⏱ Test Time")
 
-if _timing_log:
-    # Separate industry-level rows from top-level function rows
-    industry_rows = {k: v for k, v in _timing_log.items() if k.startswith("RS+Cloud")}
-    main_rows     = {k: v for k, v in _timing_log.items() if not k.startswith("RS+Cloud")}
-
-    # Top-level functions table
-    # timing_records = [{"Function": k, "Time (ms)": f"{v:,.0f}", "Time (s)": f"{v/1000:.2f}"}
-    #                   for k, v in sorted(main_rows.items(), key=lambda x: -x[1])]
-    timing_records = [{"Function": k, "Time (s)": f"{v/1000:.2f}"}
-                      for k, v in main_rows.items()]
-
-    if timing_records:
-        st.dataframe(
-            pd.DataFrame(timing_records),
-            use_container_width=True,
-            hide_index=True
-        )
-
-    # Industry RS breakdown — collapsed by default
-    if industry_rows:
-        total_rs_ms = sum(industry_rows.values())
-        with st.expander(f"RS+Cloud per industry — {len(industry_rows)} groups, total {total_rs_ms/1000:.2f}s"):
-            # industry_records = [
-            #     {"Industry": k.replace("RS+Cloud [", "").replace("]", ""),
-            #      "Time (ms)": f"{v:,.0f}",
-            #      "Time (s)": f"{v/1000:.2f}"}
-            #     for k, v in sorted(industry_rows.items(), key=lambda x: -x[1])
-            # ]
-            industry_records = [
-                {"Industry": k.replace("RS+Cloud [", "").replace("]", ""),
-                 "Time (s)": f"{v/1000:.2f}"}
-                for k, v in industry_rows.items()
-            ]
-            st.dataframe(
-                pd.DataFrame(industry_records),
-                use_container_width=True,
-                hide_index=True
-            )
-
-    total_ms = sum(_timing_log.values())
-    st.caption(f"Total measured wall-clock time: **{total_ms/1000:.2f}s** across {len(_timing_log)} tracked calls")
 
 #st.markdown(html_e2, unsafe_allow_html=True)
 
@@ -3514,14 +3470,12 @@ st.subheader("🤖 RS Leader Industry Analysis")
 if not leader_list:
     st.info("No RS leaders found — run the screener first.")
 else:
-    # Build the industry map immediately (no button needed for display)
     industry_counts, ticker_industry = build_leader_industry_map(leader_list, INDUSTRIES)
     
-    # Show quick summary table
     sorted_inds = sorted(industry_counts.items(), key=lambda x: -x[1])
     summary_rows = [{"Industry": ind, "Leaders": cnt} for ind, cnt in sorted_inds]
     
-    col_tbl, col_btn = st.columns([3, 1])
+    col_tbl, col_metrics = st.columns([3, 1])
     with col_tbl:
         st.dataframe(
             pd.DataFrame(summary_rows),
@@ -3529,22 +3483,74 @@ else:
             hide_index=True,
             height=min(300, 36 * len(summary_rows) + 38)
         )
-    with col_btn:
+    with col_metrics:
         st.metric("Total Leaders", len(leader_list))
         st.metric("Blue Dots", len([s for s in leader_rs_nh_matches if s != 'SPY']))
         st.metric("Industries", len(industry_counts))
-        
-        if st.button("⚡ Run AI Analysis"):
-            with st.spinner("Analyzing RS leader concentration via Gemini..."):
-                analysis_result = generate_leader_ai_analysis(
-                    leader_list,
-                    industry_counts,
-                    ticker_industry,
-                    leader_rs_nh_matches
-                )
-            if analysis_result:
-                st.session_state["leader_ai_result"] = analysis_result
 
-    # Render cached result if available
+    # Auto-run Gemini only when leader list changes
+    leader_list_key = str(sorted(leader_list))
+
+    if st.session_state.get("leader_ai_key") != leader_list_key:
+        with st.spinner("Analyzing RS leader concentration via Gemini..."):
+            analysis_result = timed(
+                "generate_leader_ai_analysis",
+                generate_leader_ai_analysis,
+                leader_list,
+                industry_counts,
+                ticker_industry,
+                leader_rs_nh_matches
+            )
+        if analysis_result:
+            st.session_state["leader_ai_result"] = analysis_result
+            st.session_state["leader_ai_key"] = leader_list_key
+
     if "leader_ai_result" in st.session_state:
         st.markdown(st.session_state["leader_ai_result"])
+
+
+# ── Timing Summary ───────────────────────────────────────────────────────────
+st.markdown("---")
+st.markdown("#### ⏱ Test Time")
+
+if _timing_log:
+    # Separate industry-level rows from top-level function rows
+    industry_rows = {k: v for k, v in _timing_log.items() if k.startswith("RS+Cloud")}
+    main_rows     = {k: v for k, v in _timing_log.items() if not k.startswith("RS+Cloud")}
+
+    # Top-level functions table
+    # timing_records = [{"Function": k, "Time (ms)": f"{v:,.0f}", "Time (s)": f"{v/1000:.2f}"}
+    #                   for k, v in sorted(main_rows.items(), key=lambda x: -x[1])]
+    timing_records = [{"Function": k, "Time (s)": f"{v/1000:.2f}"}
+                      for k, v in main_rows.items()]
+
+    if timing_records:
+        st.dataframe(
+            pd.DataFrame(timing_records),
+            use_container_width=True,
+            hide_index=True
+        )
+
+    # Industry RS breakdown — collapsed by default
+    if industry_rows:
+        total_rs_ms = sum(industry_rows.values())
+        with st.expander(f"RS+Cloud per industry — {len(industry_rows)} groups, total {total_rs_ms/1000:.2f}s"):
+            # industry_records = [
+            #     {"Industry": k.replace("RS+Cloud [", "").replace("]", ""),
+            #      "Time (ms)": f"{v:,.0f}",
+            #      "Time (s)": f"{v/1000:.2f}"}
+            #     for k, v in sorted(industry_rows.items(), key=lambda x: -x[1])
+            # ]
+            industry_records = [
+                {"Industry": k.replace("RS+Cloud [", "").replace("]", ""),
+                 "Time (s)": f"{v/1000:.2f}"}
+                for k, v in industry_rows.items()
+            ]
+            st.dataframe(
+                pd.DataFrame(industry_records),
+                use_container_width=True,
+                hide_index=True
+            )
+
+    total_ms = sum(_timing_log.values())
+    st.caption(f"Total measured wall-clock time: **{total_ms/1000:.2f}s** across {len(_timing_log)} tracked calls")
