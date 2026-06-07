@@ -2486,13 +2486,12 @@ if not historical_df.empty and len(historical_df) >= 10:
                 <span style="color: {status_color}; font-weight: bold;">{ma_short:.1f}</span> 
                 vs 20-Day Trend Avg: 
                 <span style="color: {status_color}; font-weight: bold;">{ma_long:.1f}</span>). <br>
-                <b>Tactical Playbook:</b> {action_note}
             </p>
         </div>
         """,
         unsafe_allow_html=True
     )
-
+#                <b>Tactical Playbook:</b> {action_note}
 #st.markdown("---")
 st.write("")
 
