@@ -429,7 +429,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
                 is_pine_7_valid
             )
 
-            if ticker == "AAPL":
+            if ticker == "CRWD":
                 st.sidebar.warning("⚠️ DEBUGGING FOR CRWD ACTIVATED")
                 
                 # # Check metrics availability
