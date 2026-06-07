@@ -257,7 +257,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
     try:
         all_tickers = tickers + [benchmark_ticker]
         # Download data (ensuring enough historical data to compute the rolling min/max lookback window)
-        data = yf.download(all_tickers, period="2y", interval="1d", progress=False)
+        data = yf.download(all_tickers, period="2y", interval="1d", progress=False, auto_adjust=False)
         
         close_data = data['Close']
         high_data = data['High']
@@ -859,7 +859,7 @@ def scan_leader(df, benchmark_df, lookback=0):
 def download_known_stocks_data(stocks_tuple):
     benchmark_symbol = "^GSPC"
     all_symbols = list(stocks_tuple) + [benchmark_symbol]
-    raw_data = yf.download(all_symbols, period="2y", interval="1d", progress=False)
+    raw_data = yf.download(all_symbols, period="2y", interval="1d", progress=False, auto_adjust=False)
 
     ticker_dfs = {}
     for ticker in stocks_tuple:
