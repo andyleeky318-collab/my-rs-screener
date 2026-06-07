@@ -2673,7 +2673,7 @@ with st.spinner("Scanning for Leader History..."):
 
 # --- LEADERS SECTION ---
 st.markdown(f"#### 🏆 RS Leader = Long term ({len(leader_list)}) ")
-st.markdown(f"#### 🤖 Blue Dot = Short term ({len([s for s in leader_rs_nh_matches if s != 'SPY'])})")
+st.markdown(f"#### 🤖   Blue Dot = Short term ({len([s for s in leader_rs_nh_matches if s != 'SPY'])})")
 
 if leader_list or leader_yest:
 
