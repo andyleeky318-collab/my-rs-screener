@@ -2838,7 +2838,7 @@ else:
     sorted_inds = sorted(industry_counts.items(), key=lambda x: -x[1])
     summary_rows = [{"Industry": ind, "Leaders": cnt} for ind, cnt in sorted_inds]
     
-    col_tbl, col_metrics, col_spacer = st.columns([2, 1, 3])
+    col_tbl, col_metrics, col_spacer = st.columns([2, 1, 6])
     with col_tbl:
         st.dataframe(
             pd.DataFrame(summary_rows),
