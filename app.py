@@ -1580,7 +1580,7 @@ if all_data:
                 if ticker_sym in LIME_STOCKS:
                     ticker_html += (
                         f'<div class="ticker-badge lime-badge">'
-                        f'{trophy_html(ticker_sym, leader_list)}'
+                        f'{trophy_html(ticker_sym, leader_list_for_table)}'
                         f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{ticker_sym}</span>' 
                         f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{rs_score:.0f}</span>' 
                         f'</div>'
@@ -1588,7 +1588,7 @@ if all_data:
                 elif ticker_sym in KNOWN_STOCKS:
                     ticker_html += (
                         f'<div class="ticker-badge new-pattern-badge">'
-                        f'{trophy_html(ticker_sym, leader_list)}'
+                        f'{trophy_html(ticker_sym, leader_list_for_table)}'
                         f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{ticker_sym}</span>'
                         f'<span class="ticker-rs" style="color: #004d26; font-weight: bold;">{r["RS Score"]:.0f}</span>'
                         f'</div>'
@@ -1597,7 +1597,7 @@ if all_data:
                     # Standard matching dark badge layout for everything else
                     ticker_html += (
                         f'<div class="ticker-badge">'
-                        f'{trophy_html(ticker_sym, leader_list)}'
+                        f'{trophy_html(ticker_sym, leader_list_for_table)}'
                         f'<span class="ticker-name">{ticker_sym}</span>'
                         f'<span class="ticker-rs">{r["RS Score"]:.0f}</span>'
                         f'</div>'
