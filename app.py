@@ -2745,8 +2745,130 @@ if not leader_hist.empty:
         use_container_width=True
     )
 
+# ==========================================
+# THEMATIC AI ANALYSIS - RS LEADERS
+# ==========================================
+def build_leader_industry_map(leader_list, industries_dict):
+    """Map each RS leader ticker to its industry group(s)."""
+    industry_counts = {}
+    ticker_industry = {}
+    
+    for ticker in leader_list:
+        found = []
+        for industry, tickers in industries_dict.items():
+            if ticker in tickers:
+                found.append(industry)
+                industry_counts[industry] = industry_counts.get(industry, 0) + 1
+        ticker_industry[ticker] = found if found else ["Uncategorized"]
+    
+    return industry_counts, ticker_industry
+
+def generate_leader_ai_analysis(leader_list, industry_counts, ticker_industry, rs_nh_list):
+    """Call Gemini to summarize RS leader industry concentration."""
+    api_key = st.secrets.get("GEMINI_API_KEY")
+    if not api_key:
+        st.error("🔑 Missing `GEMINI_API_KEY` in Streamlit secrets.")
+        return None
+
+    try:
+        client = genai.Client(api_key=api_key)
+
+        # Sort industries by leader count descending
+        sorted_industries = sorted(industry_counts.items(), key=lambda x: -x[1])
+        top_industries_str = "\n".join(
+            f"  - {ind}: {cnt} leader(s)" for ind, cnt in sorted_industries[:10]
+        )
+
+        # Tag blue dot (RS new high) tickers
+        tagged_leaders = []
+        for t in leader_list:
+            tag = " [BLUE DOT]" if t in rs_nh_list else ""
+            inds = ", ".join(ticker_industry.get(t, ["?"]))
+            tagged_leaders.append(f"{t}{tag} ({inds})")
+
+        leaders_str = "\n".join(tagged_leaders[:40])
+
+        prompt = f"""
+You are a concise IBD-style market analyst. I will give you a list of RS Leader stocks and their industry groups.
+
+RS Leaders ({len(leader_list)} total):
+{leaders_str}
+
+Industry concentration (by leader count):
+{top_industries_str}
+
+Note: [BLUE DOT] = stock hitting a 250-day RS high right now (strongest near-term momentum).
+
+In 4-5 SHORT bullet points:
+1. Which 2-3 industries dominate the RS leader list and what does that signal?
+2. Are the BLUE DOT stocks concentrated in any particular theme?
+3. Any notable divergence or rotation worth flagging?
+4. One-line tactical takeaway for a swing trader.
+
+Be direct, use industry names, no fluff.
+"""
+
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
+        return response.text
+
+    except Exception as e:
+        return f"AI analysis error: {str(e)}"
+
+
+# ==========================================
+# UI - RS LEADER AI ANALYSIS
+# ==========================================
+st.write("---")
+st.subheader("🤖 RS Leader Industry Analysis")
+
+if not leader_list:
+    st.info("No RS leaders found — run the screener first.")
+else:
+    industry_counts, ticker_industry = build_leader_industry_map(leader_list, INDUSTRIES)
+    
+    sorted_inds = sorted(industry_counts.items(), key=lambda x: -x[1])
+    summary_rows = [{"Industry": ind, "Leaders": cnt} for ind, cnt in sorted_inds]
+    
+    col_tbl, col_metrics = st.columns([3, 1])
+    with col_tbl:
+        st.dataframe(
+            pd.DataFrame(summary_rows),
+            use_container_width=True,
+            hide_index=True,
+            height=min(300, 36 * len(summary_rows) + 38)
+        )
+    with col_metrics:
+        st.metric("Total Leaders", len(leader_list))
+        st.metric("Blue Dots", len([s for s in leader_rs_nh_matches if s != 'SPY']))
+        st.metric("Industries", len(industry_counts))
+
+    # Auto-run Gemini only when leader list changes
+    leader_list_key = str(sorted(leader_list))
+
+    if st.session_state.get("leader_ai_key") != leader_list_key:
+        with st.spinner("Analyzing RS leader concentration via Gemini..."):
+            analysis_result = timed(
+                "generate_leader_ai_analysis",
+                generate_leader_ai_analysis,
+                leader_list,
+                industry_counts,
+                ticker_industry,
+                leader_rs_nh_matches
+            )
+        if analysis_result:
+            st.session_state["leader_ai_result"] = analysis_result
+            st.session_state["leader_ai_key"] = leader_list_key
+
+    if "leader_ai_result" in st.session_state:
+        st.markdown(st.session_state["leader_ai_result"])
+
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
+
+
 
 with st.spinner("Scanning for Two Botak History..."):
     two_botak_hist= timed("compute_two_botak_history",     compute_two_botak_history,     stocks_tuple, ticker_dfs_shared)
@@ -3388,125 +3510,6 @@ else:
 #         st.dataframe(debug_df, use_container_width=True)
 # # END DEBUG ENGULFING
 
-# ==========================================
-# THEMATIC AI ANALYSIS - RS LEADERS
-# ==========================================
-def build_leader_industry_map(leader_list, industries_dict):
-    """Map each RS leader ticker to its industry group(s)."""
-    industry_counts = {}
-    ticker_industry = {}
-    
-    for ticker in leader_list:
-        found = []
-        for industry, tickers in industries_dict.items():
-            if ticker in tickers:
-                found.append(industry)
-                industry_counts[industry] = industry_counts.get(industry, 0) + 1
-        ticker_industry[ticker] = found if found else ["Uncategorized"]
-    
-    return industry_counts, ticker_industry
-
-def generate_leader_ai_analysis(leader_list, industry_counts, ticker_industry, rs_nh_list):
-    """Call Gemini to summarize RS leader industry concentration."""
-    api_key = st.secrets.get("GEMINI_API_KEY")
-    if not api_key:
-        st.error("🔑 Missing `GEMINI_API_KEY` in Streamlit secrets.")
-        return None
-
-    try:
-        client = genai.Client(api_key=api_key)
-
-        # Sort industries by leader count descending
-        sorted_industries = sorted(industry_counts.items(), key=lambda x: -x[1])
-        top_industries_str = "\n".join(
-            f"  - {ind}: {cnt} leader(s)" for ind, cnt in sorted_industries[:10]
-        )
-
-        # Tag blue dot (RS new high) tickers
-        tagged_leaders = []
-        for t in leader_list:
-            tag = " [BLUE DOT]" if t in rs_nh_list else ""
-            inds = ", ".join(ticker_industry.get(t, ["?"]))
-            tagged_leaders.append(f"{t}{tag} ({inds})")
-
-        leaders_str = "\n".join(tagged_leaders[:40])
-
-        prompt = f"""
-You are a concise IBD-style market analyst. I will give you a list of RS Leader stocks and their industry groups.
-
-RS Leaders ({len(leader_list)} total):
-{leaders_str}
-
-Industry concentration (by leader count):
-{top_industries_str}
-
-Note: [BLUE DOT] = stock hitting a 250-day RS high right now (strongest near-term momentum).
-
-In 4-5 SHORT bullet points:
-1. Which 2-3 industries dominate the RS leader list and what does that signal?
-2. Are the BLUE DOT stocks concentrated in any particular theme?
-3. Any notable divergence or rotation worth flagging?
-4. One-line tactical takeaway for a swing trader.
-
-Be direct, use industry names, no fluff.
-"""
-
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt
-        )
-        return response.text
-
-    except Exception as e:
-        return f"AI analysis error: {str(e)}"
-
-
-# ==========================================
-# UI - RS LEADER AI ANALYSIS
-# ==========================================
-st.write("---")
-st.subheader("🤖 RS Leader Industry Analysis")
-
-if not leader_list:
-    st.info("No RS leaders found — run the screener first.")
-else:
-    industry_counts, ticker_industry = build_leader_industry_map(leader_list, INDUSTRIES)
-    
-    sorted_inds = sorted(industry_counts.items(), key=lambda x: -x[1])
-    summary_rows = [{"Industry": ind, "Leaders": cnt} for ind, cnt in sorted_inds]
-    
-    col_tbl, col_metrics = st.columns([3, 1])
-    with col_tbl:
-        st.dataframe(
-            pd.DataFrame(summary_rows),
-            use_container_width=True,
-            hide_index=True,
-            height=min(300, 36 * len(summary_rows) + 38)
-        )
-    with col_metrics:
-        st.metric("Total Leaders", len(leader_list))
-        st.metric("Blue Dots", len([s for s in leader_rs_nh_matches if s != 'SPY']))
-        st.metric("Industries", len(industry_counts))
-
-    # Auto-run Gemini only when leader list changes
-    leader_list_key = str(sorted(leader_list))
-
-    if st.session_state.get("leader_ai_key") != leader_list_key:
-        with st.spinner("Analyzing RS leader concentration via Gemini..."):
-            analysis_result = timed(
-                "generate_leader_ai_analysis",
-                generate_leader_ai_analysis,
-                leader_list,
-                industry_counts,
-                ticker_industry,
-                leader_rs_nh_matches
-            )
-        if analysis_result:
-            st.session_state["leader_ai_result"] = analysis_result
-            st.session_state["leader_ai_key"] = leader_list_key
-
-    if "leader_ai_result" in st.session_state:
-        st.markdown(st.session_state["leader_ai_result"])
 
 
 # ── Timing Summary ───────────────────────────────────────────────────────────
