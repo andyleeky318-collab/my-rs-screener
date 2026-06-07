@@ -1411,6 +1411,14 @@ for idx, (industry_name, tickers) in enumerate(industry_items):
 status_text.empty()
 progress_bar.empty()
 
+global_setup_count = sum(
+    len(
+        (set(item["Cloud21EMA"]) | set(item["CloudWick"]) | set(item["MA50Bounce"]))
+        & set(KNOWN_STOCKS)
+    )
+    for item in all_data
+)
+
 # 6. Compact Display Logic
 if all_data:
     df_main = pd.DataFrame([{"Industry": item["Industry"], "Group RS": item["Group RS"], "Group RS Prev": item["Group RS Prev"], "Group RS 1M": item["Group RS 1M"]} for item in all_data])
@@ -1510,6 +1518,12 @@ if all_data:
     td { padding: 2px 8px !important; border-bottom: 1px solid #333; font-size: 12px; }
     </style>
     """, unsafe_allow_html=True)
+
+    st.markdown(
+        f'<div style="text-align: right; font-size: 11px; color: #888888; margin-bottom: 4px; font-family: monospace;">'
+        f'Setup = <span style="color: #4ecdc4; font-weight: bold;">{global_setup_count}</span></div>',
+        unsafe_allow_html=True
+    )
 
     table_html = """<table>
     <thead><tr>
@@ -2492,11 +2506,11 @@ styled_df = df_regime.style.apply(highlight_current_regime, axis=1)
 st.dataframe(
     styled_df,
     use_container_width=False,
-    width=620,
+    width=520,
     hide_index=True,
     column_config={
-        "Market Condition": st.column_config.Column(width=250),
-        "What to do": st.column_config.Column(width=350),
+        "Market Condition": st.column_config.Column(width=200),
+        "What to do": st.column_config.Column(width=300),
     }
 )
 
