@@ -2598,8 +2598,8 @@ st.markdown("---")
 
 st.markdown(
     f"#### ⭐ Minervini ("
-    f"+ve Pct: {know_pos_pct:.1f}% / "
-    f"+ve Count: {know_positive_count} / "
+    f"+ve Pct: {know_pos_pct:.1f}% .. "
+    f"+ve Count: {know_positive_count} .. "
     f"Total: {know_total_count})"
 )
 
