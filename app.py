@@ -177,7 +177,7 @@ INDUSTRIES = {
     'RETAIL-RESTAURANTS': ['MCD', 'SBUX', 'CMG', 'YUM', 'QSR', 'DRI', 'YUMC', 'CAVA', 'DPZ', 'WING', 'TXRH', 'ARMK', 'SHAK', 'SG', 'EAT', 'WEN', 'CAKE'],
     'TELECOM SVCS-FOREIGN': ['CCOI', 'LBTYA'],
     'TELCOM-INFRASTR': ['SATS', 'ASTS', 'IRDM'],
-    'STEEL-PRODUCERS': ['NWPX', 'PKX', 'NUE', 'STLD', 'WS', 'WS', 'RS', 'ASTL', 'CLF', 'GGB', 'CMC', 'RIO', 'TX', 'MTUS', 'MT', 'HCC', 'MSB', 'VALE', 'SID'],
+    'STEEL-PRODUCERS': ['SLX', 'NWPX', 'PKX', 'NUE', 'STLD', 'WS', 'WS', 'RS', 'ASTL', 'CLF', 'GGB', 'CMC', 'RIO', 'TX', 'MTUS', 'MT', 'HCC', 'MSB', 'VALE', 'SID'],
     'TELCOM-CONS PROD': ['MSI', 'GRMN', 'UI'],
     #'TEXTILES': ['AIN', 'CULP', 'UFI'],
     'TOBACCO': ['PM', 'MO'],
