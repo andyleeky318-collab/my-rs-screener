@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import time
+from google import genai
 
 _timing_log = {}  # module-level dict, accumulates across all call sites
 
@@ -3430,3 +3431,70 @@ if _timing_log:
 #         }).tail(5)
 #         st.dataframe(debug_df, use_container_width=True)
 # # END DEBUG ENGULFING
+
+def generate_ai_analysis(theme_name, stock_list, rs_data_summary):
+    """
+    Connects to the Gemini API using the secure st.secrets token
+    and returns a technical market perspective.
+    """
+    # 1. Retrieve the secure key from the environment frame
+    api_key = st.secrets.get("GEMINI_API_KEY")
+    
+    if not api_key:
+        st.error("🔑 Missing API Key! Please configure `GEMINI_API_KEY` in your Streamlit secrets layout.")
+        return None
+
+    try:
+        # 2. Initialize the official Google GenAI Client
+        client = genai.Client(api_key=api_key)
+        
+        # 3. Create a tailored structural context prompt
+        prompt = f"""
+        You are an expert technical swing trader utilizing CAN SLIM and Mark Minervini principles.
+        Analyze this data chunk from my Streamlit dashboard setup.
+        
+        Theme Cluster: {theme_name}
+        Tracked Equities: {', '.join(stock_list)}
+        
+        Current Computed Metric Insights:
+        {rs_data_summary}
+        
+        Provide a sharp, 3-sentence bulleted summary describing the cluster's current institutional momentum profile and structural trend stability.
+        """
+        
+        # 4. Request generation using the standard cost-efficient gemini-2.5-flash model
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
+        return response.text
+        
+    except Exception as e:
+        return f"An processing error occurred inside the AI Engine execution loop: {str(e)}"
+
+
+# ==========================================
+# UI INTERACTION SURFACE
+# ==========================================
+st.write("---")
+st.subheader("🤖 Thematic AI Quick-Analysis")
+
+# Dropdown to let user choose which theme cluster to analyze
+selected_theme = st.selectbox("Select a Theme to Analyze", list(INDUSTRIES.keys()))
+
+if st.button("⚡ Run Theme Diagnostic"):
+    theme_stocks = INDUSTRIES[selected_theme]
+    
+    # Pack up some dummy state metadata (Map this to your actual rolling loop output values)
+    mock_metric_payload = f"Average Cluster RS Score: 87. Peak Assets within the 21 EMA Cloud buy zone."
+    
+    with st.spinner(f"Evaluating {selected_theme} via Gemini..."):
+        analysis_result = generate_ai_analysis(
+            theme_name=selected_theme,
+            stock_list=theme_stocks,
+            rs_data_summary=mock_metric_payload
+        )
+        
+        if analysis_result:
+            st.success("Analysis Complete!")
+            st.markdown(analysis_result)
