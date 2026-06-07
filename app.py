@@ -280,7 +280,9 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
 
         for ticker in valid_tickers:
             # 1. rsClose = close / indexClose
-            rs_ratio_series = close_data[ticker] / bench_close
+            # With this:
+            common_idx = close_data[ticker].dropna().index.intersection(bench_close.dropna().index)
+            rs_ratio_series = (close_data[ticker].loc[common_idx] / bench_close.loc[common_idx])
             
             # 2. hh = ta.highest(rsClose, length) | ll = ta.lowest(rsClose, length)
             # Use rolling window to get historical highs and lows of the ratio
