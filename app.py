@@ -3432,69 +3432,119 @@ if _timing_log:
 #         st.dataframe(debug_df, use_container_width=True)
 # # END DEBUG ENGULFING
 
-def generate_ai_analysis(theme_name, stock_list, rs_data_summary):
-    """
-    Connects to the Gemini API using the secure st.secrets token
-    and returns a technical market perspective.
-    """
-    # 1. Retrieve the secure key from the environment frame
-    api_key = st.secrets.get("GEMINI_API_KEY")
+# ==========================================
+# THEMATIC AI ANALYSIS - RS LEADERS
+# ==========================================
+def build_leader_industry_map(leader_list, industries_dict):
+    """Map each RS leader ticker to its industry group(s)."""
+    industry_counts = {}
+    ticker_industry = {}
     
+    for ticker in leader_list:
+        found = []
+        for industry, tickers in industries_dict.items():
+            if ticker in tickers:
+                found.append(industry)
+                industry_counts[industry] = industry_counts.get(industry, 0) + 1
+        ticker_industry[ticker] = found if found else ["Uncategorized"]
+    
+    return industry_counts, ticker_industry
+
+def generate_leader_ai_analysis(leader_list, industry_counts, ticker_industry, rs_nh_list):
+    """Call Gemini to summarize RS leader industry concentration."""
+    api_key = st.secrets.get("GEMINI_API_KEY")
     if not api_key:
-        st.error("🔑 Missing API Key! Please configure `GEMINI_API_KEY` in your Streamlit secrets layout.")
+        st.error("🔑 Missing `GEMINI_API_KEY` in Streamlit secrets.")
         return None
 
     try:
-        # 2. Initialize the official Google GenAI Client
         client = genai.Client(api_key=api_key)
-        
-        # 3. Create a tailored structural context prompt
+
+        # Sort industries by leader count descending
+        sorted_industries = sorted(industry_counts.items(), key=lambda x: -x[1])
+        top_industries_str = "\n".join(
+            f"  - {ind}: {cnt} leader(s)" for ind, cnt in sorted_industries[:10]
+        )
+
+        # Tag blue dot (RS new high) tickers
+        tagged_leaders = []
+        for t in leader_list:
+            tag = " [BLUE DOT]" if t in rs_nh_list else ""
+            inds = ", ".join(ticker_industry.get(t, ["?"]))
+            tagged_leaders.append(f"{t}{tag} ({inds})")
+
+        leaders_str = "\n".join(tagged_leaders[:40])
+
         prompt = f"""
-        You are an expert technical swing trader utilizing CAN SLIM and Mark Minervini principles.
-        Analyze this data chunk from my Streamlit dashboard setup.
-        
-        Theme Cluster: {theme_name}
-        Tracked Equities: {', '.join(stock_list)}
-        
-        Current Computed Metric Insights:
-        {rs_data_summary}
-        
-        Provide a sharp, 3-sentence bulleted summary describing the cluster's current institutional momentum profile and structural trend stability.
-        """
-        
-        # 4. Request generation using the standard cost-efficient gemini-2.5-flash model
+You are a concise IBD-style market analyst. I will give you a list of RS Leader stocks and their industry groups.
+
+RS Leaders ({len(leader_list)} total):
+{leaders_str}
+
+Industry concentration (by leader count):
+{top_industries_str}
+
+Note: [BLUE DOT] = stock hitting a 250-day RS high right now (strongest near-term momentum).
+
+In 4-5 SHORT bullet points:
+1. Which 2-3 industries dominate the RS leader list and what does that signal?
+2. Are the BLUE DOT stocks concentrated in any particular theme?
+3. Any notable divergence or rotation worth flagging?
+4. One-line tactical takeaway for a swing trader.
+
+Be direct, use industry names, no fluff.
+"""
+
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt
         )
         return response.text
-        
+
     except Exception as e:
-        return f"An processing error occurred inside the AI Engine execution loop: {str(e)}"
+        return f"AI analysis error: {str(e)}"
 
 
 # ==========================================
-# UI INTERACTION SURFACE
+# UI - RS LEADER AI ANALYSIS
 # ==========================================
 st.write("---")
-st.subheader("🤖 Thematic AI Quick-Analysis")
+st.subheader("🤖 RS Leader Industry Analysis")
 
-# Dropdown to let user choose which theme cluster to analyze
-selected_theme = st.selectbox("Select a Theme to Analyze", list(INDUSTRIES.keys()))
-
-if st.button("⚡ Run Theme Diagnostic"):
-    theme_stocks = INDUSTRIES[selected_theme]
+if not leader_list:
+    st.info("No RS leaders found — run the screener first.")
+else:
+    # Build the industry map immediately (no button needed for display)
+    industry_counts, ticker_industry = build_leader_industry_map(leader_list, INDUSTRIES)
     
-    # Pack up some dummy state metadata (Map this to your actual rolling loop output values)
-    mock_metric_payload = f"Average Cluster RS Score: 87. Peak Assets within the 21 EMA Cloud buy zone."
+    # Show quick summary table
+    sorted_inds = sorted(industry_counts.items(), key=lambda x: -x[1])
+    summary_rows = [{"Industry": ind, "Leaders": cnt} for ind, cnt in sorted_inds]
     
-    with st.spinner(f"Evaluating {selected_theme} via Gemini..."):
-        analysis_result = generate_ai_analysis(
-            theme_name=selected_theme,
-            stock_list=theme_stocks,
-            rs_data_summary=mock_metric_payload
+    col_tbl, col_btn = st.columns([3, 1])
+    with col_tbl:
+        st.dataframe(
+            pd.DataFrame(summary_rows),
+            use_container_width=True,
+            hide_index=True,
+            height=min(300, 36 * len(summary_rows) + 38)
         )
+    with col_btn:
+        st.metric("Total Leaders", len(leader_list))
+        st.metric("Blue Dots", len([s for s in leader_rs_nh_matches if s != 'SPY']))
+        st.metric("Industries", len(industry_counts))
         
-        if analysis_result:
-            st.success("Analysis Complete!")
-            st.markdown(analysis_result)
+        if st.button("⚡ Run AI Analysis"):
+            with st.spinner("Analyzing RS leader concentration via Gemini..."):
+                analysis_result = generate_leader_ai_analysis(
+                    leader_list,
+                    industry_counts,
+                    ticker_industry,
+                    leader_rs_nh_matches
+                )
+            if analysis_result:
+                st.session_state["leader_ai_result"] = analysis_result
+
+    # Render cached result if available
+    if "leader_ai_result" in st.session_state:
+        st.markdown(st.session_state["leader_ai_result"])
