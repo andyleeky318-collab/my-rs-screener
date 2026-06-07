@@ -2044,7 +2044,7 @@ def compute_historical_know_counts(stocks_list, ticker_dfs):
             
             historical_records.append({
                 "Date": current_date.strftime("%Y-%m-%d"), 
-                "Total Count": day_total_count,
+                "Minervini Count": day_total_count,
                 "Positive Pct": round(day_pos_pct, 1)
             })
 
@@ -2428,7 +2428,7 @@ if not historical_df.empty and len(historical_df) >= 10:
     
     # Isolate trailing 30 days data (or max available) for trend analysis
     sample_df = historical_df.tail(30).copy()
-    counts = sample_df["Total Count"].tolist()
+    counts = sample_df["Minervini Count"].tolist()
     dates = sample_df["Date"].tolist()
     
     current_count = counts[-1]
@@ -2496,10 +2496,10 @@ if not historical_df.empty and len(historical_df) >= 10:
 #st.markdown("---")
 st.write("")
 
-#st.markdown(f"### Total Count ({know_total_count})")
+#st.markdown(f"### Minervini Count ({know_total_count})")
 if not historical_df.empty:
     # 1. THE ORIGINAL CHART: Updated to pass the full dataframe to show 90 days instead of 30
-    st.line_chart(data=historical_df, x="Date", y="Total Count", use_container_width=True)
+    st.line_chart(data=historical_df, x="Date", y="Minervini Count", use_container_width=True)
     
     #st.markdown("---")
     
@@ -2598,7 +2598,7 @@ st.markdown("---")
 #     f"<span style='font-weight:normal; color:#888;'> "
 #     f"(<b style='color:#eee;'>Positive Pct:</b> {know_pos_pct:.1f}% |"
 #     f" <b style='color:#eee;'>Positive Count:</b> {know_positive_count} |"
-#     f" <b style='color:#eee;'>Total Count:</b> {know_total_count})"
+#     f" <b style='color:#eee;'>Minervini Count:</b> {know_total_count})"
 #     f"</div>"
 # )
 # st.markdown(header_html, unsafe_allow_html=True)
