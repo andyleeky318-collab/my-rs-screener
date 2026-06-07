@@ -2,22 +2,10 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import time
-from google import genai
-
-_timing_log = {}  # module-level dict, accumulates across all call sites
-
-def timed(label, fn, *args, **kwargs):
-    """Call fn(*args, **kwargs), record elapsed ms in _timing_log, return result."""
-    t0 = time.perf_counter()
-    result = fn(*args, **kwargs)
-    elapsed = (time.perf_counter() - t0) * 1000
-    _timing_log[label] = elapsed
-    return result
 
 # 1. Setup Streamlit Page
 st.set_page_config(page_title="Chrome Sector RS", layout="wide")
-st.title("🐱 Theme Tracker")
+st.title("🚀 Theme Tracker")
 
 st.markdown(
     """
@@ -34,16 +22,16 @@ st.markdown(
 
 # 2. Cleaned Industry Database (Preserved as requested)
 INDUSTRIES = {
-    '3D Printing': ['XMTR', 'VELO', 'DDD', 'PRLB', 'MTLS', 'SSYS', 'NNDM'],
+    '3D printing': ['XMTR', 'VELO', 'DDD', 'PRLB', 'MTLS', 'SSYS', 'NNDM'],
     'Crypto': ['MSTR', 'CRCL', 'COIN', 'IBIT'],
     'Nuclear': ['URA', 'NLR', 'CEG', 'CCJ', 'OKLO', 'UUUU', 'SMR', 'LEU'],
-    'MAG7': ['MAGS', 'AAPL', 'GOOGL', 'NVDA', 'META', 'MSFT', 'AMZN', 'TSLA'],
+    'MAG7': ['AAPL', 'GOOGL', 'NVDA', 'META', 'MSFT', 'AMZN', 'TSLA'],
     'ETF': ['XLK', 'XLF', 'XLE', 'XLP', 'XLU', 'XLI', 'XLY', 'XLV', 'XLC', 'XLB'],
-    'SPACE': ['UFO', 'VSAT', 'RKLB', 'SATL', 'RDW', 'LUNR', 'BKSY', 'PL', 'IRDM', 'SATS', 'GSAT', 'ASTS', 'ARKX', 'FLY', 'SPCE', 'AVAV', 'KRMN', 'SIDU'],
+    'SPACE': ['UFO', 'VSAT', 'RKLB', 'SATL', 'RDW', 'LUNR', 'BKSY', 'PL', 'IRDM', 'SATS', 'GSAT', 'ASTS', 'ARKX', 'FLY', 'HON', 'SPCE', 'AVAV', 'KRMN', 'SIDU'],
     'CATHIE WOOD': ['ARKG', 'ARKK', 'ARKQ', 'ARKW', 'ARKF', 'ARKX'],
     'CHINA': ['FUTU', 'LI', 'KWEB', 'XPEV', 'NIO', 'PDD', 'BIDU', 'JD', 'BABA'],
-    'DATA CENTER / AI HOST': ['WGMI', 'CRWV', 'NBIS', 'IREN', 'WULF', 'CORZ', 'CIFR', 'HUT', 'BTDR'],
-    'ENERGY SOLAR': ['TAN', 'SEDG', 'ENPH', 'FSLR', 'ARRY', 'SHLS', 'CSIQ', 'RUN', 'NOVA', 'DQ'],
+    'DATA CENTER / AI HOSTING': ['WGMI', 'CRWV', 'NBIS', 'IREN', 'WULF', 'CORZ', 'CIFR', 'HUT', 'BTDR'],
+    'ENERGY SOLAR': ['TAN', 'SEDG', 'ENPH', 'FSLR', 'ARRY', 'SHLS', 'CSIQ', 'RUN', 'DQ'],
     'COML SVCS-ADVRTSNG': ['OMC', 'DJT'],
     'AEROSPACE/DEFENSE': ['ITA', 'RTX', 'LMT', 'HON', 'BA', 'GD', 'NOC', 'TDG', 'LHX', 'HWM', 'AXON', 'HEI', 'LDOS', 'TDY', 'TXT', 'FTAI', 'CW', 'BWXT', 'HII', 'CR', 'DRS', 'LOAR', 'AVAV', 'HXL', 'KTOS', 'MIR', 'OSIS', 'AIR', 'MRCY'],
     'AGRICULTURAL OPRTIONS': ['ADM', 'BG', 'PPC', 'CALM', 'SEB'],
@@ -53,22 +41,22 @@ INDUSTRIES = {
     'ENERGY-ALT/OTHER': ['BIP', 'TLN', 'CWEN', 'BEPC'],
     'MINING-METAL ORES': ['AA', 'SCCO', 'FCX', 'CCJ', 'CRS', 'ATI', 'MP', 'TECK'],
     'APPAREL-SHOES & REL': ['NKE', 'DECK', 'ONON', 'RL', 'BIRK', 'CROX', 'LEVI', 'VFC', 'GIL', 'PVH', 'COLM', 'KTB', 'SHOO'],
-    'RETAIL-APPRL/SHOES/ACC': ['TJX', 'ROST', 'BURL', 'TPR', 'GAP', 'ANF', 'BBWI', 'CPRI', 'BOOT', 'AEO', 'URBN', 'CRI', 'BKE', 'VSXY'],
+    'RETAIL-APPRL/SHOES/ACC': ['TJX', 'ROST', 'BURL', 'TPR', 'GAP', 'ANF', 'BBWI', 'CPRI', 'BOOT', 'AEO', 'URBN', 'CRI', 'BKE', 'VSCO'],
     'AUTO/TRCK-ORGNL EQP': ['ITW', 'CMI', 'APTV', 'ITT', 'DCI', 'ALSN', 'ALV', 'GNTX', 'LEA', 'BC', 'ATMU', 'VC', 'BWA'],
     'AUTO/TRCK-RPLC PRTS': ['LKQ', 'DORM', 'AAP'],
     'BEVERAGES-ALCOHOLIC': ['STZ', 'TAP', 'SAM'],
     'BEV-NON-ALCOHOLIC': ['KO', 'MNST', 'CCEP', 'COKE', 'BRBR', 'CELH', 'FIZZ'],
     'MEDICAL-BIOMED/BTH': ['BNTX', 'AMGN', 'GILD', 'MRNA', 'ILMN', 'SMMT', 'PCVX', 'BMRN', 'TECH', 'NUVL', 'ELAN', 'HALO', 'RNA', 'KRYS', 'ADMA', 'BBIO', 'IMVT', 'ACLX', 'AXSM', 'CRSP', 'DNLI', 'ALVO', 'APGE', 'DYN', 'RYTM', 'KYMR', 'EWTX', 'PTGX', 'TWST', 'TXG', 'CGON', 'JANX', 'ARWR', 'VERA', 'NVAX', 'CLDX'],
-    'MEDIA-RADIO/TV': ['FOX', 'SIRI', 'NXST'],
+    'MEDIA-RADIO/TV': ['FOX', 'SIRI', 'NXST', 'TGNA'],
     'TELCOM-SVC-CBL/SAT': ['CMCSA', 'CHTR'],
     'LEISRE-GAMNG/EQUIP': ['FLUT', 'LVS', 'MGM', 'WYNN', 'CZR', 'LNW', 'BYD', 'RSI', 'DKNG', 'CHDN', 'PENN'],
     'CHEMICALS-AG': ['NTR', 'CTVA', 'CF', 'MOS', 'FMC', 'SMG'],
     'CHEMICALS-BASIC': ['DD', 'ESI', 'AVNT', 'HUN', 'IOSP', 'DOW', 'LYB', 'WLK', 'AVTR', 'CE', 'EMN', 'CC'],
-    'CHEMICALS-SPECIALTY': ['LIN', 'ECL', 'APD', 'ALB', 'CBT', 'NEU', 'KWR', 'HWKN', 'MTX', 'TROX', 'OLN', 'FUL', 'WDFC', 'AZZ', 'UFPT'],
+    'CHEMICALS-SPECIALTY': ['LIN', 'ECL', 'APD', 'ALB', 'CHX', 'CBT', 'NEU', 'KWR', 'HWKN', 'MTX', 'TROX', 'OLN', 'FUL', 'WDFC', 'AZZ', 'UFPT'],
     'ENERGY COAL': ['HCC', 'BTU', 'ARLP', 'AMR'],
     'MEDIA-DIVERSIFIED': ['WMG', 'SPOT', 'LYV', 'DIS', 'WBD'],
     'COMPTER-NETWRKING': ['ANET', 'CSCO', 'CALX'],
-    'COMPTR-DATA STRGE': ['DRAM', 'WDC', 'STX', 'MU', 'SNDK'],
+    'COMPTR-DATA STRGE': ['DRAM', 'WDC', 'STX', 'MU', 'SNDK', 'SIMO'],
     'CMP-HRDWRE/PERIP': ['DELL', 'HPQ', 'SMCI', 'HPE', 'ZBRA', 'NATL'],
     'CONTAINERS/PACKAGING': ['SW', 'BALL', 'PKG', 'AVY', 'AMCR', 'OC', 'CCK', 'ATR', 'GPK', 'SLGN', 'SON', 'SEE', 'GEF', 'OI'],
     'OIL&GAS-DRILLING': ['SLB', 'BKR', 'NE', 'VAL', 'HP', 'SDRL'],
@@ -78,18 +66,18 @@ INDUSTRIES = {
     'RETAIL-DISCNT&VARI': ['DG', 'DLTR', 'FIVE', 'OLLI'],
     'RETAIL-DRUG STORES': ['CVS', 'UNH', 'ELV', 'HUM'],
     'UTILITY-ELCTRIC PWR': ['NEE', 'SO', 'CEG', 'DUK', 'AEP', 'SRE', 'D', 'VST', 'PEG', 'PCG', 'EXC', 'XEL', 'ED', 'EIX', 'WEC', 'ETR', 'DTE', 'FE', 'PPL', 'AEE', 'ES', 'CMS', 'NRG', 'CNP', 'LNT', 'EVRG', 'AES', 'PNW', 'OGE', 'IDA', 'POR', 'ORA', 'BKH', 'TXNM', 'NWE', 'MGEE'],
-    'ELEC-POWER/EQPMT': ['ETN', 'GEV', 'AME', 'ROK', 'HUBB', 'RRX', 'GNRC', 'AYI', 'BDC', 'ENS', 'FLNC', 'SMR', 'ATKR', 'PBW', 'POWL', 'VICR', 'BE', 'ENVX'],
+    'ELECTRICAL POWER/EQPMT': ['ETN', 'GEV', 'AME', 'ROK', 'HUBB', 'RRX', 'GNRC', 'AYI', 'BDC', 'ENS', 'FLNC', 'SMR', 'ATKR', 'PBW', 'POWL', 'VICR', 'BE', 'ENVX'],
     'TELCOM-FIBR OPTCS': ['XTL', 'AAOI', 'COHR', 'CIEN', 'FN', 'LITE', 'AXTI'],
     'ELEC-PARTS': ['APH', 'GLW', 'NVT', 'CAMT', 'TEL'],
     'ELEC-SCNTIFIC/MSRNG': ['PH', 'EMR', 'KEYS', 'FTV', 'CGNX', 'NOVT', 'ST', 'NXT', 'ITRI', 'ESE', 'SXI', 'MTRN'],
     'ELEC-SEMICNDCTR EQP': ['ASML', 'KLAC', 'AMAT', 'LRCX', 'ONTO', 'NVMI', 'TER', 'AEIS', 'MKSI', 'ENTG', 'ACLS', 'AEHR'],
-    'ELEC-CONTRACT MFG': ['CLS', 'SOLS', 'VRT', 'FLEX', 'PLXS', 'JBL', 'SANM', 'TTMI'],
+    'ELEC-CONTRACT MFG': ['SOLS', 'VRT', 'FLEX', 'PLXS', 'JBL', 'SANM', 'TTMI'],
     'ELEC-MISC PRODUCTS': ['OLED', 'LFUS', 'VSH'],
     'WHOLESALE-ELECT': ['SNX', 'ARW', 'AVT', 'REZI', 'GWW', 'FAST', 'FERG', 'GPC', 'POOL', 'AIT', 'WCC', 'MSM', 'UGI'],
     'RETAIL-CNSMR ELEC': ['BBY', 'GME'],
     'CONSUMER PROD-ELEC': ['SN', 'ROKU', 'WHR', 'SPB', 'AAPL'],
-    'BLDG-HEAVY CONSTR': ['PWR', 'IESC', 'EME', 'FIX', 'ACM', 'TTEK', 'MTZ', 'APG', 'FLR', 'DY', 'STRL', 'ROAD', 'GVA', 'PRIM'],
-    'BLDG-RSIDNT/COMML': ['ITB', 'BLD', 'IBP', 'EXPO', 'DHI', 'LEN', 'NVR', 'PHM', 'TOL', 'MTH', 'TMHC', 'KBH', 'SKY', 'MHO', 'TPH', 'FTDR', 'GRBK', 'DFH', 'CCS', 'LGIH'],
+    'BLDG-HEAVY CONSTR': ['PWR', 'EME', 'FIX', 'ACM', 'TTEK', 'MTZ', 'APG', 'FLR', 'DY', 'STRL', 'ROAD', 'GVA', 'PRIM'],
+    'BLDG-RSIDNT/COMML': ['ITB', 'BLD', 'IBP', 'EXPO', 'IESC', 'DHI', 'LEN', 'NVR', 'PHM', 'TOL', 'MTH', 'TMHC', 'KBH', 'SKY', 'MHO', 'TPH', 'FTDR', 'GRBK', 'DFH', 'CCS', 'LGIH'],
     'BLDG-MBILE/MFG & RV': ['CVCO', 'PATK'],
     'POLLUTION CONTROL': ['WM', 'RSG', 'CLH', 'CWST'],
     'COMML SVCS-LEASING': ['URI', 'AER', 'UHAL', 'WSC', 'R', 'AL', 'HRI', 'WD', 'CAR', 'MGRC', 'PRG'],
@@ -128,7 +116,7 @@ INDUSTRIES = {
     'INTERNET-CONTENT': ['GOOGL', 'META', 'NFLX', 'SPOT', 'PINS', 'RDDT', 'MMYT', 'MTCH', 'IAC', 'YELP', 'GRND'],
     'INTRNT-NETWK SLTNS': ['IT', 'MSTR', 'CSGP', 'VRSN', 'UPST', 'BRZE', 'CARG', 'NET', 'VLTO'],
     'INSURANCE-BROKERS': ['AON', 'AJG', 'WTW', 'BRO', 'RYAN', 'CRVL', 'GSHD'],
-    'OIL&GAS INTEGRATED': ['USO', 'XOM', 'CVX', 'OXY'],
+    'OIL&GAS INTEGRATED': ['XOM', 'CVX', 'OXY'],
     'OIL&GAS-U S EXPL PRO': ['XOP', 'COP', 'EOG', 'FANG', 'DVN', 'EQT', 'EXE', 'CTRA', 'PR', 'OVV', 'APA', 'CHRD', 'MTDR', 'NFG', 'CNX', 'CRC', 'CRGY', 'AR', 'RRC', 'MUR', 'MGY', 'SM', 'NOG', 'CRK', 'GPOR', 'XPRO'],
     'OIL&GAS-ROYALTY TRUST': ['VNOM', 'HESM', 'BSM'],
     'RETAIL-INTERNET': ['AMZN', 'MELI', 'CPNG', 'LULU', 'EBAY', 'CHWY', 'GLBE', 'ETSY', 'ACVA'],
@@ -140,31 +128,31 @@ INDUSTRIES = {
     'BANKS-FOREIGN': ['UBS', 'BAP'],
     'BANKS-SUPR RGIONAL': ['PNC', 'HBAN', 'RF', 'CFG', 'KEY', 'ZION', 'FITB', 'TFC', 'MTB', 'ALLY', 'WAL'],
     'BANKS-WST/STHWST': ['BOKF', 'ONB', 'TCBI', 'WAFD', 'PRK', 'BKU', 'IBOC', 'BANF', 'UCB', 'AUB', 'FIBK', 'CATY', 'FHB', 'BOH', 'CVBF'],
-    'BANKS-SOUTHEAST': ['KBE', 'FNB', 'FBK', 'HOMB', 'OZK', 'ABCB'],
+    'BANKS-SOUTHEAST': ['KBE', 'CADE', 'FNB', 'FBK', 'SNV', 'HOMB', 'OZK', 'ABCB'],
     'BANKS-MIDWEST': ['KRE', 'FFIN', 'UMBF', 'ASB', 'FULT', 'CBU', 'SFNC', 'FRME', 'NBTB', 'CBSH', 'COLB', 'GBCI', 'UBSI', 'HWC', 'TOWN'],
     'BANKS-NORTHEAST': ['IAT', 'FCNCA', 'EWBC', 'FHN', 'CFR', 'PNFP', 'SSB', 'WTFC', 'BPOP', 'PB', 'WU', 'EBC', 'FBP', 'TBBK'],
-    'FINANC-SVINGS & LO': ['WBS', 'TFSL', 'WSFS', 'PFS'],
+    'FINANC-SVINGS & LO': ['WBS', 'NYCB', 'TFSL', 'WSFS', 'PFS'],
     'MED-MANAGED CARE': ['UNH', 'ELV', 'CI', 'CNC', 'HUM', 'MOH', 'OSCR', 'ALHC'],
-    'TRANSPORTATION-SHIP': ['KEX', 'FRO', 'MATX', 'GLNG', 'STNG', 'TDW', 'INSW', 'SBLK', 'ZIM', 'TNK'],
+    'TRANSPORTATION-SHIP': ['KEX', 'FRO', 'MATX', 'GLNG', 'STNG', 'TDW', 'INSW', 'SBLK', 'GOGL', 'ZIM', 'TNK'],
     'MDCAL-WHLSLE DRG': ['MCK', 'COR', 'CAH', 'HSIC'],
-    'MEDICAL-PRODUCTS': ['TMO', 'ABT', 'DHR', 'A', 'IDXX', 'RMD', 'MTD', 'RVTY', 'BRKR', 'QGEN', 'BIO', 'LNTH', 'MASI', 'GKOS', 'BLCO', 'MMSI'],
+    'MEDICAL-PRODUCTS': ['TMO', 'ABT', 'DHR', 'A', 'IDXX', 'RMD', 'MTD', 'RVTY', 'EXAS', 'BRKR', 'QGEN', 'BIO', 'GMEN', 'LNTH', 'MASI', 'GKOS', 'BLCO', 'MMSI'],
     'MEDICAL-SYSTEMS/EQP': ['IHI', 'ISRG', 'SYK', 'BSX', 'MDT', 'BDX', 'GEHC', 'EW', 'DXCM', 'STE', 'WST', 'COO', 'ZBH', 'WAT', 'HOLX', 'BAX', 'ALGN', 'PODD', 'NTRA', 'TFX', 'PEN', 'INSP'],
     'METAL PROC & FABRICA': ['RBC', 'MLI', 'VMI', 'ROCK'],
-    'CMML SVCS-CNSLTNG': ['TNET', 'LOPE', 'CNXC', 'ABM', 'LAUR', 'QXO', 'G'],
+    'CMML SVCS-CNSLTNG': ['TNET', 'LOPE', 'CNXC', 'ABM', 'RCM', 'LAUR', 'QXO', 'G'],
     'AUTO MANUFACTURERS': ['TSLA', 'GM', 'F', 'RIVN'],
     'TRNSPRT-EQP MFG': ['OSK', 'HOG', 'WAB', 'TEX', 'TRN', 'ALG'],
     'LEISRE-MVIES & REL': ['DIS', 'LYV', 'FWONA', 'TKO', 'MSGS', 'FUN', 'CNK', 'PRKS', 'MANU', 'BATRA'],
-    'INSRNCE-DIVRSIFIED': ['PGR', 'AFL', 'MET', 'ACGL', 'HIG', 'CINF', 'RGA', 'CNA', 'UNM', 'KNSL', 'GL', 'RLI', 'AXS', 'BWIN', 'ACT', 'FG', 'WTM', 'CNO'],
+    'INSRNCE-DIVRSIFIED': ['PGR', 'AFL', 'MET', 'ACGL', 'HIG', 'CINF', 'RGA', 'CNA', 'UNM', 'KNSL', 'GL', 'RLI', 'AXS', 'BWIN', 'ACT', 'FG', 'ESGR', 'WTM', 'CNO'],
     'OFFICE SUPPLIES MFG': ['HNI', 'MLKN', 'ACCO'],
-    'OIL&GAS-TRNSPRT/PIP': ['EPD', 'WMB', 'ET', 'OKE', 'KMI', 'MPLX', 'LNG', 'WES', 'PAA', 'DTM', 'KNTK', 'AM', 'SOBO', 'PAGP', 'DKL'],
+    'OIL&GAS-TRNSPRT/PIP': ['EPD', 'WMB', 'ET', 'OKE', 'KMI', 'MPLX', 'LNG', 'WES', 'PAA', 'DTM', 'KNTK', 'AM', 'ENLC', 'SOBO', 'PAGP', 'DKL'],
     'OIL&GAS-RFING/MKT': ['PSX', 'MPC', 'VLO', 'DINO', 'IEP', 'PBF', 'CVI', 'SUN'],
-    'OIL&GAS-FIELD SERVIC': ['HAL', 'WFRD', 'NOV', 'WHD', 'AROC', 'LBRT', 'USAC', 'KGS', 'AESI'],
-    'LEISURE-SERVICES': ['CTAS', 'ROL', 'SCI', 'HRB', 'PLNT', 'LTH', 'VVV', 'GHC', 'UNF', 'LRN', 'DRVN', 'STRA'],
-    'CONSUMR PROD-SPECI': ['MSA', 'HAS', 'AS', 'MAT', 'THO', 'PII', 'GOLF', 'HAYW', 'SIG'],
+    'OIL&GAS-FIELD SERVIC': ['HAL', 'FIT', 'WFRD', 'NOV', 'WHD', 'AROC', 'LBRT', 'USAC', 'KGS', 'AESI'],
+    'LEISURE-SERVICES': ['CTAS', 'ROL', 'SCI', 'HRB', 'PLNT', 'LTH', 'VVV', 'GHC', 'UNF', 'LRN', 'ATGE', 'DRVN', 'STRA'],
+    'CONSUMR PROD-SPECI': ['MSA', 'HAS', 'AS', 'MAT', 'THO', 'PII', 'GOLF', 'HAYW', 'VSTO', 'SIG'],
     'CMP SFTWR-SPC-ENTR': ['TTD', 'MGNI', 'PUBM'],
-    'MEDICAL-ETHICAL DRGS': ['NVO', 'LLY', 'JNJ', 'ABBV', 'MRK', 'PFE', 'VRTX', 'REGN', 'BMY', 'ZTS', 'ALNY', 'BIIB', 'RPRX', 'UTHR', 'VTRS', 'INCY', 'INSM', 'SRPT', 'NBIX', 'ROIV', 'RGEN', 'VKTX', 'EXEL', 'JAZZ', 'CYTK', 'IONS', 'BHVN', 'RARE', 'CORT', 'MDGL', 'OGN', 'ALKS', 'CRNX', 'TGTX', 'PHB', 'PRGO', 'APLS', 'RVMD'],
+    'MEDICAL-ETHICAL DRGS': ['NVO', 'LLY', 'JNJ', 'ABBV', 'MRK', 'PFE', 'VRTX', 'REGN', 'BMY', 'ZTS', 'ALNY', 'BIIB', 'RPRX', 'UTHR', 'VTRS', 'INCY', 'INSM', 'SRPT', 'NBIX', 'CTLT', 'ROIV', 'ITCI', 'RGEN', 'VKTX', 'EXEL', 'JAZZ', 'CYTK', 'IONS', 'BHVN', 'RARE', 'CORT', 'MDGL', 'OGN', 'ALKS', 'CRNX', 'TGTX', 'PHB', 'PRGO', 'APLS', 'RVMD'],
     'MINING-GLD/SILVR/GMS': ['NEM', 'RGLD'],
-    'INSRNCE-PRP/CAS/TITL': ['BRK-B','CB', 'TRV', 'ALL', 'AIG', 'ERIE', 'WRB', 'MKL', 'L', 'EG', 'RNR', 'AFG', 'AIZ', 'MTG', 'SIGI', 'THG', 'KMPR', 'HGTY', 'MCY', 'NMIH', 'PLMR', 'SPNT', 'FNF', 'ORI', 'ESNT', 'FAF', 'RDN', 'AGO'],
+    'INSRNCE-PRP/CAS/TITL': ['BRK.B', 'CB', 'TRV', 'ALL', 'AIG', 'ERIE', 'WRB', 'MKL', 'L', 'EG', 'RNR', 'AFG', 'AIZ', 'MTG', 'SIGI', 'THG', 'KMPR', 'HGTY', 'MCY', 'NMIH', 'PLMR', 'SPNT', 'FNF', 'ORI', 'ESNT', 'FAF', 'RDN', 'AGO'],
     'MEDIA-BOOKS': ['WLY', 'SCHL', 'NYT'],
     'MEDIA-NEWSPAPERS': ['NWS', 'NYT'],
     'PAPER & PAPER PRODUC': ['IP', 'SLVM'],
@@ -176,32 +164,32 @@ INDUSTRIES = {
     'RETAIL/WSL-AUTO PRT': ['ORLY', 'AZO'],
     'RETAIL-SPECIALTY': ['MUSA', 'CASY', 'HZO', 'COST', 'BJ', 'ARKO', 'WMT', 'PSMT', 'TBBB', 'TGT', 'DKS', 'FIVE', 'BOBS', 'BBW', 'WINA', 'GME', 'MNSO', 'BBY', 'ULTA', 'EVGO', 'BWMX', 'OLLI', 'DLTR', 'RH', 'ASO', 'WSM', 'WOOF', 'DG', 'BBWI', 'SVV', 'SBH', 'BNED', 'ARHS', 'TSCO', 'EYE'],
     'RETAIL-RESTAURANTS': ['MCD', 'SBUX', 'CMG', 'YUM', 'QSR', 'DRI', 'YUMC', 'CAVA', 'DPZ', 'WING', 'TXRH', 'ARMK', 'SHAK', 'SG', 'EAT', 'WEN', 'CAKE'],
-    'TELECOM SVCS-FOREIGN': ['CCOI', 'LBTYA'],
+    'TELECOM SVCS-FOREIGN': ['FYBR', 'CCOI', 'LBTYA'],
     'TELCOM-INFRASTR': ['SATS', 'ASTS', 'IRDM'],
-    'STEEL-PRODUCERS': ['SLX', 'NWPX', 'PKX', 'NUE', 'STLD', 'WS', 'WS', 'RS', 'ASTL', 'CLF', 'GGB', 'CMC', 'RIO', 'TX', 'MTUS', 'MT', 'HCC', 'MSB', 'VALE', 'SID'],
+    'STEEL-PRODUCERS': ['NWPX', 'PKX', 'NUE', 'STLD', 'WS', 'WS', 'RS', 'ASTL', 'CLF', 'GGB', 'CMC', 'RIO', 'TX', 'MTUS', 'MT', 'HCC', 'MSB', 'VALE', 'SID'],
     'TELCOM-CONS PROD': ['MSI', 'GRMN', 'UI'],
-    #'TEXTILES': ['AIN', 'CULP', 'UFI'],
+    'TEXTILES': ['AIN', 'CULP', 'UFI'],
     'TOBACCO': ['PM', 'MO'],
     'BLDG-HAND TOOLS': ['SWK', 'SNA'],
     'TRNSPORTATION-TRCK': ['ODFL', 'JBHT', 'XPO', 'SAIA', 'KNX', 'LSTR', 'SNDR', 'ARCB', 'WERN'],
     'MACHINERY-FARM': ['DE', 'CNH', 'TTC', 'AGCO', 'SITE', 'FSS', 'ACA'],
     'MCHNRY-CNSTR/MNG': ['CAT', 'PCAR', 'LGN'],
     'UTILITY-WATER SUPPLY': ['AWK', 'WTRG', 'AWR', 'CWT'],
-    'TELCOM SVC-WIRLES': ['TMUS', 'VZ', 'T', 'LBRDA', 'TIGO', 'TDS'],
-    'ELEC-SEMICON FBLSS': ['SMH', 'SIMO', 'ARM', 'NVDA', 'AVGO', 'AMD', 'QCOM', 'ADI', 'MRVL', 'NXPI', 'MPWR', 'MCHP', 'ON', 'SWKS', 'QRVO', 'ALAB', 'CRDO', 'MTSI', 'LSCC', 'CRUS', 'PI', 'RMBS', 'SITM', 'ALGM', 'SLAB', 'POWI', 'IPGP', 'SMTC', 'DIOD', 'SYNA', 'AMBA'],
-    'ELEC-SEMICON FNDRY': ['TSM', 'TXN', 'INTC', 'GFS', 'AMKR', 'TSEM', 'FORM', 'STM'],
+    'TELCOM SVC-WIRLES': ['TMUS', 'VZ', 'T', 'LBRDA', 'USM', 'TIGO', 'TDS'],
+    'ELEC-SEMICON FBLSS': ['ARM', 'NVDA', 'AVGO', 'AMD', 'QCOM', 'ADI', 'MRVL', 'NXPI', 'MPWR', 'MCHP', 'ON', 'SWKS', 'QRVO', 'ALAB', 'CRDO', 'MTSI', 'LSCC', 'CRUS', 'PI', 'RMBS', 'SITM', 'ALGM', 'SLAB', 'POWI', 'IPGP', 'SMTC', 'DIOD', 'SYNA', 'AMBA'],
+    'ELEC-SEMICON MFG': ['TSM', 'TXN', 'INTC', 'GFS', 'AMKR', 'TSEM', 'FORM', 'STM']
 }
 
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
-    'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EXC', 'FIGR', 
-    'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'NTAP', 'OR', 
+    'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EXC', 'FIGR', 
+    'GEV', 'GILD', 'GXC', 'HON', 'JEF', 'JKS', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'NTAP', 'OR', 
     'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
     'VUG', 'WGMI', 'WMB', 'XEL', 'XMAG', 'XYZ', 'ZIM','VICR', 'SLX', 'CBOE', 'SIMO', 'FLEX', 'POWL', 'VLO', 'DOCN', 
     'IYZ', 'LNG', 'AAOI', 'AXTI', 'TSEM', 'USO', 'JNJ', 
     'HP', 'GLD', 'ALB', 'BUG', 'BX', 'DOW', 'VZ', 'REMX', 'GDX', 'SIL', 'VEEV', 'SNDK', 'TLT', 'APH', 'ARM', 'FANG', 
     'NBIS', 'NVT', 'OXY', 'FORM', 'IBIT', 'QTUM', 'IAI', 'KWEB', 'IHI', 'UFO', 'ITA', 'IYT', 'CVS', 'HUM', 'NEE', 
-    'HPE', 'PLAB', 'INOD', 'TTMI', 'CCJ', 'BE', 'SLV', 'PICK', 'COPX', 'MAR', 'XAR', 'VSXY', 'GLW', 'ANF', 'AEO', 
+    'HPE', 'PLAB', 'INOD', 'TTMI', 'CCJ', 'BE', 'SLV', 'PICK', 'COPX', 'MAR', 'XAR', 'VSCO', 'GLW', 'ANF', 'AEO', 
     'AEP', 'GH', 'SANM', 'ROK', 'PSN', 'IAT', 'HROW', 'PL', 'AVAV', 'CIEN', 'COHR', 'NU', 'WULF', 'IREN', 'CIFR', 
     'RDW', 'PH', 'LITE', 'ACHR', 'CACI', 'CRS', 'URA', 'NVO', 'NLR', 'ITB', 'MVST', 'EOSE', 'APP', 'RKLB', 'ASTS', 
     'IONQ', 'RMBS', 'RTX', 'NOC', 'LMT', 'HON', 'ONDS', 'CLS', 'LEU', 'VRT', 'VST', 'NRG', 'CEG', 'SMCI', 'CRDO', 
@@ -215,7 +203,7 @@ KNOWN_STOCKS = [
     'Z', 'OPEN', 'CHWY', 'CVNA', 'BARK', 'GM', 'BLNK', 'QS', 'F', 'RIVN', 'FCEL', 'CHPT', 'LCID', 
     'UPST', 'PYPL', 'AFRM', 'V', 'MA', 'AXP', 'BITO', 'COIN', 'RIOT', 'MARA', 'MSTR', 'SI', 
     'DKNG', 'PENN', 'BETZ', 'REGN', 'VRTX', 'MRK', 'UNH', 'TMO', 'ISRG', 'ABT', 'IDXX', 'TDOC', 'CRSP', 
-    'BRK-B', 'ETN', 'CAT', 'BLD', 'U', 'RBLX', 'SKLZ', 'FSLY', 'TRIP', 'EXPE', 'BKNG', 'ABNB', 'DIS', 'WMT', 
+    'BRK.B', 'ETN', 'CAT', 'BLD', 'U', 'RBLX', 'SKLZ', 'FSLY', 'TRIP', 'EXPE', 'BKNG', 'ABNB', 'DIS', 'WMT', 
     'COST', 'TGT', 'LOW', 'HD', 'DT', 'SNPS', 'CDNS', 'MDB', 'ORCL', 'NOW', 'ADP', 'SNOW', 'ANSS', 'DDOG', 
     'FROG', 'ADSK', 'INTU', 'TEAM', 'WDAY', 'CRM', 'PAYC', 'ANET', 'ADBE', 'ACN', 'EPAM', 'ZM', 'TTD', 'TWLO', 
     'DASH', 'APPS', 'DOCU', 'AI', 'AKAM', 'QLYS', 'PANW', 'FTNT', 'CRWD', 'TENB', 'OKTA', 'ZS', 
@@ -225,7 +213,7 @@ KNOWN_STOCKS = [
     'PEP', 'XOM', 'LLY', 'CL', 'MCD', 'KO', 'GE', 'CVX', 'FISV', 'DE', 'WM', 'HLT', 'FUTU', 'UBER', 
     'TIGR', 'EQIX', 'DPZ', 'CSCO', 'COKE', 'SONY', 'FDS', 'MCO', 'GRAB', 'PTON', 'AMT', 'LIT', 'CMG', 'IPO', 
     'PSTG', 'INMD', 'NNDM', 'MP', 'FUBO', 'SPOT', 'ALGN', 'PZZA', 'LOVE', 'LMND', 'POOL', 'PLTR', 'ROKU', 
-    'CELH', 'NFLX', 'DHI', 'DELL'
+    'CELH', 'NFLX', 'DHI', 'DELL', 'GOOG'
 ]
 # Ensure uniqueness
 KNOWN_STOCKS = list(set(KNOWN_STOCKS))
@@ -234,7 +222,7 @@ LIME_STOCKS = [
     'USO', 'XOP', 'BUG', 'CLOU', 'IGV', 'HACK', 'CIBR', 'TAN', 'IHI', 'IPAY', 
     'VTV', 'KBE', 'KRE', 'VUG', 'PBW', 'MAGS', 'XRT', 'JETS', 'XTL', 'SHLD', 
     'IBIT', 'UFO', 'XBI', 'SLX', 'ITA', 'REMX', 'LIT', 'KWEB', 'XHB', 'SMH', 
-    'BLOK', 'XME', 'URA', 'NLR', 'DRAM', 'GDX', 'WGMI', 'COPX', 'SIL', 'IAT', 'ITB'
+    'BLOK', 'XME', 'URA', 'DRAM', 'GDX', 'WGMI', 'COPX', 'SIL', 'IAT', 'ITB'
 ]
 
 # 3. Sidebar Inputs
@@ -244,8 +232,6 @@ with st.sidebar:
     rs_length = st.number_input("RS Lookback Length", value=90, min_value=10)
     top_n = st.number_input("Top N for Group Avg", value=5, min_value=1)
     show_all_rs = st.toggle("Show RS < 80 Tickers", value=False)
-    show_ppp_charts = st.toggle("Show PPP Charts", value=False)
-    show_gap_charts = st.toggle("Show Gap Charts", value=False)
     
     if st.button("Clear Cache & Refresh"):
         st.cache_data.clear()
@@ -257,25 +243,20 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
     try:
         all_tickers = tickers + [benchmark_ticker]
         # Download data (ensuring enough historical data to compute the rolling min/max lookback window)
-        data = yf.download(all_tickers, period="2y", interval="1d", progress=False, auto_adjust=False)
+        data = yf.download(all_tickers, period="2y", interval="1d", progress=False)
         
         close_data = data['Close']
         high_data = data['High']
         low_data = data['Low']
-        open_data = data['Open']
         
         valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= length]
-        if not valid_tickers: return None, None, None, {}, None, None, None, None, None
+        if not valid_tickers: return None, None, None, {}, None
 
         # --- New RS Logic ---
         bench_close = close_data[benchmark_ticker]
         stock_scores = {}
         stock_scores_prev = {}
-        stock_scores_1m = {}
         cloud_tickers = []
-        cloud_21ema_tickers = []
-        cloud_wick_tickers = []
-        ma50_bounce_tickers = []
         price_lookup = {}  # Added to track individual stock prices out of cache cleanly
 
         for ticker in valid_tickers:
@@ -296,11 +277,6 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             prev_rs = rs_ratio_series.iloc[-6]
             prev_hh = hh.iloc[-6]
             prev_ll = ll.iloc[-6]
-
-            # Get values from 1 month ago (21 trading days ago)
-            m1_rs = rs_ratio_series.iloc[-22]
-            m1_hh = hh.iloc[-22]
-            m1_ll = ll.iloc[-22]
             
             # 3. Normalized logic: ((99 - 1) * (rsClose - ll) / (hh - ll)) + 1
             if pd.isna(current_hh) or pd.isna(current_ll) or current_hh == current_ll:
@@ -314,15 +290,9 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             else:
                 total_score_prev = int(((99 - 1) * (prev_rs - prev_ll) / (prev_hh - prev_ll)) + 1)
 
-            if pd.isna(m1_hh) or pd.isna(m1_ll) or m1_hh == m1_ll:
-                total_score_1m = 0
-            else:
-                total_score_1m = int(((99 - 1) * (m1_rs - m1_ll) / (m1_hh - m1_ll)) + 1)
-
             # This will now store a clean whole number (e.g., 85 instead of 85.34)
             stock_scores[ticker] = total_score
             stock_scores_prev[ticker] = total_score_prev
-            stock_scores_1m[ticker] = total_score_1m
 
             # EMA Cloud Calculation (21 EMA of High/Low) - Kept Unchanged
             ema_low = low_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
@@ -330,248 +300,17 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             current_price = close_data[ticker].iloc[-1]
             price_lookup[ticker] = current_price  # Cache current price reference maps
             
-            #if ema_low <= current_price <= ema_high:
-            #    cloud_tickers.append(ticker)
-
-            # ================================
-            # BUYABLE-STYLE 21 EMA CLOUD LOGIC
-            # ================================
-
-            ema21_close = close_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
-            ema21_low   = low_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
-
-            sma50_series = close_data[ticker].rolling(50).mean()
-            sma50 = sma50_series.iloc[-1]
-            sma50_prev1 = sma50_series.iloc[-2] if len(sma50_series) > 2 else sma50
-            sma50_prev2 = sma50_series.iloc[-3] if len(sma50_series) > 3 else sma50
-
-            # --- MA50 Rising ---
-            ma50Rising = (sma50 > sma50_prev1) and (sma50_prev1 > sma50_prev2)
-
-            # --- EMA50 gradient ---
-            powerma = close_data[ticker].ewm(span=50, adjust=False).mean()
-            gradient = (powerma.iloc[-1] - powerma.iloc[-2]) if len(powerma) > 1 else 0
-
-            # --- ATR% ---
-            high = high_data[ticker]
-            low = low_data[ticker]
-            close = close_data[ticker]
-
-            tr = pd.concat([
-                high - low,
-                abs(high - close.shift(1)),
-                abs(low - close.shift(1))
-            ], axis=1).max(axis=1)
-
-            atr = tr.rolling(14).mean()
-            atrPercent = (atr / close) * 100
-
-            atr21_R = (((close.iloc[-1] - ema21_close) / close.iloc[-1]) * 100) / (atrPercent.iloc[-1] + 1e-6)
-            atr50_R = (((close.iloc[-1] - sma50) / close.iloc[-1]) * 100) / (atrPercent.iloc[-1] + 1e-6)
-
-            # --- EMA distance filter ---
-            emaDistPercent = ((close.iloc[-1] - ema21_low) / close.iloc[-1]) * 100
-
-            # --- BUYABLE CONDITIONS ---
-            hl_ratio = high_data[ticker] / low_data[ticker]
-            adr_sma = hl_ratio.rolling(20).mean()
-
-            adrPercent = 100 * (adr_sma - 1)
-
-            cond1 = (adrPercent.iloc[-1] >= 2.45) and (adrPercent.iloc[-1] <= 8)
-
-            cond2 = -0.5 <= atr21_R <= 1
-            cond3 = 0 <= atr50_R <= 3
-            cond4 = 0 < emaDistPercent <= 8
-            cond5 = close.iloc[-1] > ema21_low
-
-            # --- smoothing logic placeholders (simplified version) ---
-            pbb_cond1 = True
-            pbb_cond2 = gradient >= 0
-            pbb_cond3 = True
-
-            is_pine_7_valid = False
-            if len(close_data) >= 260:
-                # 1. Moving Averages
-                sma150_series = close_data[ticker].rolling(window=150).mean()
-                sma200_series = close_data[ticker].rolling(window=200).mean()
-                
-                c_sma150 = sma150_series.iloc[-1]
-                c_sma200 = sma200_series.iloc[-1]
-                c_sma200_22 = sma200_series.iloc[-23] if len(sma200_series) >= 23 else c_sma200
-                
-                # 2. 52-Week (260 Days) Lookback Highs and Lows
-                c_highest = high_data[ticker].rolling(window=260).max().iloc[-1]
-                c_lowest = low_data[ticker].rolling(window=260).min().iloc[-1]
-                
-                # 3. Calculate 7 Flag Criteria
-                c1 = 1 if (close.iloc[-1] > c_sma150 and close.iloc[-1] > c_sma200) else 0
-                c2 = 1 if (c_sma150 > c_sma200) else 0
-                c3 = 1 if (c_sma200 > c_sma200_22) else 0
-                c4 = 1 if (sma50 > c_sma150 and sma50 > c_sma200) else 0
-                c5 = 1 if (close.iloc[-1] > sma50) else 0
-                c6 = 1 if (((close.iloc[-1] / c_lowest) - 1) * 100 >= 25) else 0
-                c7 = 1 if ((1 - (close.iloc[-1] / c_highest)) * 100 <= 25) else 0
-                
-                pine_count = c1 + c2 + c3 + c4 + c5 + c6 + c7
-                is_pine_7_valid = (pine_count == 7)
-
-            # --- FINAL BUYABLE FILTER ---
-            buyable = (
-                cond1 and
-                cond2 and
-                cond3 and
-                cond4 and
-                pbb_cond2 and
-                (pbb_cond1 or pbb_cond3) and
-                ma50Rising and
-                close.iloc[-1] >= 20 and 
-                is_pine_7_valid
-            )
-
-            if ticker == "AAPL":
-                st.sidebar.warning("⚠️ DEBUGGING FOR CRWD ACTIVATED")
-                
-                # Check metrics availability
-                debug_info = {
-                    "Ticker Symbol": ticker,
-                    "Current Cached Price": round(current_price, 2) if 'current_price' in locals() else "N/A",
-                    "Total Raw RS Score": total_score,
-                    "Has Data Available": ticker in close_data.columns,
-                    "Historical Bars Fetched": int(close_data[ticker].notna().sum()),
-                    "Requested Window Length": length,
-                    "Is Current High NaN": pd.isna(current_hh),
-                    "Is Current Low NaN": pd.isna(current_ll)
-                }
-                st.sidebar.json(debug_info)            
-
-            # ================================
-            # DEBUG AMAT
-            # ================================
-            # if ticker == "AMAT":
-            #     debug_data = {"ticker": ticker,"close": round(close.iloc[-1], 2),"adrPercent": round(float(adrPercent.iloc[-1]), 2),"cond1_adr_2.45_to_8": cond1,"atr21_R": round(float(atr21_R), 2),"cond2_atr21": cond2,"atr50_R": round(float(atr50_R), 2),"cond3_atr50": cond3,"emaDistPercent": round(float(emaDistPercent), 2),"cond4_emaDist": cond4,"gradient": round(float(gradient), 4),"pbb_cond2_gradient_positive": pbb_cond2,"sma50": round(float(sma50), 2),"sma50_prev1": round(float(sma50_prev1), 2),"sma50_prev2": round(float(sma50_prev2), 2),"ma50Rising": ma50Rising,"close_gt_20": close.iloc[-1] >= 20,"FINAL_BUYABLE": buyable}
-            #     st.write(debug_data)
-
-            # ================================
-            # CLOUD CONDITION (UPDATED)
-            # ================================
-            if buyable:
+            if ema_low <= current_price <= ema_high:
                 cloud_tickers.append(ticker)
 
-            # ================================
-            # 21 EMA CLOUD CONDITION (finalCondition)
-            # ================================
-            if len(close_data[ticker]) >= 3 and len(low_data[ticker]) >= 3 and len(high_data[ticker]) >= 3 and len(open_data[ticker]) >= 3:
-                ema21_low_series  = low_data[ticker].ewm(span=21, adjust=False).mean()
-                ema21_high_series = high_data[ticker].ewm(span=21, adjust=False).mean()
-
-                MALow0  = ema21_low_series.iloc[-1]
-                MALow1  = ema21_low_series.iloc[-2]
-                MALow2  = ema21_low_series.iloc[-3]
-                MAHigh0 = ema21_high_series.iloc[-1]
-                MAHigh1 = ema21_high_series.iloc[-2]
-                MAHigh2 = ema21_high_series.iloc[-3]
-
-                c0 = close_data[ticker].iloc[-1]
-                c1 = close_data[ticker].iloc[-2]
-                c2 = close_data[ticker].iloc[-3]
-                o0 = open_data[ticker].iloc[-1]
-                o1 = open_data[ticker].iloc[-2]
-                o2 = open_data[ticker].iloc[-3]
-                h0 = high_data[ticker].iloc[-1]
-                h1 = high_data[ticker].iloc[-2]
-                h2 = high_data[ticker].iloc[-3]
-                l0 = low_data[ticker].iloc[-1]
-                l1 = low_data[ticker].iloc[-2]
-                l2 = low_data[ticker].iloc[-3]
-
-                insideCloud0 = MALow0 <= c0 <= MAHigh0
-                insideCloud1 = MALow1 <= c1 <= MAHigh1
-                insideCloud2 = MALow2 <= c2 <= MAHigh2
-
-                insideCloud3Days         = insideCloud0 and insideCloud1 and insideCloud2
-                insideCloud2DaysPositive = insideCloud0 and insideCloud1 and (c0 > c1) and (c0 > o0)
-
-                bodyTop0    = max(o0, c0);  bodyBottom0 = min(o0, c0);  bodySize0 = bodyTop0 - bodyBottom0
-                bodyTop1    = max(o1, c1);  bodyBottom1 = min(o1, c1);  bodySize1 = bodyTop1 - bodyBottom1
-                bodyTop2    = max(o2, c2);  bodyBottom2 = min(o2, c2);  bodySize2 = bodyTop2 - bodyBottom2
-
-                insideBody0 = max(0.0, min(bodyTop0, MAHigh0) - max(bodyBottom0, MALow0))
-                insideBody1 = max(0.0, min(bodyTop1, MAHigh1) - max(bodyBottom1, MALow1))
-                insideBody2 = max(0.0, min(bodyTop2, MAHigh2) - max(bodyBottom2, MALow2))
-
-                insidePct0 = (insideBody0 / bodySize0) if bodySize0 > 0 else 0.0
-                insidePct1 = (insideBody1 / bodySize1) if bodySize1 > 0 else 0.0
-                insidePct2 = (insideBody2 / bodySize2) if bodySize2 > 0 else 0.0
-
-                bodyCloud3Days = insidePct0 >= 0.70 and insidePct1 >= 0.70 and insidePct2 >= 0.70
-                finalCondition = bodyCloud3Days or insideCloud3Days or insideCloud2DaysPositive
-
-                if buyable and finalCondition and close_data[ticker].iloc[-1] >= 20:
-                    cloud_21ema_tickers.append(ticker)
-
-            # ================================
-            # 21 EMA WICK CONDITION (longWickToday)
-            # ================================
-            h_today = high_data[ticker].iloc[-1]
-            l_today = low_data[ticker].iloc[-1]
-            o_today = open_data[ticker].iloc[-1]
-            c_today = close_data[ticker].iloc[-1]
-
-            rangeToday     = h_today - l_today
-            lowerWickToday = min(o_today, c_today) - l_today
-            longWickToday  = (lowerWickToday / rangeToday) > 0.5 if rangeToday > 0 else False
-
-            if buyable and longWickToday and c_today >= 20:
-                cloud_wick_tickers.append(ticker)
-
-            # ================================
-            # 50MA BOUNCE CONDITION (ma50_bounce_cond)
-            # ================================
-            sma50_series_full = close_data[ticker].rolling(50).mean()
-            if len(sma50_series_full) >= 2 and len(low_data[ticker]) >= 2:
-                sma50_today = sma50_series_full.iloc[-1]
-                sma50_yest  = sma50_series_full.iloc[-2]
- 
-                if pd.isna(sma50_today) or pd.isna(sma50_yest) or sma50_today == 0:
-                    pass
-                else:
-                    fiftyday_percent  = (close_data[ticker].iloc[-1] - sma50_today) / sma50_today * 100
-                    # truncate to 1 decimal place (mirrors Pine Script truncate())
-                    fiftyday_percent2 = int(fiftyday_percent * 10) / 10
- 
-                    touchMA50_yest = low_data[ticker].iloc[-2] <= sma50_yest
-                    recover1       = touchMA50_yest and (close_data[ticker].iloc[-1] > sma50_today)
- 
-                    ma50_bounce_cond = (
-                        recover1 and
-                        cond1 and
-                        fiftyday_percent2 <= 8 and
-                        ma50Rising and
-                        close_data[ticker].iloc[-1] >= 20 and 
-                        is_pine_7_valid
-                    )
- 
-                    if ma50_bounce_cond:
-                        ma50_bounce_tickers.append(ticker)
-
-        # Convert dictionary metrics to Pandas Series
-        rs_perf_raw = pd.Series(stock_scores).astype(int)
-        rs_perf_prev_raw = pd.Series(stock_scores_prev).astype(int)
-        rs_perf_1m_raw = pd.Series(stock_scores_1m).astype(int)
+        rs_perf = pd.Series(stock_scores).astype(int)
+        rs_perf_prev = pd.Series(stock_scores_prev).astype(int)
         
-        # Build a list of tickers that strictly have a price greater than 20
-        valid_price_tickers = [ticker for ticker, price in price_lookup.items() if price > 20]
-        
-        # Filter the series so only stocks with a price > 20 remain
-        rs_perf = rs_perf_raw[rs_perf_raw.index.isin(valid_price_tickers)]
-        rs_perf_prev = rs_perf_prev_raw[rs_perf_prev_raw.index.isin(valid_price_tickers)]
-        rs_perf_1m = rs_perf_1m_raw[rs_perf_1m_raw.index.isin(valid_price_tickers)]
-        
-        return rs_perf, rs_perf, cloud_tickers, price_lookup, rs_perf_prev, rs_perf_1m, cloud_21ema_tickers, cloud_wick_tickers, ma50_bounce_tickers
+        # We assign the raw score directly as your ranking metrics instead of the old percentile conversion
+        return rs_perf, rs_perf, cloud_tickers, price_lookup, rs_perf_prev
     except Exception as e:
         st.error(f"Error: {e}")
-        return None, None, None, {}, None, None, None, None, None
+        return None, None, None, {}, None
 
 # Reference Scanner Logic Functions
 def scan_two_botak(df, lookback=0):
@@ -593,65 +332,6 @@ def scan_two_botak(df, lookback=0):
         (df['Close'] > 20)
     )
     return bool(twoBotak.iloc[idx])
-
-def scan_gapper(df, lookback=0):
-    idx = -1 - lookback
-    if len(df) < 22 + lookback: return False
-
-    df = df.copy().reset_index(drop=True)  # guarantee clean integer index
-
-    strictGapUp = df['Low'] > df['High'].shift(1)
-    gapPercent  = (df['Close'] / df['Close'].shift(1)) - 1
-    gapUp10     = strictGapUp & (gapPercent >= 0.10)
-
-    bars_since        = pd.Series(np.inf,  index=df.index)
-    gap_floor         = pd.Series(np.nan,  index=df.index)
-    gap_ceiling       = pd.Series(np.nan,  index=df.index)
-    min_low_since_gap = pd.Series(np.nan,  index=df.index)
-
-    counter         = np.inf
-    last_floor      = np.nan
-    last_ceiling    = np.nan
-    running_min_low = np.nan
-
-    for i in range(1, len(df)):   # start at 1 — need i-1 to always be valid
-        if gapUp10.iloc[i]:
-            counter         = 0
-            last_floor      = df['High'].iloc[i - 1]   # top of pre-gap candle = gap bottom
-            last_ceiling    = df['Low'].iloc[i]         # bottom of gap candle  = gap top
-            running_min_low = df['Low'].iloc[i]
-        else:
-            counter += 1
-            if not np.isnan(running_min_low):
-                running_min_low = min(running_min_low, df['Low'].iloc[i])
-                
-                # --- THE FIX: Check if the gap was filled on this bar ---
-                if running_min_low <= last_floor:
-                    # Gap is filled! Reset variables so it doesn't carry forward
-                    counter         = np.inf
-                    last_floor      = np.nan
-                    last_ceiling    = np.nan
-                    running_min_low = np.nan
-
-        bars_since.iloc[i]         = counter
-        gap_floor.iloc[i]          = last_floor
-        gap_ceiling.iloc[i]        = last_ceiling
-        min_low_since_gap.iloc[i]  = running_min_low
-
-    gapIn20 = bars_since <= 20
-
-    # Gap is unfilled only if the lowest low since gap never touched the gap floor
-    # Use gap_ceiling as an extra sanity check: floor must be below ceiling
-    validGap       = gap_floor < gap_ceiling
-    strictUnfilled = min_low_since_gap > gap_floor
-
-    result = gapIn20 & strictUnfilled & validGap & (df['Close'] >= 20)
-
-    # remap idx back since we reset_index
-    mapped_idx = len(df) + idx
-    if mapped_idx < 0 or mapped_idx >= len(df):
-        return False
-    return bool(result.iloc[mapped_idx])
 
 def scan_engulfing(df, lookback=0):
     idx = -1 - lookback
@@ -790,103 +470,11 @@ def scan_ppp(df, lookback=0):
     )
     return bool(ppp.iloc[idx])
 
-def scan_leader(df, benchmark_df, lookback=0):
-    idx = -1 - lookback
-
-    if len(df) < 250 + lookback or len(benchmark_df) < 250 + lookback:
-        return False
-
-    try:
-        # =========================
-        # MATCH PINE SCRIPT LOGIC
-        # =========================
-
-        # RS Curve
-        rs = df['Close'] / benchmark_df['Close']
-
-        # RS Moving Average
-        rsMA = rs.ewm(span=21, adjust=False).mean()
-
-        # Historical RS High
-        histNH = rs.rolling(250).max()
-
-        # Current values
-        rs_now = rs.iloc[idx]
-        rsMA_now = rsMA.iloc[idx]
-        histNH_now = histNH.iloc[idx]
-        close_now = df['Close'].iloc[idx]
-
-        # =========================
-        # circleCond
-        # =========================
-        circleCond = rs == histNH
-
-        # =========================
-        # twoCircles30
-        # =========================
-        circleCount30 = circleCond.rolling(30).sum()
-        twoCircles30 = circleCount30.iloc[idx] >= 2
-
-        # =========================
-        # MA CONDITIONS
-        # =========================
-        sma50 = df['Close'].rolling(50).mean()
-        sma200 = df['Close'].rolling(200).mean()
-
-        sma50_now = sma50.iloc[idx]
-        sma200_now = sma200.iloc[idx]
-
-        # =========================
-        # FINAL LEADER CONDITION
-        # =========================
-        leader_cond = (
-            (twoCircles30 or rs_now == histNH_now) and
-            (rs_now > rsMA_now) and
-            (close_now > sma50_now) and
-            (close_now > sma200_now) and
-            (close_now >= 20)
-        )
-
-        return bool(leader_cond)
-
-    except:
-        return False
-
-# ============================================================
-# SHARED DOWNLOAD: runs once, feeds all history compute fns
-# ============================================================
 @st.cache_data(ttl=3600)
-def download_known_stocks_data(stocks_tuple):
-    benchmark_symbol = "^GSPC"
-    all_symbols = list(stocks_tuple) + [benchmark_symbol]
-    raw_data = yf.download(all_symbols, period="2y", interval="1d", progress=False, auto_adjust=False)
-
-    ticker_dfs = {}
-    for ticker in stocks_tuple:
-        try:
-            df = pd.DataFrame({
-                'Open':   raw_data['Open'][ticker],
-                'High':   raw_data['High'][ticker],
-                'Low':    raw_data['Low'][ticker],
-                'Close':  raw_data['Close'][ticker],
-                'Volume': raw_data['Volume'][ticker]
-            }).dropna()
-            if not df.empty:
-                ticker_dfs[ticker] = df
-        except Exception:
-            continue
-
-    benchmark_df = pd.DataFrame({
-        'Close': raw_data['Close'][benchmark_symbol]
-    }).dropna()
-
-    return ticker_dfs, benchmark_df
-
-@st.cache_data(ttl=3600)
-def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
+def process_pattern_scanners(stocks_list):
     try:
-        benchmark_symbol = "^GSPC"
-
+        raw_data = yf.download(stocks_list, period="2y", interval="1d", progress=False)
+        
         # Today's Matches
         botak_matches = []
         engulf2_matches = []
@@ -895,10 +483,6 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
         powertrend_ne_matches = []
         value_trap_matches = []
         ppp_matches = []
-        leader_matches = []
-        leader_rs_nh_matches = []
-        gapper_matches = []
-        gapper_gap_levels = {}
         
         # Yesterday's Matches (for color logic)
         botak_yest = []
@@ -908,134 +492,103 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
         powertrend_ne_yest = []
         value_trap_yest = []
         ppp_yest = []
-        leader_yest = []
-        gapper_yest = []
 
         # Initialize internal metrics tracking variables
+        # --- Inside process_pattern_scanners loop setup ---
         know_total_count = 0
         know_positive_count = 0
-        email_content_stocks = []  # Tracks tuples of (ticker, is_new_addition)
+        email_content_stocks = []  # Now tracks tuples of (ticker, is_new_addition)
         email_content_removed = [] # Tracks dropped Minervini stocks compared to yesterday
         extra_52wk_high_symbols = []
         extra_52wk_high_removed = []
         ema200_above_count = 0
         ema200_total_count = 0
 
-        benchmark_df = benchmark_df_input
-
         for ticker in stocks_list:
             try:
-                ticker_df = ticker_dfs.get(ticker)
-                if ticker_df is None or ticker_df.empty:
-                    continue
-                
-                df_len = len(ticker_df)
-                if df_len < 50:
-                    continue
-
-                # Cache Close series to reduce repeatedly accessing a string key index on DataFrame
-                close_series = ticker_df['Close']
-                high_series  = ticker_df['High']
-                low_series   = ticker_df['Low']
-                open_series  = ticker_df['Open']
-                vol_series   = ticker_df['Volume']
-
-                # ── Pre-compute shared indicator series ONCE per ticker ──────────────────
-                # These are reused by multiple scan blocks below for both today and yesterday
-
-                # EMA 200
-                if df_len >= 200:
-                    ema200_val = close_series.ewm(span=200, adjust=False).mean().iloc[-1]
-                    ema200_total_count += 1
-                    if close_series.iloc[-1] > ema200_val:
-                        ema200_above_count += 1
-
-                # SMA 50 / 150 / 200
-                sma50_series  = close_series.rolling(50).mean()  if df_len >= 50  else None
-                sma150_series = close_series.rolling(150).mean() if df_len >= 150 else None
-                sma200_series = close_series.rolling(200).mean() if df_len >= 200 else None
-
-                # ATR (14) — used by powertrend_ne, value_trap, scan_ppp
-                if df_len >= 15:
-                    high_low   = high_series - low_series
-                    high_close = (high_series - close_series.shift(1)).abs()
-                    low_close  = (low_series  - close_series.shift(1)).abs()
-                    tr_series  = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-                    atr14      = tr_series.rolling(14).mean()
-                    atr_pct    = (atr14 / close_series) * 100
+                if len(stocks_list) > 1:
+                    ticker_df = pd.DataFrame({
+                        'Open': raw_data['Open'][ticker],
+                        'High': raw_data['High'][ticker],
+                        'Low': raw_data['Low'][ticker],
+                        'Close': raw_data['Close'][ticker],
+                        'Volume': raw_data['Volume'][ticker]
+                    }).dropna()
                 else:
-                    atr14 = atr_pct = None
+                    ticker_df = raw_data.dropna().copy()
+                
+                if ticker_df.empty or len(ticker_df) < 50:
+                    continue
 
-                # EMA 50 (PowerTrend)
-                powerma = close_series.ewm(span=50, adjust=False).mean() if df_len >= 52 else None
+                # Calculate EMA 200 for the current stock
+                if len(ticker_df) >= 200:
+                    current_close = ticker_df['Close'].iloc[-1]
+                    ema200 = ticker_df['Close'].ewm(span=200, adjust=False).mean().iloc[-1]
+                    ema200_total_count += 1
+                    if current_close > ema200:
+                        ema200_above_count += 1
+                
+                # --- ADJUSTED FOR NEW ADDITIONS TODAY VS YESTERDAY ---
+                if ticker in KNOWN_STOCKS and len(ticker_df) >= 261:
+                    # Setup SMA structures
+                    ticker_df["SMA_50"] = round(ticker_df['Close'].rolling(window=50).mean(), 2)
+                    ticker_df["SMA_150"] = round(ticker_df['Close'].rolling(window=150).mean(), 2)
+                    ticker_df["SMA_200"] = round(ticker_df['Close'].rolling(window=200).mean(), 2)
 
-                # RS (Leader)
-                rs_series = (close_series / benchmark_df['Close']) if df_len >= 250 else None
-
-                # ==============================================================
-                # OPTIMIZED MINERVINI SCRIPTS BLOCK (TOP 1 PERFORMANCE BOOST)
-                # ==============================================================
-                if ticker in KNOWN_STOCKS and df_len >= 261:
-                    # 1. Compute rolling averages as local temporary series (avoids costly df column allocation updates)
-                    # sma50_series / sma200_series already computed above
-
-                    # 2. Extract Today's Scalar Points (Index -1)
-                    currentClose = close_series.iloc[-1]
-                    prevClose    = close_series.iloc[-2]
-                    Volume       = vol_series.iloc[-1]
-                    moving_average_50  = sma50_series.iloc[-1]
-                    moving_average_200 = sma200_series.iloc[-1]
-                    moving_average_200_20 = sma200_series.iloc[-20]
+                    # --- EVALUATE TODAY (Index -1) ---
+                    currentClose = ticker_df["Close"].iloc[-1]
+                    prevClose = ticker_df["Close"].iloc[-2]
+                    Volume = ticker_df["Volume"].iloc[-1]
+                    moving_average_50 = ticker_df["SMA_50"].iloc[-1]
+                    moving_average_200 = ticker_df["SMA_200"].iloc[-1]
+                    moving_average_200_20 = ticker_df["SMA_200"].iloc[-20] if len(ticker_df) >= 20 else 0
                     
-                    # Massively speed up 52-week min/max ranges by utilizing raw NumPy array views (.values)
-                    low_of_52week  = round(ticker_df["Low"].values[-260:].min(), 2)
-                    high_of_52week = round(ticker_df["High"].values[-260:-1].max(), 2)
+                    low_of_52week = round(min(ticker_df["Low"].iloc[-260:]), 2)
+                    high_of_52week = round(ticker_df["High"].iloc[-260:-1].max(), 2)
 
-                    # Today's Evaluation Matrix
-                    cond1_t  = int(currentClose > moving_average_50 > moving_average_200)
-                    cond2_t  = int(moving_average_50 > moving_average_200)
-                    cond3_t  = int(moving_average_200 > moving_average_200_20)
-                    cond4_t  = cond2_t  # Derived directly from cond2_t to completely eliminate a redundant boolean check
-                    cond5_t  = int(currentClose > moving_average_50)
-                    cond6_t  = int(currentClose >= (1.3 * low_of_52week))
-                    cond7_t  = int(currentClose >= (0.75 * high_of_52week))
-                    cond8_t  = int(currentClose >= 20)
-                    cond9_t  = int(Volume > 20000)
+                    cond1_t = int(currentClose > moving_average_50 > moving_average_200)
+                    cond2_t = int(moving_average_50 > moving_average_200)
+                    cond3_t = int(moving_average_200 > moving_average_200_20)
+                    cond4_t = int(moving_average_50 > moving_average_200)
+                    cond5_t = int(currentClose > moving_average_50)
+                    cond6_t = int(currentClose >= (1.3 * low_of_52week))
+                    cond7_t = int(currentClose >= (0.75 * high_of_52week))
+                    cond8_t = int(currentClose >= 20)
+                    cond9_t = int(Volume > 20000)
                     cond10_t = int((Volume * currentClose) > 2000000)
                     
                     total_today = (cond1_t + cond2_t + cond3_t + cond4_t + cond5_t + 
                                    cond6_t + cond7_t + cond8_t + cond9_t + cond10_t)
 
-                    # 3. Extract Yesterday's Scalar Points (Index -2)
-                    yestClose  = close_series.iloc[-2]
-                    yestVolume = vol_series.iloc[-2]
-                    yest_ma_50       = sma50_series.iloc[-2]
-                    yest_ma_200      = sma200_series.iloc[-2]
-                    yest_ma_200_20   = sma200_series.iloc[-21]
+                    # --- EVALUATE YESTERDAY (Index -2) ---
+                    yestClose = ticker_df["Close"].iloc[-2]
+                    yestVolume = ticker_df["Volume"].iloc[-2]
+                    yest_ma_50 = ticker_df["SMA_50"].iloc[-2]
+                    yest_ma_200 = ticker_df["SMA_200"].iloc[-2]
+                    yest_ma_200_20 = ticker_df["SMA_200"].iloc[-21] if len(ticker_df) >= 21 else 0
                     
-                    yest_low_of_52week  = round(ticker_df["Low"].values[-261:-1].min(), 2)
-                    yest_high_of_52week = round(ticker_df["High"].values[-261:-2].max(), 2)
+                    yest_low_of_52week = round(min(ticker_df["Low"].iloc[-261:-1]), 2)
+                    yest_high_of_52week = round(ticker_df["High"].iloc[-261:-2].max(), 2)
 
-                    # Yesterday's Evaluation Matrix
-                    cond1_y  = int(yestClose > yest_ma_50 > yest_ma_200)
-                    cond2_y  = int(yest_ma_50 > yest_ma_200)
-                    cond3_y  = int(yest_ma_200 > yest_ma_200_20)
-                    cond4_y  = cond2_y
-                    cond5_y  = int(yestClose > yest_ma_50)
-                    cond6_y  = int(yestClose >= (1.3 * yest_low_of_52week))
-                    cond7_y  = int(yestClose >= (0.75 * yest_high_of_52week))
-                    cond8_y  = int(yestClose >= 20)
-                    cond9_y  = int(yestVolume > 20000)
+                    cond1_y = int(yestClose > yest_ma_50 > yest_ma_200)
+                    cond2_y = int(yest_ma_50 > yest_ma_200)
+                    cond3_y = int(yest_ma_200 > yest_ma_200_20)
+                    cond4_y = int(yest_ma_50 > yest_ma_200)
+                    cond5_y = int(yestClose > yest_ma_50)
+                    cond6_y = int(yestClose >= (1.3 * yest_low_of_52week))
+                    cond7_y = int(yestClose >= (0.75 * yest_high_of_52week))
+                    cond8_y = int(yestClose >= 20)
+                    cond9_y = int(yestVolume > 20000)
                     cond10_y = int((yestVolume * yestClose) > 2000000)
 
                     total_yesterday = (cond1_y + cond2_y + cond3_y + cond4_y + cond5_y + 
                                        cond6_y + cond7_y + cond8_y + cond9_y + cond10_y)
                     
                     is_at_52wk_high_today = currentClose >= high_of_52week
-                    is_at_52wk_high_yest  = yestClose >= yest_high_of_52week
+                    is_at_52wk_high_yest = yestClose >= yest_high_of_52week
                     
                     qualified_today_52w = (is_at_52wk_high_today and total_today < 10)
-                    was_qualified_yest  = (is_at_52wk_high_yest  and total_yesterday < 10)
+                    was_qualified_yest = (is_at_52wk_high_yest and total_yesterday < 10)
                     
                     if qualified_today_52w:
                         is_new_addition_52w = not was_qualified_yest
@@ -1043,271 +596,37 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                     elif was_qualified_yest:
                         extra_52wk_high_removed.append(ticker)
 
-                    # Set flags
+                    # --- SET CONTROLLER FLAGS ---
                     if total_today >= 10:
                         know_total_count += 1
-                        is_new_addition    = (total_yesterday < 10)
-                        is_positive_today  = (currentClose > prevClose)
+                        is_new_addition = (total_yesterday < 10)
+                        is_positive_today = (currentClose > prevClose)
                         email_content_stocks.append((ticker, is_new_addition, is_positive_today))
                         
                         if currentClose > prevClose:
                             know_positive_count += 1
                     elif total_yesterday >= 10:
                         email_content_removed.append(ticker)
-                # ==============================================================
 
-                # ── INLINE SCAN LOGIC (replaces all scan_* function calls) ───────────────
-                # Each block evaluates today (idx=-1) and yesterday (idx=-2) in one pass.
-                # Original scan_* functions are preserved above and unchanged.
+                # Scan Today
+                if scan_two_botak(ticker_df, 0): botak_matches.append(ticker)
+                e2, e3 = scan_engulfing(ticker_df, 0)
+                if e2: engulf2_matches.append(ticker)
+                if e3: engulf3_matches.append(ticker)
+                if scan_powertrend(ticker_df, 0): powertrend_matches.append(ticker)
+                if scan_powertrend_not_extended(ticker_df, 0): powertrend_ne_matches.append(ticker)
+                if scan_value_trap(ticker_df, 0): value_trap_matches.append(ticker)
+                if scan_ppp(ticker_df, 0): ppp_matches.append(ticker)
 
-                # --- Two Botak ---
-                if df_len >= 2:
-                    botak_s = (
-                        (close_series - high_series).abs() < 0.05
-                    ) & (close_series > open_series)
-                    pct_s = (
-                        (close_series > open_series) &
-                        (((close_series - open_series) /
-                          (high_series - open_series).replace(0, 0.001)) > 0.9)
-                    )
-                    two_botak_s = (
-                        ((botak_s & botak_s.shift(1)) |
-                         (botak_s & pct_s.shift(1))   |
-                         (pct_s   & botak_s.shift(1)) |
-                         (pct_s   & pct_s.shift(1)))  &
-                        (close_series > 20)
-                    )
-                    if bool(two_botak_s.iloc[-1]): botak_matches.append(ticker)
-                    if bool(two_botak_s.iloc[-2]): botak_yest.append(ticker)
-
-                # --- Gapper ---
-                if df_len >= 22:
-                    df_g = ticker_df.copy().reset_index(drop=True)
-                    strict_gap = df_g['Low'] > df_g['High'].shift(1)
-
-                    gap_pct = (df_g['Close'] / df_g['Close'].shift(1)) - 1
-
-                    max_gap_200 = gap_pct.shift(1).rolling(200, min_periods=1).max()
-
-                    gapUp10 = strict_gap & (
-                        (gap_pct >= 0.10) |
-                        (gap_pct >= max_gap_200 * 0.99)
-                    )
-
-                    bars_since_g        = pd.Series(np.inf,  index=df_g.index)
-                    gap_floor_g         = pd.Series(np.nan,  index=df_g.index)
-                    gap_ceiling_g       = pd.Series(np.nan,  index=df_g.index)
-                    min_low_since_gap_g = pd.Series(np.nan,  index=df_g.index)
-
-                    ctr_g = np.inf; fl_g = np.nan; ceil_g = np.nan; run_min_g = np.nan
-
-                    for i in range(1, len(df_g)):
-                        if gapUp10.iloc[i]:
-                            ctr_g     = 0
-                            fl_g      = df_g['High'].iloc[i - 1]
-                            ceil_g    = df_g['Low'].iloc[i]
-                            run_min_g = df_g['Low'].iloc[i]
-                        else:
-                            ctr_g += 1
-                            if not np.isnan(run_min_g):
-                                run_min_g = min(run_min_g, df_g['Low'].iloc[i])
-                                # --- THE FIX: Check if the gap was filled on this bar ---
-                                if run_min_g <= fl_g:
-                                    # Gap is filled! Reset variables so it doesn't carry forward
-                                    ctr_g     = np.inf
-                                    fl_g      = np.nan
-                                    ceil_g    = np.nan
-                                    run_min_g = np.nan
-                        bars_since_g.iloc[i]         = ctr_g
-                        gap_floor_g.iloc[i]          = fl_g
-                        gap_ceiling_g.iloc[i]        = ceil_g
-                        min_low_since_gap_g.iloc[i]  = run_min_g
-
-                    gapIn20_g      = bars_since_g        <= 30
-                    validGap_g     = gap_floor_g         <  gap_ceiling_g
-                    strictUnfill_g = min_low_since_gap_g >  gap_floor_g
-                    result_g       = gapIn20_g & strictUnfill_g & validGap_g & (df_g['Close'] >= 20)
-
-                    if bool(result_g.iloc[-1]):
-                        gapper_matches.append(ticker)
-                        gap_bar_positions = [i for i in range(1, len(df_g)) if gapUp10.iloc[i]]
-                        gap_bar_pos       = gap_bar_positions[-1]  # most recent gap bar
-                        gap_bar_date      = ticker_df.index[gap_bar_pos].strftime("%Y-%m-%d")
-                        gapper_gap_levels[ticker] = {
-                            "floor":   round(float(fl_g),   2),
-                            "ceiling": round(float(ceil_g), 2),
-                            "date":    gap_bar_date,
-                        }
-                    if bool(result_g.iloc[-2]):  gapper_yest.append(ticker)
-
-                # --- Bullish Engulfing (OPTIMIZED) ---
-                if df_len >= 31:
-
-                    # Only need recent bars
-                    recent = ticker_df.tail(35)
-
-                    o = recent["Open"]
-                    h = recent["High"]
-                    l = recent["Low"]
-                    c = recent["Close"]
-
-                    # Bullish engulfing
-                    be_s = (
-                        (o < l.shift(1)) &
-                        (c > h.shift(1))
-                    )
-
-                    engulf_closes = c[be_s]
-
-                    # ==========================
-                    # TODAY
-                    # ==========================
-                    today_close = c.iloc[-1]
-
-                    prior_today = engulf_closes.iloc[:-1] if bool(be_s.iloc[-1]) else engulf_closes
-
-                    eng1_today = prior_today.iloc[-1] if len(prior_today) >= 1 else np.nan
-                    eng2_today = prior_today.iloc[-2] if len(prior_today) >= 2 else np.nan
-                    eng3_today = prior_today.iloc[-3] if len(prior_today) >= 3 else np.nan
-
-                    cnt30_today = be_s.iloc[-30:].sum()
-
-                    two_today = (
-                        cnt30_today >= 2 and
-                        today_close >= 20 and
-                        pd.notna(eng1_today) and
-                        pd.notna(eng2_today) and
-                        today_close > eng1_today and
-                        today_close > eng2_today
-                    )
-
-                    three_today = (
-                        cnt30_today >= 3 and
-                        today_close >= 20 and
-                        pd.notna(eng1_today) and
-                        pd.notna(eng2_today) and
-                        pd.notna(eng3_today) and
-                        today_close > eng1_today and
-                        today_close > eng2_today and
-                        today_close > eng3_today
-                    )
-
-                    if two_today:
-                        engulf2_matches.append(ticker)
-
-                    if three_today:
-                        engulf3_matches.append(ticker)
-
-                    # ==========================
-                    # YESTERDAY
-                    # ==========================
-                    yest_close = c.iloc[-2]
-
-                    engulf_yest = engulf_closes[
-                        engulf_closes.index < c.index[-2]
-                    ]
-
-                    eng1_yest = engulf_yest.iloc[-1] if len(engulf_yest) >= 1 else np.nan
-                    eng2_yest = engulf_yest.iloc[-2] if len(engulf_yest) >= 2 else np.nan
-                    eng3_yest = engulf_yest.iloc[-3] if len(engulf_yest) >= 3 else np.nan
-
-                    cnt30_yest = be_s.iloc[-31:-1].sum()
-
-                    two_yest = (
-                        cnt30_yest >= 2 and
-                        yest_close >= 20 and
-                        pd.notna(eng1_yest) and
-                        pd.notna(eng2_yest) and
-                        yest_close > eng1_yest and
-                        yest_close > eng2_yest
-                    )
-
-                    three_yest = (
-                        cnt30_yest >= 3 and
-                        yest_close >= 20 and
-                        pd.notna(eng1_yest) and
-                        pd.notna(eng2_yest) and
-                        pd.notna(eng3_yest) and
-                        yest_close > eng1_yest and
-                        yest_close > eng2_yest and
-                        yest_close > eng3_yest
-                    )
-
-                    if two_yest:
-                        engulf2_yest.append(ticker)
-
-                    if three_yest:
-                        engulf3_yest.append(ticker)
-
-                # --- PowerTrend & PowerTrend Not Extended ---
-                if powerma is not None and df_len >= 52:
-                    grad_s     = powerma - powerma.shift(1)
-                    grad_pct_s = (grad_s / powerma.shift(1)) * 100
-                    abs_grad_s = grad_pct_s.abs()
-
-                    pt_s = (grad_s > 0) & (abs_grad_s >= 1.0) & (close_series >= 20)
-
-                    if bool(pt_s.iloc[-1]): powertrend_matches.append(ticker)
-                    if bool(pt_s.iloc[-2]): powertrend_yest.append(ticker)
-
-                    if atr_pct is not None and sma50_series is not None:
-                        pct_gain_s  = ((close_series - sma50_series) / sma50_series) * 100
-                        atr_mult2_s = pct_gain_s / atr_pct.replace(0, 0.001)
-                        atr_mult_s  = (atr_mult2_s * 10).fillna(0).astype(int) / 10
-                        ptne_s = pt_s & (atr_mult_s <= 4)
-
-                        if bool(ptne_s.iloc[-1]): powertrend_ne_matches.append(ticker)
-                        if bool(ptne_s.iloc[-2]): powertrend_ne_yest.append(ticker)
-
-                # --- Value Trap ---
-                if atr_pct is not None and sma50_series is not None and df_len >= 50:
-                    pct_gain_vt  = ((close_series - sma50_series) / sma50_series) * 100
-                    atr_mult2_vt = pct_gain_vt / atr_pct.replace(0, 0.001)
-                    atr_mult2_vt = atr_mult2_vt.replace([float('inf'), -float('inf')], pd.NA)
-                    atr_mult_vt  = (atr_mult2_vt.fillna(0) * 10).astype(int) / 10
-                    vt_s = (atr_mult_vt < -4) & (close_series >= 20)
-
-                    if bool(vt_s.iloc[-1]): value_trap_matches.append(ticker)
-                    if bool(vt_s.iloc[-2]): value_trap_yest.append(ticker)
-
-                # --- PPP ---
-                if df_len >= 200 and sma50_series is not None and sma200_series is not None and atr_pct is not None:
-                    dyn_sens = atr_pct * 0.2
-                    day0_s   = (open_series + close_series) / 2
-                    day1_s   = day0_s.shift(1)
-                    day2_s   = day0_s.shift(2)
-                    diff0_s  = ((day0_s - day1_s) / day1_s.replace(0, 0.001) * 100).abs()
-                    diff1_s  = ((day1_s - day2_s) / day2_s.replace(0, 0.001) * 100).abs()
-                    ma_filt  = (
-                        (close_series >= sma200_series) &
-                        (close_series >= sma50_series)  &
-                        (close_series >= 20)
-                    )
-                    ppp_s = (diff0_s < dyn_sens) & (diff1_s < dyn_sens) & ma_filt
-
-                    if bool(ppp_s.iloc[-1]): ppp_matches.append(ticker)
-                    if bool(ppp_s.iloc[-2]): ppp_yest.append(ticker)
-
-                # --- Leader ---
-                if rs_series is not None and df_len >= 250 and sma50_series is not None and sma200_series is not None:
-                    rs_ma_s    = rs_series.ewm(span=21, adjust=False).mean()
-                    hist_nh_s  = rs_series.rolling(250).max()
-                    circle_s   = (rs_series == hist_nh_s)
-                    cc30_s     = circle_s.rolling(30).sum()
-                    two_c_s    = cc30_s >= 2
-
-                    leader_s = (
-                        (two_c_s | circle_s)         &
-                        (rs_series > rs_ma_s)         &
-                        (close_series > sma50_series) &
-                        (close_series > sma200_series)&
-                        (close_series >= 20)
-                    )
-                    if bool(leader_s.iloc[-1]): leader_matches.append(ticker)
-                    if bool(leader_s.iloc[-2]): leader_yest.append(ticker)
-                    if bool(leader_s.iloc[-1]):
-                        if bool(circle_s.iloc[-1]):          # ADD THIS BLOCK
-                            leader_rs_nh_matches.append(ticker)
+                # Scan Yesterday
+                if scan_two_botak(ticker_df, 1): botak_yest.append(ticker)
+                e2y, e3y = scan_engulfing(ticker_df, 1)
+                if e2y: engulf2_yest.append(ticker)
+                if e3y: engulf3_yest.append(ticker)
+                if scan_powertrend(ticker_df, 1): powertrend_yest.append(ticker)
+                if scan_powertrend_not_extended(ticker_df, 1): powertrend_ne_yest.append(ticker)
+                if scan_value_trap(ticker_df, 1): value_trap_yest.append(ticker)
+                if scan_ppp(ticker_df, 1): ppp_yest.append(ticker)
 
             except:
                 continue
@@ -1319,47 +638,17 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
         powertrend_ne_matches.sort()
         value_trap_matches.sort()
         ppp_matches.sort()
-        leader_matches.sort()
-        gapper_matches.sort()
-
+        
         know_pos_pct = (know_positive_count / know_total_count * 100) if know_total_count > 0 else 0
         pct_above_ema200 = (ema200_above_count / ema200_total_count * 100) if ema200_total_count > 0 else 0
         
-        return (
-            botak_matches,
-            engulf2_matches,
-            engulf3_matches,
-            powertrend_matches,
-            powertrend_ne_matches,
-            value_trap_matches,
-            ppp_matches,
-            leader_matches,
-            gapper_matches,
-
-            botak_yest,
-            engulf2_yest,
-            engulf3_yest,
-            powertrend_yest,
-            powertrend_ne_yest,
-            value_trap_yest,
-            ppp_yest,
-            leader_yest,
-            gapper_yest,
-            
-            know_pos_pct,
-            know_positive_count,
-            know_total_count,
-            email_content_stocks,
-            email_content_removed,
-            extra_52wk_high_symbols,
-            extra_52wk_high_removed,
-            pct_above_ema200,
-            leader_rs_nh_matches,
-            gapper_gap_levels
-        )
+        return (botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, value_trap_matches, ppp_matches,
+                botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, value_trap_yest, ppp_yest, 
+                know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed,
+                extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200)
     except:
-        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, [], [], [], [], 0
-    
+        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, [], [], [], [], 0
+
 # 5. UI Layout & Logic
 #st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
 
@@ -1370,11 +659,7 @@ status_text = st.empty()
 industry_items = list(INDUSTRIES.items())
 for idx, (industry_name, tickers) in enumerate(industry_items):
     status_text.text(f"Processing {industry_name}...")
-    perf, rs_scores, cloud_list, price_lookup, rs_scores_prev, rs_scores_1m, cloud_21ema_list, cloud_wick_list, ma50_bounce_list = timed(
-        f"RS+Cloud [{industry_name}]",
-        get_rs_and_cloud_data_cached,
-        tuple(tickers), benchmark, 90
-    )
+    perf, rs_scores, cloud_list, price_lookup, rs_scores_prev = get_rs_and_cloud_data_cached(tuple(tickers), benchmark, 90)
     
     if rs_scores is not None:
         top_n_scores = rs_scores.nlargest(int(top_n))
@@ -1385,24 +670,13 @@ for idx, (industry_name, tickers) in enumerate(industry_items):
             group_avg_prev = top_n_scores_prev.mean()
         else:
             group_avg_prev = group_avg
-
-        if rs_scores_1m is not None and not rs_scores_1m.empty:
-            top_n_scores_1m = rs_scores_1m.nlargest(int(top_n))
-            group_avg_1m = top_n_scores_1m.mean()
-        else:
-            group_avg_1m = group_avg
-
         df_tickers = pd.DataFrame({"Ticker": rs_scores.index, "RS Score": rs_scores.values}).sort_values(by="RS Score", ascending=False)
         all_data.append({
             "Industry": industry_name, 
             "Group RS": group_avg, 
             "Group RS Prev": group_avg_prev, 
-            "Group RS 1M": group_avg_1m, 
             "Tickers": df_tickers, 
             "Cloud": cloud_list,
-            "Cloud21EMA": cloud_21ema_list if cloud_21ema_list is not None else [],
-            "CloudWick": cloud_wick_list if cloud_wick_list is not None else [],
-            "MA50Bounce": ma50_bounce_list if ma50_bounce_list is not None else [],
             "Prices": price_lookup  # Store prices securely into dataset
         })
     
@@ -1413,7 +687,7 @@ progress_bar.empty()
 
 # 6. Compact Display Logic
 if all_data:
-    df_main = pd.DataFrame([{"Industry": item["Industry"], "Group RS": item["Group RS"], "Group RS Prev": item["Group RS Prev"], "Group RS 1M": item["Group RS 1M"]} for item in all_data])
+    df_main = pd.DataFrame([{"Industry": item["Industry"], "Group RS": item["Group RS"], "Group RS Prev": item["Group RS Prev"]} for item in all_data])
 
     col1, col2 = st.columns([1, 1])
     with col1:
@@ -1433,16 +707,9 @@ if all_data:
     df_prev_sorted = df_main.sort_values("Group RS Prev", ascending=(sort_order == "Ascending")).copy()
     df_prev_sorted['Prev Rank'] = range(1, len(df_prev_sorted) + 1)
     
-    # Sort by 1M scores to resolve 1 month visual ranks
-    df_1m_sorted = df_main.sort_values("Group RS 1M", ascending=(sort_order == "Ascending")).copy()
-    df_1m_sorted['1M Rank'] = range(1, len(df_1m_sorted) + 1)
-
     # Map elements back directly inside the pipeline
     rank_map = dict(zip(df_prev_sorted['Industry'], df_prev_sorted['Prev Rank']))
     df_main['Prev Rank'] = df_main['Industry'].map(rank_map)
-
-    rank_map_1m = dict(zip(df_1m_sorted['Industry'], df_1m_sorted['1M Rank']))
-    df_main['1M Rank'] = df_main['Industry'].map(rank_map_1m)
 
     st.markdown("""
     <style>
@@ -1480,20 +747,8 @@ if all_data:
         text-decoration: line-through;
     }
     .lime-badge {
-        background-color: #00FF00; /*FFB7C5*/
-        border: 1px solid #009900; /*FF0000*/
-        color: #000000;
-        font-weight: bold;
-    }
-    .purple-badge {
-        background-color: #c084fc;
-        border: 1px solid #c084fc;
-        color: #000000;
-        font-weight: bold;
-    }
-    .aqua-badge {
-        background-color: #99e6e6;
-        border: 1px solid #99e6e6;
+        background-color: #00FF00;
+        border: 1px solid #009900;
         color: #000000;
         font-weight: bold;
     }
@@ -1511,12 +766,8 @@ if all_data:
     <th style="text-align: left;">Industry</th>
     <th style="text-align: center; width: 40px;">RS</th>
     <th style="text-align: center; width: 40px;">1W</th>
-    <th style="text-align: center; width: 40px;">1M</th>
-    <th style="text-align: left;">Tickers</th>
-    <th style="text-align: left; width: 150px;">21ema_Valid</th>
-    <th style="text-align: left; width: 150px;">21ema_Cloud</th>
-    <th style="text-align: left; width: 150px;">21ema_Wick</th>
-    <th style="text-align: left; width: 150px;">50ma_Bounce</th>
+    <th style="text-align: left;">Tickers (Above 80)</th>
+    <th style="text-align: left; width: 300px;">Within 21 EMA Cloud</th>
     </tr></thead><tbody>"""
 
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
@@ -1534,25 +785,6 @@ if all_data:
         else:
             rank_str = f'<span style="color: #aaaaaa;">0</span>'
         
-        # Calculate 1M Rank Shift strings cleanly dynamically
-        prv_r_1m = row['1M Rank']
-        shift_1m = prv_r_1m - cur_r
-        if shift_1m > 0:
-            # Check if it's in the top 20 industries and the 1M value is greater than +20
-            if shift_1m >= 20 and row_num <= 20:
-                rank_str_1m = (
-                    f'<span style="color: #00FF00; font-weight: bold; '
-                    f'border: 2px solid #00FF00; border-radius: 50%; '
-                    f'display: inline-flex; align-items: center; justify-content: center; '
-                    f'width: 32px; height: 32px;">+{shift_1m}</span>'
-                )
-            else:
-                rank_str_1m = f'<span style="color: #00FF00; font-weight: bold;">+{shift_1m}</span>'
-        elif shift_1m < 0:
-            rank_str_1m = f'<span style="color: #FF7F7F; font-weight: bold;">{shift_1m}</span>'
-        else:
-            rank_str_1m = f'<span style="color: #aaaaaa;">0</span>'
-
         ticker_html = ""
         for _, r in item["Tickers"].iterrows():
             ticker_sym = r["Ticker"]
@@ -1616,115 +848,15 @@ if all_data:
                     f'<span class="ticker-rs">{cloud_rs:.0f}</span>'
                     f'</div>'
                 )
-
-        # ================================
-        # 21 EMA CLOUD COLUMN (new column)
-        # ================================
-        cloud_21ema_html = ""
-        sorted_cloud_21ema = sorted(item["Cloud21EMA"], key=lambda sym: rs_lookup.get(sym, 0), reverse=True)
-        top_5_cloud_21ema = sorted_cloud_21ema[:5]
-
-        for cloud_sym in top_5_cloud_21ema:
-            cloud_rs = rs_lookup.get(cloud_sym, 0)
-
-            if cloud_sym in LIME_STOCKS:
-                cloud_21ema_html += (
-                    f'<div class="ticker-badge lime-badge">'
-                    f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{cloud_sym}</span>'
-                    f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{cloud_rs:.0f}</span>'
-                    f'</div>'
-                )
-            elif cloud_sym in KNOWN_STOCKS:
-                cloud_21ema_html += (
-                    f'<div class="ticker-badge purple-badge">'
-                    f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{cloud_sym}</span>'
-                    f'<span class="ticker-rs" style="color: #7e22ce; font-weight: bold;">{cloud_rs:.0f}</span>'
-                    f'</div>'
-                )
-            else:
-                cloud_21ema_html += (
-                    f'<div class="ticker-badge">'
-                    f'<span class="ticker-name">{cloud_sym}</span>'
-                    f'<span class="ticker-rs">{cloud_rs:.0f}</span>'
-                    f'</div>'
-                )
         bg_color = "#262730" if row_num % 2 == 0 else "#0e1117"
         
-        # ================================
-        # 21 EMA WICK COLUMN (new column)
-        # ================================
-        cloud_wick_html = ""
-        sorted_cloud_wick = sorted(item["CloudWick"], key=lambda sym: rs_lookup.get(sym, 0), reverse=True)
-        top_5_cloud_wick = sorted_cloud_wick[:5]
-
-        for cloud_sym in top_5_cloud_wick:
-            cloud_rs = rs_lookup.get(cloud_sym, 0)
-
-            if cloud_sym in LIME_STOCKS:
-                cloud_wick_html += (
-                    f'<div class="ticker-badge lime-badge">'
-                    f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{cloud_sym}</span>'
-                    f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{cloud_rs:.0f}</span>'
-                    f'</div>'
-                )
-            elif cloud_sym in KNOWN_STOCKS:
-                cloud_wick_html += (
-                    f'<div class="ticker-badge aqua-badge">'
-                    f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{cloud_sym}</span>'
-                    f'<span class="ticker-rs" style="color: #0f766e; font-weight: bold;">{cloud_rs:.0f}</span>'
-                    f'</div>'
-                )
-            else:
-                cloud_wick_html += (
-                    f'<div class="ticker-badge">'
-                    f'<span class="ticker-name">{cloud_sym}</span>'
-                    f'<span class="ticker-rs">{cloud_rs:.0f}</span>'
-                    f'</div>'
-                )
-
-        # ================================
-        # 50MA BOUNCE COLUMN (new column)
-        # ================================
-        ma50_bounce_html = ""
-        sorted_ma50_bounce = sorted(item["MA50Bounce"], key=lambda sym: rs_lookup.get(sym, 0), reverse=True)
-        top_5_ma50_bounce = sorted_ma50_bounce[:5]
-
-        for cloud_sym in top_5_ma50_bounce:
-            cloud_rs = rs_lookup.get(cloud_sym, 0)
-
-            if cloud_sym in LIME_STOCKS:
-                ma50_bounce_html += (
-                    f'<div class="ticker-badge lime-badge">'
-                    f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{cloud_sym}</span>'
-                    f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{cloud_rs:.0f}</span>'
-                    f'</div>'
-                )
-            elif cloud_sym in KNOWN_STOCKS:
-                ma50_bounce_html += (
-                    f'<div class="ticker-badge new-pattern-badge">'
-                    f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{cloud_sym}</span>'
-                    f'<span class="ticker-rs" style="color: #004d26; font-weight: bold;">{cloud_rs:.0f}</span>'
-                    f'</div>'
-                )
-            else:
-                ma50_bounce_html += (
-                    f'<div class="ticker-badge">'
-                    f'<span class="ticker-name">{cloud_sym}</span>'
-                    f'<span class="ticker-rs">{cloud_rs:.0f}</span>'
-                    f'</div>'
-                )
-
         table_html += f"""<tr style="background-color: {bg_color};">
         <td style="text-align: center; color: #888; font-weight: bold;">{row_num}</td>
         <td style="font-weight: bold; color: #ffffff;">{row['Industry']}</td>
         <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.1f}</td>
         <td style="text-align: center; vertical-align: middle;">{rank_str}</td>
-        <td style="text-align: center; vertical-align: middle;">{rank_str_1m}</td>
         <td>{ticker_html}</td>
-        <td>{cloud_html}</td>
-        <td>{cloud_21ema_html}</td>
-        <td>{cloud_wick_html}</td>
-        <td>{ma50_bounce_html}</td></tr>"""
+        <td>{cloud_html}</td></tr>"""
 
     table_html += "</tbody></table>"
     st.markdown(table_html, unsafe_allow_html=True)
@@ -1733,254 +865,41 @@ if all_data:
 #st.markdown("---")
 #st.markdown("### 🔍 Technical Pattern Screener (KNOWN_STOCKS Database)")
 
-# ================================
-# PPP MINI CHART: OHLCV DATA FETCH
-# ================================
-@st.cache_data(ttl=3600)
-def get_ppp_ohlcv_json(ticker):
-    try:
-        df = yf.download(ticker, period="3mo", interval="1d", progress=False)
-        if df.empty:
-            return "[]"
-        df = df.tail(42)  # ~2 months of trading days
-        records = []
-        for ts, row in df.iterrows():
-            records.append({
-                "time":  ts.strftime("%Y-%m-%d"),
-                "open":  round(float(row["Open"].iloc[0])  if hasattr(row["Open"],  "iloc") else float(row["Open"]),  2),
-                "high":  round(float(row["High"].iloc[0])  if hasattr(row["High"],  "iloc") else float(row["High"]),  2),
-                "low":   round(float(row["Low"].iloc[0])   if hasattr(row["Low"],   "iloc") else float(row["Low"]),   2),
-                "close": round(float(row["Close"].iloc[0]) if hasattr(row["Close"], "iloc") else float(row["Close"]), 2),
-            })
-        import json
-        return json.dumps(records)
-    except Exception:
-        return "[]"
+with st.spinner("Scanning pattern anomalies across known instruments..."):
+    results = process_pattern_scanners(tuple(KNOWN_STOCKS))
+    b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list = results[:7]
+    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:14]
+    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200 = results[14:]
 
-@st.cache_data(ttl=3600)
-def get_gapper_ohlcv_json(ticker):
-    try:
-        df = yf.download(ticker, period="3mo", interval="1d", progress=False)
-        if df.empty:
-            return "[]"
-        df = df.tail(42)
-        records = []
-        for ts, row in df.iterrows():
-            records.append({
-                "time":  ts.strftime("%Y-%m-%d"),
-                "open":  round(float(row["Open"].iloc[0])  if hasattr(row["Open"],  "iloc") else float(row["Open"]),  2),
-                "high":  round(float(row["High"].iloc[0])  if hasattr(row["High"],  "iloc") else float(row["High"]),  2),
-                "low":   round(float(row["Low"].iloc[0])   if hasattr(row["Low"],   "iloc") else float(row["Low"]),   2),
-                "close": round(float(row["Close"].iloc[0]) if hasattr(row["Close"], "iloc") else float(row["Close"]), 2),
-            })
-        import json
-        return json.dumps(records)
-    except Exception:
-        return "[]"
-    
-@st.cache_data(ttl=3600)
-def compute_two_botak_history(stocks_list, ticker_dfs):
-    try:
-        if not ticker_dfs:
-            return pd.DataFrame()
+st.markdown("---")
 
-        all_series = []
-        for ticker, df in ticker_dfs.items():
-            if len(df) < 2:
-                continue
-
-            botak = (
-                (abs(df['Close'] - df['High']) < 0.05) &
-                (df['Close'] > df['Open'])
-            )
-            percentile = (
-                (df['Close'] > df['Open']) &
-                (((df['Close'] - df['Open']) /
-                  ((df['High'] - df['Open']).replace(0, 0.001))) > 0.9)
-            )
-            two_botak_series = (
-                ((botak & botak.shift(1)) |
-                 (botak & percentile.shift(1)) |
-                 (percentile & botak.shift(1)) |
-                 (percentile & percentile.shift(1))) &
-                (df['Close'] > 20)
-            ).astype(int)
-
-            all_series.append(two_botak_series)
-
-        if not all_series:
-            return pd.DataFrame()
-
-        combined = pd.concat(all_series, axis=1).fillna(0)
-        daily_counts = combined.sum(axis=1)
-
-        result = daily_counts.tail(60).reset_index()
-        result.columns = ["Date", "Two Botak Count"]
-        result["Date"] = result["Date"].dt.strftime("%Y-%m-%d")
-        return result
-    except Exception:
-        return pd.DataFrame()
-
-@st.cache_data(ttl=3600)
-def compute_engulfing_history(stocks_list, ticker_dfs):
-    try:
-        if not ticker_dfs:
-            return pd.DataFrame()
-
-        all_2x = []
-        all_3x = []
-
-        for ticker, df in ticker_dfs.items():
-            if len(df) < 30:
-                continue
-
-            bullish_engulfing = (
-                (df['Open'] < df['Low'].shift(1)) &
-                (df['Close'] > df['High'].shift(1))
-            )
-
-            # Rolling count of engulfing candles in last 30 days
-            engulf_count = bullish_engulfing.rolling(30).sum()
-
-            # For the "close above prior engulf closes" condition:
-            # Get the last engulfing close via a forward-filled masked series
-            eng_close = df['Close'].where(bullish_engulfing, other=pd.NA).ffill()
-            eng_close_2 = df['Close'].where(bullish_engulfing, other=pd.NA).shift(1).ffill()
-            eng_close_3 = df['Close'].where(bullish_engulfing, other=pd.NA).shift(2).ffill()
-
-            two_engulf = (
-                (engulf_count >= 2) &
-                (df['Close'] > 20) &
-                (df['Close'] > eng_close.shift(1)) &   # above most recent prior
-                (df['Close'] > eng_close_2.shift(1))
-            ).astype(int)
-
-            three_engulf = (
-                (engulf_count >= 3) &
-                (df['Close'] > 20) &
-                (df['Close'] > eng_close.shift(1)) &
-                (df['Close'] > eng_close_2.shift(1)) &
-                (df['Close'] > eng_close_3.shift(1))
-            ).astype(int)
-
-            all_2x.append(two_engulf)
-            all_3x.append(three_engulf)
-
-        if not all_2x:
-            return pd.DataFrame()
-
-        count_2x = pd.concat(all_2x, axis=1).fillna(0).sum(axis=1)
-        count_3x = pd.concat(all_3x, axis=1).fillna(0).sum(axis=1)
-
-        # Align on common index, take last 60 rows
-        result = pd.DataFrame({
-            "Date": count_2x.index,
-            "2x Engulfing Count": count_2x.values,
-            "3x Engulfing Count": count_3x.values
-        }).tail(60)
-        result["Date"] = pd.to_datetime(result["Date"]).dt.strftime("%Y-%m-%d")
-        return result.reset_index(drop=True)
-
-    except Exception as e:
-        print(e)
-        return pd.DataFrame()
-    
-@st.cache_data(ttl=3600)
-def compute_powertrend_history(stocks_list, ticker_dfs):
-    try:
-        if not ticker_dfs:
-            return pd.DataFrame()
-
-        # Compute full powertrend boolean series per ticker ONCE
-        all_series = []
-        for ticker, df in ticker_dfs.items():
-            if len(df) < 52:
-                continue
-            powerma = df['Close'].ewm(span=50, adjust=False).mean()
-            gradientPct = ((powerma - powerma.shift(1)) / powerma.shift(1)) * 100
-            pt_series = (
-                (powerma > powerma.shift(1)) &
-                (abs(gradientPct) >= 1.0) &
-                (df['Close'] >= 20)
-            ).astype(int)
-            all_series.append(pt_series)
-
-        if not all_series:
-            return pd.DataFrame()
-
-        # Sum across all tickers for each date — one operation
-        combined = pd.concat(all_series, axis=1).fillna(0)
-        daily_counts = combined.sum(axis=1)
-
-        result = daily_counts.tail(60).reset_index()
-        result.columns = ["Date", "PowerTrend Count"]
-        result["Date"] = result["Date"].dt.strftime("%Y-%m-%d")
-        return result.iloc[::-1].reset_index(drop=True).iloc[::-1]  # keep chronological
-    except Exception:
-        return pd.DataFrame()
-
-@st.cache_data(ttl=3600)
-def compute_leader_history(stocks_list, ticker_dfs, benchmark_df_leader):
-    try:
-        if not ticker_dfs:
-            return pd.DataFrame()
-
-        all_series = []
-
-        for ticker, df in ticker_dfs.items():
-            if len(df) < 250:
-                continue
-            try:
-                rs = df['Close'] / benchmark_df_leader['Close']
-                rsMA = rs.ewm(span=21, adjust=False).mean()
-                histNH = rs.rolling(250).max()
-                sma50 = df['Close'].rolling(50).mean()
-                sma200 = df['Close'].rolling(200).mean()
-
-                circleCond = (rs == histNH)
-                circleCount30 = circleCond.rolling(30).sum()
-                twoCircles30 = circleCount30 >= 2
-
-                leader_series = (
-                    (twoCircles30 | circleCond) &
-                    (rs > rsMA) &
-                    (df['Close'] > sma50) &
-                    (df['Close'] > sma200) &
-                    (df['Close'] >= 20)
-                ).astype(int)
-
-                all_series.append(leader_series)
-            except Exception:
-                continue
-
-        if not all_series:
-            return pd.DataFrame()
-
-        combined = pd.concat(all_series, axis=1).fillna(0)
-        daily_counts = combined.sum(axis=1)
-
-        result = daily_counts.tail(60).reset_index()
-        result.columns = ["Date", "Leader Count"]
-        result["Date"] = result["Date"].dt.strftime("%Y-%m-%d")
-        return result
-    except Exception:
-        return pd.DataFrame()
-    
 # ==============================================================================
 # 8. HISTORICAL KNOW_TOTAL_COUNT 30-DAY CHART (Completely New Logic at Bottom)
 # ==============================================================================
 @st.cache_data(ttl=3600)
-def compute_historical_know_counts(stocks_list, ticker_dfs):
+def compute_historical_know_counts(stocks_list):
     try:
-        # Attach SMA columns needed by this function only (non-destructive copy)
-        enriched_dfs = {}
-        for ticker, df in ticker_dfs.items():
-            if len(df) >= 261:
-                df2 = df.copy()
-                df2["SMA_50"]  = round(df2['Close'].rolling(window=50).mean(), 2)
-                df2["SMA_200"] = round(df2['Close'].rolling(window=200).mean(), 2)
-                enriched_dfs[ticker] = df2
-        ticker_dfs = enriched_dfs  # shadow with enriched version for rest of function
+        # Download historical data spanning long enough timeline to process 52w highs and 90-day index shifts safely
+        chart_raw_data = yf.download(list(stocks_list), period="2y", interval="1d", progress=False)
+        
+        # Isolate individual ticker structures into isolated dataframes matching your setup logic
+        ticker_dfs = {}
+        for ticker in stocks_list:
+            if len(stocks_list) > 1:
+                t_df = pd.DataFrame({
+                    'Open': chart_raw_data['Open'][ticker],
+                    'High': chart_raw_data['High'][ticker],
+                    'Low': chart_raw_data['Low'][ticker],
+                    'Close': chart_raw_data['Close'][ticker],
+                    'Volume': chart_raw_data['Volume'][ticker]
+                }).dropna()
+            else:
+                t_df = chart_raw_data.dropna().copy()
+            
+            if not t_df.empty and len(t_df) >= 261:
+                t_df["SMA_50"] = round(t_df['Close'].rolling(window=50).mean(), 2)
+                t_df["SMA_200"] = round(t_df['Close'].rolling(window=200).mean(), 2)
+                ticker_dfs[ticker] = t_df
 
         if not ticker_dfs:
             return pd.DataFrame()
@@ -2012,11 +931,10 @@ def compute_historical_know_counts(stocks_list, ticker_dfs):
                 
                 # Handle safe range windows relative to chosen index shift pointer
                 end_p = len(df_cloned) + target_idx
-                ma_200_20 = df_cloned["SMA_200"].iloc[target_idx - 19] if end_p >= 20 else 0
+                ma_200_20 = df_cloned["SMA_200"].iloc[target_idx - 20] if end_p >= 20 else 0
                 
                 low_52w = round(min(df_cloned["Low"].iloc[target_idx - 260 : end_p if end_p != 0 else None]), 2)
-                hist_end = len(df_cloned) + target_idx
-                high_52w = round(df_cloned["High"].iloc[target_idx - 260 : hist_end].max(), 2)
+                high_52w = round(df_cloned["High"].iloc[target_idx - 260 : target_idx].max(), 2)
 
                 c1 = int(c_close > ma_50 > ma_200)
                 c2 = int(ma_50 > ma_200)
@@ -2046,372 +964,8 @@ def compute_historical_know_counts(stocks_list, ticker_dfs):
     except Exception as e:
         return pd.DataFrame()
 
-# ============================================================
-# SINGLE DOWNLOAD + SPINNER: all compute fns share one fetch
-# ============================================================
-stocks_tuple = tuple(KNOWN_STOCKS)
-
-# Single download — all history fns share this cached result
-ticker_dfs_shared, benchmark_df_shared = timed(
-    "download_known_stocks_data",
-    download_known_stocks_data,
-    stocks_tuple
-)
-
-# ==============================================================================
-# MARKET BREADTH & STAGE ANALYSIS FOR KNOWN_STOCKS
-# (Place this block ABOVE the Timing Summary section, after the Gapper section)
-# ==============================================================================
-
-@st.cache_data(ttl=3600)
-def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
-    """
-    Computes IBD-style market breadth stats and stage analysis
-    for the given stock list, mirroring the original Python screener logic.
-    """
-    try:
-        breadth_stats = {
-            'new_high': 0, 'new_low': 0,
-            'advance': 0, 'decline': 0,
-            'up_from_open': 0, 'down_from_open': 0,
-            'up_volume': 0, 'down_volume': 0,
-            'up_4pct': 0, 'down_4pct': 0
-        }
-        new_high_tickers = []  # ADD THIS
-        stage_counts = {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}
-        total_processed = 0
-
-        for ticker in stocks_list:
-            try:
-                df = ticker_dfs.get(ticker)
-                if df is None or len(df) < 5:
-                    continue
-
-                currentClose = df['Close'].iloc[-1]
-                prevClose    = df['Close'].iloc[-2]
-                currentOpen  = df['Open'].iloc[-1]
-                currentVol   = df['Volume'].iloc[-1]
-                prevVol      = df['Volume'].iloc[-2]
-
-                # 52-week high/low (exclude today for high, mirror original logic)
-                low_of_52week  = float(df['Low'].values[-260:].min())
-                high_of_52week = float(df['High'].values[-260:-1].max()) if len(df) >= 260 else float(df['High'].values[:-1].max())
-
-                pct_change = (currentClose - prevClose) / prevClose if prevClose != 0 else 0
-
-                total_processed += 1
-
-                # 1. New High / New Low
-                if currentClose >= high_of_52week:
-                    breadth_stats['new_high'] += 1
-                    new_high_tickers.append(ticker)  # ADD THIS
-                if currentClose <= low_of_52week:
-                    breadth_stats['new_low'] += 1
-
-                # 2. Advance / Decline
-                if currentClose > prevClose:
-                    breadth_stats['advance'] += 1
-                elif currentClose < prevClose:
-                    breadth_stats['decline'] += 1
-
-                # 3. Up from Open / Down from Open
-                if currentClose > currentOpen:
-                    breadth_stats['up_from_open'] += 1
-                elif currentClose < currentOpen:
-                    breadth_stats['down_from_open'] += 1
-
-                # 4. Up on Volume / Down on Volume
-                if currentClose > prevClose and currentVol > prevVol:
-                    breadth_stats['up_volume'] += 1
-                elif currentClose < prevClose and currentVol > prevVol:
-                    breadth_stats['down_volume'] += 1
-
-                # 5. Up 4% / Down 4%
-                if pct_change >= 0.04:
-                    breadth_stats['up_4pct'] += 1
-                elif pct_change <= -0.04:
-                    breadth_stats['down_4pct'] += 1
-
-                # ── Stage Analysis ──────────────────────────────────────────────
-                # Requires benchmark alignment and at least 260 bars
-                if len(df) < 260 or benchmark_df_input is None or benchmark_df_input.empty:
-                    stage_counts[0] += 1
-                    continue
-
-                df_idx = df.index.tz_localize(None) if df.index.tz is not None else df.index
-                bm_idx = benchmark_df_input.index.tz_localize(None) if benchmark_df_input.index.tz is not None else benchmark_df_input.index
-
-                df_aligned = df.copy()
-                df_aligned.index = df_idx
-                bm_aligned = benchmark_df_input.copy()
-                bm_aligned.index = bm_idx
-
-                combined = pd.merge(
-                    df_aligned[['Close', 'Open']],
-                    bm_aligned[['Close']].rename(columns={'Close': 'Close_bench'}),
-                    left_index=True, right_index=True, how='inner'
-                )
-
-                if combined.empty:
-                    stage_counts[0] += 1
-                    continue
-
-                # EMA 126 of stock close (for price vs trend line check)
-                ema126 = df_aligned['Close'].ewm(span=126, adjust=False).mean()
-
-                # RS Ratio
-                rs = combined['Close'] / combined['Close_bench']
-
-                # 8 EMAs of RS ratio (matches original screener)
-                ema_spans = [21, 42, 63, 72, 84, 126, 147, 168]
-                rs_emas = {span: rs.ewm(span=span, adjust=False).mean() for span in ema_spans}
-
-                last = combined.index[-1]
-                rsme  = rs.loc[last]
-                c     = combined['Close'].loc[last]
-                o     = combined['Open'].loc[last]
-
-                # Align ema126 to combined index
-                ema126_val = ema126.reindex(combined.index, method='ffill').loc[last]
-
-                r21  = rs_emas[21].loc[last]
-                r42  = rs_emas[42].loc[last]
-                r63  = rs_emas[63].loc[last]
-                r72  = rs_emas[72].loc[last]
-                r84  = rs_emas[84].loc[last]
-                r126 = rs_emas[126].loc[last]
-                r147 = rs_emas[147].loc[last]
-                r168 = rs_emas[168].loc[last]
-
-                # Stage logic (exact mirror of original screener, checked in order)
-                if rsme >= r84 and rsme < r126:
-                    stage = 1
-                elif (rsme < r42 and rsme >= r72 and rsme >= r84 and rsme >= r126
-                      and (r42 > r63 or rsme < r63) and r63 > r126 and c >= ema126_val):
-                    stage = 3
-                elif (rsme >= r168 and rsme >= r147 and rsme >= r126
-                      and c >= ema126_val and (r21 >= r42 or r42 >= r63)):
-                    stage = 2
-                elif rsme >= r126 and c >= ema126_val and (r21 >= r42 or r42 >= r63):
-                    stage = 2
-                elif (rsme < r63 and rsme < r126) or (r63 < r126 and rsme < r126):
-                    stage = 4
-                elif (o >= ema126_val or c >= ema126_val) and rsme >= r72 and rsme < r126:
-                    stage = 1
-                elif rsme >= r84 and rsme >= r72 and (o >= ema126_val or c >= ema126_val):
-                    stage = 1
-                else:
-                    stage = 0
-
-                stage_counts[stage] += 1
-
-            except Exception:
-                stage_counts[0] += 1
-                continue
-
-        return breadth_stats, stage_counts, total_processed, new_high_tickers
-
-    except Exception as e:
-        return {}, {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}, 0
-
-
-# ── Compute ─────────────────────────────────────────────────────────────────
-with st.spinner("Computing market breadth & stage analysis..."):
-    breadth_stats, stage_counts, breadth_total, new_high_tickers = timed(
-        "compute_breadth_and_stage",
-        compute_breadth_and_stage,
-        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
-    )
-
-st.markdown("---")
-#st.markdown(f"#### 📊 Market Breadth")
-
-if breadth_total > 0:
-
-    # ── Helper: one breadth bar (compact, label above, counts below) ──────
-    def breadth_bar_html(title, val, counterpart):
-        pair_total = val + counterpart
-        if pair_total == 0:
-            pct_val, pct_counter = 0, 0
-        else:
-            pct_val     = (val / pair_total) * 100
-            pct_counter = 100 - pct_val
-
-        is_bullish  = pct_val >= 50
-        bull_color  = "#378ADD" if is_bullish else "#FF69B4"
-        bear_color  = "#a9a9a9"
-        pct_display = f"{pct_val:.1f}%"
-
-        # Bar segments
-        if pct_val == 0:
-            bar_segs = f"<div style='width:100%;background:{bear_color};height:100%;border-radius:999px;'></div>"
-        elif pct_counter == 0:
-            bar_segs = f"<div style='width:100%;background:{bull_color};height:100%;border-radius:999px;'></div>"
-        else:
-            bar_segs = (
-                f"<div style='width:{pct_val:.2f}%;background:{bull_color};height:100%;border-radius:999px 0 0 999px;'></div>"
-                f"<div style='width:{pct_counter:.2f}%;background:{bear_color};height:100%;border-radius:0 999px 999px 0;'></div>"
-            )
-
-        return (
-            f"<div style='margin-bottom:18px;'>"
-            # Title row with pct on the right
-            f"  <div style='margin-bottom:5px;font-size:14px;font-weight:700;color:#ffffff;'>"
-            f"    {title} <span style='color:{bull_color};'>({pct_display})</span>"
-            f"  </div>"
-            # Bar — 40% width, left-aligned
-            f"  <div style='width:40%;height:7px;display:flex;overflow:hidden;border-radius:999px;background:{bear_color};'>"
-            f"    {bar_segs}"
-            f"  </div>"
-            # Counts row
-            f"  <div style='display:flex;justify-content:space-between;width:40%;margin-top:4px;'>"
-            f"    <span style='font-size:12px;color:#888888;'>{val:,} {title.split(' vs ')[0]}</span>"
-            f"    <span style='font-size:12px;color:#888888;'>{counterpart:,} {title.split(' vs ')[1]}</span>"
-            f"  </div>"
-            f"</div>"
-        )
-
-    # ── Render all 5 breadth bars ─────────────────────────────────────────
-    # Render New Highs bar separately with expander
-    new_high_count = breadth_stats.get('new_high', 0)
-    new_low_count  = breadth_stats.get('new_low', 0)
-    pair_total = new_high_count + new_low_count
-    pct_val     = (new_high_count / pair_total * 100) if pair_total > 0 else 0
-    pct_counter = 100 - pct_val
-    bull_color  = "#378ADD" if pct_val >= 50 else "#FF69B4"
-    bear_color  = "#a9a9a9"
-
-    if pct_val == 0:
-        bar_segs_nh = f"<div style='width:100%;background:{bear_color};height:100%;border-radius:999px;'></div>"
-    elif pct_counter == 0:
-        bar_segs_nh = f"<div style='width:100%;background:{bull_color};height:100%;border-radius:999px;'></div>"
-    else:
-        bar_segs_nh = (
-            f"<div style='width:{pct_val:.2f}%;background:{bull_color};height:100%;border-radius:999px 0 0 999px;'></div>"
-            f"<div style='width:{pct_counter:.2f}%;background:{bear_color};height:100%;border-radius:0 999px 999px 0;'></div>"
-        )
-
-    st.markdown(
-        f"<div style='margin-bottom:6px;font-size:14px;font-weight:700;color:#ffffff;'>"
-        f"New Highs vs New Lows <span style='color:{bull_color};'>({pct_val:.1f}%)</span>"
-        f"</div>"
-        f"<div style='width:40%;height:7px;display:flex;overflow:hidden;border-radius:999px;background:{bear_color};margin-bottom:4px;'>"
-        f"{bar_segs_nh}</div>",
-        unsafe_allow_html=True
-    )
-
-
-
-    st.markdown(
-        f"<div style='display:flex;justify-content:space-between;width:40%;margin-bottom:18px;'>"
-        f"<span style='font-size:12px;color:#888888;'>{new_high_count:,} New Highs</span>"
-        f"<span style='font-size:12px;color:#888888;'>{new_low_count:,} New Lows</span>"
-        f"</div>",
-        unsafe_allow_html=True
-    )
-
-    col_nh, col_nl = st.columns([1, 9])
-    with col_nh:
-        with st.expander(f""):
-            if new_high_tickers:
-                nh_html = "<div style='padding: 12px 4px 12px 4px;'>"
-                for sym in sorted(new_high_tickers):
-                    if sym in LIME_STOCKS:
-                        nh_html += f'<div class="ticker-badge lime-badge"><span style="color:#000;font-weight:bold;">{sym}</span></div>'
-                    elif sym in KNOWN_STOCKS:
-                        nh_html += f'<div class="ticker-badge new-pattern-badge"><span style="color:#111;font-weight:bold;">{sym}</span></div>'
-                    else:
-                        nh_html += f'<div class="ticker-badge">{sym}</div>'
-                nh_html += "</div>"
-                st.markdown(nh_html, unsafe_allow_html=True)
-            else:
-                st.info("None.")
-
-    # Remaining 4 breadth bars unchanged
-    breadth_html = (
-        breadth_bar_html('Advance vs Decline',            breadth_stats.get('advance', 0),      breadth_stats.get('decline', 0))
-        + breadth_bar_html('Up from Open vs Down from Open',breadth_stats.get('up_from_open', 0), breadth_stats.get('down_from_open', 0))
-        + breadth_bar_html('Up on Volume vs Down on Volume',breadth_stats.get('up_volume', 0),    breadth_stats.get('down_volume', 0))
-        + breadth_bar_html('Up 4% vs Down 4%',              breadth_stats.get('up_4pct', 0),      breadth_stats.get('down_4pct', 0))
-    )
-    st.markdown(breadth_html, unsafe_allow_html=True)
-
-st.markdown("---")
-#st.markdown(f"#### 🎯 Stage Analysis")
-
-if breadth_total > 0:
-    # ── Stage: single stacked bar ─────────────────────────────────────────
-    stage_order  = [1, 2, 3, 4]
-    stage_colors = {1: "#a9a9a9", 2: "#378ADD", 3: "#EF9F27", 4: "#FF69B4"}
-    stage_labels = {1: "S1", 2: "S2", 3: "S3", 4: "S4"}
-
-    bar_total = sum(stage_counts.get(s, 0) for s in stage_order)
-
-    if bar_total > 0:
-        segs = [
-            {"s": s, "cnt": stage_counts.get(s, 0),
-             "pct": stage_counts.get(s, 0) / bar_total * 100,
-             "color": stage_colors[s]}
-            for s in stage_order
-        ]
-
-        bar_segs = ""
-        legend = ""
-        
-        for i, seg in enumerate(segs):
-            # 1. Build the bar segment
-            r = ("border-radius:999px 0 0 999px;" if i == 0
-                 else "border-radius:0 999px 999px 0;" if i == len(segs) - 1
-                 else "")
-            bar_segs += (
-                f"<div style='width:{seg['pct']:.2f}%; background:{seg['color']};"
-                f"height:100%; {r}'></div>"
-            )
-
-            # 2. Build the perfectly aligned label area below it
-            # Hide text details entirely if the percentage is 0 to avoid overlapping strings
-            display_style = "display:flex;" if seg['pct'] > 0 else "display:none;"
-            
-            legend += (
-                f"<div style='width:{seg['pct']:.2f}%; {display_style} flex-direction:column;"
-                f"align-items:center; text-align:center; box-sizing:border-box; padding:0 2px; overflow:hidden;'>"
-                f"<div style='display:flex;align-items:center;gap:5px;justify-content:center; white-space:nowrap;'>"
-                f"<span style='width:8px;height:8px;border-radius:50%;"
-                f"background:{seg['color']};display:inline-block;flex-shrink:0;'></span>"
-                f"<span style='font-size:13px;font-weight:500;color:#ffffff;'>"
-                f"{stage_labels[seg['s']]}</span></div>"
-                f"<span style='font-size:11px;color:#888888;white-space:nowrap;'>"
-                f"{seg['cnt']} · {seg['pct']:.0f}%</span>"
-                f"</div>"
-            )
-
-        st.markdown(
-            f"<div style='padding:8px 0 4px; width:100%;'>"
-            f"<div style='width:100%;height:12px;display:flex;"
-            f"overflow:hidden;border-radius:999px;'>{bar_segs}</div>"
-            f"<div style='display:flex; width:100%; margin-top:10px;'>"
-            f"{legend}</div></div>",
-            unsafe_allow_html=True
-        )
-
-else:
-    st.info("Insufficient data to compute breadth & stage analysis.")
-
-with st.spinner("Scanning pattern anomalies across known instruments..."):
-    results       = timed("process_pattern_scanners",      process_pattern_scanners,      stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
-    # historical_df   = compute_historical_know_counts(stocks_tuple, ticker_dfs_shared)   # moved here: renders first
-    # two_botak_hist  = compute_two_botak_history(stocks_tuple, ticker_dfs_shared)
-    # engulf_hist     = compute_engulfing_history(stocks_tuple, ticker_dfs_shared)
-    # powertrend_hist = compute_powertrend_history(stocks_tuple, ticker_dfs_shared)
-    # leader_hist     = compute_leader_history(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
-    b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list, leader_list, gapper_list = results[:9]
-    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest, leader_yest, gapper_yest = results[9:18]
-    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200, leader_rs_nh_matches, gapper_gap_levels = results[18:]
-
-st.markdown("---")
-
-with st.spinner("Computing Historical Known Counts..."):
-    historical_df = timed("compute_historical_know_counts", compute_historical_know_counts, stocks_tuple, ticker_dfs_shared)
+# Process full 90-day data asset
+historical_df = compute_historical_know_counts(tuple(KNOWN_STOCKS))
 
 # ==============================================================================
 # 9. AUTOMATED BREADTH MARKET REGIME INTERPRETATION
@@ -2473,12 +1027,7 @@ if not historical_df.empty and len(historical_df) >= 10:
                 <span style="font-size: 0.9em; color: #888;">Structure: <b>{structure_desc}</b></span>
             </div>
             <p style="margin: 0; font-size: 0.95em; color: #e0e0e0; line-height: 1.5;">
-                <b>Breadth Matrix:</b> Current active Minervini pool rests at 
-                <span style="color: {status_color}; font-weight: bold; font-size: 1.4em;">{current_count}</span>
-                (5-Day Trend Avg: 
-                <span style="color: {status_color}; font-weight: bold;">{ma_short:.1f}</span> 
-                vs 20-Day Trend Avg: 
-                <span style="color: {status_color}; font-weight: bold;">{ma_long:.1f}</span>). <br>
+                <b>Breadth Matrix:</b> Current active Minervini pool rests at <b>{current_count}</b> setups (5-Day Trend Avg: {ma_short:.1f} vs 20-Day Trend Avg: {ma_long:.1f}). <br>
                 <b>Tactical Playbook:</b> {action_note}
             </p>
         </div>
@@ -2487,9 +1036,8 @@ if not historical_df.empty and len(historical_df) >= 10:
     )
 
 #st.markdown("---")
-st.write("")
 
-#st.markdown(f"### Total Count ({know_total_count})")
+st.markdown(f"### Total Count ({know_total_count})")
 if not historical_df.empty:
     # 1. THE ORIGINAL CHART: Updated to pass the full dataframe to show 90 days instead of 30
     st.line_chart(data=historical_df, x="Date", y="Total Count", use_container_width=True)
@@ -2512,18 +1060,18 @@ st.markdown(f"#### 🧭 Market Regime Reference ({pct_above_ema200:.2f}%)")
 # 1. Define raw data exactly from your reference image
 regime_data = {
     "Market Condition": [
-        "Above 200 EMA > 70%",
-        "Above 200 EMA > 60%",
-        "Above 200 EMA 50–60%",
+        "Above 200 EMA < 40%",
         "Above 200 EMA 40–50%",
-        "Above 200 EMA < 40%"
+        "Above 200 EMA 50–60%",
+        "Above 200 EMA > 60%",
+        "Above 200 EMA > 70%"
     ],
     "What to do": [
-        "Strong bull participation",
-        "Good swing trading environment",
-        "Market improving",
+        "Be cautious, focus only on best setups",
         "Recovery attempt",
-        "Be cautious, focus only on best setups"
+        "Market improving",
+        "Good swing trading environment",
+        "Strong bull participation"
     ]
 }
 
@@ -2547,31 +1095,25 @@ elif pct_above_ema200 < 40:
 
 # 4. Create a styling function to apply the lime background
 def highlight_current_regime(row):
-    pct = pct_above_ema200
+    style = [''] * len(row)
 
-    is_highlight = False
-    bg = ""
+    if row.name == highlight_idx:
 
-    if pct > 70 and row["Market Condition"] == "Above 200 EMA > 70%":
-        bg = "#90EE90"
-        is_highlight = True
-    elif pct > 60 and row["Market Condition"] == "Above 200 EMA > 60%":
-        bg = "#90EE90"
-        is_highlight = True
-    elif 50 <= pct <= 60 and row["Market Condition"] == "Above 200 EMA 50–60%":
-        bg = "#FFD8A8"
-        is_highlight = True
-    elif 40 <= pct < 50 and row["Market Condition"] == "Above 200 EMA 40–50%":
-        bg = "#FFD8A8"
-        is_highlight = True
-    elif pct < 40 and row["Market Condition"] == "Above 200 EMA < 40%":
-        bg = "#FFCCCC"
-        is_highlight = True
+        # Be cautious = Light Red
+        if highlight_idx == 0:
+            bg = "#FFCCCC"
 
-    if is_highlight:
-        return [f"background-color: {bg}; color: #000000; font-weight: bold;"] * len(row)
-    else:
-        return [""] * len(row)
+        # Recovery Attempt + Market Improving = Light Orange
+        elif highlight_idx in [1, 2]:
+            bg = "#FFD8A8"
+
+        # Good / Strong market = Light Green
+        else:
+            bg = "#90EE90"
+
+        style = [f'background-color: {bg}; color: #000000; font-weight: bold;'] * len(row)
+
+    return style
 
 # 5. Apply the style and render via Streamlit dataframe (handles styling better than st.table)
 styled_df = df_regime.style.apply(highlight_current_regime, axis=1)
@@ -2597,10 +1139,10 @@ st.markdown("---")
 # st.markdown(header_html, unsafe_allow_html=True)
 
 st.markdown(
-    f"#### ⭐ Minervini ("
-    f"+ve Pct: {know_pos_pct:.1f}% | "
-    f"+ve Count: {know_positive_count} | "
-    f"Total: {know_total_count})"
+    f"#### ⭐ Minervini Qualified Stocks ("
+    f"Positive Pct: {know_pos_pct:.1f}% | "
+    f"Positive Count: {know_positive_count} | "
+    f"Total Count: {know_total_count})"
 )
 
 if email_content_stocks or email_content_removed:
@@ -2623,7 +1165,7 @@ if email_content_stocks or email_content_removed:
         
     st.markdown(minervini_html, unsafe_allow_html=True)
 else:
-    st.info("No active RS leaders discovered.")
+    st.text("None")
 
 st.markdown("---")
 
@@ -2642,7 +1184,7 @@ st.markdown("---")
 # )
 # st.markdown(extra_header_html, unsafe_allow_html=True)
 
-st.markdown(f"#### 🌟 ATH , but fail Minervini criteria ({len(extra_52wk_high_symbols)})")
+st.markdown(f"#### 🚀 ATH , but fail Minervini criteria ({len(extra_52wk_high_symbols)})")
 # Render if there are either active items OR removed items to show
 if extra_52wk_high_symbols or extra_52wk_high_removed:
     extra_html = ""
@@ -2662,97 +1204,13 @@ if extra_52wk_high_symbols or extra_52wk_high_removed:
         
     st.markdown(extra_html, unsafe_allow_html=True)
 else:
-    st.info("No active setups discovered.")
-
-st.markdown("---")
-
-with st.spinner("Scanning for Leader History..."):
-    leader_hist   = timed("compute_leader_history",        compute_leader_history,        stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
-
-#st.write(f"Percentage of stock above EMA200: {pct_above_ema200:.2f}%")
-
-# --- LEADERS SECTION ---
-st.markdown(f"#### 🏆 RS Leader = Long term ({len(leader_list)}) ")
-st.markdown(f"#### 🏆 Blue Dot = Short term ({len([s for s in leader_rs_nh_matches if s != 'SPY'])})")
-
-if leader_list or leader_yest:
-
-    html_leader = ""
-
-    for sym in leader_list:
-        cls = "new-pattern-badge" if sym not in leader_yest else ""
-
-        dot = (
-            '<span style="'
-            'display:inline-block;width:7px;height:7px;'
-            'border-radius:50%;background:#FF4B4B;'
-            'box-shadow:0 0 5px 2px #FF4B4B;'
-            'margin-right:4px;vertical-align:middle;'
-            '"></span>'
-            if sym in leader_rs_nh_matches and sym != "SPY" else ""
-        )
-
-        html_leader += (
-            f'<div class="ticker-badge {cls}">{dot}{sym}</div>'
-        )
-
-    # Removed leaders
-    removed_leaders = [sym for sym in leader_yest if sym not in leader_list]
-
-    for sym in sorted(removed_leaders):
-        html_leader += (
-            f'<div class="ticker-badge removed-badge">{sym}</div>'
-        )
-
-    st.markdown(html_leader, unsafe_allow_html=True)
-
-else:
-    st.info("No active RS leaders discovered.")
-
-st.write("")
-# if not leader_hist.empty:
-#     st.bar_chart(
-#         data=leader_hist,
-#         x="Date",
-#         y="Leader Count",
-#         use_container_width=True
-#     )
-
-if not leader_hist.empty:
-    # 1. Create a temporary copy to prevent altering your original global dataframe
-    chart_df = leader_hist.copy()
-    
-    # 2. Determine if the most recent row (today) holds the absolute maximum value
-    today_value = chart_df["Leader Count"].iloc[-1]
-    max_value = chart_df["Leader Count"].max()
-    min_value = chart_df["Leader Count"].min()
-    
-    # 3. Add a explicit 'Bar_Color' column to your dataframe
-    if today_value == max_value or today_value == min_value:
-        # Define base color array, then override the last row (today) with your accent color
-        chart_df["Bar_Color"] = "#29B5E8"
-        chart_df.iloc[-1, chart_df.columns.get_loc("Bar_Color")] = "#FF4B4B"
-    else:
-        # Standard uniform blue color if today isn't the highest
-        chart_df["Bar_Color"] = "#29B5E8"
-
-    # 4. Render chart mapping color directly to the new dataframe column
-    st.bar_chart(
-        data=chart_df,
-        x="Date",
-        y="Leader Count",
-        color="Bar_Color",  # Direct Streamlit to read colors line-by-line from this column
-        use_container_width=True
-    )
+    st.text("None")
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
 
-with st.spinner("Scanning for Two Botak History..."):
-    two_botak_hist= timed("compute_two_botak_history",     compute_two_botak_history,     stocks_tuple, ticker_dfs_shared)
-
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
-st.markdown(f"#### 🔥 Two Botak = Short term Group burst ({len(b_list)})")
+st.markdown(f"#### 🔥 Two Botak = Awareness short term group burst ({len(b_list)})")
 if b_list or b_yest:
     html_b = ""
     for sym in b_list:
@@ -2769,57 +1227,15 @@ else:
     st.info("No active setups discovered.")
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
-#st.markdown("---")
-st.write("")
-
-# ===================== TWO BOTAK 60-DAY BREADTH CHART =====================
-# if not two_botak_hist.empty:
-#     #st.markdown("#### 📊 Two Botak Breadth (60 Days)")
-#     st.bar_chart(
-#         data=two_botak_hist,
-#         x="Date",
-#         y="Two Botak Count",
-#         use_container_width=True
-#     )
-
-if not two_botak_hist.empty:
-    # 1. Create a temporary copy to prevent altering your original dataframe
-    chart_df = two_botak_hist.copy()
-    
-    # 2. Determine if the most recent row (today) holds the absolute maximum value
-    today_value = chart_df["Two Botak Count"].iloc[-1]
-    max_value = chart_df["Two Botak Count"].max()
-    
-    # 3. Add an explicit 'Bar_Color' column to your dataframe
-    if today_value == max_value:
-        # Define base color, then override the last row (today) with your accent color
-        chart_df["Bar_Color"] = "#29B5E8"
-        chart_df.iloc[-1, chart_df.columns.get_loc("Bar_Color")] = "#FF4B4B"
-    else:
-        # Standard uniform blue color if today isn't the highest
-        chart_df["Bar_Color"] = "#29B5E8"
-
-    # 4. Render chart mapping color directly to the new dataframe column
-    st.bar_chart(
-        data=chart_df,
-        x="Date",
-        y="Two Botak Count",
-        color="Bar_Color",  # Direct Streamlit to read colors line-by-line from this column
-        use_container_width=True
-    )
-
 st.markdown("---")
-
-with st.spinner("Scanning for Bullish Engulfing History..."):
-    engulf_hist   = timed("compute_engulfing_history",     compute_engulfing_history,     stocks_tuple, ticker_dfs_shared)
 
 # --- 3. BULLISH ENGULFING (Full Horizontal Row Below Tight PPP) ---
 total_engulf = len(e2_list) + len(e3_list)
-st.markdown(f"#### 🐳 Engulfing = HL ({total_engulf})")
+st.markdown(f"#### 🐳 Bullish Engulfing = Awareness HL ({total_engulf})")
 
 if e2_list or e3_list or e2_yest or e3_yest:
     if e2_list or e2_yest:
-        st.markdown(f"**2x Engulfing ({len(e2_list)}):**")
+        st.markdown(f"**2x Engulfing Conditions Matched ({len(e2_list)}):**")
         html_e2 = ""
         for sym in e2_list:
             cls = "new-pattern-badge" if sym not in e2_yest else ""
@@ -2831,63 +1247,9 @@ if e2_list or e3_list or e2_yest or e3_yest:
             html_e2 += f'<div class="ticker-badge removed-badge">{sym}</div>'
             
         st.markdown(html_e2, unsafe_allow_html=True)
-    
-    # st.write("")
-    # if len(e3_list) == 0 and len(e3_yest) == 0:
-    #     st.markdown("**3x Engulfing Conditions Matched (0):**")
-    #     #st.text("None") # Optional: explicit visual feedback for an empty scanner
-    # if e3_list or e3_yest:
-    #     st.markdown(f"<div style='margin-top:10px;'><b>3x Engulfing Conditions Matched ({len(e3_list)}):</b></div>", unsafe_allow_html=True)
-    #     html_e3 = ""
-    #     for sym in e3_list:
-    #         cls = "new-pattern-badge" if sym not in e3_yest else ""
-    #         html_e3 += f'<div class="ticker-badge {cls}">{sym}</div>'
-            
-    #     # Process and append removed 3x engulfing stocks
-    #     removed_e3 = [sym for sym in e3_yest if sym not in e3_list]
-    #     for sym in sorted(removed_e3):
-    #         html_e3 += f'<div class="ticker-badge removed-badge">{sym}</div>'
-            
-    #     st.markdown(html_e3, unsafe_allow_html=True)
-else:
-    st.info("No active setups discovered.")
-
-st.write("")
-# if not engulf_hist.empty:
-#     #st.markdown("#### 🐳 2x Engulfing Breadth (60 Days)")
-#     st.bar_chart(engulf_hist, x="Date", y="2x Engulfing Count", use_container_width=True)
-
-#     #st.markdown("#### 🐳 3x Engulfing Breadth (60 Days)")
-#     st.bar_chart(engulf_hist, x="Date", y="3x Engulfing Count", use_container_width=True)
-
-if not engulf_hist.empty:
-    # --- 1. 2x Engulfing Chart ---
-    chart_df_2x = engulf_hist.copy()
-    today_2x = chart_df_2x["2x Engulfing Count"].iloc[-1]
-    max_2x = chart_df_2x["2x Engulfing Count"].max()
-    
-    if today_2x == max_2x:
-        chart_df_2x["Bar_Color"] = "#29B5E8"
-        chart_df_2x.iloc[-1, chart_df_2x.columns.get_loc("Bar_Color")] = "#FF4B4B"
-    else:
-        chart_df_2x["Bar_Color"] = "#29B5E8"
-
-    # st.markdown("#### 🐳 2x Engulfing Breadth (60 Days)")
-    st.bar_chart(
-        data=chart_df_2x,
-        x="Date",
-        y="2x Engulfing Count",
-        color="Bar_Color",
-        use_container_width=True
-    )
-
-if e3_list or e3_yest:
-    st.write("")
-    if len(e3_list) == 0 and len(e3_yest) == 0:
-        st.markdown("**3x Engulfing (0):**")
-        #st.text("None") # Optional: explicit visual feedback for an empty scanner
-    elif e3_list or e3_yest:
-        st.markdown(f"<div style='margin-top:10px;'><b>3x Engulfing ({len(e3_list)}):</b></div>", unsafe_allow_html=True)
+        
+    if e3_list or e3_yest:
+        st.markdown(f"<div style='margin-top:10px;'><b>3x Engulfing Conditions Matched ({len(e3_list)}):</b></div>", unsafe_allow_html=True)
         html_e3 = ""
         for sym in e3_list:
             cls = "new-pattern-badge" if sym not in e3_yest else ""
@@ -2900,29 +1262,8 @@ if e3_list or e3_yest:
             
         st.markdown(html_e3, unsafe_allow_html=True)
 else:
-    #st.info("No active setups discovered.")
-    st.markdown("**3x Engulfing (0):**")
+    st.info("No active setups discovered.")
 
-if not engulf_hist.empty:
-    # --- 2. 3x Engulfing Chart ---
-    chart_df_3x = engulf_hist.copy()
-    today_3x = chart_df_3x["3x Engulfing Count"].iloc[-1]
-    max_3x = chart_df_3x["3x Engulfing Count"].max()
-    
-    if today_3x == max_3x:
-        chart_df_3x["Bar_Color"] = "#29B5E8"
-        chart_df_3x.iloc[-1, chart_df_3x.columns.get_loc("Bar_Color")] = "#FF4B4B"
-    else:
-        chart_df_3x["Bar_Color"] = "#29B5E8"
-
-    # st.markdown("#### 🐳 3x Engulfing Breadth (60 Days)")
-    st.bar_chart(
-        data=chart_df_3x,
-        x="Date",
-        y="3x Engulfing Count",
-        color="Bar_Color",
-        use_container_width=True
-    )
 
 # --- EXTRA TREND METRICS (Stacked Horizontally Below Patterns) ---
 #st.markdown("---")
@@ -2930,28 +1271,13 @@ if not engulf_hist.empty:
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
 
-with st.spinner("Scanning for PowerTrend History..."):
-    powertrend_hist=timed("compute_powertrend_history",    compute_powertrend_history,    stocks_tuple, ticker_dfs_shared)
-
 # --- 4. POWERTREND (Full Horizontal Row) ---
-st.markdown(f"#### ⚡ PowerTrend = Thematic Extended ({len(pt_list)})")
+st.markdown(f"#### ⚡ PowerTrend = Awareness thematic leaders extended ({len(pt_list)})")
 if pt_list or pt_yest:
     html_pt = ""
     for sym in pt_list:
         cls = "new-pattern-badge" if sym not in pt_yest else ""
-        # Get close price from shared ticker data
-        pt_price = ""
-        ticker_df_pt = ticker_dfs_shared.get(sym)
-        if ticker_df_pt is not None and not ticker_df_pt.empty:
-            pt_close = ticker_df_pt['Close'].iloc[-1]
-            pt_high  = ticker_df_pt['High'].iloc[-1]
-            if not pd.isna(pt_close) and not pd.isna(pt_high):
-                pt_price = (
-                    f'<span style="color:#aaaaaa; font-size:10px; margin-left:4px;">'
-                    f'C${pt_close:.2f} H${pt_high:.2f}'
-                    f'</span>'
-                )
-        html_pt += f'<div class="ticker-badge {cls}">{sym}{pt_price}</div>'
+        html_pt += f'<div class="ticker-badge {cls}">{sym}</div>'
     
     # Process and append removed stocks
     removed_pt = [sym for sym in pt_yest if sym not in pt_list]
@@ -2960,43 +1286,7 @@ if pt_list or pt_yest:
         
     st.markdown(html_pt, unsafe_allow_html=True)
 else:
-    st.info("No active RS leaders discovered.")
-
-st.write("")
-# if not powertrend_hist.empty:
-#     st.bar_chart(
-#         data=powertrend_hist,
-#         x="Date",
-#         y="PowerTrend Count",
-#         use_container_width=True
-#     )
-
-if not powertrend_hist.empty:
-    # 1. Create a temporary copy to prevent altering your original dataframe
-    chart_df = powertrend_hist.copy()
-    
-    # 2. Determine if the most recent row (today) holds the absolute maximum value
-    today_value = chart_df["PowerTrend Count"].iloc[-1]
-    max_value = chart_df["PowerTrend Count"].max()
-    min_value = chart_df["PowerTrend Count"].min()
-    
-    # 3. Add an explicit 'Bar_Color' column to your dataframe
-    if today_value == max_value or today_value == min_value:
-        # Define base color, then override the last row (today) with your accent color
-        chart_df["Bar_Color"] = "#29B5E8"
-        chart_df.iloc[-1, chart_df.columns.get_loc("Bar_Color")] = "#FF4B4B"
-    else:
-        # Standard uniform blue color if today isn't the highest
-        chart_df["Bar_Color"] = "#29B5E8"
-
-    # 4. Render chart mapping color directly to the new dataframe column
-    st.bar_chart(
-        data=chart_df,
-        x="Date",
-        y="PowerTrend Count",
-        color="Bar_Color",  # Direct Streamlit to read colors line-by-line from this column
-        use_container_width=True
-    )
+    st.text("None")
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
@@ -3010,7 +1300,7 @@ if ptne_list:
         html_ptne += f'<div class="ticker-badge {cls}">{sym}</div>'
     st.markdown(html_ptne, unsafe_allow_html=True)
 else:
-    st.info("No active RS leaders discovered.")
+    st.text("None")
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
@@ -3030,471 +1320,28 @@ if vt_list or vt_yest:
         
     st.markdown(html_vt, unsafe_allow_html=True)
 else:
-    st.info("No active RS leaders discovered.")
+    st.text("None")
 
 st.markdown("---")
 
 # --- 2. TIGHT PPP (Full Horizontal Row Below Two Botak) ---
 st.markdown(f"#### 📉 PPP = Opportunity ({len(ppp_list)})")
-
 if ppp_list or ppp_yest:
-    # ── Badge row ─────────────────────────────────────────────────────────
     html_p = ""
     for sym in ppp_list:
         cls = "new-pattern-badge" if sym not in ppp_yest else ""
         html_p += f'<div class="ticker-badge {cls}">{sym}</div>'
-
+    
+    # Process and append removed stocks
     removed_ppp = [sym for sym in ppp_yest if sym not in ppp_list]
     for sym in sorted(removed_ppp):
         html_p += f'<div class="ticker-badge removed-badge">{sym}</div>'
-
+        
     st.markdown(html_p, unsafe_allow_html=True)
-
-    # ── All charts together, 3 per row ────────────────────────────────────
-    if ppp_list and show_ppp_charts:
-        st.write("")
-        CHARTS_PER_ROW = 4
-        CHART_SIZE     = 280   # square: width == height
-
-        for row_start in range(0, len(ppp_list), CHARTS_PER_ROW):
-            row_tickers = ppp_list[row_start : row_start + CHARTS_PER_ROW]
-            cols = st.columns(CHARTS_PER_ROW)
-
-            for col_idx, sym in enumerate(row_tickers):
-                with cols[col_idx]:
-                    ohlcv_json = get_ppp_ohlcv_json(sym)
-                    chart_id   = f"ppp_{sym}_{row_start}_{col_idx}"
-
-                    chart_html = f"""
-<div style="font-family:'JetBrains Mono','Fira Code',monospace;">
-  <div style="position:relative;width:{CHART_SIZE + 60}px;height:{CHART_SIZE}px;
-              border:1px solid #30363d;border-radius:6px;background:#0d1117;">
-    <div id="{chart_id}"
-         style="width:{CHART_SIZE + 60}px;height:{CHART_SIZE}px;">
-    </div>
-    <div style="
-      position:absolute;top:8px;left:8px;
-      font-size:20px;font-weight:900;
-      color:rgba(255,255,255,0.15);
-      letter-spacing:0.05em;
-      pointer-events:none;
-      z-index:999;
-      user-select:none;
-      white-space:nowrap;">
-      {sym}
-    </div>
-  </div>
-</div>
-
-<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
-<script>
-(function(){{
-  var ohlcv = {ohlcv_json};
-  var el = document.getElementById('{chart_id}');
-  if (!ohlcv || ohlcv.length === 0) {{
-    el.innerHTML = '<p style="color:#7d8590;padding:12px;font-size:11px;">No data.</p>';
-    return;
-  }}
-
-  var chart = LightweightCharts.createChart(el, {{
-    width:  {CHART_SIZE},
-    height: {CHART_SIZE},
-    layout: {{
-      background: {{ type:'solid', color:'#0d1117' }},
-      textColor:  '#c9d1d9',
-    }},
-    grid: {{
-      vertLines: {{ color:'#21262d', style:1 }},
-      horzLines: {{ color:'#21262d', style:1 }},
-    }},
-    crosshair: {{
-      mode: LightweightCharts.CrosshairMode.Normal,
-      vertLine: {{ color:'#58a6ff', width:1, style:1, labelBackgroundColor:'#1f6feb' }},
-      horzLine: {{ color:'#58a6ff', width:1, style:1, labelBackgroundColor:'#1f6feb' }},
-    }},
-    rightPriceScale: {{ borderColor:'#30363d', textColor:'#8b949e' }},
-    timeScale: {{
-      borderColor:'#30363d', textColor:'#8b949e',
-      timeVisible:true, secondsVisible:false,
-      fixLeftEdge:true, fixRightEdge:true,
-    }},
-  }});
-
-  var candles = chart.addCandlestickSeries({{
-    upColor:'#26a641',   downColor:'#f85149',
-    borderUpColor:'#26a641', borderDownColor:'#f85149',
-    wickUpColor:'#26a641',   wickDownColor:'#f85149',
-  }});
-  candles.setData(ohlcv);
-
-  function calcEMA(data, span) {{
-    var k = 2/(span+1), ema = data[0].close, out = [];
-    for (var i=0;i<data.length;i++) {{
-      ema = data[i].close*k + ema*(1-k);
-      if (i >= span-1) out.push({{time:data[i].time, value:parseFloat(ema.toFixed(4))}});
-    }}
-    return out;
-  }}
-
-  function calcSMA(data, period) {{
-    var out = [];
-    for (var i=period-1;i<data.length;i++) {{
-      var s=0; for(var j=i-period+1;j<=i;j++) s+=data[j].close;
-      out.push({{time:data[i].time, value:parseFloat((s/period).toFixed(4))}});
-    }}
-    return out;
-  }}
-
-  chart.addLineSeries({{color:'#e3b341',lineWidth:1,
-    priceLineVisible:false,lastValueVisible:false}})
-    .setData(calcEMA(ohlcv,21));
-
-  chart.addLineSeries({{color:'#58a6ff',lineWidth:1,
-    priceLineVisible:false,lastValueVisible:false}})
-    .setData(calcSMA(ohlcv,50));
-
-  chart.timeScale().fitContent();
-
-  new ResizeObserver(function(entries){{
-    for(var e of entries){{
-      chart.applyOptions({{width:e.contentRect.width}});
-    }}
-  }}).observe(el);
-}})();
-</script>
-"""
-                    import streamlit.components.v1 as components
-                    components.html(chart_html, height=CHART_SIZE + 32, scrolling=False)
-
 else:
     st.info("No active setups discovered.")
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
-st.markdown("---")
+#st.markdown("---")
 
-# --- GAPPER SECTION ---
-st.markdown(f"#### 🚀 Gapper Earning Drift ({len(gapper_list)})")
-
-if gapper_list or gapper_yest:
-    # ── Badge row ─────────────────────────────────────────────────────────
-    html_g = ""
-    for sym in gapper_list:
-        cls = "new-pattern-badge" if sym not in gapper_yest else ""
-        html_g += f'<div class="ticker-badge {cls}">{sym}</div>'
-
-    removed_gapper = [sym for sym in gapper_yest if sym not in gapper_list]
-    for sym in sorted(removed_gapper):
-        html_g += f'<div class="ticker-badge removed-badge">{sym}</div>'
-
-    st.markdown(html_g, unsafe_allow_html=True)
-
-    # ── All charts together, 5 per row ────────────────────────────────────
-    if gapper_list and show_gap_charts:
-        st.write("")
-        GAPPER_CHARTS_PER_ROW = 4
-        GAPPER_CHART_SIZE     = 280
-
-        for row_start in range(0, len(gapper_list), GAPPER_CHARTS_PER_ROW):
-            row_tickers = gapper_list[row_start : row_start + GAPPER_CHARTS_PER_ROW]
-            cols = st.columns(GAPPER_CHARTS_PER_ROW)
-
-            for col_idx, sym in enumerate(row_tickers):
-                with cols[col_idx]:
-                    ohlcv_json = get_gapper_ohlcv_json(sym)
-                    chart_id   = f"gapper_{sym}_{row_start}_{col_idx}"
-                    _levels        = gapper_gap_levels.get(sym, {})
-                    gap_floor_js   = str(_levels["floor"])   if _levels else "null"
-                    gap_ceiling_js = str(_levels["ceiling"]) if _levels else "null"
-                    gap_date_js    = f'"{_levels["date"]}"'  if _levels else "null"
-
-                    chart_html = f"""
-<div style="font-family:'JetBrains Mono','Fira Code',monospace;">
-  <div style="position:relative;width:{GAPPER_CHART_SIZE+60}px;height:{GAPPER_CHART_SIZE}px;
-              border:1px solid #30363d;border-radius:6px;background:#0d1117;">
-    <div id="{chart_id}"
-         style="width:{GAPPER_CHART_SIZE+60}px;height:{GAPPER_CHART_SIZE}px;">
-    </div>
-    <div style="
-      position:absolute;top:10%;left:50%;
-      transform:translate(-50%,-50%);
-      font-size:48px;font-weight:900;
-      color:rgba(255,255,255,0.08);
-      letter-spacing:0.05em;
-      pointer-events:none;
-      z-index:999;
-      user-select:none;
-      white-space:nowrap;">
-      {sym}
-    </div>
-  </div>
-</div>
-
-<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
-<script>
-(function(){{
-  var ohlcv = {ohlcv_json};
-  var el = document.getElementById('{chart_id}');
-  if (!ohlcv || ohlcv.length === 0) {{
-    el.innerHTML = '<p style="color:#7d8590;padding:12px;font-size:11px;">No data.</p>';
-    return;
-  }}
-
-  var chart = LightweightCharts.createChart(el, {{
-    width:  {GAPPER_CHART_SIZE},
-    height: {GAPPER_CHART_SIZE},
-    layout: {{
-      background: {{ type:'solid', color:'#0d1117' }},
-      textColor:  '#c9d1d9',
-    }},
-    grid: {{
-      vertLines: {{ color:'#21262d', style:1 }},
-      horzLines: {{ color:'#21262d', style:1 }},
-    }},
-    crosshair: {{
-      mode: LightweightCharts.CrosshairMode.Normal,
-      vertLine: {{ color:'#58a6ff', width:1, style:1, labelBackgroundColor:'#1f6feb' }},
-      horzLine: {{ color:'#58a6ff', width:1, style:1, labelBackgroundColor:'#1f6feb' }},
-    }},
-    rightPriceScale: {{ borderColor:'#30363d', textColor:'#8b949e' }},
-    timeScale: {{
-      borderColor:'#30363d', textColor:'#8b949e',
-      timeVisible:true, secondsVisible:false,
-      fixLeftEdge:true, fixRightEdge:true,
-    }},
-  }});
-
-  var gapBottom = {gap_floor_js};
-  var gapTop    = {gap_ceiling_js};
-
-if (gapBottom !== null && gapTop !== null && {gap_date_js} !== null) {{
-    var gapStartDate = {gap_date_js};
-    var t1 = ohlcv[ohlcv.length - 1].time;
-
-    // Upper boundary — fills grey DOWN from gapTop
-    var upperArea = chart.addAreaSeries({{
-      topColor:    'rgba(160,160,160,0.20)',
-      bottomColor: 'rgba(160,160,160,0.20)',
-      lineColor:   'rgba(160,160,160,0.55)',
-      lineWidth:   1,
-      priceLineVisible:       false,
-      lastValueVisible:       false,
-      crosshairMarkerVisible: false,
-    }});
-    upperArea.setData([
-      {{ time: gapStartDate, value: gapTop }},
-      {{ time: t1,           value: gapTop }},
-    ]);
-
-    // Lower boundary — fills solid background DOWN from gapBottom to erase bleed
-    var lowerArea = chart.addAreaSeries({{
-      topColor:    '#0d1117',
-      bottomColor: '#0d1117',
-      lineColor:   'rgba(160,160,160,0.55)',
-      lineWidth:   1,
-      priceLineVisible:       false,
-      lastValueVisible:       false,
-      crosshairMarkerVisible: false,
-    }});
-    lowerArea.setData([
-      {{ time: gapStartDate, value: gapBottom }},
-      {{ time: t1,           value: gapBottom }},
-    ]);
-  }}  
-
-  var candles = chart.addCandlestickSeries({{
-    upColor:'#26a641',   downColor:'#f85149',
-    borderUpColor:'#26a641', borderDownColor:'#f85149',
-    wickUpColor:'#26a641',   wickDownColor:'#f85149',
-  }});
-  candles.setData(ohlcv);
-
-  function calcEMA(data, span) {{
-    var k = 2/(span+1), ema = data[0].close, out = [];
-    for (var i=0;i<data.length;i++) {{
-      ema = data[i].close*k + ema*(1-k);
-      if (i >= span-1) out.push({{time:data[i].time, value:parseFloat(ema.toFixed(4))}});
-    }}
-    return out;
-  }}
-
-  function calcSMA(data, period) {{
-    var out = [];
-    for (var i=period-1;i<data.length;i++) {{
-      var s=0; for(var j=i-period+1;j<=i;j++) s+=data[j].close;
-      out.push({{time:data[i].time, value:parseFloat((s/period).toFixed(4))}});
-    }}
-    return out;
-  }}
-
-  chart.addLineSeries({{color:'#e3b341',lineWidth:1,
-    priceLineVisible:false,lastValueVisible:false}})
-    .setData(calcEMA(ohlcv,21));
-
-  chart.addLineSeries({{color:'#58a6ff',lineWidth:1,
-    priceLineVisible:false,lastValueVisible:false}})
-    .setData(calcSMA(ohlcv,50));
-
-  chart.timeScale().fitContent();
-
-  new ResizeObserver(function(entries){{
-    for(var e of entries){{
-      chart.applyOptions({{width:e.contentRect.width}});
-    }}
-  }}).observe(el);
-}})();
-</script>
-"""
-                    import streamlit.components.v1 as components
-                    components.html(chart_html, height=GAPPER_CHART_SIZE + 32, scrolling=False)
-
-else:
-    st.info("No active gapper setups discovered.")
-
-# ── Timing Summary ───────────────────────────────────────────────────────────
-st.markdown("---")
-st.markdown("#### ⏱ Test Time")
-
-if _timing_log:
-    # Separate industry-level rows from top-level function rows
-    industry_rows = {k: v for k, v in _timing_log.items() if k.startswith("RS+Cloud")}
-    main_rows     = {k: v for k, v in _timing_log.items() if not k.startswith("RS+Cloud")}
-
-    # Top-level functions table
-    # timing_records = [{"Function": k, "Time (ms)": f"{v:,.0f}", "Time (s)": f"{v/1000:.2f}"}
-    #                   for k, v in sorted(main_rows.items(), key=lambda x: -x[1])]
-    timing_records = [{"Function": k, "Time (s)": f"{v/1000:.2f}"}
-                      for k, v in main_rows.items()]
-
-    if timing_records:
-        st.dataframe(
-            pd.DataFrame(timing_records),
-            use_container_width=True,
-            hide_index=True
-        )
-
-    # Industry RS breakdown — collapsed by default
-    if industry_rows:
-        total_rs_ms = sum(industry_rows.values())
-        with st.expander(f"RS+Cloud per industry — {len(industry_rows)} groups, total {total_rs_ms/1000:.2f}s"):
-            # industry_records = [
-            #     {"Industry": k.replace("RS+Cloud [", "").replace("]", ""),
-            #      "Time (ms)": f"{v:,.0f}",
-            #      "Time (s)": f"{v/1000:.2f}"}
-            #     for k, v in sorted(industry_rows.items(), key=lambda x: -x[1])
-            # ]
-            industry_records = [
-                {"Industry": k.replace("RS+Cloud [", "").replace("]", ""),
-                 "Time (s)": f"{v/1000:.2f}"}
-                for k, v in industry_rows.items()
-            ]
-            st.dataframe(
-                pd.DataFrame(industry_records),
-                use_container_width=True,
-                hide_index=True
-            )
-
-    total_ms = sum(_timing_log.values())
-    st.caption(f"Total measured wall-clock time: **{total_ms/1000:.2f}s** across {len(_timing_log)} tracked calls")
-
-#st.markdown(html_e2, unsafe_allow_html=True)
-
-# # DEBUG ENGULFING
-# for sym in e2_list:
-#     ticker_df = ticker_dfs_shared.get(sym)
-#     if ticker_df is None:
-#         continue
-#     close_series = ticker_df['Close']
-#     open_series  = ticker_df['Open']
-#     high_series  = ticker_df['High']
-#     low_series   = ticker_df['Low']
-
-#     be_s   = (open_series < low_series.shift(1)) & (close_series > high_series.shift(1))
-#     ec_s   = close_series.where(be_s, other=pd.NA)
-#     eng1_s = ec_s.shift(1).ffill()
-#     eng2_s = ec_s.shift(2).ffill()
-#     eng3_s = ec_s.shift(3).ffill()
-#     cnt30  = be_s.rolling(30).sum()
-#     two_e  = (cnt30 >= 2) & (close_series > 20) & (close_series > eng1_s) & (close_series > eng2_s)
-
-#     with st.expander(f"🔍 Engulf Debug: {sym}"):
-#         st.markdown("**Last 5 rows — all variables**")
-#         debug_df = pd.DataFrame({
-#             "close"  : close_series,
-#             "eng1"   : eng1_s,
-#             "eng2"   : eng2_s,
-#             "cnt30"  : cnt30,
-#             "be_s"   : be_s,
-#             "two_e"  : two_e,
-#             "c>20"   : close_series > 20,
-#             "c>eng1" : close_series > eng1_s,
-#             "c>eng2" : close_series > eng2_s,
-#         }).tail(5)
-#         st.dataframe(debug_df, use_container_width=True)
-# # END DEBUG ENGULFING
-
-def generate_ai_analysis(theme_name, stock_list, rs_data_summary):
-    """
-    Connects to the Gemini API using the secure st.secrets token
-    and returns a technical market perspective.
-    """
-    # 1. Retrieve the secure key from the environment frame
-    api_key = st.secrets.get("GEMINI_API_KEY")
-    
-    if not api_key:
-        st.error("🔑 Missing API Key! Please configure `GEMINI_API_KEY` in your Streamlit secrets layout.")
-        return None
-
-    try:
-        # 2. Initialize the official Google GenAI Client
-        client = genai.Client(api_key=api_key)
-        
-        # 3. Create a tailored structural context prompt
-        prompt = f"""
-        You are an expert technical swing trader utilizing CAN SLIM and Mark Minervini principles.
-        Analyze this data chunk from my Streamlit dashboard setup.
-        
-        Theme Cluster: {theme_name}
-        Tracked Equities: {', '.join(stock_list)}
-        
-        Current Computed Metric Insights:
-        {rs_data_summary}
-        
-        Provide a sharp, 3-sentence bulleted summary describing the cluster's current institutional momentum profile and structural trend stability.
-        """
-        
-        # 4. Request generation using the standard cost-efficient gemini-2.5-flash model
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt
-        )
-        return response.text
-        
-    except Exception as e:
-        return f"An processing error occurred inside the AI Engine execution loop: {str(e)}"
-
-
-# ==========================================
-# UI INTERACTION SURFACE
-# ==========================================
-st.write("---")
-st.subheader("🤖 Thematic AI Quick-Analysis")
-
-# Dropdown to let user choose which theme cluster to analyze
-selected_theme = st.selectbox("Select a Theme to Analyze", list(INDUSTRIES.keys()))
-
-if st.button("⚡ Run Theme Diagnostic"):
-    theme_stocks = INDUSTRIES[selected_theme]
-    
-    # Pack up some dummy state metadata (Map this to your actual rolling loop output values)
-    mock_metric_payload = f"Average Cluster RS Score: 87. Peak Assets within the 21 EMA Cloud buy zone."
-    
-    with st.spinner(f"Evaluating {selected_theme} via Gemini..."):
-        analysis_result = generate_ai_analysis(
-            theme_name=selected_theme,
-            stock_list=theme_stocks,
-            rs_data_summary=mock_metric_payload
-        )
-        
-        if analysis_result:
-            st.success("Analysis Complete!")
-            st.markdown(analysis_result)
+#st.write(f"Percentage of stock above EMA200: {pct_above_ema200:.2f}%")
