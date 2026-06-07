@@ -17,7 +17,7 @@ INDUSTRIES = {
     "CATHIE WOOD": ["ARKG", "ARKK", "ARKQ", "ARKW", "ARKF", "ARKX"],
     "CHINA": ["FUTU", "LI", "KWEB", "XPEV", "NIO", "PDD", "BIDU", "JD", "BABA"],
     "DATA CENTER / AI HOSTING": ["WGMI", "CRWV", "NBIS", "IREN", "WULF", "CORZ", "CIFR", "HUT", "BTDR"],
-    "ENERGY SOLAR": ["TAN", "SEDG", "ENPH", "FSLR", "ARRY", "SHLS", "CSIQ", "RUN"],
+    "ENERGY SOLAR": ["TAN", "SEDG", "ENPH", "FSLR", "ARRY", "SHLS", "CSIQ", "RUN", "DQ"],
     "COML SVCS-ADVRTSNG": ["OMC", "DJT"],
     "AEROSPACE/DEFENSE": ["ITA", "RTX", "LMT", "HON", "BA", "GD", "NOC", "TDG", "LHX", "HWM", "AXON", "HEI", "LDOS", "TDY", "TXT", "FTAI", "CW", "BWXT", "HII", "CR", "DRS", "LOAR", "AVAV", "HXL", "KTOS", "MIR", "OSIS", "AIR", "MRCY"],
     "AGRICULTURAL OPRTIONS": ["ADM", "BG", "PPC", "CALM", "SEB"],
@@ -27,7 +27,7 @@ INDUSTRIES = {
     "ENERGY-ALT/OTHER": ["BIP", "TLN", "CWEN", "BEPC"],
     "MINING-METAL ORES": ["AA", "SCCO", "FCX", "CCJ", "CRS", "ATI", "MP", "TECK"],
     "APPAREL-SHOES & REL": ["NKE", "DECK", "ONON", "RL", "BIRK", "CROX", "LEVI", "VFC", "GIL", "PVH", "COLM", "KTB", "SHOO"],
-    "RETAIL-APPRL/SHOES/ACC": ["TJX", "ROST", "BURL", "TPR", "GAP", "ANF", "BBWI", "CPRI", "BOOT", "AEO", "URBN", "CRI", "BKE"],
+    "RETAIL-APPRL/SHOES/ACC": ["TJX", "ROST", "BURL", "TPR", "GAP", "ANF", "BBWI", "CPRI", "BOOT", "AEO", "URBN", "CRI", "BKE", "VSCO"],
     "AUTO/TRCK-ORGNL EQP": ["ITW", "CMI", "APTV", "ITT", "DCI", "ALSN", "ALV", "GNTX", "LEA", "BC", "ATMU", "VC", "BWA"],
     "AUTO/TRCK-RPLC PRTS": ["LKQ", "DORM", "AAP"],
     "BEVERAGES-ALCOHOLIC": ["STZ", "TAP", "SAM"],
@@ -47,7 +47,7 @@ INDUSTRIES = {
     "CONTAINERS/PACKAGING": ["SW", "BALL", "PKG", "AVY", "AMCR", "OC", "CCK", "ATR", "GPK", "SLGN", "SON", "SEE", "GEF", "OI"],
     "OIL&GAS-DRILLING": ["SLB", "BKR", "NE", "VAL", "HP", "SDRL"],
     "BLDG-CMENT/CNCRT": ["CRH", "MLM", "VMC", "EXP", "KNF", "USLM"],
-    "CMPTER-TECH SRVCS": ["PAYX", "MSCI", "VRSK", "ZS", "TYL", "GDDY", "J", "FDS", "AKAM", "DBX", "EXLS", "KD", "MARA", "EEFT", "DXC", "CORZ", "AVPT", "ACN", "CTSH", "CDW", "CACI", "PSN", "EPAM", "DOX", "KBR", "GLOB", "NSIT", "SAIC", "ASGN"],
+    "CMPTER-TECH SRVCS": ["PAYX", "MSCI", "VRSK", "TYL", "GDDY", "J", "FDS", "AKAM", "DBX", "EXLS", "KD", "MARA", "EEFT", "DXC", "CORZ", "AVPT", "ACN", "CTSH", "CDW", "CACI", "PSN", "EPAM", "DOX", "KBR", "GLOB", "NSIT", "SAIC", "ASGN"],
     "RETAIL-DPRTMNT STRS": ["DDS", "M", "KSS"],
     "RETAIL-DISCNT&VARI": ["DG", "DLTR", "FIVE", "OLLI"],
     "RETAIL-DRUG STORES": ["CVS"],
@@ -57,7 +57,7 @@ INDUSTRIES = {
     "ELEC-PARTS": ["APH", "GLW", "NVT", "CAMT", "TEL"],
     "ELEC-SCNTIFIC/MSRNG": ["PH", "EMR", "KEYS", "FTV", "CGNX", "NOVT", "ST", "NXT", "ITRI", "ESE", "SXI", "MTRN"],
     "ELEC-SEMICNDCTR EQP": ["ASML", "KLAC", "AMAT", "LRCX", "ONTO", "NVMI", "TER", "AEIS", "MKSI", "ENTG", "ACLS"],
-    "ELEC-CONTRACT MFG": ["SOLS", "VRT", "FLEX", "PLXS", "JBL"],
+    "ELEC-CONTRACT MFG": ["SOLS", "VRT", "FLEX", "PLXS", "JBL", "SANM", "TTMI"],
     "ELEC-MISC PRODUCTS": ["OLED", "LFUS", "VSH"],
     "WHOLESALE-ELECT": ["SNX", "ARW", "AVT", "REZI", "GWW", "FAST", "FERG", "GPC", "POOL", "AIT", "WCC", "MSM", "UGI"],
     "RETAIL-CNSMR ELEC": ["BBY", "GME"],
@@ -67,7 +67,7 @@ INDUSTRIES = {
     "BLDG-MBILE/MFG & RV": ["CVCO", "PATK"],
     "POLLUTION CONTROL": ["WM", "RSG", "CLH", "CWST"],
     "COMML SVCS-LEASING": ["URI", "AER", "UHAL", "WSC", "R", "AL", "HRI", "WD", "CAR", "MGRC", "PRG"],
-    "FINANCE-CARD/PMTPR": ["AXP", "SYF", "AFRM", "FCFS", "SLM", "V", "MA", "PYPL", "GPN", "CPAY", "FOUR", "WEX", "PAY", "RELY"],
+    "FINANCE-CARD/PMTPR": ["AXP", "SYF", "AFRM", "FCFS", "SLM", "V", "MA", "PYPL", "GPN", "CPAY", "FOUR", "WEX", "PAY", "RELY", "SOFI"],
     "FINANCE-CONS LOAN": ["RKT", "OMF", "ENVA", "NNI"],
     "FINANCE-CMRCL LOAN": ["OBDC", "PFSI", "CACC"],
     "FINANCE-BLANK CHECK": ["BCSF", "LOCL", "MNTN", "MSDL", "NCDL", "OKLO", "PSBD", "RMI", "SBXD"],
@@ -91,7 +91,7 @@ INDUSTRIES = {
     "DVRSIFIED OPRTIONS": ["MMM", "RLX", "WMS", "AWI", "BRC", "YETI", "LCII"],
     "MCHNRY-GEN INDSTRL": ["GE", "TT", "CARR", "JCI", "IR", "XYL", "DOV", "LII", "PNR", "IEX", "GGG", "NDSN", "LECO", "WWD", "AAON", "FLS", "MIDD", "MOD", "WTS", "BMI", "ZWS", "ESAB", "TKR", "GTLS", "GTES", "FELE", "KAI", "MWA", "NPO", "CXT", "OII", "SYM"],
     "CHEMICALS-PAINTS": ["SHW", "PPG", "RPM", "AXTA"],
-    "COMPTER SFTWR-SCRITY": ["BUG", "FTNT", "PANW", "CRWD", "CHKP", "RBRK", "RPD"],
+    "COMPTER SFTWR-SCRITY": ["BUG", "FTNT", "PANW", "CRWD", "CHKP", "RBRK", "RPD", "OKTA", "ZS", "TENB"],
     "COMPTER SFTWR-ENTR": ["IGV", "TWLO", "MSFT", "ORCL", "CRM", "IBM", "NOW", "ADP", "DOCN", "PLTR", "ADSK", "ROP", "TEAM", "SNOW", "VEEV", "HUBS", "PTC", "MDB", "MANH", "TOST", "MNDY", "WDAY", "SSNC", "GWRE", "BSY", "PEGA", "QTWO", "APPF", "BOX", "WK"],
     "COMPTER SFTWR-DSGN": ["ADBE", "INTU", "SNPS", "CDNS", "IOT", "DT", "TRMB", "WIX"],
     "CMPTER SFTWR-FINCL": ["FICO", "FIS", "NU", "SHOP"],
@@ -136,7 +136,7 @@ INDUSTRIES = {
     "LEISURE-SERVICES": ["CTAS", "ROL", "SCI", "HRB", "PLNT", "LTH", "VVV", "GHC", "UNF", "LRN", "ATGE", "DRVN", "STRA"],
     "CONSUMR PROD-SPECI": ["MSA", "HAS", "AS", "MAT", "THO", "PII", "GOLF", "HAYW", "VSTO", "SIG"],
     "CMP SFTWR-SPC-ENTR": ["TTD"],
-    "MEDICAL-ETHICAL DRGS": ["LLY", "JNJ", "ABBV", "MRK", "PFE", "VRTX", "REGN", "BMY", "ZTS", "ALNY", "BIIB", "RPRX", "UTHR", "VTRS", "INCY", "INSM", "SRPT", "NBIX", "CTLT", "ROIV", "ITCI", "RGEN", "VKTX", "EXEL", "JAZZ", "CYTK", "IONS", "BHVN", "RARE", "CORT", "MDGL", "OGN", "ALKS", "CRNX", "TGTX", "PHB", "PRGO", "APLS", "RVMD"],
+    "MEDICAL-ETHICAL DRGS": ["NVO", "LLY", "JNJ", "ABBV", "MRK", "PFE", "VRTX", "REGN", "BMY", "ZTS", "ALNY", "BIIB", "RPRX", "UTHR", "VTRS", "INCY", "INSM", "SRPT", "NBIX", "CTLT", "ROIV", "ITCI", "RGEN", "VKTX", "EXEL", "JAZZ", "CYTK", "IONS", "BHVN", "RARE", "CORT", "MDGL", "OGN", "ALKS", "CRNX", "TGTX", "PHB", "PRGO", "APLS", "RVMD"],
     "MINING-GLD/SILVR/GMS": ["NEM", "RGLD"],
     "INSRNCE-PRP/CAS/TITL": ["BRK.B", "CB", "TRV", "ALL", "AIG", "ERIE", "WRB", "MKL", "L", "EG", "RNR", "AFG", "AIZ", "MTG", "SIGI", "THG", "KMPR", "HGTY", "MCY", "NMIH", "PLMR", "SPNT", "FNF", "ORI", "ESNT", "FAF", "RDN", "AGO"],
     "MEDIA-BOOKS": ["WLY"],
@@ -168,7 +168,11 @@ INDUSTRIES = {
 
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
-    'VICR', 'SLX', 'CBOE', 'SIMO', 'FLEX', 'POWL', 'VLO', 'DOCN', 'IYZ', 'LNG', 'AAOI', 'AXTI', 'TSEM', 'USO', 'JNJ', 
+    'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EXC', 'FIGR', 
+    'GEV', 'GILD', 'GXC', 'HON', 'JEF', 'JKS', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'NTAP', 'OR', 
+    'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
+    'VUG', 'WGMI', 'WMB', 'XEL', 'XMAG', 'XYZ', 'ZIM','VICR', 'SLX', 'CBOE', 'SIMO', 'FLEX', 'POWL', 'VLO', 'DOCN', 
+    'IYZ', 'LNG', 'AAOI', 'AXTI', 'TSEM', 'USO', 'JNJ', 
     'HP', 'GLD', 'ALB', 'BUG', 'BX', 'DOW', 'VZ', 'REMX', 'GDX', 'SIL', 'VEEV', 'SNDK', 'TLT', 'APH', 'ARM', 'FANG', 
     'NBIS', 'NVT', 'OXY', 'FORM', 'IBIT', 'QTUM', 'IAI', 'KWEB', 'IHI', 'UFO', 'ITA', 'IYT', 'CVS', 'HUM', 'NEE', 
     'HPE', 'PLAB', 'INOD', 'TTMI', 'CCJ', 'BE', 'SLV', 'PICK', 'COPX', 'MAR', 'XAR', 'VSCO', 'GLW', 'ANF', 'AEO', 
@@ -191,7 +195,7 @@ KNOWN_STOCKS = [
     'DASH', 'APPS', 'DOCU', 'AI', 'COUP', 'AKAM', 'CYBR', 'QLYS', 'PANW', 'FTNT', 'CRWD', 'TENB', 'OKTA', 'ZS', 
     'NET', 'S', 'UMC', 'ASML', 'KEYS', 'CRUS', 'AMD', 'AVGO', 'MU', 'KLAC', 'TXN', 'QRVO', 'TSM', 'SWKS', 'AMBA', 
     'STM', 'MCHP', 'ON', 'QCOM', 'SOXX', 'MRVL', 'ADI', 'LRCX', 'AMAT', 'WDC', 'NXPI', 'TER', 'MPWR', 'INTC', 
-    'GFS', 'WOLF', 'STX', 'A', 'ZBRA', 'ENTG', 'ONTO', 'TRMB', 'BNTX', 'PFE', 'MRNA', 'NVAX', 'FCX', 'CF', 'DRI', 
+    'GFS', 'STX', 'A', 'ZBRA', 'ENTG', 'ONTO', 'TRMB', 'BNTX', 'PFE', 'MRNA', 'NVAX', 'FCX', 'CF', 'DRI', 
     'PEP', 'XOM', 'LLY', 'CL', 'MCD', 'KO', 'ATVI', 'GE', 'CVX', 'FISV', 'DE', 'WM', 'HLT', 'FUTU', 'UBER', 
     'TIGR', 'EQIX', 'DPZ', 'CSCO', 'COKE', 'SONY', 'FDS', 'MCO', 'GRAB', 'PTON', 'AMT', 'LIT', 'CMG', 'IPO', 
     'PSTG', 'INMD', 'NNDM', 'MP', 'FUBO', 'SPOT', 'ALGN', 'PZZA', 'LOVE', 'LMND', 'POOL', 'DADA', 'PLTR', 'ROKU', 
@@ -204,48 +208,58 @@ KNOWN_STOCKS = list(set(KNOWN_STOCKS))
 with st.sidebar:
     st.header("Settings")
     benchmark = st.selectbox("Benchmark", ["^GSPC", "^IXIC"], index=0)
+    rs_length = st.number_input("RS Lookback Length", value=90, min_value=10)
     top_n = st.number_input("Top N for Group Avg", value=5, min_value=1)
     
     if st.button("Clear Cache & Refresh"):
         st.cache_data.clear()
 
-# 4. IMPLEMENTATION OF WEIGHTED RS METHOD AND EMA CLOUD
+# 4. IMPLEMENTATION OF NEW NORMALIZED RS METHOD AND EMA CLOUD
 @st.cache_data(ttl=3600)
-def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker):
+def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <-- Added length parameter
     tickers = list(tickers_tuple)
     try:
         all_tickers = tickers + [benchmark_ticker]
+        # Download data (ensuring enough historical data to compute the rolling min/max lookback window)
         data = yf.download(all_tickers, period="2y", interval="1d", progress=False)
         
         close_data = data['Close']
         high_data = data['High']
         low_data = data['Low']
         
-        valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= 252]
+        valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= length]
         if not valid_tickers: return None, None, None
 
-        # --- RS Logic ---
-        offsets = [63, 126, 189, 252]
-        weights = [0.4, 0.2, 0.2, 0.2]
-
-        def calculate_weighted_score(series):
-            score = 0
-            for offset, weight in zip(offsets, weights):
-                perf = series.iloc[-1] / series.iloc[-offset]
-                score += (perf * weight)
-            return score
-
-        bench_weighted = calculate_weighted_score(close_data[benchmark_ticker])
+        # --- New RS Logic ---
+        bench_close = close_data[benchmark_ticker]
         stock_scores = {}
         cloud_tickers = []
 
         for ticker in valid_tickers:
-            # RS Calculation
-            stock_weighted = calculate_weighted_score(close_data[ticker])
-            total_score = (stock_weighted / bench_weighted) * 100
+            # 1. rsClose = close / indexClose
+            rs_ratio_series = close_data[ticker] / bench_close
+            
+            # 2. hh = ta.highest(rsClose, length) | ll = ta.lowest(rsClose, length)
+            # Use rolling window to get historical highs and lows of the ratio
+            hh = rs_ratio_series.rolling(window=length).max()
+            ll = rs_ratio_series.rolling(window=length).min()
+            
+            # Get the absolute most recent values (today's values)
+            current_rs = rs_ratio_series.iloc[-1]
+            current_hh = hh.iloc[-1]
+            current_ll = ll.iloc[-1]
+            
+            # 3. Normalized logic: ((99 - 1) * (rsClose - ll) / (hh - ll)) + 1
+            if pd.isna(current_hh) or pd.isna(current_ll) or current_hh == current_ll:
+                total_score = 0
+            else:
+                # Convert the entire formula directly into an integer
+                total_score = int(((99 - 1) * (current_rs - current_ll) / (current_hh - current_ll)) + 1)
+            
+            # This will now store a clean whole number (e.g., 85 instead of 85.34)
             stock_scores[ticker] = total_score
 
-            # EMA Cloud Calculation (21 EMA of High/Low)
+            # EMA Cloud Calculation (21 EMA of High/Low) - Kept Unchanged
             ema_low = low_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
             ema_high = high_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
             current_price = close_data[ticker].iloc[-1]
@@ -253,18 +267,18 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker):
             if ema_low <= current_price <= ema_high:
                 cloud_tickers.append(ticker)
 
-        rs_perf = pd.Series(stock_scores)
-        ranks = rs_perf.rank(pct=True) * 99
+        rs_perf = pd.Series(stock_scores).astype(int)
         
-        return rs_perf, ranks, cloud_tickers
+        # We assign the raw score directly as your ranking metrics instead of the old percentile conversion
+        return rs_perf, rs_perf, cloud_tickers
     except Exception as e:
         st.error(f"Error: {e}")
         return None, None, None
 
 # Reference Scanner Logic Functions
-def scan_two_botak(df):
-    if len(df) < 2: return False
-    # Adjusted check to look for high precision data setups across yfinance values
+def scan_two_botak(df, lookback=0):
+    idx = -1 - lookback
+    if len(df) < abs(idx) + 1: return False
     botak = (
         (abs(df['Close'] - df['High']) < 0.05) & 
         (df['Close'] > df['Open'])
@@ -279,24 +293,30 @@ def scan_two_botak(df):
         (percentile & botak.shift(1)) |
         (percentile & percentile.shift(1))
     )
-    return bool(twoBotak.iloc[-1])
+    return bool(twoBotak.iloc[idx])
 
-def scan_engulfing(df):
-    if len(df) < 30: return False, False
+def scan_engulfing(df, lookback=0):
+    idx = -1 - lookback
+    if len(df) < 30 + lookback: return False, False
     bullish_engulfing = (
         (df['Open'] < df['Low'].shift(1)) &
         (df['Close'] > df['High'].shift(1))
     )
     engulf_count_series = bullish_engulfing.rolling(window=30).sum()
-    engulf_closes = df.loc[bullish_engulfing, 'Close']
-    prior_engulfs = engulf_closes[engulf_closes.index < df.index[-1]]
+    
+    # Logic for historical comparison
+    df_temp = df.iloc[:len(df)-lookback] if lookback > 0 else df
+    current_idx = df_temp.index[-1]
+    
+    engulf_closes = df_temp.loc[bullish_engulfing, 'Close']
+    prior_engulfs = engulf_closes[engulf_closes.index < current_idx]
 
     eng1 = prior_engulfs.iloc[-1] if len(prior_engulfs) >= 1 else 0
     eng2 = prior_engulfs.iloc[-2] if len(prior_engulfs) >= 2 else 0
     eng3 = prior_engulfs.iloc[-3] if len(prior_engulfs) >= 3 else 0
 
-    current_close = df['Close'].iloc[-1]
-    current_count = engulf_count_series.iloc[-1]
+    current_close = df_temp['Close'].iloc[-1]
+    current_count = engulf_count_series.iloc[idx]
 
     two_engulf = (
         (current_count >= 2) and
@@ -313,21 +333,23 @@ def scan_engulfing(df):
     )
     return bool(two_engulf), bool(three_engulf)
 
-def scan_powertrend(df):
-    if len(df) < 52: return False
+def scan_powertrend(df, lookback=0):
+    idx = -1 - lookback
+    if len(df) < 52 + lookback: return False
     powerma = df['Close'].ewm(span=50, adjust=False).mean()
     gradient = powerma - powerma.shift(1)
     gradientPct = ((powerma - powerma.shift(1)) / powerma.shift(1)) * 100
     absGradient = abs(gradientPct)
     powertrend = (
         (gradient > 0) &
-        (absGradient >= 0.1) & # Slightly optimized boundary condition to avoid rigid flat periods
+        (absGradient >= 1.0) & 
         (df['Close'] >= 20)
     )
-    return bool(powertrend.iloc[-1])
+    return bool(powertrend.iloc[idx])
 
-def scan_powertrend_not_extended(df):
-    if len(df) < 52: return False
+def scan_powertrend_not_extended(df, lookback=0):
+    idx = -1 - lookback
+    if len(df) < 52 + lookback: return False
     powerma = df['Close'].ewm(span=50, adjust=False).mean()
     gradient = powerma - powerma.shift(1)
     gradientPct = ((powerma - powerma.shift(1)) / powerma.shift(1)) * 100
@@ -335,7 +357,7 @@ def scan_powertrend_not_extended(df):
     
     powertrend = (
         (gradient > 0) &
-        (absGradient >= 0.1) &
+        (absGradient >= 1.0) &
         (df['Close'] >= 20)
     )
 
@@ -351,10 +373,33 @@ def scan_powertrend_not_extended(df):
     atrMultiple = (atrMultiple2 * 10).fillna(0).astype(int) / 10
 
     result = (powertrend & (atrMultiple <= 4))
-    return bool(result.iloc[-1])
+    return bool(result.iloc[idx])
 
-def scan_ppp(df):
-    if len(df) < 200: return False
+def scan_value_trap(df, lookback=0):
+    idx = -1 - lookback
+    if len(df) < 50 + lookback: return False
+    
+    high_low = df['High'] - df['Low']
+    high_close = abs(df['High'] - df['Close'].shift(1))
+    low_close = abs(df['Low'] - df['Close'].shift(1))
+    
+    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    absATR = tr.rolling(14).mean()
+    atrPercent = (absATR / df['Close']) * 100
+    
+    sma50 = df['Close'].rolling(50).mean()
+    percentGainFromMA = ((df['Close'] - sma50) / sma50) * 100
+    
+    atrMultiple2 = percentGainFromMA / atrPercent.replace(0, 0.001)
+    atrMultiple2 = atrMultiple2.replace([float('inf'), -float('inf')], pd.NA)
+    atrMultiple = ((atrMultiple2.fillna(0) * 10).astype(int) / 10)
+    
+    result = ((atrMultiple < -4) & (df['Close'] >= 20))
+    return bool(result.iloc[idx])
+
+def scan_ppp(df, lookback=0):
+    idx = -1 - lookback
+    if len(df) < 200 + lookback: return False
     high_low = df['High'] - df['Low']
     high_close = abs(df['High'] - df['Close'].shift(1))
     low_close = abs(df['Low'] - df['Close'].shift(1))
@@ -366,20 +411,16 @@ def scan_ppp(df):
     day0 = (df['Open'] + df['Close']) / 2
     day1 = day0.shift(1)
     day2 = day0.shift(2)
-    day3 = day0.shift(3)
-    day4 = day0.shift(4)
 
     diff0 = abs((day0 - day1) / day1.replace(0, 0.001) * 100)
     diff1 = abs((day1 - day2) / day2.replace(0, 0.001) * 100)
 
-    MALow = df['Low'].ewm(span=21, adjust=False).mean()
     sma50 = df['Close'].rolling(50).mean()
     sma200 = df['Close'].rolling(200).mean()
 
     ma21_and_ma50_or_ma200 = (
         (
-            (df['Close'] >= sma200) |
-            ((df['Close'] >= MALow) & (df['Close'] >= sma50))
+            ((df['Close'] >= sma200) & (df['Close'] >= sma50))
         ) &
         (df['Close'] >= 20)
     )
@@ -389,58 +430,139 @@ def scan_ppp(df):
         (diff1 < dynamicSensitivity) &
         ma21_and_ma50_or_ma200
     )
-    return bool(ppp.iloc[-1])
+    return bool(ppp.iloc[idx])
 
 @st.cache_data(ttl=3600)
 def process_pattern_scanners(stocks_list):
     try:
-        raw_data = yf.download(stocks_list, period="1y", interval="1d", progress=False)
+        raw_data = yf.download(stocks_list, period="2y", interval="1d", progress=False)
+        
+        # Today's Matches
         botak_matches = []
         engulf2_matches = []
         engulf3_matches = []
         powertrend_matches = []
         powertrend_ne_matches = []
+        value_trap_matches = []
         ppp_matches = []
+        
+        # Yesterday's Matches (for color logic)
+        botak_yest = []
+        engulf2_yest = []
+        engulf3_yest = []
+        powertrend_yest = []
+        powertrend_ne_yest = []
+        value_trap_yest = []
+        ppp_yest = []
+
+        # Initialize internal metrics tracking variables
+        know_total_count = 0
+        know_positive_count = 0
+        email_content_stocks = []
         
         for ticker in stocks_list:
             try:
-                # Extract single ticker dataframe safely from multi-index or single index format
                 if len(stocks_list) > 1:
                     ticker_df = pd.DataFrame({
                         'Open': raw_data['Open'][ticker],
                         'High': raw_data['High'][ticker],
                         'Low': raw_data['Low'][ticker],
-                        'Close': raw_data['Close'][ticker]
+                        'Close': raw_data['Close'][ticker],
+                        'Volume': raw_data['Volume'][ticker]
                     }).dropna()
                 else:
-                    ticker_df = raw_data.dropna()
+                    ticker_df = raw_data.dropna().copy()
                 
                 if ticker_df.empty or len(ticker_df) < 50:
                     continue
+
+                # --- INTEGRATION OF CUSTOM USER LOGIC APPLIED TO KNOWN STOCKS ---
+                if ticker in KNOWN_STOCKS and len(ticker_df) >= 260:
+                    # Implement SMA calculations using Close to align seamlessly with template parameters
+                    ticker_df["SMA_50"] = round(ticker_df['Close'].rolling(window=50).mean(), 2)
+                    ticker_df["SMA_150"] = round(ticker_df['Close'].rolling(window=150).mean(), 2)
+                    ticker_df["SMA_200"] = round(ticker_df['Close'].rolling(window=200).mean(), 2)
+
+                    currentClose = ticker_df["Close"].iloc[-1]
+                    prevClose = ticker_df["Close"].iloc[-2]
+                    Volume = ticker_df["Volume"].iloc[-1]
+                    moving_average_50 = ticker_df["SMA_50"].iloc[-1]
+                    moving_average_200 = ticker_df["SMA_200"].iloc[-1]
+                    
+                    low_of_52week = round(min(ticker_df["Low"].iloc[-260:]), 2)
+                    high_of_52week = round(ticker_df["High"].iloc[-260:-1].max(), 2)
+                    volume_50days = ticker_df["Volume"].iloc[-50:].mean()
+                    volume_50days_13x = 1.3 * volume_50days
+                    volume_1year = max(ticker_df["Volume"].iloc[-52:-1])
+
+                    try:
+                        moving_average_200_20 = ticker_df["SMA_200"].iloc[-20]
+                    except:
+                        moving_average_200_20 = 0
+
+                    # Convert boolean metrics directly to integer indicators
+                    condition_1 = int(currentClose > moving_average_50 > moving_average_200)
+                    condition_2 = int(moving_average_50 > moving_average_200)
+                    condition_3 = int(moving_average_200 > moving_average_200_20)
+                    condition_4 = int(moving_average_50 > moving_average_200)
+                    condition_5 = int(currentClose > moving_average_50)
+                    condition_6 = int(currentClose >= (1.3 * low_of_52week))
+                    condition_7 = int(currentClose >= (0.75 * high_of_52week))
+                    condition_8 = int(currentClose >= 20)
+                    condition_9 = int(Volume > 20000)
+                    condition_10 = int((Volume * currentClose) > 2000000)
+
+                    total = (condition_1 + condition_2 + condition_3 + condition_4 + condition_5 + 
+                             condition_6 + condition_7 + condition_8 + condition_9 + condition_10)
+
+                    if total >= 10:
+                        know_total_count += 1
+                        is_pos_today = currentClose > prevClose
+                        
+                        # Store both the symbol name and its positive state true/false flag
+                        email_content_stocks.append((ticker, is_pos_today)) 
+                        
+                        if is_pos_today:
+                            know_positive_count += 1
                 
-                if scan_two_botak(ticker_df): botak_matches.append(ticker)
-                
-                e2, e3 = scan_engulfing(ticker_df)
+                # Scan Today
+                if scan_two_botak(ticker_df, 0): botak_matches.append(ticker)
+                e2, e3 = scan_engulfing(ticker_df, 0)
                 if e2: engulf2_matches.append(ticker)
                 if e3: engulf3_matches.append(ticker)
-                
-                if scan_powertrend(ticker_df): powertrend_matches.append(ticker)
-                if scan_powertrend_not_extended(ticker_df): powertrend_ne_matches.append(ticker)
-                if scan_ppp(ticker_df): ppp_matches.append(ticker)
+                if scan_powertrend(ticker_df, 0): powertrend_matches.append(ticker)
+                if scan_powertrend_not_extended(ticker_df, 0): powertrend_ne_matches.append(ticker)
+                if scan_value_trap(ticker_df, 0): value_trap_matches.append(ticker)
+                if scan_ppp(ticker_df, 0): ppp_matches.append(ticker)
+
+                # Scan Yesterday
+                if scan_two_botak(ticker_df, 1): botak_yest.append(ticker)
+                e2y, e3y = scan_engulfing(ticker_df, 1)
+                if e2y: engulf2_yest.append(ticker)
+                if e3y: engulf3_yest.append(ticker)
+                if scan_powertrend(ticker_df, 1): powertrend_yest.append(ticker)
+                if scan_powertrend_not_extended(ticker_df, 1): powertrend_ne_yest.append(ticker)
+                if scan_value_trap(ticker_df, 1): value_trap_yest.append(ticker)
+                if scan_ppp(ticker_df, 1): ppp_yest.append(ticker)
+
             except:
                 continue
                 
-        # Minor Change: Alphabetical ascending sort applied to all results
         botak_matches.sort()
         engulf2_matches.sort()
         engulf3_matches.sort()
         powertrend_matches.sort()
         powertrend_ne_matches.sort()
+        value_trap_matches.sort()
         ppp_matches.sort()
+
+        know_pos_pct = (know_positive_count / know_total_count * 100) if know_total_count > 0 else 0
         
-        return botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, ppp_matches
+        return (botak_matches, engulf2_matches, engulf3_matches, powertrend_matches, powertrend_ne_matches, value_trap_matches, ppp_matches,
+                botak_yest, engulf2_yest, engulf3_yest, powertrend_yest, powertrend_ne_yest, value_trap_yest, ppp_yest, 
+                know_pos_pct, know_positive_count, know_total_count, email_content_stocks)
     except:
-        return [], [], [], [], [], []
+        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, []
 
 # 5. UI Layout & Logic
 st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
@@ -452,7 +574,7 @@ status_text = st.empty()
 industry_items = list(INDUSTRIES.items())
 for idx, (industry_name, tickers) in enumerate(industry_items):
     status_text.text(f"Processing {industry_name}...")
-    perf, rs_scores, cloud_list = get_rs_and_cloud_data_cached(tuple(tickers), benchmark)
+    perf, rs_scores, cloud_list = get_rs_and_cloud_data_cached(tuple(tickers), benchmark, 90)
     
     if rs_scores is not None:
         top_n_scores = rs_scores.nlargest(int(top_n))
@@ -508,6 +630,12 @@ if all_data:
         color: #fff;
         font-weight: bold;
     }
+    .new-pattern-badge {
+        background-color: #FFD700;
+        border: 1px solid #B8860B;
+        color: #000;
+        font-weight: bold;
+    }
     .ticker-name { font-weight: bold; color: #ffffff; margin-right: 4px; }
     .ticker-rs { color: #4ecdc4; font-weight: normal; }
     table { width:100%; border-collapse: collapse; }
@@ -527,7 +655,8 @@ if all_data:
 
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
         item = next(d for d in all_data if d["Industry"] == row["Industry"])
-        ticker_html = "".join([f'<div class="ticker-badge"><span class="ticker-name">{r["Ticker"]}</span><span class="ticker-rs">{r["RS Score"]:.1f}</span></div>' for _, r in item["Tickers"].iterrows()])
+        # Change :.1f to :.0f right here:
+        ticker_html = "".join([f'<div class="ticker-badge"><span class="ticker-name">{r["Ticker"]}</span><span class="ticker-rs">{r["RS Score"]:.0f}</span></div>' for _, r in item["Tickers"].iterrows()])
         
         cloud_html = "".join([f'<div class="ticker-badge cloud-badge">{c}</div>' for c in item["Cloud"]])
         bg_color = "#262730" if row_num % 2 == 0 else "#0e1117"
@@ -535,64 +664,138 @@ if all_data:
         table_html += f"""<tr style="background-color: {bg_color};">
         <td style="text-align: center; color: #888; font-weight: bold;">{row_num}</td>
         <td style="font-weight: bold;">{row['Industry']}</td>
-        <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.2f}</td>
+        <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.1f}</td>
         <td>{ticker_html}</td>
         <td>{cloud_html}</td></tr>"""
 
     table_html += "</tbody></table>"
     st.markdown(table_html, unsafe_allow_html=True)
 
-# 7. EXTRA SEPARATE PATTERNS SCANNING BLOCK (No logic impacted above)
+# 7. EXTRA SEPARATE PATTERNS SCANNING BLOCK
 st.markdown("---")
-st.markdown("### 🔍 Technical Pattern Screener (KNOWN_STOCKS Database)")
+#st.markdown("### 🔍 Technical Pattern Screener (KNOWN_STOCKS Database)")
 
 with st.spinner("Scanning pattern anomalies across known instruments..."):
-    b_list, e2_list, e3_list, pt_list, ptne_list, ppp_list = process_pattern_scanners(tuple(KNOWN_STOCKS))
+    results = process_pattern_scanners(tuple(KNOWN_STOCKS))
+    b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list = results[:7]
+    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest = results[7:14]
+    know_pos_pct, know_positive_count, know_total_count, email_content_stocks = results[14:]
 
-col_b, col_p, col_e = st.columns(3)
+# --- 1. TWO BOTAK (Full Horizontal Row) ---
+st.markdown(f"#### 🔥 Two Botak = Awareness short term group burst ({len(b_list)})")
+if b_list:
+    html_b = ""
+    for sym in b_list:
+        cls = "new-pattern-badge" if sym not in b_yest else ""
+        html_b += f'<div class="ticker-badge {cls}">{sym}</div>'
+    st.markdown(html_b, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
 
-with col_b:
-    st.subheader("🔥 Two Botak Pattern")
-    if b_list:
-        html_b = "".join([f'<div class="ticker-badge pattern-badge">{sym}</div>' for sym in b_list])
-        st.markdown(html_b, unsafe_allow_html=True)
-    else:
-        st.info("No active setups discovered.")
+st.markdown("<br>", unsafe_allow_html=True) # Spacer
 
-with col_p:
-    st.subheader("📈 Pinch Play Setup (PPP)")
-    if ppp_list:
-        html_p = "".join([f'<div class="ticker-badge pattern-badge">{sym}</div>' for sym in ppp_list])
-        st.markdown(html_p, unsafe_allow_html=True)
-    else:
-        st.info("No active setups discovered.")
+# --- 2. TIGHT PPP (Full Horizontal Row Below Two Botak) ---
+st.markdown(f"#### 📈 PPP = Opportunity ({len(ppp_list)})")
+if ppp_list:
+    html_p = ""
+    for sym in ppp_list:
+        cls = "new-pattern-badge" if sym not in ppp_yest else ""
+        html_p += f'<div class="ticker-badge {cls}">{sym}</div>'
+    st.markdown(html_p, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
 
-with col_e:
-    st.subheader("🐳 Bullish Engulfing Structures")
-    if e2_list or e3_list:
-        if e2_list:
-            st.markdown("**2x Engulfing Conditions Matched:**")
-            html_e2 = "".join([f'<div class="ticker-badge pattern-badge">{sym}</div>' for sym in e2_list])
-            st.markdown(html_e2, unsafe_allow_html=True)
-        if e3_list:
-            st.markdown("<div style='margin-top:10px;'><b>3x Engulfing Conditions Matched:</b></div>", unsafe_allow_html=True)
-            html_e3 = "".join([f'<div class="ticker-badge pattern-badge">{sym}</div>' for sym in e3_list])
-            st.markdown(html_e3, unsafe_allow_html=True)
-    else:
-        st.info("No active setups discovered.")
+st.markdown("<br>", unsafe_allow_html=True) # Spacer
 
-# Extra underlying trends metrics displayed for deep context visibility
-with st.expander("Show Extra Trend Metrics (PowerTrend Indicators)"):
-    col_pt1, col_pt2 = st.columns(2)
-    with col_pt1:
-        st.markdown("**Active PowerTrend:**")
-        if pt_list:
-            st.markdown("".join([f'<div class="ticker-badge">{sym}</div>' for sym in pt_list]), unsafe_allow_html=True)
+# --- 3. BULLISH ENGULFING (Full Horizontal Row Below Tight PPP) ---
+total_engulf = len(e2_list) + len(e3_list)
+st.markdown(f"#### 🐳 Bullish Engulfing = Awareness HL ({total_engulf})")
+
+if e2_list or e3_list:
+    if e2_list:
+        st.markdown(f"**2x Engulfing Conditions Matched ({len(e2_list)}):**")
+        html_e2 = ""
+        for sym in e2_list:
+            cls = "new-pattern-badge" if sym not in e2_yest else ""
+            html_e2 += f'<div class="ticker-badge {cls}">{sym}</div>'
+        st.markdown(html_e2, unsafe_allow_html=True)
+    if e3_list:
+        st.markdown(f"<div style='margin-top:10px;'><b>3x Engulfing Conditions Matched ({len(e3_list)}):</b></div>", unsafe_allow_html=True)
+        html_e3 = ""
+        for sym in e3_list:
+            cls = "new-pattern-badge" if sym not in e3_yest else ""
+            html_e3 += f'<div class="ticker-badge {cls}">{sym}</div>'
+        st.markdown(html_e3, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
+
+
+# --- EXTRA TREND METRICS (Stacked Horizontally Below Patterns) ---
+#st.markdown("---")
+#st.markdown("### 📊 Extra Trend Metrics (PowerTrend Indicators)")
+st.markdown("<br>", unsafe_allow_html=True) # Spacer
+
+# --- 4. POWERTREND (Full Horizontal Row) ---
+st.markdown(f"**PowerTrend = Awareness thematic leaders ({len(pt_list)}):**")
+if pt_list:
+    html_pt = ""
+    for sym in pt_list:
+        cls = "new-pattern-badge" if sym not in pt_yest else ""
+        html_pt += f'<div class="ticker-badge {cls}">{sym}</div>'
+    st.markdown(html_pt, unsafe_allow_html=True)
+else:
+    st.text("None")
+
+st.markdown("<br>", unsafe_allow_html=True) # Spacer
+
+# --- 5. POWERTREND NOT EXTENDED (Full Horizontal Row Below PowerTrend) ---
+st.markdown(f"**PowerTrend (Not Extended) ({len(ptne_list)}):**")
+if ptne_list:
+    html_ptne = ""
+    for sym in ptne_list:
+        cls = "new-pattern-badge" if sym not in ptne_yest else ""
+        html_ptne += f'<div class="ticker-badge {cls}">{sym}</div>'
+    st.markdown(html_ptne, unsafe_allow_html=True)
+else:
+    st.text("None")
+
+st.markdown("<br>", unsafe_allow_html=True) # Spacer
+
+# --- 6. VALUE TRAP (Full Horizontal Row Below PowerTrend Not Extended) ---
+st.markdown(f"**Value Trap ({len(vt_list)}):**")
+if vt_list:
+    html_vt = ""
+    for sym in vt_list:
+        cls = "new-pattern-badge" if sym not in vt_yest else ""
+        html_vt += f'<div class="ticker-badge {cls}">{sym}</div>'
+    st.markdown(html_vt, unsafe_allow_html=True)
+else:
+    st.text("None")
+
+st.markdown("<br>", unsafe_allow_html=True) # Spacer
+
+# --- Display metrics row at the very bottom of the website ---
+#st.write(f"**Known Pos Pct:** {know_pos_pct:.2f}% | **Known Positive Count:** {know_positive_count} | **Known Total Count:** {know_total_count}")
+
+# --- Render the Qualifying Stocks List Row ---
+st.markdown("<div style='margin-top:20px; font-size:14px; font-weight:bold;'>⭐ Minervini Qualified Stocks (Total >= 10):</div>", unsafe_allow_html=True)
+if email_content_stocks:
+    stocks_html = ""
+    
+    # Applied sorted() here to sort the tuples alphabetically by the stock ticker
+    for sym, is_positive in sorted(email_content_stocks):
+        if is_positive:
+            # Special Gold Badge Styling for items matching positive close direction states
+            stocks_html += f'<div class="ticker-badge" style="background-color: #3a321d; border: 1px solid #FFD700; color: #FFD700; font-weight: bold;">{sym} 🗲</div>'
         else:
-            st.text("None")
-    with col_pt2:
-        st.markdown("**PowerTrend (Not Extended):**")
-        if ptne_list:
-            st.markdown("".join([f'<div class="ticker-badge cloud-badge">{sym}</div>' for sym in ptne_list]), unsafe_allow_html=True)
-        else:
-            st.text("None")
+            # Standard Matching Badge Layout
+            stocks_html += f'<div class="ticker-badge">{sym}</div>'
+            
+    st.markdown(stocks_html, unsafe_allow_html=True)
+else:
+    st.info("No stocks matched all required filters today.")
+
+st.markdown("<br>", unsafe_allow_html=True) # Spacer
+
+# --- Your exact Summary Line rendered directly below ---
+st.write(f"**Known Pos Pct:** {know_pos_pct:.2f}% | **Known Positive Count:** {know_positive_count} | **Known Total Count:** {know_total_count}")
