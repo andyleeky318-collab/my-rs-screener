@@ -2605,8 +2605,8 @@ st.markdown("---")
 
 st.markdown(
     f"#### ⭐ Minervini ("
-    f"+ve Pct: {know_pos_pct:.1f}% .. "
-    f"+ve Count: {know_positive_count} .. "
+    f"+ve Pct: {know_pos_pct:.1f}% ... "
+    f"+ve Count: {know_positive_count} ... "
     f"Total: {know_total_count})"
 )
 
@@ -2630,7 +2630,7 @@ if email_content_stocks or email_content_removed:
         
     st.markdown(minervini_html, unsafe_allow_html=True)
 else:
-    st.info("No active RS leaders discovered.")
+    st.info("No active setups discovered.")
 
 st.markdown("---")
 
@@ -2714,7 +2714,7 @@ if leader_list or leader_yest:
     st.markdown(html_leader, unsafe_allow_html=True)
 
 else:
-    st.info("No active RS leaders discovered.")
+    st.info("No active setups discovered.")
 
 st.write("")
 # if not leader_hist.empty:
@@ -3083,7 +3083,7 @@ if pt_list or pt_yest:
             if not pd.isna(pt_close) and not pd.isna(pt_high):
                 pt_price = (
                     f'<span style="color:#aaaaaa; font-size:10px; margin-left:4px;">'
-                    f'C${pt_close:.2f} H${pt_high:.2f}'
+                    #f'C${pt_close:.2f} H${pt_high:.2f}'
                     f'</span>'
                 )
         html_pt += f'<div class="ticker-badge {cls}">{sym}{pt_price}</div>'
@@ -3095,7 +3095,7 @@ if pt_list or pt_yest:
         
     st.markdown(html_pt, unsafe_allow_html=True)
 else:
-    st.info("No active RS leaders discovered.")
+    st.info("No active setups discovered.")
 
 st.write("")
 # if not powertrend_hist.empty:
@@ -3145,7 +3145,7 @@ if ptne_list:
         html_ptne += f'<div class="ticker-badge {cls}">{sym}</div>'
     st.markdown(html_ptne, unsafe_allow_html=True)
 else:
-    st.info("No active RS leaders discovered.")
+    st.info("No active setups discovered.")
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
@@ -3165,7 +3165,7 @@ if vt_list or vt_yest:
         
     st.markdown(html_vt, unsafe_allow_html=True)
 else:
-    st.info("No active RS leaders discovered.")
+    st.info("No active setups discovered.")
 
 st.markdown("---")
 
@@ -3483,7 +3483,7 @@ if (gapBottom !== null && gapTop !== null && {gap_date_js} !== null) {{
                     components.html(chart_html, height=GAPPER_CHART_SIZE + 32, scrolling=False)
 
 else:
-    st.info("No active gapper setups discovered.")
+    st.info("No active setups discovered.")
 
 
 
