@@ -2698,8 +2698,19 @@ st.write("")
 
 #st.markdown(f"### Minervini Count ({know_total_count})")
 if not historical_df.empty:
-    # 1. THE ORIGINAL CHART: Updated to pass the full dataframe to show 90 days instead of 30
-    st.line_chart(data=historical_df, x="Date", y="Minervini Count", use_container_width=True)
+    chart_df_minervini = historical_df.copy()
+    chart_df_minervini["20D MA"] = (
+        chart_df_minervini["Minervini Count"]
+        .rolling(window=20, min_periods=1)
+        .mean()
+        .round(1)
+    )
+    st.line_chart(
+        data=chart_df_minervini,
+        x="Date",
+        y=["Minervini Count", "20D MA"],
+        use_container_width=True
+    )
     
     #st.markdown("---")
     
