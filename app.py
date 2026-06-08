@@ -190,7 +190,7 @@ INDUSTRIES = {
     'TELCOM SVC-WIRLES': ['TMUS', 'VZ', 'T', 'LBRDA', 'TIGO', 'TDS'],
     'ELEC-SEMICON FBLSS': ['SMH', 'SIMO', 'ARM', 'NVDA', 'AVGO', 'AMD', 'QCOM', 'ADI', 'MRVL', 'NXPI', 'MPWR', 'MCHP', 'ON', 'SWKS', 'QRVO', 'ALAB', 'CRDO', 'MTSI', 'LSCC', 'CRUS', 'PI', 'RMBS', 'SITM', 'ALGM', 'SLAB', 'POWI', 'IPGP', 'SMTC', 'DIOD', 'SYNA', 'AMBA'],
     'ELEC-SEMICON FNDRY': ['TSM', 'TXN', 'INTC', 'GFS', 'AMKR', 'TSEM', 'FORM', 'STM'],
-    'ROBOTIC': ['AMBA', 'ARBE', 'MBLY', 'NOVT', 'HLX', 'JOBY', 'CDNS', 'CGNX', 'ZBRA', 'NVDA', 'CRNC', 'ROK', 'RR', 'PRCT', 'PTC', 'TSLA', 'ADSK', 'NDSN', 'DE', 'HSAI', 'ISRG', 'EMR', 'SERV', 'AVAV', 'TER', 'IPGP', 'TRMB', 'SYM'],
+    'ROBOTIC': ['AMBA', 'ARBE', 'MBLY', 'NOVT', 'HLX', 'JOBY', 'CGNX', 'ZBRA', 'CRNC', 'ROK', 'RR', 'PRCT', 'PTC', 'NDSN', 'HSAI', 'EMR', 'SERV', 'AVAV', 'TER', 'IPGP', 'TRMB', 'SYM'],
     'RARE EARTH': ['REMX', 'RARE', 'USAR', 'METC', 'TMC', 'MP', 'MOS', 'CRML', 'NB', 'PPTA', 'UAMY'],
     'QUANTUM': ['QNT', 'QTUM', 'QMCO', 'IONQ', 'QUBT', 'QBTS', 'RGTI', 'BTQ', 'ARQQ', 'INFQ', 'XNDU'],
     'FUEL CELL': ['FCEL', 'BLDP', 'HYDR', 'BE', 'PLUG'],
