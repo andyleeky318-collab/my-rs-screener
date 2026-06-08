@@ -1,4 +1,3 @@
-import altair as alt
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -2795,48 +2794,29 @@ st.write("")
 if not leader_hist.empty:
     # 1. Create a temporary copy to prevent altering your original global dataframe
     chart_df = leader_hist.copy()
-
-    # --- NEW: Calculate Moving Average ---
-    # Adjust the window (e.g., 7 days) to whatever fits your data best
-    chart_df["Moving_Average"] = (
-        chart_df["Leader Count"].rolling(window=7, min_periods=1).mean()
-    )
-
+    
     # 2. Determine if the most recent row (today) holds the absolute maximum value
     today_value = chart_df["Leader Count"].iloc[-1]
     max_value = chart_df["Leader Count"].max()
     min_value = chart_df["Leader Count"].min()
-
-    # 3. Add an explicit 'Bar_Color' column to your dataframe
+    
+    # 3. Add a explicit 'Bar_Color' column to your dataframe
     if today_value == max_value or today_value == min_value:
+        # Define base color array, then override the last row (today) with your accent color
         chart_df["Bar_Color"] = "#29B5E8"
         chart_df.iloc[-1, chart_df.columns.get_loc("Bar_Color")] = "#FF4B4B"
     else:
+        # Standard uniform blue color if today isn't the highest
         chart_df["Bar_Color"] = "#29B5E8"
 
-    # --- NEW: Render Layered Chart using Altair ---
-
-    # Base chart to share the X-axis (Date)
-    base = alt.Chart(chart_df).encode(
-        x=alt.X("Date:T", axis=alt.Axis(labelAngle=-45))
+    # 4. Render chart mapping color directly to the new dataframe column
+    st.bar_chart(
+        data=chart_df,
+        x="Date",
+        y="Leader Count",
+        color="Bar_Color",  # Direct Streamlit to read colors line-by-line from this column
+        use_container_width=True
     )
-
-    # Layer 1: The Bars (using your dynamic colors)
-    bars = base.mark_bar().encode(
-        y=alt.Y("Leader Count:Q"),
-        color=alt.Color(
-            "Bar_Color:N", scale=None
-        ),  # scale=None tells Altair to use actual hex strings
-    )
-
-    # Layer 2: The Moving Average Line
-    line = base.mark_line(color="#FF9F1C", size=3).encode(
-        y=alt.Y("Moving_Average:Q")
-    )
-
-    # Combine them and display
-    layered_chart = alt.layer(bars, line).properties(height=400)
-    st.altair_chart(layered_chart, use_container_width=True)
 
 # ==========================================
 # THEMATIC AI ANALYSIS - RS LEADERS
