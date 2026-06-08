@@ -2709,6 +2709,7 @@ if not historical_df.empty:
         data=chart_df_minervini,
         x="Date",
         y=["Minervini Count", "20D MA"],
+        color=["#1f77b4", "#FF4B4B"],
         use_container_width=True
     )
     
