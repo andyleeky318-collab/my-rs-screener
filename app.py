@@ -2659,11 +2659,11 @@ if not historical_df.empty and len(historical_df) >= 10:
             structure_desc = "Coiling / Symmetrical Compression"
             
     # 4. Determine Momentum & Direction Status Flags
-    if ma_short > ma_long and current_count >= prev_count:
+    if ma_short > ma_long and current_count >= ma_long:
         status_color = "#00FF00" # Emerald Green
         status_title = "EXPANDING MOMENTUM"
         action_note = "Market participation is expanding actively. Growth setups have a high probability of immediate follow-through. Lean long."
-    elif ma_short < ma_long and current_count <= prev_count:
+    elif ma_short < ma_long and current_count <= ma_long:
         status_color = "#FF4B4B" # Red
         status_title = "DETERIORATING BREADTH"
         action_note = "Market leadership is thinning or experiencing distribution. New breakouts are prone to failure traps. Tighten risk parameters and trail stops aggressively."
