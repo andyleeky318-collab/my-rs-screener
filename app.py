@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 import time
 from google import genai
+import streamlit.components.v1 as components
+import json
 
 _timing_log = {}  # module-level dict, accumulates across all call sites
 
@@ -3677,3 +3679,53 @@ if _timing_log:
 
 st.markdown("---")
 
+#st.markdown("---")
+st.markdown("#### 🫧 Leveraged ETF Universe — Volume Map")
+
+LEVERAGED_ETFS = [
+    {"t":"AAPU","lev":2,"vol":1.2,"cat":"bull","under":"AAPL","desc":"2x Apple"},
+    {"t":"AAPB","lev":-2,"vol":0.8,"cat":"bear","under":"AAPL","desc":"-2x Apple"},
+    {"t":"AMZU","lev":2,"vol":1.5,"cat":"bull","under":"AMZN","desc":"2x Amazon"},
+    {"t":"AMZZ","lev":-2,"vol":0.6,"cat":"bear","under":"AMZN","desc":"-2x Amazon"},
+    {"t":"GGLL","lev":2,"vol":1.1,"cat":"bull","under":"GOOGL","desc":"2x Alphabet"},
+    {"t":"GGLS","lev":-2,"vol":0.5,"cat":"bear","under":"GOOGL","desc":"-2x Alphabet"},
+    {"t":"MSFU","lev":2,"vol":1.3,"cat":"bull","under":"MSFT","desc":"2x Microsoft"},
+    {"t":"MSFX","lev":-2,"vol":0.4,"cat":"bear","under":"MSFT","desc":"-2x Microsoft"},
+    {"t":"METU","lev":2,"vol":2.8,"cat":"bull","under":"META","desc":"2x Meta"},
+    {"t":"FBL","lev":2,"vol":1.9,"cat":"bull","under":"META","desc":"2x Meta (alt)"},
+    {"t":"NFLU","lev":2,"vol":1.0,"cat":"bull","under":"NFLX","desc":"2x Netflix"},
+    {"t":"TSLL","lev":2,"vol":18.5,"cat":"bull","under":"TSLA","desc":"2x Tesla"},
+    {"t":"TSLT","lev":-2,"vol":3.2,"cat":"bear","under":"TSLA","desc":"-2x Tesla"},
+    {"t":"NVDL","lev":2,"vol":22.4,"cat":"bull","under":"NVDA","desc":"2x Nvidia"},
+    {"t":"NVDU","lev":2,"vol":4.1,"cat":"bull","under":"NVDA","desc":"2x Nvidia (alt)"},
+    {"t":"PLTU","lev":2,"vol":1.4,"cat":"bull","under":"PLTR","desc":"2x Palantir"},
+    {"t":"ARMG","lev":2,"vol":1.2,"cat":"bull","under":"ARM","desc":"2x ARM Holdings"},
+    {"t":"MSTU","lev":2,"vol":6.8,"cat":"bull","under":"MSTR","desc":"2x MicroStrategy"},
+    {"t":"CONL","lev":2,"vol":2.1,"cat":"bull","under":"COIN","desc":"2x Coinbase"},
+    {"t":"ASMU","lev":2,"vol":1.6,"cat":"bull","under":"ASML","desc":"2x ASML"},
+    {"t":"MRVU","lev":2,"vol":1.0,"cat":"bull","under":"MRVL","desc":"2x Marvell"},
+    {"t":"AVGU","lev":2,"vol":1.8,"cat":"bull","under":"AVGO","desc":"2x Broadcom"},
+    {"t":"GOOX","lev":2,"vol":0.9,"cat":"bull","under":"GOOGL","desc":"2x Google (alt)"},
+    {"t":"MAGX","lev":2,"vol":3.5,"cat":"bull","under":"MAG7","desc":"2x Mag-7 basket"},
+    {"t":"FNGU","lev":3,"vol":12.0,"cat":"sector","under":"FANG+","desc":"3x FANG+"},
+    {"t":"BULZ","lev":3,"vol":2.3,"cat":"bull","under":"MAG7","desc":"3x Mag-7"},
+    {"t":"SOXL","lev":3,"vol":45.0,"cat":"sector","under":"SOX","desc":"3x Semiconductors"},
+    {"t":"TECL","lev":3,"vol":8.5,"cat":"sector","under":"XLK","desc":"3x Technology"},
+    {"t":"TQQQ","lev":3,"vol":90.0,"cat":"broad","under":"QQQ","desc":"3x Nasdaq-100"},
+    {"t":"UPRO","lev":3,"vol":20.0,"cat":"broad","under":"SPY","desc":"3x S&P 500"},
+    {"t":"ROM","lev":2,"vol":3.2,"cat":"sector","under":"XLK","desc":"2x Technology"},
+    {"t":"QLD","lev":2,"vol":7.5,"cat":"broad","under":"QQQ","desc":"2x Nasdaq-100"},
+    {"t":"MUU","lev":2,"vol":0.7,"cat":"bull","under":"MU","desc":"2x Micron"},
+    {"t":"BEX","lev":2,"vol":0.5,"cat":"bull","under":"BE","desc":"2x Bloom Energy"},
+    {"t":"GLWG","lev":2,"vol":0.4,"cat":"bull","under":"GLW","desc":"2x Corning"},
+]
+
+etfs_json = json.dumps(LEVERAGED_ETFS)
+
+bubble_html = f"""
+<!-- paste the full HTML/JS from the widget above here, replacing:
+     const etfs = [...];   →  const etfs = {etfs_json};
+-->
+"""
+
+components.html(bubble_html, height=580, scrolling=False)
