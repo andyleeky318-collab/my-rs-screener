@@ -2633,6 +2633,25 @@ else:
 #st.markdown("---")
 st.write("")
 
+# --- ALL TIME HIGH ---
+st.markdown(f"#### 🔺 All Time High Close ({len(ath_list)})")
+
+if ath_list or ath_yest:
+    html_ath = ""
+    for sym in ath_list:
+        cls = "new-pattern-badge" if sym not in ath_yest else ""
+        html_ath += f'<div class="ticker-badge {cls}">{sym}</div>'
+
+    removed_ath = [sym for sym in ath_yest if sym not in ath_list]
+    for sym in sorted(removed_ath):
+        html_ath += f'<div class="ticker-badge removed-badge">{sym}</div>'
+
+    st.markdown(html_ath, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
+
+st.write("")
+
 with st.spinner("Computing Historical Known Counts..."):
     historical_df = timed("compute_historical_know_counts", compute_historical_know_counts, stocks_tuple, ticker_dfs_shared)
 
@@ -3658,19 +3677,3 @@ if _timing_log:
 
 st.markdown("---")
 
-# --- ALL TIME HIGH ---
-st.markdown(f"#### 🏔️ All Time High Close ({len(ath_list)})")
-
-if ath_list or ath_yest:
-    html_ath = ""
-    for sym in ath_list:
-        cls = "new-pattern-badge" if sym not in ath_yest else ""
-        html_ath += f'<div class="ticker-badge {cls}">{sym}</div>'
-
-    removed_ath = [sym for sym in ath_yest if sym not in ath_list]
-    for sym in sorted(removed_ath):
-        html_ath += f'<div class="ticker-badge removed-badge">{sym}</div>'
-
-    st.markdown(html_ath, unsafe_allow_html=True)
-else:
-    st.info("No active setups discovered.")
