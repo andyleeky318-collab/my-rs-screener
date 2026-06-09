@@ -2634,7 +2634,7 @@ else:
 st.write("")
 
 # --- ALL TIME HIGH ---
-st.markdown(f"#### 🔺 All Time High Close ({len(ath_list)})")
+st.markdown(f"#### ✨ All Time High Close ({len(ath_list)})")
 
 if ath_list or ath_yest:
     html_ath = ""
