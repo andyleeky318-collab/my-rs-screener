@@ -1096,7 +1096,8 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                     prev_ath = close_series.shift(1).expanding().max()
                     ath_s = (
                         ~prev_ath.isna() &
-                        (close_series > prev_ath)
+                        (close_series > prev_ath) &
+                        (close_series > 20)
                     )
                     if bool(ath_s.iloc[-1]): ath_matches.append(ticker)
                     if bool(ath_s.iloc[-2]): ath_yest.append(ticker)
