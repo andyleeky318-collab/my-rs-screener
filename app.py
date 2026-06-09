@@ -919,6 +919,8 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
         ppp_yest = []
         leader_yest = []
         gapper_yest = []
+        ath_matches = []
+        ath_yest = []
 
         # Initialize internal metrics tracking variables
         know_total_count = 0
@@ -1088,6 +1090,16 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                     )
                     if bool(two_botak_s.iloc[-1]): botak_matches.append(ticker)
                     if bool(two_botak_s.iloc[-2]): botak_yest.append(ticker)
+
+                # --- All Time High Close ---
+                if df_len >= 2:
+                    prev_ath = close_series.shift(1).expanding().max()
+                    ath_s = (
+                        ~prev_ath.isna() &
+                        (close_series > prev_ath)
+                    )
+                    if bool(ath_s.iloc[-1]): ath_matches.append(ticker)
+                    if bool(ath_s.iloc[-2]): ath_yest.append(ticker)
 
                 # --- Gapper ---
                 if df_len >= 22:
@@ -1385,10 +1397,12 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
             extra_52wk_high_removed,
             pct_above_ema200,
             leader_rs_nh_matches,
-            gapper_gap_levels
+            gapper_gap_levels,
+            ath_matches,    # ← add
+            ath_yest,       # ← add
         )
     except:
-        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, [], [], [], [], 0
+        return [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], 0, 0, 0, [], [], [], [], 0, [], [], []
     
 # 5. UI Layout & Logic
 #st.markdown("<h3 style='font-size: 16px; margin-bottom: 10px;'>📊 Relative Strength Screener</h3>", unsafe_allow_html=True)
@@ -2457,7 +2471,7 @@ with st.spinner("Scanning pattern anomalies across known instruments..."):
     # leader_hist     = compute_leader_history(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
     b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list, leader_list, gapper_list = results[:9]
     b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest, leader_yest, gapper_yest = results[9:18]
-    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200, leader_rs_nh_matches, gapper_gap_levels = results[18:]
+    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200, leader_rs_nh_matches, gapper_gap_levels, ath_list, ath_yest = results[18:]
 
 st.markdown("---")
 
@@ -3640,3 +3654,22 @@ if _timing_log:
 
     total_ms = sum(_timing_log.values())
     st.caption(f"Total measured wall-clock time: **{total_ms/1000:.2f}s** across {len(_timing_log)} tracked calls")
+
+st.markdown("---")
+
+# --- ALL TIME HIGH ---
+st.markdown(f"#### 🏔️ All Time High Close ({len(ath_list)})")
+
+if ath_list or ath_yest:
+    html_ath = ""
+    for sym in ath_list:
+        cls = "new-pattern-badge" if sym not in ath_yest else ""
+        html_ath += f'<div class="ticker-badge {cls}">{sym}</div>'
+
+    removed_ath = [sym for sym in ath_yest if sym not in ath_list]
+    for sym in sorted(removed_ath):
+        html_ath += f'<div class="ticker-badge removed-badge">{sym}</div>'
+
+    st.markdown(html_ath, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
