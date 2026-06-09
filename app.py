@@ -3723,9 +3723,57 @@ LEVERAGED_ETFS = [
 etfs_json = json.dumps(LEVERAGED_ETFS)
 
 bubble_html = f"""
-<!-- paste the full HTML/JS from the widget above here, replacing:
-     const etfs = [...];   →  const etfs = {etfs_json};
--->
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body style="margin:0;background:#0e1117;">
+
+<svg width="100%" height="580"></svg>
+
+<script>
+const data = {etfs_json};
+
+const width = window.innerWidth;
+const height = 580;
+
+const svg = d3.select("svg")
+  .attr("width", width)
+  .attr("height", height);
+
+const scale = d3.scaleSqrt()
+  .domain([0, d3.max(data, d => d.vol)])
+  .range([10, 60]);
+
+const color = d => d.cat === "bull" ? "#4CAF50"
+                : d.cat === "bear" ? "#FF4D6D"
+                : "#4DA3FF";
+
+const nodes = svg.selectAll("circle")
+  .data(data)
+  .enter()
+  .append("circle")
+  .attr("r", d => scale(d.vol))
+  .attr("fill", d => color(d))
+  .attr("opacity", 0.8)
+  .attr("cx", (d,i) => (i % 10) * 120 + 80)
+  .attr("cy", (d,i) => Math.floor(i / 10) * 120 + 80);
+
+svg.selectAll("text")
+  .data(data)
+  .enter()
+  .append("text")
+  .text(d => d.t)
+  .attr("x", (d,i) => (i % 10) * 120 + 80)
+  .attr("y", (d,i) => Math.floor(i / 10) * 120 + 85)
+  .attr("fill", "white")
+  .attr("font-size", "10px")
+  .attr("text-anchor", "middle");
+
+</script>
+</body>
+</html>
 """
 
-components.html(bubble_html, height=580, scrolling=False)
+components.html(bubble_html, height=600, scrolling=False)
