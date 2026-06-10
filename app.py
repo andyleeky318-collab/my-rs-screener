@@ -441,18 +441,18 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             if ticker == "CRWD":
                 st.sidebar.warning("⚠️ DEBUGGING FOR CRWD ACTIVATED")
                 
-                # # Check metrics availability
-                # debug_info = {
-                #     "Ticker Symbol": ticker,
-                #     "Current Cached Price": round(current_price, 2) if 'current_price' in locals() else "N/A",
-                #     "Total Raw RS Score": total_score,
-                #     "Has Data Available": ticker in close_data.columns,
-                #     "Historical Bars Fetched": int(close_data[ticker].notna().sum()),
-                #     "Requested Window Length": length,
-                #     "Is Current High NaN": pd.isna(current_hh),
-                #     "Is Current Low NaN": pd.isna(current_ll)
-                # }
-                # st.sidebar.json(debug_info)            
+                # Check metrics availability
+                debug_info = {
+                    "Ticker Symbol": ticker,
+                    "Current Cached Price": round(current_price, 2) if 'current_price' in locals() else "N/A",
+                    "Total Raw RS Score": total_score,
+                    "Has Data Available": ticker in close_data.columns,
+                    "Historical Bars Fetched": int(close_data[ticker].notna().sum()),
+                    "Requested Window Length": length,
+                    "Is Current High NaN": pd.isna(current_hh),
+                    "Is Current Low NaN": pd.isna(current_ll)
+                }
+                st.sidebar.json(debug_info)            
 
             # ================================
             # DEBUG AMAT
@@ -3185,7 +3185,7 @@ if pt_list or pt_yest:
             if not pd.isna(pt_close) and not pd.isna(pt_high):
                 pt_price = (
                     f'<span style="color:#aaaaaa; font-size:10px; margin-left:4px;">'
-                    #f'C${pt_close:.2f} H${pt_high:.2f}'
+                    f'C${pt_close:.2f} H${pt_high:.2f}'
                     f'</span>'
                 )
         html_pt += f'<div class="ticker-badge {cls}">{sym}{pt_price}</div>'
