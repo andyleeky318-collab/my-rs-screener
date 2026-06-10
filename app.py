@@ -2021,6 +2021,66 @@ def compute_powertrend_history(stocks_list, ticker_dfs):
         return pd.DataFrame()
 
 @st.cache_data(ttl=3600)
+def compute_setup_avgrank_history(stocks_list, ticker_dfs, all_data_snapshot):
+    try:
+        if not ticker_dfs or not all_data_snapshot:
+            return pd.DataFrame()
+
+        # Build industry -> rank map (current sort order, descending Group RS)
+        industry_rank_map = {item["Industry"]: idx + 1 for idx, item in enumerate(
+            sorted(all_data_snapshot, key=lambda x: x["Group RS"], reverse=True)
+        )}
+
+        # Build ticker -> industries map
+        ticker_industry_map = {}
+        for item in all_data_snapshot:
+            industry = item["Industry"]
+            for col in ["Cloud21EMA", "CloudWick", "MA50Bounce"]:
+                for sym in item.get(col, []):
+                    if sym in stocks_list:
+                        if sym not in ticker_industry_map:
+                            ticker_industry_map[sym] = []
+                        if industry not in ticker_industry_map[sym]:
+                            ticker_industry_map[sym].append(industry)
+
+        # Use any ticker to get the date index
+        any_ticker = next(iter(ticker_dfs))
+        full_timeline = ticker_dfs[any_ticker].index
+        days_to_compute = min(60, len(full_timeline))
+
+        records = []
+        for i in range(days_to_compute - 1, -1, -1):
+            target_idx = -1 - i
+            current_date = full_timeline[target_idx]
+
+            # On each historical day, a ticker "counts" if its close > 20
+            # and it has a valid industry rank
+            rank_sum = 0
+            setup_count = 0
+            for sym, industries in ticker_industry_map.items():
+                df = ticker_dfs.get(sym)
+                if df is None or len(df) < abs(target_idx) + 1:
+                    continue
+                close_val = df['Close'].iloc[target_idx]
+                if pd.isna(close_val) or close_val < 20:
+                    continue
+                ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+                if not ranks:
+                    continue
+                rank_sum += min(ranks)
+                setup_count += 1
+
+            avg_rank = round(rank_sum / setup_count, 1) if setup_count > 0 else 0
+            records.append({
+                "Date": current_date.strftime("%Y-%m-%d"),
+                "Avg Rank": avg_rank,
+            })
+
+        return pd.DataFrame(records)
+    except Exception:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=3600)
 def compute_leader_history(stocks_list, ticker_dfs, benchmark_df_leader):
     try:
         if not ticker_dfs:
@@ -3661,7 +3721,37 @@ else:
 #         st.dataframe(debug_df, use_container_width=True)
 # # END DEBUG ENGULFING
 
+st.markdown("---")
 
+with st.spinner("Computing Setup Avg Rank history..."):
+    setup_avgrank_hist = timed(
+        "compute_setup_avgrank_history",
+        compute_setup_avgrank_history,
+        stocks_tuple, ticker_dfs_shared, all_data
+    )
+
+st.markdown(f"#### 📐 Setup Avg Group Rank")
+
+if not setup_avgrank_hist.empty:
+    chart_df_rank = setup_avgrank_hist.copy()
+    today_rank = chart_df_rank["Avg Rank"].iloc[-1]
+    min_rank = chart_df_rank["Avg Rank"].min()
+
+    if today_rank == min_rank:
+        chart_df_rank["Bar_Color"] = "#29B5E8"
+        chart_df_rank.iloc[-1, chart_df_rank.columns.get_loc("Bar_Color")] = "#FF4B4B"
+    else:
+        chart_df_rank["Bar_Color"] = "#29B5E8"
+
+    st.bar_chart(
+        data=chart_df_rank,
+        x="Date",
+        y="Avg Rank",
+        color="Bar_Color",
+        use_container_width=True
+    )
+else:
+    st.info("Insufficient data to compute Setup Avg Rank history.")
 
 # ── Timing Summary ───────────────────────────────────────────────────────────
 st.markdown("---")
