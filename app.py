@@ -272,6 +272,16 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         high_data = data['High']
         low_data = data['Low']
         open_data = data['Open']
+
+        # ADD THIS: drop the latest bar if it has more than 30% NaN across tickers
+        # (the unsettled intraday bar that yf.download sometimes returns)
+        # This aligns with download_known_stocks_data which uses .dropna() per ticker
+        latest_row_nan_pct = close_data.iloc[-1].isna().mean()
+        if latest_row_nan_pct > 0.3:
+            close_data = close_data.iloc[:-1]
+            high_data  = high_data.iloc[:-1]
+            low_data   = low_data.iloc[:-1]
+            open_data  = open_data.iloc[:-1]
         
         valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= length]
         if not valid_tickers: return None, None, None, {}, None, None, None, None, None
