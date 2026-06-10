@@ -3789,10 +3789,11 @@ if not setup_avgrank_hist.empty:
     else:
         chart_df_rank["Bar_Color"] = "#29B5E8"
 
-    st.line_chart(
+    st.bar_chart(
         data=chart_df_rank,
         x="Date",
         y="Avg Rank",
+        color="Bar_Color",
         use_container_width=True
     )
 else:
