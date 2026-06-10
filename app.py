@@ -6,6 +6,7 @@ import time
 from google import genai
 
 _timing_log = {}  # module-level dict, accumulates across all call sites
+_latest_bar_dropped = False
 
 def timed(label, fn, *args, **kwargs):
     """Call fn(*args, **kwargs), record elapsed ms in _timing_log, return result."""
@@ -273,15 +274,19 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         low_data = data['Low']
         open_data = data['Open']
 
-        # ADD THIS: drop the latest bar if it has more than 30% NaN across tickers
-        # (the unsettled intraday bar that yf.download sometimes returns)
-        # This aligns with download_known_stocks_data which uses .dropna() per ticker
+        # Drop the latest bar if it is mostly NaN — this is the unsettled intraday row
+        # yf.download with auto_adjust=False sometimes appends it; download_known_stocks_data
+        # avoids it via per-ticker .dropna(), so we align here to prevent NaN RS scores
+        global _latest_bar_dropped
         latest_row_nan_pct = close_data.iloc[-1].isna().mean()
         if latest_row_nan_pct > 0.3:
             close_data = close_data.iloc[:-1]
             high_data  = high_data.iloc[:-1]
             low_data   = low_data.iloc[:-1]
             open_data  = open_data.iloc[:-1]
+            _latest_bar_dropped = True
+        else:
+            _latest_bar_dropped = False
         
         valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= length]
         if not valid_tickers: return None, None, None, {}, None, None, None, None, None
@@ -448,7 +453,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
                 is_pine_7_valid
             )
 
-            if ticker == "AMD":
+            if ticker == "AMD" and _latest_bar_dropped:
                 st.sidebar.warning("⚠️ DEBUGGING FOR AMD ACTIVATED")
                 
                 # Check metrics availability
@@ -1467,11 +1472,17 @@ status_text.empty()
 progress_bar.empty()
 
 global_setup_tickers = set()
+global_setup_ticker_groups = {}  # ticker -> list of group RS ranks it appears in
 for item in all_data:
-    global_setup_tickers |= (
+    matched = (
         (set(item["Cloud21EMA"]) | set(item["CloudWick"]) | set(item["MA50Bounce"]))
         & set(KNOWN_STOCKS)
     )
+    for sym in matched:
+        global_setup_tickers.add(sym)
+        if sym not in global_setup_ticker_groups:
+            global_setup_ticker_groups[sym] = []
+        global_setup_ticker_groups[sym].append(item["Industry"])
 global_setup_count = len(global_setup_tickers)
 
 # 6. Compact Display Logic
@@ -1574,9 +1585,24 @@ if all_data:
     </style>
     """, unsafe_allow_html=True)
 
+    # Compute weighted average group rank for all setup tickers
+    # Each ticker may appear in multiple groups; use the best (lowest) rank among its groups
+    if global_setup_count > 0 and 'df_main' in dir():
+        industry_rank_map = dict(zip(df_main['Industry'], df_main['Current Rank']))
+        rank_sum = 0
+        for sym in global_setup_tickers:
+            industries = global_setup_ticker_groups.get(sym, [])
+            ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+            rank_sum += min(ranks) if ranks else 0
+        setup_avg_rank = round(rank_sum / global_setup_count, 1)
+        setup_rank_str = f'({setup_avg_rank})'
+    else:
+        setup_rank_str = ''
+
     st.markdown(
         f'<div style="text-align: right; font-size: 20px; color: #888888; margin-bottom: 4px; font-family: monospace;">'
-        f'Setup = <span style="color: #4ecdc4; font-weight: bold;">{global_setup_count}</span></div>',
+        f'Setup = <span style="color: #4ecdc4; font-weight: bold;">{global_setup_count}</span>'
+        f'<span style="color: #888888; font-size: 16px; margin-left: 6px;">{setup_rank_str}</span></div>',
         unsafe_allow_html=True
     )
 
