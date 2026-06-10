@@ -92,7 +92,7 @@ INDUSTRIES = {
     'BLDG-RSIDNT/COMML': ['ITB', 'BLD', 'IBP', 'EXPO', 'DHI', 'LEN', 'NVR', 'PHM', 'TOL', 'MTH', 'TMHC', 'KBH', 'SKY', 'MHO', 'TPH', 'FTDR', 'GRBK', 'DFH', 'CCS', 'LGIH'],
     'BLDG-MBILE/MFG & RV': ['CVCO', 'PATK'],
     'POLLUTION CONTROL': ['WM', 'RSG', 'CLH', 'CWST'],
-    'COMML SVCS-LEASING': ['URI', 'AER', 'UHAL', 'WSC', 'R', 'AL', 'HRI', 'WD', 'CAR', 'MGRC', 'PRG'],
+    'COMML SVCS-LEASING': ['URI', 'AER', 'UHAL', 'WSC', 'R', 'HRI', 'WD', 'CAR', 'MGRC', 'PRG'],
     'FINANCE-CARD/PMTPR': ['AXP', 'SYF', 'AFRM', 'FCFS', 'SLM', 'V', 'MA', 'PYPL', 'GPN', 'CPAY', 'FOUR', 'WEX', 'PAY', 'RELY', 'SOFI'],
     'FINANCE-CONS LOAN': ['RKT', 'OMF', 'ENVA', 'NNI'],
     'FINANCE-CMRCL LOAN': ['OBDC', 'PFSI', 'CACC'],
@@ -148,7 +148,7 @@ INDUSTRIES = {
     'TRANSPORTATION-SHIP': ['KEX', 'FRO', 'MATX', 'GLNG', 'STNG', 'TDW', 'INSW', 'SBLK', 'ZIM', 'TNK'],
     'MDCAL-WHLSLE DRG': ['MCK', 'COR', 'CAH', 'HSIC'],
     'MEDICAL-PRODUCTS': ['TMO', 'ABT', 'DHR', 'A', 'IDXX', 'RMD', 'MTD', 'RVTY', 'BRKR', 'QGEN', 'BIO', 'LNTH', 'MASI', 'GKOS', 'BLCO', 'MMSI'],
-    'MEDICAL-SYSTEMS/EQP': ['IHI', 'ISRG', 'SYK', 'BSX', 'MDT', 'BDX', 'GEHC', 'EW', 'DXCM', 'STE', 'WST', 'COO', 'ZBH', 'WAT', 'HOLX', 'BAX', 'ALGN', 'PODD', 'NTRA', 'TFX', 'PEN', 'INSP'],
+    'MEDICAL-SYSTEMS/EQP': ['IHI', 'ISRG', 'SYK', 'BSX', 'MDT', 'BDX', 'GEHC', 'EW', 'DXCM', 'STE', 'WST', 'COO', 'ZBH', 'WAT', 'BAX', 'ALGN', 'PODD', 'NTRA', 'TFX', 'PEN', 'INSP'],
     'METAL PROC & FABRICA': ['RBC', 'MLI', 'VMI', 'ROCK'],
     'CMML SVCS-CNSLTNG': ['TNET', 'LOPE', 'CNXC', 'ABM', 'LAUR', 'QXO', 'G'],
     'AUTO MANUFACTURERS': ['TSLA', 'GM', 'F', 'RIVN'],
@@ -438,8 +438,8 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
                 is_pine_7_valid
             )
 
-            if ticker == "CRWD":
-                st.sidebar.warning("⚠️ DEBUGGING FOR CRWD ACTIVATED")
+            if ticker == "AMD":
+                st.sidebar.warning("⚠️ DEBUGGING FOR AMD ACTIVATED")
                 
                 # Check metrics availability
                 debug_info = {
