@@ -2422,6 +2422,139 @@ def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
     except Exception as e:
         return {}, {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}, 0
 
+st.markdown("---")
+
+#st.markdown("#### 📊 Industry RS Quadrant Map (Weekly vs Monthly)")
+
+# ── Build per-industry (weekly_rs, monthly_rs) from all_data ─────────────────
+# weekly_rs  = current Group RS (top-N average of today's normalised RS scores)
+# monthly_rs = 1-month-ago Group RS (top-N average of 1-month-ago normalised RS scores)
+quad_points = []
+for item in all_data:
+    industry   = item["Industry"]
+    weekly_rs  = float(item["Group RS"])      # current  (≈ weekly proxy)
+    monthly_rs = float(item["Group RS 1M"])   # 1-month ago (≈ monthly proxy)
+    quad_points.append({
+        "industry"  : industry,
+        "weekly_rs" : round(weekly_rs,  1),
+        "monthly_rs": round(monthly_rs, 1),
+    })
+ 
+if quad_points:
+    xs     = [p["weekly_rs"]  for p in quad_points]
+    ys     = [p["monthly_rs"] for p in quad_points]
+    labels = [p["industry"]   for p in quad_points]
+ 
+    # Colour each dot by quadrant (matching photo tones)
+    dot_colors = []
+    for p in quad_points:
+        w, m = p["weekly_rs"], p["monthly_rs"]
+        if   w >= 50 and m >= 50: dot_colors.append("#1a5c35")   # Strong       — dark green
+        elif w >= 50 and m <  50: dot_colors.append("#1a5c35")   # Improving    — dark green
+        elif w <  50 and m >= 50: dot_colors.append("#8b1a1a")   # Weakening    — dark rose
+        else:                     dot_colors.append("#8b1a1a")   # Weak         — dark salmon
+ 
+    fig = go.Figure()
+ 
+    # ── Quadrant background rectangles ───────────────────────────────────────
+    # Bottom-left  = Weak       — salmon / coral pink (matching photo)
+    fig.add_shape(type="rect", x0=0,  y0=0,   x1=50,  y1=50,
+                  fillcolor="rgba(255,160,160,0.55)", line_width=0, layer="below")
+    # Top-left     = Weakening  — lighter rose (matching photo)
+    fig.add_shape(type="rect", x0=0,  y0=50,  x1=50,  y1=100,
+                  fillcolor="rgba(255,182,193,0.35)", line_width=0, layer="below")
+    # Bottom-right = Improving  — light mint green (matching photo)
+    fig.add_shape(type="rect", x0=50, y0=0,   x1=100, y1=50,
+                  fillcolor="rgba(144,238,144,0.35)", line_width=0, layer="below")
+    # Top-right    = Strong     — deeper green (matching photo)
+    fig.add_shape(type="rect", x0=50, y0=50,  x1=100, y1=100,
+                  fillcolor="rgba(144,238,144,0.60)", line_width=0, layer="below")
+ 
+    # ── Divider lines ─────────────────────────────────────────────────────────
+    fig.add_shape(type="line", x0=50, y0=0,  x1=50,  y1=100,
+                  line=dict(color="rgba(200,200,200,0.55)", width=1.2, dash="dot"))
+    fig.add_shape(type="line", x0=0,  y0=50, x1=100, y1=50,
+                  line=dict(color="rgba(200,200,200,0.55)", width=1.2, dash="dot"))
+ 
+    # ── Quadrant corner labels ────────────────────────────────────────────────
+    quad_label_cfg = dict(
+        xref="x", yref="y", showarrow=False,
+        font=dict(size=15, color="rgba(60,60,60,0.65)"),
+        xanchor="center",
+    )
+    fig.add_annotation(x=25,  y=96, text="<b>Weakening</b>",  **quad_label_cfg)
+    fig.add_annotation(x=75,  y=96, text="<b>Strong</b>",     **quad_label_cfg)
+    fig.add_annotation(x=25,  y=4,  text="<b>Weak</b>",       **quad_label_cfg)
+    fig.add_annotation(x=75,  y=4,  text="<b>Improving</b>",  **quad_label_cfg)
+ 
+    # ── Scatter dots with industry name labels ────────────────────────────────
+    fig.add_trace(go.Scatter(
+        x=xs,
+        y=ys,
+        mode="markers+text",
+        text=labels,
+        textposition="top center",
+        textfont=dict(size=8, color="#111111"),
+        marker=dict(
+            color=dot_colors,
+            size=7,
+            line=dict(width=0.8, color="rgba(255,255,255,0.6)"),
+            opacity=0.90,
+        ),
+        hovertemplate=(
+            "<b>%{text}</b><br>"
+            "Weekly RS : %{x:.1f}<br>"
+            "Monthly RS: %{y:.1f}"
+            "<extra></extra>"
+        ),
+        showlegend=False,
+    ))
+ 
+    # ── Chart layout ──────────────────────────────────────────────────────────
+    fig.update_layout(
+        title=dict(
+            text="Industry RS — Weekly vs Monthly",
+            x=0.5,
+            xanchor="center",
+            font=dict(size=16, color="#ffffff"),
+        ),
+        xaxis=dict(
+            title="Weekly RS",
+            range=[0, 100],
+            dtick=10,
+            showgrid=True,
+            gridcolor="rgba(120,120,120,0.18)",
+            zeroline=False,
+            tickfont=dict(color="#aaaaaa", size=11),
+            title_font=dict(color="#aaaaaa", size=12),
+        ),
+        yaxis=dict(
+            title="Monthly RS",
+            range=[0, 100],
+            dtick=10,
+            showgrid=True,
+            gridcolor="rgba(120,120,120,0.18)",
+            zeroline=False,
+            tickfont=dict(color="#aaaaaa", size=11),
+            title_font=dict(color="#aaaaaa", size=12),
+        ),
+        plot_bgcolor ="rgba(20,22,30,1)",
+        paper_bgcolor="rgba(13,17,23,0)",
+        height=750,
+        margin=dict(l=55, r=25, t=65, b=55),
+        font=dict(color="#cccccc"),
+        hoverlabel=dict(
+            bgcolor="#1e2030",
+            bordercolor="#555555",
+            font_size=12,
+            font_color="#ffffff",
+        ),
+    )
+ 
+    st.plotly_chart(fig, use_container_width=True)
+ 
+else:
+    st.info("No industry RS data available to render the quadrant map.")
 
 # ── Compute ─────────────────────────────────────────────────────────────────
 with st.spinner("Computing market breadth & stage analysis..."):
@@ -3851,135 +3984,3 @@ if _timing_log:
 st.markdown("---")
 
 
-st.markdown("#### 📊 Industry RS Quadrant Map (Weekly vs Monthly)")
- 
-
-# ── Build per-industry (weekly_rs, monthly_rs) from all_data ─────────────────
-# weekly_rs  = current Group RS (top-N average of today's normalised RS scores)
-# monthly_rs = 1-month-ago Group RS (top-N average of 1-month-ago normalised RS scores)
-quad_points = []
-for item in all_data:
-    industry   = item["Industry"]
-    weekly_rs  = float(item["Group RS"])      # current  (≈ weekly proxy)
-    monthly_rs = float(item["Group RS 1M"])   # 1-month ago (≈ monthly proxy)
-    quad_points.append({
-        "industry"  : industry,
-        "weekly_rs" : round(weekly_rs,  1),
-        "monthly_rs": round(monthly_rs, 1),
-    })
- 
-if quad_points:
-    xs     = [p["weekly_rs"]  for p in quad_points]
-    ys     = [p["monthly_rs"] for p in quad_points]
-    labels = [p["industry"]   for p in quad_points]
- 
-    # Colour each dot by quadrant (matching photo tones)
-    dot_colors = []
-    for p in quad_points:
-        w, m = p["weekly_rs"], p["monthly_rs"]
-        if   w >= 50 and m >= 50: dot_colors.append("#1a5c35")   # Strong       — dark green
-        elif w >= 50 and m <  50: dot_colors.append("#1a5c35")   # Improving    — dark green
-        elif w <  50 and m >= 50: dot_colors.append("#8b1a1a")   # Weakening    — dark rose
-        else:                     dot_colors.append("#8b1a1a")   # Weak         — dark salmon
- 
-    fig = go.Figure()
- 
-    # ── Quadrant background rectangles ───────────────────────────────────────
-    # Bottom-left  = Weak       — salmon / coral pink (matching photo)
-    fig.add_shape(type="rect", x0=0,  y0=0,   x1=50,  y1=50,
-                  fillcolor="rgba(255,160,160,0.55)", line_width=0, layer="below")
-    # Top-left     = Weakening  — lighter rose (matching photo)
-    fig.add_shape(type="rect", x0=0,  y0=50,  x1=50,  y1=100,
-                  fillcolor="rgba(255,182,193,0.35)", line_width=0, layer="below")
-    # Bottom-right = Improving  — light mint green (matching photo)
-    fig.add_shape(type="rect", x0=50, y0=0,   x1=100, y1=50,
-                  fillcolor="rgba(144,238,144,0.35)", line_width=0, layer="below")
-    # Top-right    = Strong     — deeper green (matching photo)
-    fig.add_shape(type="rect", x0=50, y0=50,  x1=100, y1=100,
-                  fillcolor="rgba(144,238,144,0.60)", line_width=0, layer="below")
- 
-    # ── Divider lines ─────────────────────────────────────────────────────────
-    fig.add_shape(type="line", x0=50, y0=0,  x1=50,  y1=100,
-                  line=dict(color="rgba(200,200,200,0.55)", width=1.2, dash="dot"))
-    fig.add_shape(type="line", x0=0,  y0=50, x1=100, y1=50,
-                  line=dict(color="rgba(200,200,200,0.55)", width=1.2, dash="dot"))
- 
-    # ── Quadrant corner labels ────────────────────────────────────────────────
-    quad_label_cfg = dict(
-        xref="x", yref="y", showarrow=False,
-        font=dict(size=15, color="rgba(60,60,60,0.65)"),
-        xanchor="center",
-    )
-    fig.add_annotation(x=25,  y=96, text="<b>Weakening</b>",  **quad_label_cfg)
-    fig.add_annotation(x=75,  y=96, text="<b>Strong</b>",     **quad_label_cfg)
-    fig.add_annotation(x=25,  y=4,  text="<b>Weak</b>",       **quad_label_cfg)
-    fig.add_annotation(x=75,  y=4,  text="<b>Improving</b>",  **quad_label_cfg)
- 
-    # ── Scatter dots with industry name labels ────────────────────────────────
-    fig.add_trace(go.Scatter(
-        x=xs,
-        y=ys,
-        mode="markers+text",
-        text=labels,
-        textposition="top center",
-        textfont=dict(size=8, color="#111111"),
-        marker=dict(
-            color=dot_colors,
-            size=7,
-            line=dict(width=0.8, color="rgba(255,255,255,0.6)"),
-            opacity=0.90,
-        ),
-        hovertemplate=(
-            "<b>%{text}</b><br>"
-            "Weekly RS : %{x:.1f}<br>"
-            "Monthly RS: %{y:.1f}"
-            "<extra></extra>"
-        ),
-        showlegend=False,
-    ))
- 
-    # ── Chart layout ──────────────────────────────────────────────────────────
-    fig.update_layout(
-        title=dict(
-            text="Industry RS — Weekly vs Monthly",
-            x=0.5,
-            xanchor="center",
-            font=dict(size=16, color="#ffffff"),
-        ),
-        xaxis=dict(
-            title="Weekly RS",
-            range=[0, 100],
-            dtick=10,
-            showgrid=True,
-            gridcolor="rgba(120,120,120,0.18)",
-            zeroline=False,
-            tickfont=dict(color="#aaaaaa", size=11),
-            title_font=dict(color="#aaaaaa", size=12),
-        ),
-        yaxis=dict(
-            title="Monthly RS",
-            range=[0, 100],
-            dtick=10,
-            showgrid=True,
-            gridcolor="rgba(120,120,120,0.18)",
-            zeroline=False,
-            tickfont=dict(color="#aaaaaa", size=11),
-            title_font=dict(color="#aaaaaa", size=12),
-        ),
-        plot_bgcolor ="rgba(20,22,30,1)",
-        paper_bgcolor="rgba(13,17,23,0)",
-        height=750,
-        margin=dict(l=55, r=25, t=65, b=55),
-        font=dict(color="#cccccc"),
-        hoverlabel=dict(
-            bgcolor="#1e2030",
-            bordercolor="#555555",
-            font_size=12,
-            font_color="#ffffff",
-        ),
-    )
- 
-    st.plotly_chart(fig, use_container_width=True)
- 
-else:
-    st.info("No industry RS data available to render the quadrant map.")
