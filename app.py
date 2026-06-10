@@ -3326,7 +3326,7 @@ if pt_list or pt_yest:
             if not pd.isna(pt_close) and not pd.isna(pt_high):
                 pt_price = (
                     f'<span style="color:#aaaaaa; font-size:10px; margin-left:4px;">'
-                    f'C${pt_close:.2f} H${pt_high:.2f}'
+                    #f'C${pt_close:.2f} H${pt_high:.2f}'
                     f'</span>'
                 )
         html_pt += f'<div class="ticker-badge {cls}">{sym}{pt_price}</div>'
