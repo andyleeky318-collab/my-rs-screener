@@ -1595,7 +1595,7 @@ if all_data:
             ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
             rank_sum += min(ranks) if ranks else 0
         setup_avg_rank = round(rank_sum / global_setup_count, 1)
-        setup_rank_str = f'({setup_avg_rank})'
+        setup_rank_str = f'(avgRank = {setup_avg_rank})'
     else:
         setup_rank_str = ''
 
