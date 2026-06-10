@@ -2020,18 +2020,14 @@ def compute_powertrend_history(stocks_list, ticker_dfs):
     except Exception:
         return pd.DataFrame()
 
+# AFTER:
 @st.cache_data(ttl=3600)
 def compute_setup_avgrank_history(stocks_list, ticker_dfs, all_data_snapshot):
     try:
         if not ticker_dfs or not all_data_snapshot:
             return pd.DataFrame()
 
-        # Build industry -> rank map (current sort order, descending Group RS)
-        industry_rank_map = {item["Industry"]: idx + 1 for idx, item in enumerate(
-            sorted(all_data_snapshot, key=lambda x: x["Group RS"], reverse=True)
-        )}
-
-        # Build ticker -> industries map
+        # Build ticker -> industries map from today's setup tickers only
         ticker_industry_map = {}
         for item in all_data_snapshot:
             industry = item["Industry"]
@@ -2043,28 +2039,77 @@ def compute_setup_avgrank_history(stocks_list, ticker_dfs, all_data_snapshot):
                         if industry not in ticker_industry_map[sym]:
                             ticker_industry_map[sym].append(industry)
 
-        # Use any ticker to get the date index
+        if not ticker_industry_map:
+            return pd.DataFrame()
+
+        # Build per-industry RS ratio series over time using tickers in each industry
+        # For each industry, compute daily group RS as mean of top-5 RS scores
+        # RS ratio = stock close / benchmark close (already in ticker_dfs via benchmark_df_shared)
+        # Instead, use the raw close ratios to rank industries daily
+
+        # Collect all industries involved
+        all_industries = list({ind for inds in ticker_industry_map.values() for ind in inds})
+
+        # Build industry -> list of tickers (from all_data_snapshot, not just setup tickers)
+        industry_tickers_map = {item["Industry"]: [r["Ticker"] for _, r in item["Tickers"].iterrows()]
+                                 for item in all_data_snapshot}
+
+        # Get date index from any shared ticker
         any_ticker = next(iter(ticker_dfs))
         full_timeline = ticker_dfs[any_ticker].index
         days_to_compute = min(60, len(full_timeline))
+
+        # For each industry, build a daily RS score series (mean of top-5 tickers' RS ratios)
+        # RS ratio here = normalized score proxy using rolling close performance
+        # We use 90-day return as a simple RS proxy to rank industries historically
+        industry_daily_scores = {}
+        for industry in all_industries:
+            tickers_in_group = industry_tickers_map.get(industry, [])
+            group_series_list = []
+            for sym in tickers_in_group:
+                df = ticker_dfs.get(sym)
+                if df is None or len(df) < days_to_compute + 90:
+                    continue
+                # 90-day rolling return as RS proxy
+                rs_proxy = df['Close'] / df['Close'].shift(90)
+                group_series_list.append(rs_proxy)
+            if not group_series_list:
+                continue
+            combined = pd.concat(group_series_list, axis=1).mean(axis=1)
+            industry_daily_scores[industry] = combined
+
+        if not industry_daily_scores:
+            return pd.DataFrame()
+
+        # Build a wide DataFrame of all industry scores aligned on dates
+        scores_df = pd.DataFrame(industry_daily_scores).dropna(how='all')
 
         records = []
         for i in range(days_to_compute - 1, -1, -1):
             target_idx = -1 - i
             current_date = full_timeline[target_idx]
 
-            # On each historical day, a ticker "counts" if its close > 20
-            # and it has a valid industry rank
+            # Get that day's scores row
+            try:
+                day_scores = scores_df.iloc[scores_df.index.get_loc(full_timeline[target_idx])]
+            except Exception:
+                continue
+
+            if isinstance(day_scores, pd.DataFrame):
+                day_scores = day_scores.iloc[-1]
+
+            day_scores = day_scores.dropna()
+            if day_scores.empty:
+                continue
+
+            # Rank industries for this day (highest score = rank 1)
+            day_ranks = day_scores.rank(ascending=False, method='min').astype(int)
+
+            # For each setup ticker, find its best (lowest) industry rank on this day
             rank_sum = 0
             setup_count = 0
             for sym, industries in ticker_industry_map.items():
-                df = ticker_dfs.get(sym)
-                if df is None or len(df) < abs(target_idx) + 1:
-                    continue
-                close_val = df['Close'].iloc[target_idx]
-                if pd.isna(close_val) or close_val < 20:
-                    continue
-                ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+                ranks = [day_ranks[ind] for ind in industries if ind in day_ranks.index]
                 if not ranks:
                     continue
                 rank_sum += min(ranks)
