@@ -197,6 +197,7 @@ INDUSTRIES = {
     'RARE EARTH': ['REMX', 'RARE', 'USAR', 'METC', 'TMC', 'MP', 'MOS', 'CRML', 'NB', 'PPTA', 'UAMY'],
     'QUANTUM': ['QNT', 'QTUM', 'QMCO', 'IONQ', 'QUBT', 'QBTS', 'RGTI', 'BTQ', 'ARQQ', 'INFQ', 'XNDU'],
     'FUEL CELL': ['FCEL', 'BLDP', 'HYDR', 'BE', 'PLUG'],
+    'LITHIUM': ['LIT', 'LAC', 'SLI', 'SQM', 'ALB', 'ATLX'],
     'EUROPE': ['ENOR', 'EFNL', 'EWN', 'EWI', 'EWL', 'EDEN', 'EWO', 'EIRL', 'EWK', 'EWG', 'IEUR', 'EPOL', 'IEV', 'EWU', 'EWP', 'EWQ', 'EWD'],
     'BRAZIL': ['GGB', 'ABEV', 'PBR', 'UGP', 'VALE', 'SID', 'SUZ', 'VIV', 'MELI', 'BSBR', 'CSAN', 'ITUB', 'CIG', 'BBD', 'TIMB', 'XP', 'PAGS', 'INTR', 'SBS'],
     'ARGENTINA': ['YPF', 'PAM', 'TGS', 'TEO', 'LOMA', 'CRESY', 'CEPU', 'BBAR', 'BMA', 'EDN', 'GGAL', 'IRS', 'SUPV'],
