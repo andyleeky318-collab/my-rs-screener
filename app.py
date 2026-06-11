@@ -203,7 +203,7 @@ INDUSTRIES = {
     'ARGENTINA': ['YPF', 'PAM', 'TGS', 'TEO', 'LOMA', 'CRESY', 'CEPU', 'BBAR', 'BMA', 'EDN', 'GGAL', 'IRS', 'SUPV'],
     'CANNABIS': ['GRWG', 'MSOS', 'IIPR', 'CRON', 'HITI', 'SNDL', 'ACB', 'VFF', 'CGC', 'TLRY', 'OGI'],
     'DRONES': ['RDW', 'JOBY', 'UMAC', 'GD', 'TXT', 'ONDS', 'ACHR', 'LMT', 'DPRO', 'LHX', 'ESLT', 'AVAV', 'NOC', 'EH', 'KTOS', 'PRZO', 'RCAT', 'ZENA'],
-    'PREVIOUS METAL': ['GLD', 'SLV', 'PPLT', 'GDX', 'SIL', 'RGLD'],
+    'PRECIOUS METAL': ['GLD', 'SLV', 'PPLT', 'GDX', 'SIL', 'RGLD'],
 }
 
 # Cleaned Known Stocks List Reference Array
