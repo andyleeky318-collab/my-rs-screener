@@ -3242,7 +3242,7 @@ def build_leader_industry_map(leader_list, industries_dict):
     
     return industry_counts, ticker_industry
 
-def generate_leader_ai_analysis(leader_list, industry_counts, ticker_industry, rs_nh_list):
+def generate_leader_ai_analysis(leader_list, industry_counts, ticker_industry, rs_nh_list, quad_points=None):
     """Call Gemini to summarize RS leader industry concentration."""
     api_key = st.secrets.get("GEMINI_API_KEY")
     if not api_key:
@@ -3267,8 +3267,22 @@ def generate_leader_ai_analysis(leader_list, industry_counts, ticker_industry, r
 
         leaders_str = "\n".join(tagged_leaders[:40])
 
+        quad_summary = ""
+        if quad_points:
+            strong    = [p["industry"] for p in quad_points if p["weekly_rs"] >= 50 and p["monthly_rs"] >= 50]
+            improving = [p["industry"] for p in quad_points if p["weekly_rs"] >= 50 and p["monthly_rs"] <  50]
+            weakening = [p["industry"] for p in quad_points if p["weekly_rs"] <  50 and p["monthly_rs"] >= 50]
+            weak      = [p["industry"] for p in quad_points if p["weekly_rs"] <  50 and p["monthly_rs"] <  50]
+            quad_summary = f"""
+        Industry RS Quadrant Map (Weekly vs Monthly):
+        - Strong (high weekly AND monthly RS, {len(strong)}): {', '.join(strong[:10])}
+        - Improving (high weekly, low monthly — rising, {len(improving)}): {', '.join(improving[:10])}
+        - Weakening (low weekly, high monthly — fading, {len(weakening)}): {', '.join(weakening[:10])}
+        - Weak (low both, {len(weak)}): {', '.join(weak[:10])}
+        """
+
         prompt = f"""
-You are a concise IBD-style market analyst. I will give you a list of RS Leader stocks and their industry groups.
+You are a concise IBD-style market analyst. I will give you a list of RS Leader stocks, their industry groups, and the industry RS quadrant map.
 
 RS Leaders ({len(leader_list)} total):
 {leaders_str}
@@ -3276,13 +3290,16 @@ RS Leaders ({len(leader_list)} total):
 Industry concentration (by leader count):
 {top_industries_str}
 
+{quad_summary}
+
 Note: [BLUE DOT] = stock hitting a 250-day RS high right now (strongest near-term momentum).
 
 In 4-5 SHORT bullet points:
 1. Which 2-3 industries dominate the RS leader list and what does that signal?
 2. Are the BLUE DOT stocks concentrated in any particular theme?
 3. Any notable divergence or rotation worth flagging?
-4. One-line tactical takeaway for a swing trader.
+4. One sentence of insight from the quadrant map — which quadrant has the most concentration, and what does the Strong vs Improving vs Weakening split suggest about market rotation right now?
+5. One-line tactical takeaway for a swing trader.
 
 Be direct, use industry names, no fluff.
 """
@@ -3343,7 +3360,8 @@ else:
                 leader_list,
                 industry_counts,
                 ticker_industry,
-                leader_rs_nh_matches
+                leader_rs_nh_matches,
+                quad_points
             )
         if analysis_result:
             st.session_state["leader_ai_result"] = analysis_result
