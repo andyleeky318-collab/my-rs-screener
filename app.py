@@ -2207,6 +2207,8 @@ def compute_historical_know_counts(stocks_list, ticker_dfs):
         # Attach SMA columns needed by this function only (non-destructive copy)
         enriched_dfs = {}
         for ticker, df in ticker_dfs.items():
+            if ticker.startswith('^'):   # skip benchmark indices
+                continue
             if len(df) >= 261:
                 df2 = df.copy()
                 df2["SMA_50"]  = round(df2['Close'].rolling(window=50).mean(), 2)
