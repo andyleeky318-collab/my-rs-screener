@@ -166,7 +166,7 @@ INDUSTRIES = {
     'CONSUMR PROD-SPECI': ['MSA', 'HAS', 'AS', 'MAT', 'THO', 'PII', 'GOLF', 'HAYW', 'SIG'],
     'CMP SFTWR-SPC-ENTR': ['TTD', 'MGNI', 'PUBM'],
     'MEDICAL-ETHICAL DRGS': ['NVO', 'LLY', 'JNJ', 'ABBV', 'MRK', 'PFE', 'VRTX', 'REGN', 'BMY', 'ZTS', 'ALNY', 'BIIB', 'RPRX', 'UTHR', 'VTRS', 'INCY', 'INSM', 'SRPT', 'NBIX', 'ROIV', 'RGEN', 'VKTX', 'EXEL', 'JAZZ', 'CYTK', 'IONS', 'BHVN', 'RARE', 'CORT', 'MDGL', 'OGN', 'ALKS', 'CRNX', 'TGTX', 'PHB', 'PRGO', 'APLS', 'RVMD'],
-    'MINING-GLD/SILVR/GMS': ['NEM', 'RGLD'],
+    'MINING-GLD/SILVR/GMS': ['NEM', 'RGLD', 'AEM', 'AU', 'WPM', 'KGC', 'AGI', 'EGO',],
     'INSRNCE-PRP/CAS/TITL': ['BRK-B','CB', 'TRV', 'ALL', 'AIG', 'ERIE', 'WRB', 'MKL', 'L', 'EG', 'RNR', 'AFG', 'AIZ', 'MTG', 'SIGI', 'THG', 'KMPR', 'HGTY', 'MCY', 'NMIH', 'PLMR', 'SPNT', 'FNF', 'ORI', 'ESNT', 'FAF', 'RDN', 'AGO'],
     'MEDIA-BOOKS': ['WLY', 'SCHL', 'NYT'],
     'MEDIA-NEWSPAPERS': ['NWS', 'NYT'],
@@ -203,6 +203,7 @@ INDUSTRIES = {
     'ARGENTINA': ['YPF', 'PAM', 'TGS', 'TEO', 'LOMA', 'CRESY', 'CEPU', 'BBAR', 'BMA', 'EDN', 'GGAL', 'IRS', 'SUPV'],
     'CANNABIS': ['GRWG', 'MSOS', 'IIPR', 'CRON', 'HITI', 'SNDL', 'ACB', 'VFF', 'CGC', 'TLRY', 'OGI'],
     'DRONES': ['RDW', 'JOBY', 'UMAC', 'GD', 'TXT', 'ONDS', 'ACHR', 'LMT', 'DPRO', 'LHX', 'ESLT', 'AVAV', 'NOC', 'EH', 'KTOS', 'PRZO', 'RCAT', 'ZENA'],
+    'PREVIOUS METAL': ['GLD', 'SLV', 'PPLT', 'GDX', 'SIL', 'RGLD'],
 }
 
 # Cleaned Known Stocks List Reference Array
