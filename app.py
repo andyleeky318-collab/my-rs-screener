@@ -2022,9 +2022,8 @@ def compute_powertrend_history(stocks_list, ticker_dfs):
     except Exception:
         return pd.DataFrame()
 
-# AFTER:
 @st.cache_data(ttl=3600)
-def compute_setup_avgrank_history(stocks_list, ticker_dfs, all_data_snapshot):
+def compute_setup_avgrank_history(stocks_list, ticker_dfs, all_data_snapshot, benchmark_ticker, rs_length):
     try:
         if not ticker_dfs or not all_data_snapshot:
             return pd.DataFrame()
@@ -2044,74 +2043,99 @@ def compute_setup_avgrank_history(stocks_list, ticker_dfs, all_data_snapshot):
         if not ticker_industry_map:
             return pd.DataFrame()
 
-        # Build per-industry RS ratio series over time using tickers in each industry
-        # For each industry, compute daily group RS as mean of top-5 RS scores
-        # RS ratio = stock close / benchmark close (already in ticker_dfs via benchmark_df_shared)
-        # Instead, use the raw close ratios to rank industries daily
+        # Build industry -> tickers map
+        industry_tickers_map = {
+            item["Industry"]: [r["Ticker"] for _, r in item["Tickers"].iterrows()]
+            for item in all_data_snapshot
+        }
+        all_industries = list(industry_tickers_map.keys())
 
-        # Collect all industries involved
-        all_industries = list({ind for inds in ticker_industry_map.values() for ind in inds})
-
-        # Build industry -> list of tickers (from all_data_snapshot, not just setup tickers)
-        industry_tickers_map = {item["Industry"]: [r["Ticker"] for _, r in item["Tickers"].iterrows()]
-                                 for item in all_data_snapshot}
-
-        # Get date index from any shared ticker
-        any_ticker = next(iter(ticker_dfs))
-        full_timeline = ticker_dfs[any_ticker].index
-        days_to_compute = min(60, len(full_timeline))
-
-        # For each industry, build a daily RS score series (mean of top-5 tickers' RS ratios)
-        # RS ratio here = normalized score proxy using rolling close performance
-        # We use 90-day return as a simple RS proxy to rank industries historically
-        industry_daily_scores = {}
-        for industry in all_industries:
-            tickers_in_group = industry_tickers_map.get(industry, [])
-            group_series_list = []
-            for sym in tickers_in_group:
-                df = ticker_dfs.get(sym)
-                if df is None or len(df) < days_to_compute + 90:
-                    continue
-                # 90-day rolling return as RS proxy
-                rs_proxy = df['Close'] / df['Close'].shift(90)
-                group_series_list.append(rs_proxy)
-            if not group_series_list:
-                continue
-            combined = pd.concat(group_series_list, axis=1).mean(axis=1)
-            industry_daily_scores[industry] = combined
-
-        if not industry_daily_scores:
+        # Get benchmark close series
+        bench_close = None
+        for ticker, df in ticker_dfs.items():
+            if ticker == benchmark_ticker:
+                bench_close = df['Close']
+                break
+        # If benchmark not in ticker_dfs, try to get it from any shared download
+        # Fall back: compute per-industry RS ratio series using close / bench
+        # We need the benchmark — download separately if missing
+        if bench_close is None:
             return pd.DataFrame()
 
-        # Build a wide DataFrame of all industry scores aligned on dates
-        scores_df = pd.DataFrame(industry_daily_scores).dropna(how='all')
+        # Compute per-industry daily Group RS score (top-5 normalised RS, matching main loop)
+        # For each industry, compute each ticker's normalised RS score for every day
+        # RS score = ((99-1) * (rs - ll) / (hh - ll)) + 1  where hh/ll are rs_length rolling
+        industry_daily_grouprs = {}
+        top_n = 5  # mirror sidebar default
+
+        for industry in all_industries:
+            tickers_in_group = industry_tickers_map.get(industry, [])
+            ticker_scores_list = []
+
+            for sym in tickers_in_group:
+                df = ticker_dfs.get(sym)
+                if df is None or len(df) < rs_length + 5:
+                    continue
+                # Align with benchmark
+                aligned = df['Close'].align(bench_close, join='inner')[0]
+                bench_aligned = df['Close'].align(bench_close, join='inner')[1]
+                if len(aligned) < rs_length:
+                    continue
+                rs_ratio = aligned / bench_aligned
+                hh = rs_ratio.rolling(window=rs_length).max()
+                ll = rs_ratio.rolling(window=rs_length).min()
+                denom = hh - ll
+                score = ((99 - 1) * (rs_ratio - ll) / denom.replace(0, pd.NA) + 1).fillna(0)
+                score = score.clip(1, 99).round(0)
+                ticker_scores_list.append(score)
+
+            if not ticker_scores_list:
+                continue
+
+            scores_df = pd.concat(ticker_scores_list, axis=1).fillna(0)
+            # Top-N mean per day
+            def top_n_mean(row):
+                vals = sorted(row.dropna().values, reverse=True)
+                top = vals[:top_n]
+                return sum(top) / len(top) if top else 0
+
+            group_rs_series = scores_df.apply(top_n_mean, axis=1)
+            industry_daily_grouprs[industry] = group_rs_series
+
+        if not industry_daily_grouprs:
+            return pd.DataFrame()
+
+        # Wide DataFrame: columns = industries, rows = dates
+        wide_df = pd.DataFrame(industry_daily_grouprs).dropna(how='all')
+
+        # Get date range — last 60 trading days
+        any_ticker = next(iter(ticker_dfs))
+        full_timeline = ticker_dfs[any_ticker].index
+        days_to_compute = min(60, len(wide_df))
 
         records = []
         for i in range(days_to_compute - 1, -1, -1):
-            target_idx = -1 - i
-            current_date = full_timeline[target_idx]
+            target_date = full_timeline[-1 - i]
 
-            # Get that day's scores row
             try:
-                day_scores = scores_df.iloc[scores_df.index.get_loc(full_timeline[target_idx])]
+                loc = wide_df.index.get_loc(target_date)
+                if isinstance(loc, slice):
+                    loc = loc.stop - 1
+                day_scores = wide_df.iloc[loc]
             except Exception:
                 continue
-
-            if isinstance(day_scores, pd.DataFrame):
-                day_scores = day_scores.iloc[-1]
 
             day_scores = day_scores.dropna()
             if day_scores.empty:
                 continue
 
-            # Rank industries for this day (highest score = rank 1)
+            # Rank: highest Group RS = rank 1  (ascending=False)
             day_ranks = day_scores.rank(ascending=False, method='min').astype(int)
 
-            # For each setup ticker, find its best (lowest) industry rank on this day
             rank_sum = 0
             setup_count = 0
             for sym, industries in ticker_industry_map.items():
-                ranks = [day_ranks[ind] for ind in industries if ind in day_ranks.index]
+                ranks = [int(day_ranks[ind]) for ind in industries if ind in day_ranks.index]
                 if not ranks:
                     continue
                 rank_sum += min(ranks)
@@ -2119,7 +2143,7 @@ def compute_setup_avgrank_history(stocks_list, ticker_dfs, all_data_snapshot):
 
             avg_rank = round(rank_sum / setup_count, 1) if setup_count > 0 else 0
             records.append({
-                "Date": current_date.strftime("%Y-%m-%d"),
+                "Date": target_date.strftime("%Y-%m-%d"),
                 "Avg Rank": avg_rank,
             })
 
@@ -2265,6 +2289,9 @@ ticker_dfs_shared, benchmark_df_shared = timed(
     download_known_stocks_data,
     stocks_tuple
 )
+
+# Inject benchmark so history functions can look it up by symbol
+ticker_dfs_shared[benchmark] = benchmark_df_shared
 
 # ==============================================================================
 # MARKET BREADTH & STAGE ANALYSIS FOR KNOWN_STOCKS
@@ -2482,10 +2509,15 @@ if quad_points:
         font=dict(size=15, color="rgba(60,60,60,0.65)"),
         xanchor="center",
     )
-    fig.add_annotation(x=25,  y=96, text="<b>Weakening</b>",  **quad_label_cfg)
-    fig.add_annotation(x=75,  y=96, text="<b>Strong</b>",     **quad_label_cfg)
-    fig.add_annotation(x=25,  y=4,  text="<b>Weak</b>",       **quad_label_cfg)
-    fig.add_annotation(x=75,  y=4,  text="<b>Improving</b>",  **quad_label_cfg)
+    q_strong    = sum(1 for p in quad_points if p["weekly_rs"] >= 50 and p["monthly_rs"] >= 50)
+    q_improving = sum(1 for p in quad_points if p["weekly_rs"] >= 50 and p["monthly_rs"] <  50)
+    q_weakening = sum(1 for p in quad_points if p["weekly_rs"] <  50 and p["monthly_rs"] >= 50)
+    q_weak      = sum(1 for p in quad_points if p["weekly_rs"] <  50 and p["monthly_rs"] <  50)
+
+    fig.add_annotation(x=25,  y=96, text=f"<b>Weakening ({q_weakening})</b>",  **quad_label_cfg)
+    fig.add_annotation(x=75,  y=96, text=f"<b>Strong ({q_strong})</b>",        **quad_label_cfg)
+    fig.add_annotation(x=25,  y=4,  text=f"<b>Weak ({q_weak})</b>",            **quad_label_cfg)
+    fig.add_annotation(x=75,  y=4,  text=f"<b>Improving ({q_improving})</b>",  **quad_label_cfg)
  
     # ── Scatter dots with industry name labels ────────────────────────────────
     fig.add_trace(go.Scatter(
@@ -3047,7 +3079,51 @@ st.markdown("---")
 # )
 # st.markdown(header_html, unsafe_allow_html=True)
 
+@st.cache_data(ttl=3600)
+def compute_leader_streaks(leader_list_tuple, ticker_dfs, benchmark_df_input):
+    """Return dict of ticker -> consecutive days in leader condition."""
+    streaks = {}
+    for ticker in leader_list_tuple:
+        try:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < 250:
+                streaks[ticker] = 0
+                continue
 
+            rs = df['Close'] / benchmark_df_input['Close']
+            rsMA = rs.ewm(span=21, adjust=False).mean()
+            histNH = rs.rolling(250).max()
+            sma50 = df['Close'].rolling(50).mean()
+            sma200 = df['Close'].rolling(200).mean()
+            circleCond = (rs == histNH)
+            cc30 = circleCond.rolling(30).sum() >= 2
+
+            leader_s = (
+                (cc30 | circleCond) &
+                (rs > rsMA) &
+                (df['Close'] > sma50) &
+                (df['Close'] > sma200) &
+                (df['Close'] >= 20)
+            )
+
+            # Count consecutive True from the end
+            vals = leader_s.dropna().values
+            count = 0
+            for v in reversed(vals):
+                if v:
+                    count += 1
+                else:
+                    break
+            streaks[ticker] = count
+        except Exception:
+            streaks[ticker] = 0
+    return streaks
+
+leader_streaks = timed(
+    "compute_leader_streaks",
+    compute_leader_streaks,
+    tuple(leader_list), ticker_dfs_shared, benchmark_df_shared
+)
 
 with st.spinner("Scanning for Leader History..."):
     leader_hist   = timed("compute_leader_history",        compute_leader_history,        stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
@@ -3062,6 +3138,7 @@ if leader_list or leader_yest:
 
     html_leader = ""
 
+    # NEW:
     for sym in leader_list:
         cls = "new-pattern-badge" if sym not in leader_yest else ""
 
@@ -3075,8 +3152,14 @@ if leader_list or leader_yest:
             if sym in leader_rs_nh_matches and sym != "SPY" else ""
         )
 
+        streak = leader_streaks.get(sym, 0)
+        streak_html = (
+            f'<span style="color:#888888; font-size:10px; margin-left:5px;">{streak}d</span>'
+            if streak > 0 else ""
+        )
+
         html_leader += (
-            f'<div class="ticker-badge {cls}">{dot}{sym}</div>'
+            f'<div class="ticker-badge {cls}">{dot}{sym}{streak_html}</div>'
         )
 
     # Removed leaders
@@ -3907,7 +3990,7 @@ with st.spinner("Computing Setup Avg Rank history..."):
     setup_avgrank_hist = timed(
         "compute_setup_avgrank_history",
         compute_setup_avgrank_history,
-        stocks_tuple, ticker_dfs_shared, all_data
+        stocks_tuple, ticker_dfs_shared, all_data, benchmark, 90
     )
 
 st.markdown(f"#### 📐 Setup Avg Group Rank")
