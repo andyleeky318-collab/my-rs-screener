@@ -3154,7 +3154,7 @@ if leader_list or leader_yest:
 
         streak = leader_streaks.get(sym, 0)
         streak_html = (
-            f'<span style="color:#888888; font-size:10px; margin-left:5px;">{streak}d</span>'
+            f'<span style="color:#888888; font-size:10px; margin-left:5px;"> · {streak}</span>'
             if streak > 0 else ""
         )
 
