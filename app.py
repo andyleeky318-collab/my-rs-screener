@@ -3986,14 +3986,14 @@ else:
 
 st.markdown("---")
 
-with st.spinner("Computing Setup Avg Rank history..."):
+with st.spinner("Computing Setup Rank history..."):
     setup_avgrank_hist = timed(
         "compute_setup_avgrank_history",
         compute_setup_avgrank_history,
         stocks_tuple, ticker_dfs_shared, all_data, benchmark, 90
     )
 
-st.markdown(f"#### 📐 Setup Avg Group Rank")
+st.markdown(f"#### 📐 Setup Rank")
 
 if not setup_avgrank_hist.empty:
     chart_df_rank = setup_avgrank_hist.copy()
