@@ -3576,8 +3576,9 @@ st.markdown(f"#### 🔵 RS NH Before Price ({len(rs_nh_b4_today)})")
 if rs_nh_b4_today or rs_nh_b4_yest:
     html_rsnh = ""
     for sym in rs_nh_b4_today:
-        cls = "new-pattern-badge" if sym not in rs_nh_b4_yest else ""
-        html_rsnh += f'<div class="ticker-badge {cls}">{sym}</div>'
+        #cls = "new-pattern-badge" if sym not in rs_nh_b4_yest else ""
+        #html_rsnh += f'<div class="ticker-badge {cls}">{sym}</div>'
+        html_rsnh += setup_badge(sym, is_new=(sym not in rs_nh_b4_yest))
 
     removed_rsnh = [sym for sym in rs_nh_b4_yest if sym not in rs_nh_b4_today]
     for sym in removed_rsnh:
