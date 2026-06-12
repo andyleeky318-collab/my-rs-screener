@@ -3206,12 +3206,18 @@ st.markdown(f"#### 🔺 Blue Dot = Short term ({len([s for s in leader_rs_nh_mat
 
 if leader_list or leader_yest:
 
+    # Build a lookup: ticker -> which setup buckets it appears in across all industries
+    cloud21ema_all  = set()
+    cloudwick_all   = set()
+    ma50bounce_all  = set()
+    for item in all_data:
+        cloud21ema_all.update(item.get("Cloud21EMA", []))
+        cloudwick_all.update(item.get("CloudWick",   []))
+        ma50bounce_all.update(item.get("MA50Bounce",  []))
+
     html_leader = ""
 
-    # NEW:
     for sym in leader_list:
-        cls = "new-pattern-badge" if sym not in leader_yest else ""
-
         dot = (
             '<span style="'
             'display:inline-block;width:7px;height:7px;'
@@ -3228,17 +3234,44 @@ if leader_list or leader_yest:
             if streak > 0 else ""
         )
 
-        html_leader += (
-            f'<div class="ticker-badge {cls}">{dot}{sym}{streak_html}</div>'
-        )
+        # Priority: purple (21ema_cloud) > aqua (21ema_wick) > orange (50ma_bounce) > default
+        if sym in cloud21ema_all:
+            html_leader += (
+                f'<div class="ticker-badge purple-badge">'
+                f'{dot}'
+                f'<span style="color:#000000;font-weight:bold;">{sym}</span>'
+                f'<span style="color:#7e22ce;font-weight:bold;">{streak_html}</span>'
+                f'</div>'
+            )
+        elif sym in cloudwick_all:
+            html_leader += (
+                f'<div class="ticker-badge aqua-badge">'
+                f'{dot}'
+                f'<span style="color:#000000;font-weight:bold;">{sym}</span>'
+                f'<span style="color:#0f766e;font-weight:bold;">{streak_html}</span>'
+                f'</div>'
+            )
+        elif sym in ma50bounce_all:
+            html_leader += (
+                f'<div class="ticker-badge orange-badge">'
+                f'{dot}'
+                f'<span style="color:#111111;font-weight:bold;">{sym}</span>'
+                f'<span style="color:#004d26;font-weight:bold;">{streak_html}</span>'
+                f'</div>'
+            )
+        else:
+            html_leader += (
+                f'<div class="ticker-badge">'
+                f'{dot}'
+                f'<span class="ticker-name">{sym}</span>'
+                f'{streak_html}'
+                f'</div>'
+            )
 
     # Removed leaders
     removed_leaders = [sym for sym in leader_yest if sym not in leader_list]
-
     for sym in sorted(removed_leaders):
-        html_leader += (
-            f'<div class="ticker-badge removed-badge">{sym}</div>'
-        )
+        html_leader += f'<div class="ticker-badge removed-badge">{sym}</div>'
 
     st.markdown(html_leader, unsafe_allow_html=True)
 
