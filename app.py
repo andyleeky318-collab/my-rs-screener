@@ -251,19 +251,6 @@ LIME_STOCKS = [
     'XME', 'URA', 'NLR', 'DRAM', 'GDX', 'WGMI', 'COPX', 'SIL', 'IAT', 'ITB'
 ]
 
-# 3. Sidebar Inputs
-with st.sidebar:
-    st.header("Settings")
-    benchmark = st.selectbox("Benchmark", ["^GSPC", "^IXIC"], index=0)
-    rs_length = st.number_input("RS Lookback Length", value=90, min_value=10)
-    top_n = st.number_input("Top N for Group Avg", value=5, min_value=1)
-    show_all_rs = st.toggle("Show RS < 80 Tickers", value=False)
-    show_ppp_charts = st.toggle("Show PPP Charts", value=False)
-    show_gap_charts = st.toggle("Show Gap Charts", value=False)
-    
-    if st.button("Clear Cache & Refresh"):
-        st.cache_data.clear()
-
 # ============================================================
 # SHARED DOWNLOAD: runs once, feeds all history compute fns
 # ============================================================
@@ -293,21 +280,6 @@ def download_known_stocks_data(stocks_tuple):
     }).dropna()
 
     return ticker_dfs, benchmark_df
-
-# ============================================================
-# SINGLE DOWNLOAD + SPINNER: all compute fns share one fetch
-# ============================================================
-stocks_tuple = tuple(KNOWN_STOCKS)
-
-# Single download — all history fns share this cached result
-ticker_dfs_shared, benchmark_df_shared = timed(
-    "download_known_stocks_data",
-    download_known_stocks_data,
-    stocks_tuple
-)
-
-# Inject benchmark so history functions can look it up by symbol
-ticker_dfs_shared[benchmark] = benchmark_df_shared
 
 # ==============================================================================
 # MARKET BREADTH & STAGE ANALYSIS FOR KNOWN_STOCKS
@@ -464,6 +436,40 @@ def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
 
     except Exception as e:
         return {}, {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}, 0
+
+# 3. Sidebar Inputs
+with st.sidebar:
+    st.header("Settings")
+    benchmark = st.selectbox("Benchmark", ["^GSPC", "^IXIC"], index=0)
+    rs_length = st.number_input("RS Lookback Length", value=90, min_value=10)
+    top_n = st.number_input("Top N for Group Avg", value=5, min_value=1)
+    show_all_rs = st.toggle("Show RS < 80 Tickers", value=False)
+    show_ppp_charts = st.toggle("Show PPP Charts", value=False)
+    show_gap_charts = st.toggle("Show Gap Charts", value=False)
+    
+    if st.button("Clear Cache & Refresh"):
+        st.cache_data.clear()
+
+    if st.button("Refresh Deepvue", use_container_width=True):
+        # Clear the caches for BOTH functions so fresh data is requested
+        download_known_stocks_data.clear()
+        compute_breadth_and_stage.clear()
+        st.toast("Cache cleared! Fetching real-time market data...", icon="🔄")
+
+# ============================================================
+# SINGLE DOWNLOAD + SPINNER: all compute fns share one fetch
+# ============================================================
+stocks_tuple = tuple(KNOWN_STOCKS)
+
+# Single download — all history fns share this cached result
+ticker_dfs_shared, benchmark_df_shared = timed(
+    "download_known_stocks_data",
+    download_known_stocks_data,
+    stocks_tuple
+)
+
+# Inject benchmark so history functions can look it up by symbol
+ticker_dfs_shared[benchmark] = benchmark_df_shared
 
 # ── Compute ─────────────────────────────────────────────────────────────────
 with st.spinner("Computing market breadth & stage analysis..."):
