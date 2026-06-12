@@ -2979,8 +2979,13 @@ if email_content_stocks or email_content_removed:
     # 1. Active Symbols Layout (Sorted Alphabetically by the ticker name)
     for sym, is_new_addition, is_positive_today in sorted(email_content_stocks, key=lambda x: x[0]):
         
-        # Inject small up logo to the left side if the stock finished positive today
-        up_logo = "<span style='color:#00FF00; margin-right:4px; font-weight:bold;'>▲</span>" if is_positive_today else ""
+        # Determine up logo priority: Red if in ath_list, Green if positive today, otherwise empty
+        if sym in ath_list:
+            up_logo = "<span style='color:#FF4B4B; margin-right:4px; font-weight:bold;'>▲</span>"
+        elif is_positive_today:
+            up_logo = "<span style='color:#00FF00; margin-right:4px; font-weight:bold;'>▲</span>"
+        else:
+            up_logo = ""
         
         if is_new_addition:
             minervini_html += f'<div class="ticker-badge new-pattern-badge">{up_logo}{sym}</div>'
