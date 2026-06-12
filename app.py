@@ -1493,26 +1493,30 @@ global_setup_count = len(global_setup_tickers)
 if all_data:
     df_main = pd.DataFrame([{"Industry": item["Industry"], "Group RS": item["Group RS"], "Group RS Prev": item["Group RS Prev"], "Group RS 1M": item["Group RS 1M"]} for item in all_data])
 
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        sort_by = st.selectbox("Sort by", ["Group RS (High to Low)", "Industry (A-Z)", "Group RS (Low to High)"])
-    with col2:
-        sort_order = st.radio("Order", ["Descending", "Ascending"], horizontal=True)
+    # col1, col2 = st.columns([1, 1])
+    # with col1:
+    #     sort_by = st.selectbox("Sort by", ["Group RS (High to Low)", "Industry (A-Z)", "Group RS (Low to High)"])
+    # with col2:
+    #     sort_order = st.radio("Order", ["Descending", "Ascending"], horizontal=True)
 
-    if "Industry" in sort_by:
-        df_main = df_main.sort_values("Industry", ascending=(sort_order == "Ascending"))
-    else:
-        df_main = df_main.sort_values("Group RS", ascending=(sort_order == "Ascending"))
+    # if "Industry" in sort_by:
+    #     df_main = df_main.sort_values("Industry", ascending=(sort_order == "Ascending"))
+    # else:
+    #     df_main = df_main.sort_values("Group RS", ascending=(sort_order == "Ascending"))
+
+    df_main = df_main.sort_values("Group RS", ascending=False)
 
     # Determine structural context ranking profiles before generation iteration sequences
     df_main['Current Rank'] = range(1, len(df_main) + 1)
     
     # Sort by previous scores to resolve previous visual ranks
-    df_prev_sorted = df_main.sort_values("Group RS Prev", ascending=(sort_order == "Ascending")).copy()
+    #df_prev_sorted = df_main.sort_values("Group RS Prev", ascending=(sort_order == "Ascending")).copy()
+    df_prev_sorted = df_main.sort_values("Group RS Prev", ascending=False).copy()
     df_prev_sorted['Prev Rank'] = range(1, len(df_prev_sorted) + 1)
     
     # Sort by 1M scores to resolve 1 month visual ranks
-    df_1m_sorted = df_main.sort_values("Group RS 1M", ascending=(sort_order == "Ascending")).copy()
+    #df_1m_sorted = df_main.sort_values("Group RS 1M", ascending=(sort_order == "Ascending")).copy()
+    df_1m_sorted = df_main.sort_values("Group RS 1M", ascending=False).copy()
     df_1m_sorted['1M Rank'] = range(1, len(df_1m_sorted) + 1)
 
     # Map elements back directly inside the pipeline
