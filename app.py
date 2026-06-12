@@ -3912,109 +3912,6 @@ if not engulf_hist.empty:
 #st.markdown("---")
 #st.markdown("### 📊 Extra Trend Metrics (PowerTrend Indicators)")
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
-st.markdown("---")
-
-with st.spinner("Scanning for PowerTrend History..."):
-    powertrend_hist=timed("compute_powertrend_history",    compute_powertrend_history,    stocks_tuple, ticker_dfs_shared)
-
-# --- 4. POWERTREND (Full Horizontal Row) ---
-st.markdown(f"#### ⚡ PowerTrend = Thematic Extended ({len(pt_list)})")
-if pt_list or pt_yest:
-    html_pt = ""
-    for sym in pt_list:
-        cls = "new-pattern-badge" if sym not in pt_yest else ""
-        # Get close price from shared ticker data
-        pt_price = ""
-        ticker_df_pt = ticker_dfs_shared.get(sym)
-        if ticker_df_pt is not None and not ticker_df_pt.empty:
-            pt_close = ticker_df_pt['Close'].iloc[-1]
-            pt_high  = ticker_df_pt['High'].iloc[-1]
-            if not pd.isna(pt_close) and not pd.isna(pt_high):
-                pt_price = (
-                    f'<span style="color:#aaaaaa; font-size:10px; margin-left:4px;">'
-                    #f'C${pt_close:.2f} H${pt_high:.2f}'
-                    f'</span>'
-                )
-        html_pt += f'<div class="ticker-badge {cls}">{sym}{pt_price}</div>'
-    
-    # Process and append removed stocks
-    removed_pt = [sym for sym in pt_yest if sym not in pt_list]
-    for sym in sorted(removed_pt):
-        html_pt += f'<div class="ticker-badge removed-badge">{sym}</div>'
-        
-    st.markdown(html_pt, unsafe_allow_html=True)
-else:
-    st.info("No active setups discovered.")
-
-st.write("")
-# if not powertrend_hist.empty:
-#     st.bar_chart(
-#         data=powertrend_hist,
-#         x="Date",
-#         y="PowerTrend Count",
-#         use_container_width=True
-#     )
-
-if not powertrend_hist.empty:
-    # 1. Create a temporary copy to prevent altering your original dataframe
-    chart_df = powertrend_hist.copy()
-    
-    # 2. Determine if the most recent row (today) holds the absolute maximum value
-    today_value = chart_df["PowerTrend Count"].iloc[-1]
-    max_value = chart_df["PowerTrend Count"].max()
-    min_value = chart_df["PowerTrend Count"].min()
-    
-    # 3. Add an explicit 'Bar_Color' column to your dataframe
-    if today_value == max_value or today_value == min_value:
-        # Define base color, then override the last row (today) with your accent color
-        chart_df["Bar_Color"] = "#29B5E8"
-        chart_df.iloc[-1, chart_df.columns.get_loc("Bar_Color")] = "#FF4B4B"
-    else:
-        # Standard uniform blue color if today isn't the highest
-        chart_df["Bar_Color"] = "#29B5E8"
-
-    # 4. Render chart mapping color directly to the new dataframe column
-    st.bar_chart(
-        data=chart_df,
-        x="Date",
-        y="PowerTrend Count",
-        color="Bar_Color",  # Direct Streamlit to read colors line-by-line from this column
-        use_container_width=True
-    )
-
-#st.markdown("<br>", unsafe_allow_html=True) # Spacer
-st.markdown("---")
-
-# --- 5. POWERTREND NOT EXTENDED (Full Horizontal Row Below PowerTrend) ---
-st.markdown(f"#### ⚡ PowerTrend ... Not Extended ({len(ptne_list)})")
-if ptne_list:
-    html_ptne = ""
-    for sym in ptne_list:
-        cls = "new-pattern-badge" if sym not in ptne_yest else ""
-        html_ptne += f'<div class="ticker-badge {cls}">{sym}</div>'
-    st.markdown(html_ptne, unsafe_allow_html=True)
-else:
-    st.info("No active setups discovered.")
-
-#st.markdown("<br>", unsafe_allow_html=True) # Spacer
-st.markdown("---")
-
-# --- 6. VALUE TRAP (Full Horizontal Row Below PowerTrend Not Extended) ---
-st.markdown(f"#### ⚠️ Value Trap ({len(vt_list)})")
-if vt_list or vt_yest:
-    html_vt = ""
-    for sym in vt_list:
-        cls = "new-pattern-badge" if sym not in vt_yest else ""
-        html_vt += f'<div class="ticker-badge {cls}">{sym}</div>'
-    
-    # Process and append removed stocks
-    removed_vt = [sym for sym in vt_yest if sym not in vt_list]
-    for sym in sorted(removed_vt):
-        html_vt += f'<div class="ticker-badge removed-badge">{sym}</div>'
-        
-    st.markdown(html_vt, unsafe_allow_html=True)
-else:
-    st.info("No active setups discovered.")
 
 st.markdown("---")
 
@@ -4197,6 +4094,109 @@ if (gapBottom !== null && gapTop !== null && {gap_date_js} !== null) {{
 else:
     st.info("No active setups discovered.")
 
+st.markdown("---")
+
+with st.spinner("Scanning for PowerTrend History..."):
+    powertrend_hist=timed("compute_powertrend_history",    compute_powertrend_history,    stocks_tuple, ticker_dfs_shared)
+
+# --- 4. POWERTREND (Full Horizontal Row) ---
+st.markdown(f"#### ⚡ PowerTrend = Thematic Extended ({len(pt_list)})")
+if pt_list or pt_yest:
+    html_pt = ""
+    for sym in pt_list:
+        cls = "new-pattern-badge" if sym not in pt_yest else ""
+        # Get close price from shared ticker data
+        pt_price = ""
+        ticker_df_pt = ticker_dfs_shared.get(sym)
+        if ticker_df_pt is not None and not ticker_df_pt.empty:
+            pt_close = ticker_df_pt['Close'].iloc[-1]
+            pt_high  = ticker_df_pt['High'].iloc[-1]
+            if not pd.isna(pt_close) and not pd.isna(pt_high):
+                pt_price = (
+                    f'<span style="color:#aaaaaa; font-size:10px; margin-left:4px;">'
+                    #f'C${pt_close:.2f} H${pt_high:.2f}'
+                    f'</span>'
+                )
+        html_pt += f'<div class="ticker-badge {cls}">{sym}{pt_price}</div>'
+    
+    # Process and append removed stocks
+    removed_pt = [sym for sym in pt_yest if sym not in pt_list]
+    for sym in sorted(removed_pt):
+        html_pt += f'<div class="ticker-badge removed-badge">{sym}</div>'
+        
+    st.markdown(html_pt, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
+
+st.write("")
+# if not powertrend_hist.empty:
+#     st.bar_chart(
+#         data=powertrend_hist,
+#         x="Date",
+#         y="PowerTrend Count",
+#         use_container_width=True
+#     )
+
+if not powertrend_hist.empty:
+    # 1. Create a temporary copy to prevent altering your original dataframe
+    chart_df = powertrend_hist.copy()
+    
+    # 2. Determine if the most recent row (today) holds the absolute maximum value
+    today_value = chart_df["PowerTrend Count"].iloc[-1]
+    max_value = chart_df["PowerTrend Count"].max()
+    min_value = chart_df["PowerTrend Count"].min()
+    
+    # 3. Add an explicit 'Bar_Color' column to your dataframe
+    if today_value == max_value or today_value == min_value:
+        # Define base color, then override the last row (today) with your accent color
+        chart_df["Bar_Color"] = "#29B5E8"
+        chart_df.iloc[-1, chart_df.columns.get_loc("Bar_Color")] = "#FF4B4B"
+    else:
+        # Standard uniform blue color if today isn't the highest
+        chart_df["Bar_Color"] = "#29B5E8"
+
+    # 4. Render chart mapping color directly to the new dataframe column
+    st.bar_chart(
+        data=chart_df,
+        x="Date",
+        y="PowerTrend Count",
+        color="Bar_Color",  # Direct Streamlit to read colors line-by-line from this column
+        use_container_width=True
+    )
+
+#st.markdown("<br>", unsafe_allow_html=True) # Spacer
+st.markdown("---")
+
+# --- 5. POWERTREND NOT EXTENDED (Full Horizontal Row Below PowerTrend) ---
+st.markdown(f"#### ⚡ PowerTrend ... Not Extended ({len(ptne_list)})")
+if ptne_list:
+    html_ptne = ""
+    for sym in ptne_list:
+        cls = "new-pattern-badge" if sym not in ptne_yest else ""
+        html_ptne += f'<div class="ticker-badge {cls}">{sym}</div>'
+    st.markdown(html_ptne, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
+
+#st.markdown("<br>", unsafe_allow_html=True) # Spacer
+st.markdown("---")
+
+# --- 6. VALUE TRAP (Full Horizontal Row Below PowerTrend Not Extended) ---
+st.markdown(f"#### ⚠️ Value Trap ({len(vt_list)})")
+if vt_list or vt_yest:
+    html_vt = ""
+    for sym in vt_list:
+        cls = "new-pattern-badge" if sym not in vt_yest else ""
+        html_vt += f'<div class="ticker-badge {cls}">{sym}</div>'
+    
+    # Process and append removed stocks
+    removed_vt = [sym for sym in vt_yest if sym not in vt_list]
+    for sym in sorted(removed_vt):
+        html_vt += f'<div class="ticker-badge removed-badge">{sym}</div>'
+        
+    st.markdown(html_vt, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
 
 
 #st.markdown(html_e2, unsafe_allow_html=True)
