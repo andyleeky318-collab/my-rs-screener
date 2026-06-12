@@ -3234,13 +3234,13 @@ if leader_list or leader_yest:
             if streak > 0 else ""
         )
 
-        # Priority: purple (21ema_cloud) > aqua (21ema_wick) > orange (50ma_bounce) > default
-        if sym in cloud21ema_all:
+        # Priority: orange (50ma_bounce) > aqua (21ema_wick) > purple (21ema_cloud) > default
+        if sym in ma50bounce_all:
             html_leader += (
-                f'<div class="ticker-badge purple-badge">'
+                f'<div class="ticker-badge orange-badge">'
                 f'{dot}'
-                f'<span style="color:#000000;font-weight:bold;">{sym}</span>'
-                f'<span style="color:#7e22ce;font-weight:bold;">{streak_html}</span>'
+                f'<span style="color:#111111;font-weight:bold;">{sym}</span>'
+                f'<span style="color:#004d26;font-weight:bold;">{streak_html}</span>'
                 f'</div>'
             )
         elif sym in cloudwick_all:
@@ -3251,12 +3251,12 @@ if leader_list or leader_yest:
                 f'<span style="color:#0f766e;font-weight:bold;">{streak_html}</span>'
                 f'</div>'
             )
-        elif sym in ma50bounce_all:
+        elif sym in cloud21ema_all:
             html_leader += (
-                f'<div class="ticker-badge orange-badge">'
+                f'<div class="ticker-badge purple-badge">'
                 f'{dot}'
-                f'<span style="color:#111111;font-weight:bold;">{sym}</span>'
-                f'<span style="color:#004d26;font-weight:bold;">{streak_html}</span>'
+                f'<span style="color:#000000;font-weight:bold;">{sym}</span>'
+                f'<span style="color:#7e22ce;font-weight:bold;">{streak_html}</span>'
                 f'</div>'
             )
         else:
