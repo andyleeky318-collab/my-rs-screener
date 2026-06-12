@@ -450,9 +450,13 @@ with st.sidebar:
     if st.button("Clear Cache & Refresh"):
         st.cache_data.clear()
 
-    if st.button("Refresh Deepvue", use_container_width=True):
+    if st.button("Refresh Deepvue 1", use_container_width=True):
         # Clear the caches for BOTH functions so fresh data is requested
         download_known_stocks_data.clear()
+        st.toast("Cache cleared! Fetching real-time market data...", icon="🔄")
+
+    if st.button("Refresh Deepvue 2", use_container_width=True):
+        # Clear the caches for BOTH functions so fresh data is requested
         compute_breadth_and_stage.clear()
         st.toast("Cache cleared! Fetching real-time market data...", icon="🔄")
 
@@ -470,14 +474,6 @@ ticker_dfs_shared, benchmark_df_shared = timed(
 
 # Inject benchmark so history functions can look it up by symbol
 ticker_dfs_shared[benchmark] = benchmark_df_shared
-
-# ── Compute ─────────────────────────────────────────────────────────────────
-with st.spinner("Computing market breadth & stage analysis..."):
-    breadth_stats, stage_counts, breadth_total, new_high_tickers = timed(
-        "compute_breadth_and_stage",
-        compute_breadth_and_stage,
-        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
-    )
 
 # st.markdown("---")
 #st.markdown(f"#### 📊 Market Breadth")
@@ -532,6 +528,14 @@ else:
     st.info("No Lime Stocks performance data available.")
 
 st.markdown("---")
+
+# ── Compute ─────────────────────────────────────────────────────────────────
+with st.spinner("Computing market breadth & stage analysis..."):
+    breadth_stats, stage_counts, breadth_total, new_high_tickers = timed(
+        "compute_breadth_and_stage",
+        compute_breadth_and_stage,
+        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
+    )
 
 if breadth_total > 0:
 
