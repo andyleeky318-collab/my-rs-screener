@@ -3487,6 +3487,144 @@ else:
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
 
+# --- 2. TIGHT PPP (Full Horizontal Row Below Two Botak) ---
+st.markdown(f"#### 📉 PPP = Opportunity ({len(ppp_list)})")
+
+if ppp_list or ppp_yest:
+    # ── Badge row ─────────────────────────────────────────────────────────
+    html_p = ""
+    for sym in ppp_list:
+        cls = "new-pattern-badge" if sym not in ppp_yest else ""
+        html_p += f'<div class="ticker-badge {cls}">{sym}</div>'
+
+    removed_ppp = [sym for sym in ppp_yest if sym not in ppp_list]
+    for sym in sorted(removed_ppp):
+        html_p += f'<div class="ticker-badge removed-badge">{sym}</div>'
+
+    st.markdown(html_p, unsafe_allow_html=True)
+
+    # ── All charts together, 3 per row ────────────────────────────────────
+    if ppp_list and show_ppp_charts:
+        st.write("")
+        CHARTS_PER_ROW = 4
+        CHART_SIZE     = 280   # square: width == height
+
+        for row_start in range(0, len(ppp_list), CHARTS_PER_ROW):
+            row_tickers = ppp_list[row_start : row_start + CHARTS_PER_ROW]
+            cols = st.columns(CHARTS_PER_ROW)
+
+            for col_idx, sym in enumerate(row_tickers):
+                with cols[col_idx]:
+                    ohlcv_json = get_ppp_ohlcv_json(sym)
+                    chart_id   = f"ppp_{sym}_{row_start}_{col_idx}"
+
+                    chart_html = f"""
+<div style="font-family:'JetBrains Mono','Fira Code',monospace;">
+  <div style="position:relative;width:{CHART_SIZE + 60}px;height:{CHART_SIZE}px;
+              border:1px solid #30363d;border-radius:6px;background:#0d1117;">
+    <div id="{chart_id}"
+         style="width:{CHART_SIZE + 60}px;height:{CHART_SIZE}px;">
+    </div>
+    <div style="
+      position:absolute;top:8px;left:8px;
+      font-size:20px;font-weight:900;
+      color:rgba(255,255,255,0.15);
+      letter-spacing:0.05em;
+      pointer-events:none;
+      z-index:999;
+      user-select:none;
+      white-space:nowrap;">
+      {sym}
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+(function(){{
+  var ohlcv = {ohlcv_json};
+  var el = document.getElementById('{chart_id}');
+  if (!ohlcv || ohlcv.length === 0) {{
+    el.innerHTML = '<p style="color:#7d8590;padding:12px;font-size:11px;">No data.</p>';
+    return;
+  }}
+
+  var chart = LightweightCharts.createChart(el, {{
+    width:  {CHART_SIZE},
+    height: {CHART_SIZE},
+    layout: {{
+      background: {{ type:'solid', color:'#0d1117' }},
+      textColor:  '#c9d1d9',
+    }},
+    grid: {{
+      vertLines: {{ color:'#21262d', style:1 }},
+      horzLines: {{ color:'#21262d', style:1 }},
+    }},
+    crosshair: {{
+      mode: LightweightCharts.CrosshairMode.Normal,
+      vertLine: {{ color:'#58a6ff', width:1, style:1, labelBackgroundColor:'#1f6feb' }},
+      horzLine: {{ color:'#58a6ff', width:1, style:1, labelBackgroundColor:'#1f6feb' }},
+    }},
+    rightPriceScale: {{ borderColor:'#30363d', textColor:'#8b949e' }},
+    timeScale: {{
+      borderColor:'#30363d', textColor:'#8b949e',
+      timeVisible:true, secondsVisible:false,
+      fixLeftEdge:true, fixRightEdge:true,
+    }},
+  }});
+
+  var candles = chart.addCandlestickSeries({{
+    upColor:'#26a641',   downColor:'#f85149',
+    borderUpColor:'#26a641', borderDownColor:'#f85149',
+    wickUpColor:'#26a641',   wickDownColor:'#f85149',
+  }});
+  candles.setData(ohlcv);
+
+  function calcEMA(data, span) {{
+    var k = 2/(span+1), ema = data[0].close, out = [];
+    for (var i=0;i<data.length;i++) {{
+      ema = data[i].close*k + ema*(1-k);
+      if (i >= span-1) out.push({{time:data[i].time, value:parseFloat(ema.toFixed(4))}});
+    }}
+    return out;
+  }}
+
+  function calcSMA(data, period) {{
+    var out = [];
+    for (var i=period-1;i<data.length;i++) {{
+      var s=0; for(var j=i-period+1;j<=i;j++) s+=data[j].close;
+      out.push({{time:data[i].time, value:parseFloat((s/period).toFixed(4))}});
+    }}
+    return out;
+  }}
+
+  chart.addLineSeries({{color:'#e3b341',lineWidth:1,
+    priceLineVisible:false,lastValueVisible:false}})
+    .setData(calcEMA(ohlcv,21));
+
+  chart.addLineSeries({{color:'#58a6ff',lineWidth:1,
+    priceLineVisible:false,lastValueVisible:false}})
+    .setData(calcSMA(ohlcv,50));
+
+  chart.timeScale().fitContent();
+
+  new ResizeObserver(function(entries){{
+    for(var e of entries){{
+      chart.applyOptions({{width:e.contentRect.width}});
+    }}
+  }}).observe(el);
+}})();
+</script>
+"""
+                    import streamlit.components.v1 as components
+                    components.html(chart_html, height=CHART_SIZE + 32, scrolling=False)
+
+else:
+    st.info("No active setups discovered.")
+
+#st.markdown("<br>", unsafe_allow_html=True) # Spacer
+st.markdown("---")
+
 # ── RS NEW HIGH BEFORE PRICE ─────────────────────────────────────────────────
 @st.cache_data(ttl=3600)
 def compute_rs_nh_b4_price(stocks_list, ticker_dfs, benchmark_df_input):
@@ -3874,144 +4012,6 @@ if vt_list or vt_yest:
 else:
     st.info("No active setups discovered.")
 
-st.markdown("---")
-
-# --- 2. TIGHT PPP (Full Horizontal Row Below Two Botak) ---
-st.markdown(f"#### 📉 PPP = Opportunity ({len(ppp_list)})")
-
-if ppp_list or ppp_yest:
-    # ── Badge row ─────────────────────────────────────────────────────────
-    html_p = ""
-    for sym in ppp_list:
-        cls = "new-pattern-badge" if sym not in ppp_yest else ""
-        html_p += f'<div class="ticker-badge {cls}">{sym}</div>'
-
-    removed_ppp = [sym for sym in ppp_yest if sym not in ppp_list]
-    for sym in sorted(removed_ppp):
-        html_p += f'<div class="ticker-badge removed-badge">{sym}</div>'
-
-    st.markdown(html_p, unsafe_allow_html=True)
-
-    # ── All charts together, 3 per row ────────────────────────────────────
-    if ppp_list and show_ppp_charts:
-        st.write("")
-        CHARTS_PER_ROW = 4
-        CHART_SIZE     = 280   # square: width == height
-
-        for row_start in range(0, len(ppp_list), CHARTS_PER_ROW):
-            row_tickers = ppp_list[row_start : row_start + CHARTS_PER_ROW]
-            cols = st.columns(CHARTS_PER_ROW)
-
-            for col_idx, sym in enumerate(row_tickers):
-                with cols[col_idx]:
-                    ohlcv_json = get_ppp_ohlcv_json(sym)
-                    chart_id   = f"ppp_{sym}_{row_start}_{col_idx}"
-
-                    chart_html = f"""
-<div style="font-family:'JetBrains Mono','Fira Code',monospace;">
-  <div style="position:relative;width:{CHART_SIZE + 60}px;height:{CHART_SIZE}px;
-              border:1px solid #30363d;border-radius:6px;background:#0d1117;">
-    <div id="{chart_id}"
-         style="width:{CHART_SIZE + 60}px;height:{CHART_SIZE}px;">
-    </div>
-    <div style="
-      position:absolute;top:8px;left:8px;
-      font-size:20px;font-weight:900;
-      color:rgba(255,255,255,0.15);
-      letter-spacing:0.05em;
-      pointer-events:none;
-      z-index:999;
-      user-select:none;
-      white-space:nowrap;">
-      {sym}
-    </div>
-  </div>
-</div>
-
-<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
-<script>
-(function(){{
-  var ohlcv = {ohlcv_json};
-  var el = document.getElementById('{chart_id}');
-  if (!ohlcv || ohlcv.length === 0) {{
-    el.innerHTML = '<p style="color:#7d8590;padding:12px;font-size:11px;">No data.</p>';
-    return;
-  }}
-
-  var chart = LightweightCharts.createChart(el, {{
-    width:  {CHART_SIZE},
-    height: {CHART_SIZE},
-    layout: {{
-      background: {{ type:'solid', color:'#0d1117' }},
-      textColor:  '#c9d1d9',
-    }},
-    grid: {{
-      vertLines: {{ color:'#21262d', style:1 }},
-      horzLines: {{ color:'#21262d', style:1 }},
-    }},
-    crosshair: {{
-      mode: LightweightCharts.CrosshairMode.Normal,
-      vertLine: {{ color:'#58a6ff', width:1, style:1, labelBackgroundColor:'#1f6feb' }},
-      horzLine: {{ color:'#58a6ff', width:1, style:1, labelBackgroundColor:'#1f6feb' }},
-    }},
-    rightPriceScale: {{ borderColor:'#30363d', textColor:'#8b949e' }},
-    timeScale: {{
-      borderColor:'#30363d', textColor:'#8b949e',
-      timeVisible:true, secondsVisible:false,
-      fixLeftEdge:true, fixRightEdge:true,
-    }},
-  }});
-
-  var candles = chart.addCandlestickSeries({{
-    upColor:'#26a641',   downColor:'#f85149',
-    borderUpColor:'#26a641', borderDownColor:'#f85149',
-    wickUpColor:'#26a641',   wickDownColor:'#f85149',
-  }});
-  candles.setData(ohlcv);
-
-  function calcEMA(data, span) {{
-    var k = 2/(span+1), ema = data[0].close, out = [];
-    for (var i=0;i<data.length;i++) {{
-      ema = data[i].close*k + ema*(1-k);
-      if (i >= span-1) out.push({{time:data[i].time, value:parseFloat(ema.toFixed(4))}});
-    }}
-    return out;
-  }}
-
-  function calcSMA(data, period) {{
-    var out = [];
-    for (var i=period-1;i<data.length;i++) {{
-      var s=0; for(var j=i-period+1;j<=i;j++) s+=data[j].close;
-      out.push({{time:data[i].time, value:parseFloat((s/period).toFixed(4))}});
-    }}
-    return out;
-  }}
-
-  chart.addLineSeries({{color:'#e3b341',lineWidth:1,
-    priceLineVisible:false,lastValueVisible:false}})
-    .setData(calcEMA(ohlcv,21));
-
-  chart.addLineSeries({{color:'#58a6ff',lineWidth:1,
-    priceLineVisible:false,lastValueVisible:false}})
-    .setData(calcSMA(ohlcv,50));
-
-  chart.timeScale().fitContent();
-
-  new ResizeObserver(function(entries){{
-    for(var e of entries){{
-      chart.applyOptions({{width:e.contentRect.width}});
-    }}
-  }}).observe(el);
-}})();
-</script>
-"""
-                    import streamlit.components.v1 as components
-                    components.html(chart_html, height=CHART_SIZE + 32, scrolling=False)
-
-else:
-    st.info("No active setups discovered.")
-
-#st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
 
 # --- GAPPER SECTION ---
