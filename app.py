@@ -193,17 +193,17 @@ INDUSTRIES = {
     'TELCOM SVC-WIRLES': ['TMUS', 'VZ', 'T', 'LBRDA', 'TIGO', 'TDS'],
     'ELEC-SEMICON FBLSS': ['SMH', 'SIMO', 'ARM', 'NVDA', 'AVGO', 'AMD', 'QCOM', 'ADI', 'MRVL', 'NXPI', 'MPWR', 'MCHP', 'ON', 'SWKS', 'QRVO', 'ALAB', 'CRDO', 'MTSI', 'LSCC', 'CRUS', 'PI', 'RMBS', 'SITM', 'ALGM', 'SLAB', 'POWI', 'IPGP', 'SMTC', 'DIOD', 'SYNA', 'AMBA'],
     'ELEC-SEMICON FNDRY': ['TSM', 'TXN', 'INTC', 'GFS', 'AMKR', 'TSEM', 'FORM', 'STM'],
-    'ROBOTIC': ['AMBA', 'ARBE', 'MBLY', 'NOVT', 'HLX', 'JOBY', 'CGNX', 'ZBRA', 'CRNC', 'ROK', 'RR', 'PRCT', 'PTC', 'NDSN', 'HSAI', 'EMR', 'SERV', 'AVAV', 'TER', 'IPGP', 'TRMB', 'SYM'],
-    'RARE EARTH': ['REMX', 'RARE', 'USAR', 'METC', 'TMC', 'MP', 'MOS', 'CRML', 'NB', 'PPTA', 'UAMY'],
-    'QUANTUM': ['QNT', 'QTUM', 'QMCO', 'IONQ', 'QUBT', 'QBTS', 'RGTI', 'BTQ', 'ARQQ', 'INFQ', 'XNDU'],
-    'FUEL CELL': ['FCEL', 'BLDP', 'HYDR', 'BE', 'PLUG'],
-    'LITHIUM': ['LIT', 'LAC', 'SLI', 'SQM', 'ALB', 'ATLX'],
-    'EUROPE': ['ENOR', 'EFNL', 'EWN', 'EWI', 'EWL', 'EDEN', 'EWO', 'EIRL', 'EWK', 'EWG', 'IEUR', 'EPOL', 'IEV', 'EWU', 'EWP', 'EWQ', 'EWD'],
-    'BRAZIL': ['GGB', 'ABEV', 'PBR', 'UGP', 'VALE', 'SID', 'SUZ', 'VIV', 'MELI', 'BSBR', 'CSAN', 'ITUB', 'CIG', 'BBD', 'TIMB', 'XP', 'PAGS', 'INTR', 'SBS'],
-    'ARGENTINA': ['ARGT', 'YPF', 'PAM', 'TGS', 'TEO', 'LOMA', 'CRESY', 'CEPU', 'BBAR', 'BMA', 'EDN', 'GGAL', 'IRS', 'SUPV'],
-    'CANNABIS': ['CNBS', 'GRWG', 'MSOS', 'IIPR', 'CRON', 'HITI', 'SNDL', 'ACB', 'VFF', 'CGC', 'TLRY', 'OGI'],
-    'DRONES': ['RDW', 'JOBY', 'UMAC', 'GD', 'TXT', 'ONDS', 'ACHR', 'LMT', 'DPRO', 'LHX', 'ESLT', 'AVAV', 'NOC', 'EH', 'KTOS', 'PRZO', 'RCAT', 'ZENA'],
-    'PRECIOUS METAL': ['GLD', 'SLV', 'PPLT', 'GDX', 'SIL', 'RGLD'],
+    # 'ROBOTIC': ['AMBA', 'ARBE', 'MBLY', 'NOVT', 'HLX', 'JOBY', 'CGNX', 'ZBRA', 'CRNC', 'ROK', 'RR', 'PRCT', 'PTC', 'NDSN', 'HSAI', 'EMR', 'SERV', 'AVAV', 'TER', 'IPGP', 'TRMB', 'SYM'],
+    # 'RARE EARTH': ['REMX', 'RARE', 'USAR', 'METC', 'TMC', 'MP', 'MOS', 'CRML', 'NB', 'PPTA', 'UAMY'],
+    # 'QUANTUM': ['QNT', 'QTUM', 'QMCO', 'IONQ', 'QUBT', 'QBTS', 'RGTI', 'BTQ', 'ARQQ', 'INFQ', 'XNDU'],
+    # 'FUEL CELL': ['FCEL', 'BLDP', 'HYDR', 'BE', 'PLUG'],
+    # 'LITHIUM': ['LIT', 'LAC', 'SLI', 'SQM', 'ALB', 'ATLX'],
+    # 'EUROPE': ['ENOR', 'EFNL', 'EWN', 'EWI', 'EWL', 'EDEN', 'EWO', 'EIRL', 'EWK', 'EWG', 'IEUR', 'EPOL', 'IEV', 'EWU', 'EWP', 'EWQ', 'EWD'],
+    # 'BRAZIL': ['GGB', 'ABEV', 'PBR', 'UGP', 'VALE', 'SID', 'SUZ', 'VIV', 'MELI', 'BSBR', 'CSAN', 'ITUB', 'CIG', 'BBD', 'TIMB', 'XP', 'PAGS', 'INTR', 'SBS'],
+    # 'ARGENTINA': ['ARGT', 'YPF', 'PAM', 'TGS', 'TEO', 'LOMA', 'CRESY', 'CEPU', 'BBAR', 'BMA', 'EDN', 'GGAL', 'IRS', 'SUPV'],
+    # 'CANNABIS': ['CNBS', 'GRWG', 'MSOS', 'IIPR', 'CRON', 'HITI', 'SNDL', 'ACB', 'VFF', 'CGC', 'TLRY', 'OGI'],
+    # 'DRONES': ['RDW', 'JOBY', 'UMAC', 'GD', 'TXT', 'ONDS', 'ACHR', 'LMT', 'DPRO', 'LHX', 'ESLT', 'AVAV', 'NOC', 'EH', 'KTOS', 'PRZO', 'RCAT', 'ZENA'],
+    # 'PRECIOUS METAL': ['GLD', 'SLV', 'PPLT', 'GDX', 'SIL', 'RGLD'],
 }
 
 # Cleaned Known Stocks List Reference Array
@@ -2970,7 +2970,8 @@ st.markdown(
     f"#### ⭐ Minervini ("
     f"Positive Pct = {know_pos_pct:.1f}% ... "
     #f"+ve Count: {know_positive_count} ... "
-    f"Total = {know_total_count})"
+    f"Total: {know_total_count} ... "
+    f"ATH = {len(ath_list)})"
 )
 
 if email_content_stocks or email_content_removed:
@@ -3043,24 +3044,24 @@ else:
 #st.markdown("---")
 st.write("")
 
-# --- ALL TIME HIGH ---
-st.markdown(f"#### ✨ All Time High Close ({len(ath_list)})")
+# # --- ALL TIME HIGH ---
+# st.markdown(f"#### ✨ All Time High Close ({len(ath_list)})")
 
-if ath_list or ath_yest:
-    html_ath = ""
-    for sym in ath_list:
-        cls = "new-pattern-badge" if sym not in ath_yest else ""
-        html_ath += f'<div class="ticker-badge {cls}">{sym}</div>'
+# if ath_list or ath_yest:
+#     html_ath = ""
+#     for sym in ath_list:
+#         cls = "new-pattern-badge" if sym not in ath_yest else ""
+#         html_ath += f'<div class="ticker-badge {cls}">{sym}</div>'
 
-    removed_ath = [sym for sym in ath_yest if sym not in ath_list]
-    for sym in sorted(removed_ath):
-        html_ath += f'<div class="ticker-badge removed-badge">{sym}</div>'
+#     removed_ath = [sym for sym in ath_yest if sym not in ath_list]
+#     for sym in sorted(removed_ath):
+#         html_ath += f'<div class="ticker-badge removed-badge">{sym}</div>'
 
-    st.markdown(html_ath, unsafe_allow_html=True)
-else:
-    st.info("No active setups discovered.")
+#     st.markdown(html_ath, unsafe_allow_html=True)
+# else:
+#     st.info("No active setups discovered.")
 
-st.write("")
+# st.write("")
 
 with st.spinner("Computing Historical Known Counts..."):
     historical_df = timed("compute_historical_know_counts", compute_historical_know_counts, stocks_tuple, ticker_dfs_shared)
