@@ -1489,6 +1489,33 @@ for item in all_data:
         global_setup_ticker_groups[sym].append(item["Industry"])
 global_setup_count = len(global_setup_tickers)
 
+cloud21ema_all  = set()
+cloudwick_all   = set()
+ma50bounce_all  = set()
+for item in all_data:
+    cloud21ema_all.update(item.get("Cloud21EMA", []))
+    cloudwick_all.update(item.get("CloudWick",   []))
+    ma50bounce_all.update(item.get("MA50Bounce",  []))
+
+def setup_badge(sym, is_new=False, is_removed=False, extra_prefix=""):
+    """Render a ticker badge, colored by setup-category precedence:
+    50ma_bounce (orange) > 21ema_wick (aqua) > 21ema_cloud (purple) > new (gold) > default."""
+    if is_removed:
+        return f'<div class="ticker-badge removed-badge">{extra_prefix}{sym}</div>'
+    if sym in ma50bounce_all:
+        return (f'<div class="ticker-badge orange-badge">{extra_prefix}'
+                f'<span style="color:#111111;font-weight:bold;">{sym}</span></div>')
+    if sym in cloudwick_all:
+        return (f'<div class="ticker-badge aqua-badge">{extra_prefix}'
+                f'<span style="color:#000000;font-weight:bold;">{sym}</span></div>')
+    if sym in cloud21ema_all:
+        return (f'<div class="ticker-badge purple-badge">{extra_prefix}'
+                f'<span style="color:#000000;font-weight:bold;">{sym}</span></div>')
+    if is_new:
+        return (f'<div class="ticker-badge new-pattern-badge">{extra_prefix}'
+                f'<span style="color:#111111;font-weight:bold;">{sym}</span></div>')
+    return f'<div class="ticker-badge">{extra_prefix}{sym}</div>'
+
 # 6. Compact Display Logic
 if all_data:
     df_main = pd.DataFrame([{"Industry": item["Industry"], "Group RS": item["Group RS"], "Group RS Prev": item["Group RS Prev"], "Group RS 1M": item["Group RS 1M"]} for item in all_data])
@@ -3205,15 +3232,6 @@ st.markdown(f"#### 🏆 RS Leader = Long term ({len(leader_list)}) ")
 st.markdown(f"#### 🔺 Blue Dot = Short term ({len([s for s in leader_rs_nh_matches if s != 'SPY'])})")
 
 if leader_list or leader_yest:
-
-    # Build a lookup: ticker -> which setup buckets it appears in across all industries
-    cloud21ema_all  = set()
-    cloudwick_all   = set()
-    ma50bounce_all  = set()
-    for item in all_data:
-        cloud21ema_all.update(item.get("Cloud21EMA", []))
-        cloudwick_all.update(item.get("CloudWick",   []))
-        ma50bounce_all.update(item.get("MA50Bounce",  []))
 
     html_leader = ""
 
