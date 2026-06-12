@@ -2788,6 +2788,59 @@ if breadth_total > 0:
 else:
     st.info("Insufficient data to compute breadth & stage analysis.")
 
+# ── LIME STOCKS PERFORMANCE BAR CHART ───────────────────────────────────────
+st.markdown("---")
+#st.markdown("#### 📊 Lime Stocks Daily Performance")
+
+lime_perf_rows = []
+for sym in LIME_STOCKS:
+    df_sym = ticker_dfs_shared.get(sym)
+    if df_sym is None or len(df_sym) < 2:
+        continue
+    c_today = df_sym['Close'].iloc[-1]
+    c_prev  = df_sym['Close'].iloc[-2]
+    if pd.isna(c_today) or pd.isna(c_prev) or c_prev == 0:
+        continue
+    pct = round((c_today - c_prev) / c_prev * 100, 2)
+    lime_perf_rows.append({"sym": sym, "pct": pct})
+
+if lime_perf_rows:
+    # Sort descending by pct
+    lime_perf_rows.sort(key=lambda x: -x["pct"])
+
+    max_abs = max(abs(r["pct"]) for r in lime_perf_rows) or 1
+    BAR_MAX_PX = 300  # max bar width in pixels
+
+    rows_html = ""
+    for r in lime_perf_rows:
+        sym  = r["sym"]
+        pct  = r["pct"]
+        bar_w = int(abs(pct) / max_abs * BAR_MAX_PX)
+        bar_color = "#378ADD" if pct >= 0 else "#FF69B4"
+        sign_str  = f"+{pct:.2f}%" if pct >= 0 else f"{pct:.2f}%"
+        pct_color = "#378ADD" if pct >= 0 else "#FF69B4"
+
+        rows_html += f"""
+        <div style="display:flex; align-items:center; margin-bottom:4px; gap:8px;">
+          <div style="width:60px; text-align:right; font-size:12px; font-weight:600;
+                      color:{pct_color}; flex-shrink:0;">{sign_str}</div>
+          <div style="width:80px; text-align:right; font-size:12px;
+                      font-weight:600; color:#cccccc; flex-shrink:0;">{sym}</div>
+          <div style="flex:1; display:flex; align-items:center;">
+            <div style="width:{bar_w}px; height:14px; background:{bar_color};
+                        border-radius:0 3px 3px 0; min-width:2px;"></div>
+          </div>
+        </div>"""
+
+    st.markdown(
+        f"<div style='background:#0e1117; padding:16px 12px; border-radius:6px;'>"
+        f"{rows_html}"
+        f"</div>",
+        unsafe_allow_html=True
+    )
+else:
+    st.info("No Lime Stocks performance data available.")
+
 with st.spinner("Scanning pattern anomalies across known instruments..."):
     results       = timed("process_pattern_scanners",      process_pattern_scanners,      stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
     # historical_df   = compute_historical_know_counts(stocks_tuple, ticker_dfs_shared)   # moved here: renders first
@@ -4050,59 +4103,6 @@ if not setup_avgrank_hist.empty:
     )
 else:
     st.info("Insufficient data to compute Setup Avg Rank history.")
-
-# ── LIME STOCKS PERFORMANCE BAR CHART ───────────────────────────────────────
-st.markdown("---")
-st.markdown("#### 📊 Lime Stocks Daily Performance")
-
-lime_perf_rows = []
-for sym in LIME_STOCKS:
-    df_sym = ticker_dfs_shared.get(sym)
-    if df_sym is None or len(df_sym) < 2:
-        continue
-    c_today = df_sym['Close'].iloc[-1]
-    c_prev  = df_sym['Close'].iloc[-2]
-    if pd.isna(c_today) or pd.isna(c_prev) or c_prev == 0:
-        continue
-    pct = round((c_today - c_prev) / c_prev * 100, 2)
-    lime_perf_rows.append({"sym": sym, "pct": pct})
-
-if lime_perf_rows:
-    # Sort descending by pct
-    lime_perf_rows.sort(key=lambda x: -x["pct"])
-
-    max_abs = max(abs(r["pct"]) for r in lime_perf_rows) or 1
-    BAR_MAX_PX = 300  # max bar width in pixels
-
-    rows_html = ""
-    for r in lime_perf_rows:
-        sym  = r["sym"]
-        pct  = r["pct"]
-        bar_w = int(abs(pct) / max_abs * BAR_MAX_PX)
-        bar_color = "#378ADD" if pct >= 0 else "#FF69B4"
-        sign_str  = f"+{pct:.2f}%" if pct >= 0 else f"{pct:.2f}%"
-        pct_color = "#378ADD" if pct >= 0 else "#FF69B4"
-
-        rows_html += f"""
-        <div style="display:flex; align-items:center; margin-bottom:4px; gap:8px;">
-          <div style="width:60px; text-align:right; font-size:12px; font-weight:600;
-                      color:{pct_color}; flex-shrink:0;">{sign_str}</div>
-          <div style="width:80px; text-align:right; font-size:12px;
-                      font-weight:600; color:#cccccc; flex-shrink:0;">{sym}</div>
-          <div style="flex:1; display:flex; align-items:center;">
-            <div style="width:{bar_w}px; height:14px; background:{bar_color};
-                        border-radius:0 3px 3px 0; min-width:2px;"></div>
-          </div>
-        </div>"""
-
-    st.markdown(
-        f"<div style='background:#0e1117; padding:16px 12px; border-radius:6px;'>"
-        f"{rows_html}"
-        f"</div>",
-        unsafe_allow_html=True
-    )
-else:
-    st.info("No Lime Stocks performance data available.")
 
 # ── Timing Summary ───────────────────────────────────────────────────────────
 st.markdown("---")
