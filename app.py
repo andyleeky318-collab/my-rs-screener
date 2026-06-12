@@ -265,6 +265,36 @@ with st.sidebar:
         st.cache_data.clear()
 
 # ============================================================
+# SHARED DOWNLOAD: runs once, feeds all history compute fns
+# ============================================================
+@st.cache_data(ttl=3600)
+def download_known_stocks_data(stocks_tuple):
+    benchmark_symbol = "^GSPC"
+    all_symbols = list(stocks_tuple) + [benchmark_symbol]
+    raw_data = yf.download(all_symbols, period="2y", interval="1d", progress=False, auto_adjust=False)
+
+    ticker_dfs = {}
+    for ticker in stocks_tuple:
+        try:
+            df = pd.DataFrame({
+                'Open':   raw_data['Open'][ticker],
+                'High':   raw_data['High'][ticker],
+                'Low':    raw_data['Low'][ticker],
+                'Close':  raw_data['Close'][ticker],
+                'Volume': raw_data['Volume'][ticker]
+            }).dropna()
+            if not df.empty:
+                ticker_dfs[ticker] = df
+        except Exception:
+            continue
+
+    benchmark_df = pd.DataFrame({
+        'Close': raw_data['Close'][benchmark_symbol]
+    }).dropna()
+
+    return ticker_dfs, benchmark_df
+
+# ============================================================
 # SINGLE DOWNLOAD + SPINNER: all compute fns share one fetch
 # ============================================================
 stocks_tuple = tuple(KNOWN_STOCKS)
@@ -1295,36 +1325,6 @@ def scan_leader(df, benchmark_df, lookback=0):
 
     except:
         return False
-
-# ============================================================
-# SHARED DOWNLOAD: runs once, feeds all history compute fns
-# ============================================================
-@st.cache_data(ttl=3600)
-def download_known_stocks_data(stocks_tuple):
-    benchmark_symbol = "^GSPC"
-    all_symbols = list(stocks_tuple) + [benchmark_symbol]
-    raw_data = yf.download(all_symbols, period="2y", interval="1d", progress=False, auto_adjust=False)
-
-    ticker_dfs = {}
-    for ticker in stocks_tuple:
-        try:
-            df = pd.DataFrame({
-                'Open':   raw_data['Open'][ticker],
-                'High':   raw_data['High'][ticker],
-                'Low':    raw_data['Low'][ticker],
-                'Close':  raw_data['Close'][ticker],
-                'Volume': raw_data['Volume'][ticker]
-            }).dropna()
-            if not df.empty:
-                ticker_dfs[ticker] = df
-        except Exception:
-            continue
-
-    benchmark_df = pd.DataFrame({
-        'Close': raw_data['Close'][benchmark_symbol]
-    }).dropna()
-
-    return ticker_dfs, benchmark_df
 
 @st.cache_data(ttl=3600)
 def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
