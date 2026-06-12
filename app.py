@@ -264,6 +264,177 @@ with st.sidebar:
     if st.button("Clear Cache & Refresh"):
         st.cache_data.clear()
 
+# ============================================================
+# SINGLE DOWNLOAD + SPINNER: all compute fns share one fetch
+# ============================================================
+stocks_tuple = tuple(KNOWN_STOCKS)
+
+# Single download — all history fns share this cached result
+ticker_dfs_shared, benchmark_df_shared = timed(
+    "download_known_stocks_data",
+    download_known_stocks_data,
+    stocks_tuple
+)
+
+# Inject benchmark so history functions can look it up by symbol
+ticker_dfs_shared[benchmark] = benchmark_df_shared
+
+# ==============================================================================
+# MARKET BREADTH & STAGE ANALYSIS FOR KNOWN_STOCKS
+# (Place this block ABOVE the Timing Summary section, after the Gapper section)
+# ==============================================================================
+
+@st.cache_data(ttl=3600)
+def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
+    """
+    Computes IBD-style market breadth stats and stage analysis
+    for the given stock list, mirroring the original Python screener logic.
+    """
+    try:
+        breadth_stats = {
+            'new_high': 0, 'new_low': 0,
+            'advance': 0, 'decline': 0,
+            'up_from_open': 0, 'down_from_open': 0,
+            'up_volume': 0, 'down_volume': 0,
+            'up_4pct': 0, 'down_4pct': 0
+        }
+        new_high_tickers = []  # ADD THIS
+        stage_counts = {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}
+        total_processed = 0
+
+        for ticker in stocks_list:
+            try:
+                df = ticker_dfs.get(ticker)
+                if df is None or len(df) < 5:
+                    continue
+
+                currentClose = df['Close'].iloc[-1]
+                prevClose    = df['Close'].iloc[-2]
+                currentOpen  = df['Open'].iloc[-1]
+                currentVol   = df['Volume'].iloc[-1]
+                prevVol      = df['Volume'].iloc[-2]
+
+                # 52-week high/low (exclude today for high, mirror original logic)
+                low_of_52week  = float(df['Low'].values[-260:].min())
+                high_of_52week = float(df['High'].values[-260:-1].max()) if len(df) >= 260 else float(df['High'].values[:-1].max())
+
+                pct_change = (currentClose - prevClose) / prevClose if prevClose != 0 else 0
+
+                total_processed += 1
+
+                # 1. New High / New Low
+                if currentClose >= high_of_52week:
+                    breadth_stats['new_high'] += 1
+                    new_high_tickers.append(ticker)  # ADD THIS
+                if currentClose <= low_of_52week:
+                    breadth_stats['new_low'] += 1
+
+                # 2. Advance / Decline
+                if currentClose > prevClose:
+                    breadth_stats['advance'] += 1
+                elif currentClose < prevClose:
+                    breadth_stats['decline'] += 1
+
+                # 3. Up from Open / Down from Open
+                if currentClose > currentOpen:
+                    breadth_stats['up_from_open'] += 1
+                elif currentClose < currentOpen:
+                    breadth_stats['down_from_open'] += 1
+
+                # 4. Up on Volume / Down on Volume
+                if currentClose > prevClose and currentVol > prevVol:
+                    breadth_stats['up_volume'] += 1
+                elif currentClose < prevClose and currentVol > prevVol:
+                    breadth_stats['down_volume'] += 1
+
+                # 5. Up 4% / Down 4%
+                if pct_change >= 0.04:
+                    breadth_stats['up_4pct'] += 1
+                elif pct_change <= -0.04:
+                    breadth_stats['down_4pct'] += 1
+
+                # ── Stage Analysis ──────────────────────────────────────────────
+                # Requires benchmark alignment and at least 260 bars
+                if len(df) < 260 or benchmark_df_input is None or benchmark_df_input.empty:
+                    stage_counts[0] += 1
+                    continue
+
+                df_idx = df.index.tz_localize(None) if df.index.tz is not None else df.index
+                bm_idx = benchmark_df_input.index.tz_localize(None) if benchmark_df_input.index.tz is not None else benchmark_df_input.index
+
+                df_aligned = df.copy()
+                df_aligned.index = df_idx
+                bm_aligned = benchmark_df_input.copy()
+                bm_aligned.index = bm_idx
+
+                combined = pd.merge(
+                    df_aligned[['Close', 'Open']],
+                    bm_aligned[['Close']].rename(columns={'Close': 'Close_bench'}),
+                    left_index=True, right_index=True, how='inner'
+                )
+
+                if combined.empty:
+                    stage_counts[0] += 1
+                    continue
+
+                # EMA 126 of stock close (for price vs trend line check)
+                ema126 = df_aligned['Close'].ewm(span=126, adjust=False).mean()
+
+                # RS Ratio
+                rs = combined['Close'] / combined['Close_bench']
+
+                # 8 EMAs of RS ratio (matches original screener)
+                ema_spans = [21, 42, 63, 72, 84, 126, 147, 168]
+                rs_emas = {span: rs.ewm(span=span, adjust=False).mean() for span in ema_spans}
+
+                last = combined.index[-1]
+                rsme  = rs.loc[last]
+                c     = combined['Close'].loc[last]
+                o     = combined['Open'].loc[last]
+
+                # Align ema126 to combined index
+                ema126_val = ema126.reindex(combined.index, method='ffill').loc[last]
+
+                r21  = rs_emas[21].loc[last]
+                r42  = rs_emas[42].loc[last]
+                r63  = rs_emas[63].loc[last]
+                r72  = rs_emas[72].loc[last]
+                r84  = rs_emas[84].loc[last]
+                r126 = rs_emas[126].loc[last]
+                r147 = rs_emas[147].loc[last]
+                r168 = rs_emas[168].loc[last]
+
+                # Stage logic (exact mirror of original screener, checked in order)
+                if rsme >= r84 and rsme < r126:
+                    stage = 1
+                elif (rsme < r42 and rsme >= r72 and rsme >= r84 and rsme >= r126
+                      and (r42 > r63 or rsme < r63) and r63 > r126 and c >= ema126_val):
+                    stage = 3
+                elif (rsme >= r168 and rsme >= r147 and rsme >= r126
+                      and c >= ema126_val and (r21 >= r42 or r42 >= r63)):
+                    stage = 2
+                elif rsme >= r126 and c >= ema126_val and (r21 >= r42 or r42 >= r63):
+                    stage = 2
+                elif (rsme < r63 and rsme < r126) or (r63 < r126 and rsme < r126):
+                    stage = 4
+                elif (o >= ema126_val or c >= ema126_val) and rsme >= r72 and rsme < r126:
+                    stage = 1
+                elif rsme >= r84 and rsme >= r72 and (o >= ema126_val or c >= ema126_val):
+                    stage = 1
+                else:
+                    stage = 0
+
+                stage_counts[stage] += 1
+
+            except Exception:
+                stage_counts[0] += 1
+                continue
+
+        return breadth_stats, stage_counts, total_processed, new_high_tickers
+
+    except Exception as e:
+        return {}, {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}, 0
+
 # ── Compute ─────────────────────────────────────────────────────────────────
 with st.spinner("Computing market breadth & stage analysis..."):
     breadth_stats, stage_counts, breadth_total, new_high_tickers = timed(
@@ -2557,177 +2728,6 @@ def compute_historical_know_counts(stocks_list, ticker_dfs):
         return pd.DataFrame(historical_records)
     except Exception as e:
         return pd.DataFrame()
-
-# ============================================================
-# SINGLE DOWNLOAD + SPINNER: all compute fns share one fetch
-# ============================================================
-stocks_tuple = tuple(KNOWN_STOCKS)
-
-# Single download — all history fns share this cached result
-ticker_dfs_shared, benchmark_df_shared = timed(
-    "download_known_stocks_data",
-    download_known_stocks_data,
-    stocks_tuple
-)
-
-# Inject benchmark so history functions can look it up by symbol
-ticker_dfs_shared[benchmark] = benchmark_df_shared
-
-# ==============================================================================
-# MARKET BREADTH & STAGE ANALYSIS FOR KNOWN_STOCKS
-# (Place this block ABOVE the Timing Summary section, after the Gapper section)
-# ==============================================================================
-
-@st.cache_data(ttl=3600)
-def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
-    """
-    Computes IBD-style market breadth stats and stage analysis
-    for the given stock list, mirroring the original Python screener logic.
-    """
-    try:
-        breadth_stats = {
-            'new_high': 0, 'new_low': 0,
-            'advance': 0, 'decline': 0,
-            'up_from_open': 0, 'down_from_open': 0,
-            'up_volume': 0, 'down_volume': 0,
-            'up_4pct': 0, 'down_4pct': 0
-        }
-        new_high_tickers = []  # ADD THIS
-        stage_counts = {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}
-        total_processed = 0
-
-        for ticker in stocks_list:
-            try:
-                df = ticker_dfs.get(ticker)
-                if df is None or len(df) < 5:
-                    continue
-
-                currentClose = df['Close'].iloc[-1]
-                prevClose    = df['Close'].iloc[-2]
-                currentOpen  = df['Open'].iloc[-1]
-                currentVol   = df['Volume'].iloc[-1]
-                prevVol      = df['Volume'].iloc[-2]
-
-                # 52-week high/low (exclude today for high, mirror original logic)
-                low_of_52week  = float(df['Low'].values[-260:].min())
-                high_of_52week = float(df['High'].values[-260:-1].max()) if len(df) >= 260 else float(df['High'].values[:-1].max())
-
-                pct_change = (currentClose - prevClose) / prevClose if prevClose != 0 else 0
-
-                total_processed += 1
-
-                # 1. New High / New Low
-                if currentClose >= high_of_52week:
-                    breadth_stats['new_high'] += 1
-                    new_high_tickers.append(ticker)  # ADD THIS
-                if currentClose <= low_of_52week:
-                    breadth_stats['new_low'] += 1
-
-                # 2. Advance / Decline
-                if currentClose > prevClose:
-                    breadth_stats['advance'] += 1
-                elif currentClose < prevClose:
-                    breadth_stats['decline'] += 1
-
-                # 3. Up from Open / Down from Open
-                if currentClose > currentOpen:
-                    breadth_stats['up_from_open'] += 1
-                elif currentClose < currentOpen:
-                    breadth_stats['down_from_open'] += 1
-
-                # 4. Up on Volume / Down on Volume
-                if currentClose > prevClose and currentVol > prevVol:
-                    breadth_stats['up_volume'] += 1
-                elif currentClose < prevClose and currentVol > prevVol:
-                    breadth_stats['down_volume'] += 1
-
-                # 5. Up 4% / Down 4%
-                if pct_change >= 0.04:
-                    breadth_stats['up_4pct'] += 1
-                elif pct_change <= -0.04:
-                    breadth_stats['down_4pct'] += 1
-
-                # ── Stage Analysis ──────────────────────────────────────────────
-                # Requires benchmark alignment and at least 260 bars
-                if len(df) < 260 or benchmark_df_input is None or benchmark_df_input.empty:
-                    stage_counts[0] += 1
-                    continue
-
-                df_idx = df.index.tz_localize(None) if df.index.tz is not None else df.index
-                bm_idx = benchmark_df_input.index.tz_localize(None) if benchmark_df_input.index.tz is not None else benchmark_df_input.index
-
-                df_aligned = df.copy()
-                df_aligned.index = df_idx
-                bm_aligned = benchmark_df_input.copy()
-                bm_aligned.index = bm_idx
-
-                combined = pd.merge(
-                    df_aligned[['Close', 'Open']],
-                    bm_aligned[['Close']].rename(columns={'Close': 'Close_bench'}),
-                    left_index=True, right_index=True, how='inner'
-                )
-
-                if combined.empty:
-                    stage_counts[0] += 1
-                    continue
-
-                # EMA 126 of stock close (for price vs trend line check)
-                ema126 = df_aligned['Close'].ewm(span=126, adjust=False).mean()
-
-                # RS Ratio
-                rs = combined['Close'] / combined['Close_bench']
-
-                # 8 EMAs of RS ratio (matches original screener)
-                ema_spans = [21, 42, 63, 72, 84, 126, 147, 168]
-                rs_emas = {span: rs.ewm(span=span, adjust=False).mean() for span in ema_spans}
-
-                last = combined.index[-1]
-                rsme  = rs.loc[last]
-                c     = combined['Close'].loc[last]
-                o     = combined['Open'].loc[last]
-
-                # Align ema126 to combined index
-                ema126_val = ema126.reindex(combined.index, method='ffill').loc[last]
-
-                r21  = rs_emas[21].loc[last]
-                r42  = rs_emas[42].loc[last]
-                r63  = rs_emas[63].loc[last]
-                r72  = rs_emas[72].loc[last]
-                r84  = rs_emas[84].loc[last]
-                r126 = rs_emas[126].loc[last]
-                r147 = rs_emas[147].loc[last]
-                r168 = rs_emas[168].loc[last]
-
-                # Stage logic (exact mirror of original screener, checked in order)
-                if rsme >= r84 and rsme < r126:
-                    stage = 1
-                elif (rsme < r42 and rsme >= r72 and rsme >= r84 and rsme >= r126
-                      and (r42 > r63 or rsme < r63) and r63 > r126 and c >= ema126_val):
-                    stage = 3
-                elif (rsme >= r168 and rsme >= r147 and rsme >= r126
-                      and c >= ema126_val and (r21 >= r42 or r42 >= r63)):
-                    stage = 2
-                elif rsme >= r126 and c >= ema126_val and (r21 >= r42 or r42 >= r63):
-                    stage = 2
-                elif (rsme < r63 and rsme < r126) or (r63 < r126 and rsme < r126):
-                    stage = 4
-                elif (o >= ema126_val or c >= ema126_val) and rsme >= r72 and rsme < r126:
-                    stage = 1
-                elif rsme >= r84 and rsme >= r72 and (o >= ema126_val or c >= ema126_val):
-                    stage = 1
-                else:
-                    stage = 0
-
-                stage_counts[stage] += 1
-
-            except Exception:
-                stage_counts[0] += 1
-                continue
-
-        return breadth_stats, stage_counts, total_processed, new_high_tickers
-
-    except Exception as e:
-        return {}, {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}, 0
 
 st.markdown("---")
 
