@@ -264,6 +264,251 @@ with st.sidebar:
     if st.button("Clear Cache & Refresh"):
         st.cache_data.clear()
 
+# ── Compute ─────────────────────────────────────────────────────────────────
+with st.spinner("Computing market breadth & stage analysis..."):
+    breadth_stats, stage_counts, breadth_total, new_high_tickers = timed(
+        "compute_breadth_and_stage",
+        compute_breadth_and_stage,
+        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
+    )
+
+# st.markdown("---")
+#st.markdown(f"#### 📊 Market Breadth")
+
+if breadth_total > 0:
+
+    # ── Helper: one breadth bar (compact, label above, counts below) ──────
+    def breadth_bar_html(title, val, counterpart):
+        pair_total = val + counterpart
+        if pair_total == 0:
+            pct_val, pct_counter = 0, 0
+        else:
+            pct_val     = (val / pair_total) * 100
+            pct_counter = 100 - pct_val
+
+        is_bullish  = pct_val >= 50
+        bull_color  = "#378ADD" if is_bullish else "#FF69B4"
+        bear_color  = "#a9a9a9"
+        pct_display = f"{pct_val:.1f}%"
+
+        # Bar segments
+        if pct_val == 0:
+            bar_segs = f"<div style='width:100%;background:{bear_color};height:100%;border-radius:999px;'></div>"
+        elif pct_counter == 0:
+            bar_segs = f"<div style='width:100%;background:{bull_color};height:100%;border-radius:999px;'></div>"
+        else:
+            bar_segs = (
+                f"<div style='width:{pct_val:.2f}%;background:{bull_color};height:100%;border-radius:999px 0 0 999px;'></div>"
+                f"<div style='width:{pct_counter:.2f}%;background:{bear_color};height:100%;border-radius:0 999px 999px 0;'></div>"
+            )
+
+        return (
+            f"<div style='margin-bottom:18px;'>"
+            # Title row with pct on the right
+            f"  <div style='margin-bottom:5px;font-size:14px;font-weight:700;color:#ffffff;'>"
+            f"    {title} <span style='color:{bull_color};'>({pct_display})</span>"
+            f"  </div>"
+            # Bar — 40% width, left-aligned
+            f"  <div style='width:40%;height:7px;display:flex;overflow:hidden;border-radius:999px;background:{bear_color};'>"
+            f"    {bar_segs}"
+            f"  </div>"
+            # Counts row
+            f"  <div style='display:flex;justify-content:space-between;width:40%;margin-top:4px;'>"
+            f"    <span style='font-size:12px;color:#888888;'>{val:,} {title.split(' vs ')[0]}</span>"
+            f"    <span style='font-size:12px;color:#888888;'>{counterpart:,} {title.split(' vs ')[1]}</span>"
+            f"  </div>"
+            f"</div>"
+        )
+
+    # ── Render all 5 breadth bars ─────────────────────────────────────────
+    # Render New Highs bar separately with expander
+    new_high_count = breadth_stats.get('new_high', 0)
+    new_low_count  = breadth_stats.get('new_low', 0)
+    pair_total = new_high_count + new_low_count
+    pct_val     = (new_high_count / pair_total * 100) if pair_total > 0 else 0
+    pct_counter = 100 - pct_val
+    bull_color  = "#378ADD" if pct_val >= 50 else "#FF69B4"
+    bear_color  = "#a9a9a9"
+
+    if pct_val == 0:
+        bar_segs_nh = f"<div style='width:100%;background:{bear_color};height:100%;border-radius:999px;'></div>"
+    elif pct_counter == 0:
+        bar_segs_nh = f"<div style='width:100%;background:{bull_color};height:100%;border-radius:999px;'></div>"
+    else:
+        bar_segs_nh = (
+            f"<div style='width:{pct_val:.2f}%;background:{bull_color};height:100%;border-radius:999px 0 0 999px;'></div>"
+            f"<div style='width:{pct_counter:.2f}%;background:{bear_color};height:100%;border-radius:0 999px 999px 0;'></div>"
+        )
+
+    st.markdown(
+        f"<div style='margin-bottom:6px;font-size:14px;font-weight:700;color:#ffffff;'>"
+        f"New Highs vs New Lows <span style='color:{bull_color};'>({pct_val:.1f}%)</span>"
+        f"</div>"
+        f"<div style='width:40%;height:7px;display:flex;overflow:hidden;border-radius:999px;background:{bear_color};margin-bottom:4px;'>"
+        f"{bar_segs_nh}</div>",
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        f"<div style='display:flex;justify-content:space-between;width:40%;margin-bottom:18px;'>"
+        f"<span style='font-size:12px;color:#888888;'>{new_high_count:,} New Highs</span>"
+        f"<span style='font-size:12px;color:#888888;'>{new_low_count:,} New Lows</span>"
+        f"</div>",
+        unsafe_allow_html=True
+    )
+
+    col_nh, col_nl = st.columns([1, 9])
+    with col_nh:
+        with st.expander(f""):
+            if new_high_tickers:
+                nh_html = (
+                    "<div style='display:flex;flex-wrap:wrap;gap:6px;"
+                    "padding:12px 4px;'>"
+                )
+                for sym in sorted(new_high_tickers):
+                    if sym in LIME_STOCKS:
+                        nh_html += (
+                            f'<div class="ticker-badge lime-badge">'
+                            f'<span style="color:#000;font-weight:bold;">{sym}</span></div>'
+                        )
+                    elif sym in KNOWN_STOCKS:
+                        nh_html += (
+                            f'<div class="ticker-badge new-pattern-badge">'
+                            f'<span style="color:#111;font-weight:bold;">{sym}</span></div>'
+                        )
+                    else:
+                        nh_html += f'<div class="ticker-badge">{sym}</div>'
+                nh_html += "</div>"
+                st.markdown(nh_html, unsafe_allow_html=True)
+            else:
+                st.info("")
+
+    # Remaining 4 breadth bars unchanged
+    breadth_html = (
+        breadth_bar_html('Advance vs Decline',            breadth_stats.get('advance', 0),      breadth_stats.get('decline', 0))
+        + breadth_bar_html('Up from Open vs Down from Open',breadth_stats.get('up_from_open', 0), breadth_stats.get('down_from_open', 0))
+        + breadth_bar_html('Up on Volume vs Down on Volume',breadth_stats.get('up_volume', 0),    breadth_stats.get('down_volume', 0))
+        + breadth_bar_html('Up 4% vs Down 4%',              breadth_stats.get('up_4pct', 0),      breadth_stats.get('down_4pct', 0))
+    )
+    st.markdown(breadth_html, unsafe_allow_html=True)
+
+st.markdown("---")
+#st.markdown(f"#### 🎯 Stage Analysis")
+
+if breadth_total > 0:
+    # ── Stage: single stacked bar ─────────────────────────────────────────
+    stage_order  = [1, 2, 3, 4]
+    stage_colors = {1: "#a9a9a9", 2: "#378ADD", 3: "#EF9F27", 4: "#FF69B4"}
+    stage_labels = {1: "S1", 2: "S2", 3: "S3", 4: "S4"}
+
+    bar_total = sum(stage_counts.get(s, 0) for s in stage_order)
+
+    if bar_total > 0:
+        segs = [
+            {"s": s, "cnt": stage_counts.get(s, 0),
+             "pct": stage_counts.get(s, 0) / bar_total * 100,
+             "color": stage_colors[s]}
+            for s in stage_order
+        ]
+
+        bar_segs = ""
+        legend = ""
+        
+        for i, seg in enumerate(segs):
+            # 1. Build the bar segment
+            r = ("border-radius:999px 0 0 999px;" if i == 0
+                 else "border-radius:0 999px 999px 0;" if i == len(segs) - 1
+                 else "")
+            bar_segs += (
+                f"<div style='width:{seg['pct']:.2f}%; background:{seg['color']};"
+                f"height:100%; {r}'></div>"
+            )
+
+            # 2. Build the perfectly aligned label area below it
+            # Hide text details entirely if the percentage is 0 to avoid overlapping strings
+            display_style = "display:flex;" if seg['pct'] > 0 else "display:none;"
+            
+            legend += (
+                f"<div style='width:{seg['pct']:.2f}%; {display_style} flex-direction:column;"
+                f"align-items:center; text-align:center; box-sizing:border-box; padding:0 2px; overflow:hidden;'>"
+                f"<div style='display:flex;align-items:center;gap:5px;justify-content:center; white-space:nowrap;'>"
+                f"<span style='width:8px;height:8px;border-radius:50%;"
+                f"background:{seg['color']};display:inline-block;flex-shrink:0;'></span>"
+                f"<span style='font-size:13px;font-weight:500;color:#ffffff;'>"
+                f"{stage_labels[seg['s']]}</span></div>"
+                f"<span style='font-size:11px;color:#888888;white-space:nowrap;'>"
+                f"{seg['cnt']} · {seg['pct']:.0f}%</span>"
+                f"</div>"
+            )
+
+        st.markdown(
+            f"<div style='padding:8px 0 4px; width:100%;'>"
+            f"<div style='text-align: center; font-size: 30px; font-weight: bold; color: #ffffff; margin-bottom: 18px;'>Stage</div>"
+            f"<div style='width:100%;height:12px;display:flex;"
+            f"overflow:hidden;border-radius:999px;'>{bar_segs}</div>"
+            f"<div style='display:flex; width:100%; margin-top:10px;'>"
+            f"{legend}</div></div>",
+            unsafe_allow_html=True
+        )
+
+else:
+    st.info("Insufficient data to compute breadth & stage analysis.")
+
+# ── LIME STOCKS PERFORMANCE BAR CHART ───────────────────────────────────────
+st.markdown("---")
+#st.markdown("#### 📊 Lime Stocks Daily Performance")
+
+lime_perf_rows = []
+for sym in LIME_STOCKS:
+    df_sym = ticker_dfs_shared.get(sym)
+    if df_sym is None or len(df_sym) < 2:
+        continue
+    c_today = df_sym['Close'].iloc[-1]
+    c_prev  = df_sym['Close'].iloc[-2]
+    if pd.isna(c_today) or pd.isna(c_prev) or c_prev == 0:
+        continue
+    pct = round((c_today - c_prev) / c_prev * 100, 2)
+    lime_perf_rows.append({"sym": sym, "pct": pct})
+
+if lime_perf_rows:
+    # Sort descending by pct
+    lime_perf_rows.sort(key=lambda x: -x["pct"])
+
+    max_abs = max(abs(r["pct"]) for r in lime_perf_rows) or 1
+    BAR_MAX_PX = 300  # max bar width in pixels
+
+    rows_html = ""
+    for r in lime_perf_rows:
+        sym  = r["sym"]
+        pct  = r["pct"]
+        bar_w = int(abs(pct) / max_abs * BAR_MAX_PX)
+        bar_color = "#378ADD" if pct >= 0 else "#FF69B4"
+        sign_str  = f"+{pct:.2f}%" if pct >= 0 else f"{pct:.2f}%"
+        pct_color = "#378ADD" if pct >= 0 else "#FF69B4"
+
+        rows_html += f"""
+        <div style="display:flex; align-items:center; margin-bottom:4px; gap:8px;">
+          <div style="width:60px; text-align:right; font-size:12px; font-weight:600;
+                      color:{pct_color}; flex-shrink:0;">{sign_str}</div>
+          <div style="width:80px; text-align:right; font-size:12px;
+                      font-weight:600; color:#cccccc; flex-shrink:0;">{sym}</div>
+          <div style="flex:1; display:flex; align-items:center;">
+            <div style="width:{bar_w}px; height:14px; background:{bar_color};
+                        border-radius:0 3px 3px 0; min-width:2px;"></div>
+          </div>
+        </div>"""
+
+    st.markdown(
+        f"<div style='background:#0e1117; padding:16px 12px; border-radius:6px;'>"
+        f"{rows_html}"
+        f"</div>",
+        unsafe_allow_html=True
+    )
+else:
+    st.info("No Lime Stocks performance data available.")
+
+st.markdown("---")
+
 # 4. IMPLEMENTATION OF NEW NORMALIZED RS METHOD AND EMA CLOUD
 @st.cache_data(ttl=3600)
 def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <-- Added length parameter
@@ -2622,251 +2867,6 @@ if quad_points:
  
 else:
     st.info("No industry RS data available to render the quadrant map.")
-
-# ── Compute ─────────────────────────────────────────────────────────────────
-with st.spinner("Computing market breadth & stage analysis..."):
-    breadth_stats, stage_counts, breadth_total, new_high_tickers = timed(
-        "compute_breadth_and_stage",
-        compute_breadth_and_stage,
-        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
-    )
-
-st.markdown("---")
-#st.markdown(f"#### 📊 Market Breadth")
-
-if breadth_total > 0:
-
-    # ── Helper: one breadth bar (compact, label above, counts below) ──────
-    def breadth_bar_html(title, val, counterpart):
-        pair_total = val + counterpart
-        if pair_total == 0:
-            pct_val, pct_counter = 0, 0
-        else:
-            pct_val     = (val / pair_total) * 100
-            pct_counter = 100 - pct_val
-
-        is_bullish  = pct_val >= 50
-        bull_color  = "#378ADD" if is_bullish else "#FF69B4"
-        bear_color  = "#a9a9a9"
-        pct_display = f"{pct_val:.1f}%"
-
-        # Bar segments
-        if pct_val == 0:
-            bar_segs = f"<div style='width:100%;background:{bear_color};height:100%;border-radius:999px;'></div>"
-        elif pct_counter == 0:
-            bar_segs = f"<div style='width:100%;background:{bull_color};height:100%;border-radius:999px;'></div>"
-        else:
-            bar_segs = (
-                f"<div style='width:{pct_val:.2f}%;background:{bull_color};height:100%;border-radius:999px 0 0 999px;'></div>"
-                f"<div style='width:{pct_counter:.2f}%;background:{bear_color};height:100%;border-radius:0 999px 999px 0;'></div>"
-            )
-
-        return (
-            f"<div style='margin-bottom:18px;'>"
-            # Title row with pct on the right
-            f"  <div style='margin-bottom:5px;font-size:14px;font-weight:700;color:#ffffff;'>"
-            f"    {title} <span style='color:{bull_color};'>({pct_display})</span>"
-            f"  </div>"
-            # Bar — 40% width, left-aligned
-            f"  <div style='width:40%;height:7px;display:flex;overflow:hidden;border-radius:999px;background:{bear_color};'>"
-            f"    {bar_segs}"
-            f"  </div>"
-            # Counts row
-            f"  <div style='display:flex;justify-content:space-between;width:40%;margin-top:4px;'>"
-            f"    <span style='font-size:12px;color:#888888;'>{val:,} {title.split(' vs ')[0]}</span>"
-            f"    <span style='font-size:12px;color:#888888;'>{counterpart:,} {title.split(' vs ')[1]}</span>"
-            f"  </div>"
-            f"</div>"
-        )
-
-    # ── Render all 5 breadth bars ─────────────────────────────────────────
-    # Render New Highs bar separately with expander
-    new_high_count = breadth_stats.get('new_high', 0)
-    new_low_count  = breadth_stats.get('new_low', 0)
-    pair_total = new_high_count + new_low_count
-    pct_val     = (new_high_count / pair_total * 100) if pair_total > 0 else 0
-    pct_counter = 100 - pct_val
-    bull_color  = "#378ADD" if pct_val >= 50 else "#FF69B4"
-    bear_color  = "#a9a9a9"
-
-    if pct_val == 0:
-        bar_segs_nh = f"<div style='width:100%;background:{bear_color};height:100%;border-radius:999px;'></div>"
-    elif pct_counter == 0:
-        bar_segs_nh = f"<div style='width:100%;background:{bull_color};height:100%;border-radius:999px;'></div>"
-    else:
-        bar_segs_nh = (
-            f"<div style='width:{pct_val:.2f}%;background:{bull_color};height:100%;border-radius:999px 0 0 999px;'></div>"
-            f"<div style='width:{pct_counter:.2f}%;background:{bear_color};height:100%;border-radius:0 999px 999px 0;'></div>"
-        )
-
-    st.markdown(
-        f"<div style='margin-bottom:6px;font-size:14px;font-weight:700;color:#ffffff;'>"
-        f"New Highs vs New Lows <span style='color:{bull_color};'>({pct_val:.1f}%)</span>"
-        f"</div>"
-        f"<div style='width:40%;height:7px;display:flex;overflow:hidden;border-radius:999px;background:{bear_color};margin-bottom:4px;'>"
-        f"{bar_segs_nh}</div>",
-        unsafe_allow_html=True
-    )
-
-
-
-    st.markdown(
-        f"<div style='display:flex;justify-content:space-between;width:40%;margin-bottom:18px;'>"
-        f"<span style='font-size:12px;color:#888888;'>{new_high_count:,} New Highs</span>"
-        f"<span style='font-size:12px;color:#888888;'>{new_low_count:,} New Lows</span>"
-        f"</div>",
-        unsafe_allow_html=True
-    )
-
-    col_nh, col_nl = st.columns([1, 9])
-    with col_nh:
-        with st.expander(f""):
-            if new_high_tickers:
-                nh_html = (
-                    "<div style='display:flex;flex-wrap:wrap;gap:6px;"
-                    "padding:12px 4px;'>"
-                )
-                for sym in sorted(new_high_tickers):
-                    if sym in LIME_STOCKS:
-                        nh_html += (
-                            f'<div class="ticker-badge lime-badge">'
-                            f'<span style="color:#000;font-weight:bold;">{sym}</span></div>'
-                        )
-                    elif sym in KNOWN_STOCKS:
-                        nh_html += (
-                            f'<div class="ticker-badge new-pattern-badge">'
-                            f'<span style="color:#111;font-weight:bold;">{sym}</span></div>'
-                        )
-                    else:
-                        nh_html += f'<div class="ticker-badge">{sym}</div>'
-                nh_html += "</div>"
-                st.markdown(nh_html, unsafe_allow_html=True)
-            else:
-                st.info("")
-
-    # Remaining 4 breadth bars unchanged
-    breadth_html = (
-        breadth_bar_html('Advance vs Decline',            breadth_stats.get('advance', 0),      breadth_stats.get('decline', 0))
-        + breadth_bar_html('Up from Open vs Down from Open',breadth_stats.get('up_from_open', 0), breadth_stats.get('down_from_open', 0))
-        + breadth_bar_html('Up on Volume vs Down on Volume',breadth_stats.get('up_volume', 0),    breadth_stats.get('down_volume', 0))
-        + breadth_bar_html('Up 4% vs Down 4%',              breadth_stats.get('up_4pct', 0),      breadth_stats.get('down_4pct', 0))
-    )
-    st.markdown(breadth_html, unsafe_allow_html=True)
-
-st.markdown("---")
-#st.markdown(f"#### 🎯 Stage Analysis")
-
-if breadth_total > 0:
-    # ── Stage: single stacked bar ─────────────────────────────────────────
-    stage_order  = [1, 2, 3, 4]
-    stage_colors = {1: "#a9a9a9", 2: "#378ADD", 3: "#EF9F27", 4: "#FF69B4"}
-    stage_labels = {1: "S1", 2: "S2", 3: "S3", 4: "S4"}
-
-    bar_total = sum(stage_counts.get(s, 0) for s in stage_order)
-
-    if bar_total > 0:
-        segs = [
-            {"s": s, "cnt": stage_counts.get(s, 0),
-             "pct": stage_counts.get(s, 0) / bar_total * 100,
-             "color": stage_colors[s]}
-            for s in stage_order
-        ]
-
-        bar_segs = ""
-        legend = ""
-        
-        for i, seg in enumerate(segs):
-            # 1. Build the bar segment
-            r = ("border-radius:999px 0 0 999px;" if i == 0
-                 else "border-radius:0 999px 999px 0;" if i == len(segs) - 1
-                 else "")
-            bar_segs += (
-                f"<div style='width:{seg['pct']:.2f}%; background:{seg['color']};"
-                f"height:100%; {r}'></div>"
-            )
-
-            # 2. Build the perfectly aligned label area below it
-            # Hide text details entirely if the percentage is 0 to avoid overlapping strings
-            display_style = "display:flex;" if seg['pct'] > 0 else "display:none;"
-            
-            legend += (
-                f"<div style='width:{seg['pct']:.2f}%; {display_style} flex-direction:column;"
-                f"align-items:center; text-align:center; box-sizing:border-box; padding:0 2px; overflow:hidden;'>"
-                f"<div style='display:flex;align-items:center;gap:5px;justify-content:center; white-space:nowrap;'>"
-                f"<span style='width:8px;height:8px;border-radius:50%;"
-                f"background:{seg['color']};display:inline-block;flex-shrink:0;'></span>"
-                f"<span style='font-size:13px;font-weight:500;color:#ffffff;'>"
-                f"{stage_labels[seg['s']]}</span></div>"
-                f"<span style='font-size:11px;color:#888888;white-space:nowrap;'>"
-                f"{seg['cnt']} · {seg['pct']:.0f}%</span>"
-                f"</div>"
-            )
-
-        st.markdown(
-            f"<div style='padding:8px 0 4px; width:100%;'>"
-            f"<div style='text-align: center; font-size: 30px; font-weight: bold; color: #ffffff; margin-bottom: 18px;'>Stage</div>"
-            f"<div style='width:100%;height:12px;display:flex;"
-            f"overflow:hidden;border-radius:999px;'>{bar_segs}</div>"
-            f"<div style='display:flex; width:100%; margin-top:10px;'>"
-            f"{legend}</div></div>",
-            unsafe_allow_html=True
-        )
-
-else:
-    st.info("Insufficient data to compute breadth & stage analysis.")
-
-# ── LIME STOCKS PERFORMANCE BAR CHART ───────────────────────────────────────
-st.markdown("---")
-#st.markdown("#### 📊 Lime Stocks Daily Performance")
-
-lime_perf_rows = []
-for sym in LIME_STOCKS:
-    df_sym = ticker_dfs_shared.get(sym)
-    if df_sym is None or len(df_sym) < 2:
-        continue
-    c_today = df_sym['Close'].iloc[-1]
-    c_prev  = df_sym['Close'].iloc[-2]
-    if pd.isna(c_today) or pd.isna(c_prev) or c_prev == 0:
-        continue
-    pct = round((c_today - c_prev) / c_prev * 100, 2)
-    lime_perf_rows.append({"sym": sym, "pct": pct})
-
-if lime_perf_rows:
-    # Sort descending by pct
-    lime_perf_rows.sort(key=lambda x: -x["pct"])
-
-    max_abs = max(abs(r["pct"]) for r in lime_perf_rows) or 1
-    BAR_MAX_PX = 300  # max bar width in pixels
-
-    rows_html = ""
-    for r in lime_perf_rows:
-        sym  = r["sym"]
-        pct  = r["pct"]
-        bar_w = int(abs(pct) / max_abs * BAR_MAX_PX)
-        bar_color = "#378ADD" if pct >= 0 else "#FF69B4"
-        sign_str  = f"+{pct:.2f}%" if pct >= 0 else f"{pct:.2f}%"
-        pct_color = "#378ADD" if pct >= 0 else "#FF69B4"
-
-        rows_html += f"""
-        <div style="display:flex; align-items:center; margin-bottom:4px; gap:8px;">
-          <div style="width:60px; text-align:right; font-size:12px; font-weight:600;
-                      color:{pct_color}; flex-shrink:0;">{sign_str}</div>
-          <div style="width:80px; text-align:right; font-size:12px;
-                      font-weight:600; color:#cccccc; flex-shrink:0;">{sym}</div>
-          <div style="flex:1; display:flex; align-items:center;">
-            <div style="width:{bar_w}px; height:14px; background:{bar_color};
-                        border-radius:0 3px 3px 0; min-width:2px;"></div>
-          </div>
-        </div>"""
-
-    st.markdown(
-        f"<div style='background:#0e1117; padding:16px 12px; border-radius:6px;'>"
-        f"{rows_html}"
-        f"</div>",
-        unsafe_allow_html=True
-    )
-else:
-    st.info("No Lime Stocks performance data available.")
 
 with st.spinner("Scanning pattern anomalies across known instruments..."):
     results       = timed("process_pattern_scanners",      process_pattern_scanners,      stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
