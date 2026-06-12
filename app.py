@@ -3494,8 +3494,9 @@ if ppp_list or ppp_yest:
     # ── Badge row ─────────────────────────────────────────────────────────
     html_p = ""
     for sym in ppp_list:
-        cls = "new-pattern-badge" if sym not in ppp_yest else ""
-        html_p += f'<div class="ticker-badge {cls}">{sym}</div>'
+        #cls = "new-pattern-badge" if sym not in ppp_yest else ""
+        #html_p += f'<div class="ticker-badge {cls}">{sym}</div>'
+        html_p += setup_badge(sym, is_new=(sym not in ppp_yest))
 
     removed_ppp = [sym for sym in ppp_yest if sym not in ppp_list]
     for sym in sorted(removed_ppp):
