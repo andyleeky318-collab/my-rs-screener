@@ -2446,34 +2446,43 @@ def get_gapper_ohlcv_json(ticker):
         return "[]"
     
 @st.cache_data(ttl=3600)
-def compute_two_botak_history(stocks_list, ticker_dfs):
+def compute_two_botak_history(stocks_list, _ticker_dfs):
     try:
-        if not ticker_dfs:
+        if not _ticker_dfs:
             return pd.DataFrame()
 
         all_series = []
-        for ticker, df in ticker_dfs.items():
+        errors = []  # ADD THIS
+        for ticker, df in _ticker_dfs.items():
+            if not all(col in df.columns for col in ['Open', 'High', 'Low', 'Close']):
+                continue
             if len(df) < 2:
                 continue
 
-            botak = (
-                (abs(df['Close'] - df['High']) < 0.05) &
-                (df['Close'] > df['Open'])
-            )
-            percentile = (
-                (df['Close'] > df['Open']) &
-                (((df['Close'] - df['Open']) /
-                  ((df['High'] - df['Open']).replace(0, 0.001))) > 0.9)
-            )
-            two_botak_series = (
-                ((botak & botak.shift(1)) |
-                 (botak & percentile.shift(1)) |
-                 (percentile & botak.shift(1)) |
-                 (percentile & percentile.shift(1))) &
-                (df['Close'] > 20)
-            ).astype(int)
+            try:  # ADD INNER TRY to catch per-ticker errors
+                botak = (
+                    (abs(df['Close'] - df['High']) < 0.05) &
+                    (df['Close'] > df['Open'])
+                )
+                percentile = (
+                    (df['Close'] > df['Open']) &
+                    (((df['Close'] - df['Open']) /
+                      ((df['High'] - df['Open']).replace(0, 0.001))) > 0.9)
+                )
+                two_botak_series = (
+                    ((botak & botak.shift(1)) |
+                     (botak & percentile.shift(1)) |
+                     (percentile & botak.shift(1)) |
+                     (percentile & percentile.shift(1))) &
+                    (df['Close'] > 20)
+                ).astype(int)
 
-            all_series.append(two_botak_series)
+                all_series.append(two_botak_series)
+            except Exception as e:
+                errors.append(f"{ticker}: {e}")  # ADD THIS
+                continue
+
+        st.write(f"all_series count: {len(all_series)}, errors sample: {errors[:3]}")  # ADD THIS
 
         if not all_series:
             return pd.DataFrame()
@@ -2485,7 +2494,8 @@ def compute_two_botak_history(stocks_list, ticker_dfs):
         result.columns = ["Date", "Two Botak Count"]
         result["Date"] = result["Date"].dt.strftime("%Y-%m-%d")
         return result
-    except Exception:
+    except Exception as e:
+        st.write(f"OUTER ERROR: {e}")  # ADD THIS
         return pd.DataFrame()
 
 @st.cache_data(ttl=3600)
