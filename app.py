@@ -682,8 +682,8 @@ if lime_perf_rows:
     </div>
     {js}
     """
-    SVG_H = N * ROW_H + PADDING * 4  # was PADDING * 2
-    st.components.v1.html(html_out, height=SVG_H + 80, scrolling=False)
+    SVG_H = N * ROW_H + PADDING * 8  # was PADDING * 2
+    st.components.v1.html(html_out, height=SVG_H + 160, scrolling=False)
 else:
     st.info("No Lime Stocks performance data available.")
 
