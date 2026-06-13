@@ -2499,15 +2499,15 @@ def compute_two_botak_history(stocks_list, _ticker_dfs):
         return pd.DataFrame()
 
 @st.cache_data(ttl=3600)
-def compute_engulfing_history(stocks_list, ticker_dfs):
+def compute_engulfing_history(stocks_list, _ticker_dfs):
     try:
-        if not ticker_dfs:
+        if not _ticker_dfs:
             return pd.DataFrame()
 
         all_2x = []
         all_3x = []
 
-        for ticker, df in ticker_dfs.items():
+        for ticker, df in _ticker_dfs.items():
             if len(df) < 30:
                 continue
 
@@ -2563,14 +2563,14 @@ def compute_engulfing_history(stocks_list, ticker_dfs):
         return pd.DataFrame()
     
 @st.cache_data(ttl=3600)
-def compute_powertrend_history(stocks_list, ticker_dfs):
+def compute_powertrend_history(stocks_list, _ticker_dfs):
     try:
-        if not ticker_dfs:
+        if not _ticker_dfs:
             return pd.DataFrame()
 
         # Compute full powertrend boolean series per ticker ONCE
         all_series = []
-        for ticker, df in ticker_dfs.items():
+        for ticker, df in _ticker_dfs.items():
             if len(df) < 52:
                 continue
             powerma = df['Close'].ewm(span=50, adjust=False).mean()
@@ -2597,9 +2597,9 @@ def compute_powertrend_history(stocks_list, ticker_dfs):
         return pd.DataFrame()
 
 @st.cache_data(ttl=3600)
-def compute_setup_avgrank_history(stocks_list, ticker_dfs, all_data_snapshot, benchmark_ticker, rs_length):
+def compute_setup_avgrank_history(stocks_list, _ticker_dfs, all_data_snapshot, benchmark_ticker, rs_length):
     try:
-        if not ticker_dfs or not all_data_snapshot:
+        if not _ticker_dfs or not all_data_snapshot:
             return pd.DataFrame()
 
         # Build ticker -> industries map from today's setup tickers only
@@ -2626,11 +2626,11 @@ def compute_setup_avgrank_history(stocks_list, ticker_dfs, all_data_snapshot, be
 
         # Get benchmark close series
         bench_close = None
-        for ticker, df in ticker_dfs.items():
+        for ticker, df in _ticker_dfs.items():
             if ticker == benchmark_ticker:
                 bench_close = df['Close']
                 break
-        # If benchmark not in ticker_dfs, try to get it from any shared download
+        # If benchmark not in _ticker_dfs, try to get it from any shared download
         # Fall back: compute per-industry RS ratio series using close / bench
         # We need the benchmark — download separately if missing
         if bench_close is None:
@@ -2647,7 +2647,7 @@ def compute_setup_avgrank_history(stocks_list, ticker_dfs, all_data_snapshot, be
             ticker_scores_list = []
 
             for sym in tickers_in_group:
-                df = ticker_dfs.get(sym)
+                df = _ticker_dfs.get(sym)
                 if df is None or len(df) < rs_length + 5:
                     continue
                 # Align with benchmark
@@ -2683,8 +2683,8 @@ def compute_setup_avgrank_history(stocks_list, ticker_dfs, all_data_snapshot, be
         wide_df = pd.DataFrame(industry_daily_grouprs).dropna(how='all')
 
         # Get date range — last 60 trading days
-        any_ticker = next(iter(ticker_dfs))
-        full_timeline = ticker_dfs[any_ticker].index
+        any_ticker = next(iter(_ticker_dfs))
+        full_timeline = _ticker_dfs[any_ticker].index
         days_to_compute = min(60, len(wide_df))
 
         records = []
@@ -2726,14 +2726,14 @@ def compute_setup_avgrank_history(stocks_list, ticker_dfs, all_data_snapshot, be
         return pd.DataFrame()
 
 @st.cache_data(ttl=3600)
-def compute_leader_history(stocks_list, ticker_dfs, benchmark_df_leader):
+def compute_leader_history(stocks_list, _ticker_dfs, benchmark_df_leader):
     try:
-        if not ticker_dfs:
+        if not _ticker_dfs:
             return pd.DataFrame()
 
         all_series = []
 
-        for ticker, df in ticker_dfs.items():
+        for ticker, df in _ticker_dfs.items():
             if len(df) < 250:
                 continue
             try:
@@ -2776,11 +2776,11 @@ def compute_leader_history(stocks_list, ticker_dfs, benchmark_df_leader):
 # 8. HISTORICAL KNOW_TOTAL_COUNT 30-DAY CHART (Completely New Logic at Bottom)
 # ==============================================================================
 @st.cache_data(ttl=3600)
-def compute_historical_know_counts(stocks_list, ticker_dfs):
+def compute_historical_know_counts(stocks_list, _ticker_dfs):
     try:
         # Attach SMA columns needed by this function only (non-destructive copy)
         enriched_dfs = {}
-        for ticker, df in ticker_dfs.items():
+        for ticker, df in _ticker_dfs.items():
             if ticker.startswith('^'):   # skip benchmark indices
                 continue
             if len(df) >= 261:
