@@ -2146,7 +2146,7 @@ if all_data:
     .ticker-name { font-weight: bold; color: #ffffff; margin-right: 4px; }
     .ticker-rs { color: #4ecdc4; font-weight: normal; }
     table { width:100%; border-collapse: collapse; }
-    th { padding: 4px 8px !important; background-color: #1e2530; color: #8b949e; font-size: 12px; }
+    th { padding: 4px 8px !important; background-color: #0d2d2d; color: #4ecdc4; font-size: 12px; }
     td { padding: 2px 8px !important; border-bottom: 1px solid #333; font-size: 12px; }
     </style>
     """, unsafe_allow_html=True)
