@@ -517,12 +517,12 @@ if lime_perf_rows:
     max_abs_1w = max(abs(r["pct_1w"])  for r in rows_1w) or 1
     max_abs_1m = max(abs(r["pct_1m"])  for r in rows_1m) or 1
 
-    ROW_H   = 18   # was 18
-    LABEL_W = 108   # was 110
+    ROW_H   = 20   # was 18
+    LABEL_W = 118   # was 110
     COL_W   = LABEL_W + BAR_MAX_PX
-    GAP     = 50   # was 60
-    PADDING = 11    # was 12
-    FS      = 11    # font size
+    GAP     = 55   # was 60
+    PADDING = 12    # was 12
+    FS      = 12    # font size
 
     N      = max(len(rows_1d), len(rows_1w), len(rows_1m))
     SVG_H  = N * ROW_H + PADDING * 2
