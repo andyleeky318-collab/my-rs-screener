@@ -4096,10 +4096,13 @@ else:
     st.info("No active setups discovered.")
 
 st.markdown("---")
-st.write(f"inside check: {len(ticker_dfs_shared)}")
+#st.write(f"inside check: {len(ticker_dfs_shared)}")
+
 with st.spinner("Scanning for Two Botak History..."):
     two_botak_hist= timed("compute_two_botak_history",     compute_two_botak_history,     stocks_tuple, ticker_dfs_shared)
-st.write(f"two_botak_hist shape: {two_botak_hist.shape}")
+
+#st.write(f"two_botak_hist shape: {two_botak_hist.shape}")
+
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
 st.markdown(f"#### 🔥 Two Botak = Short term Group burst ({len(b_list)})")
 if b_list or b_yest:
@@ -4132,9 +4135,9 @@ st.write("")
 #         use_container_width=True
 #     )
 
-st.write(two_botak_hist.shape, two_botak_hist.head(2))  # remove after confirming
-st.write(f"ticker_dfs_shared keys count: {len(ticker_dfs_shared)}")
-st.write(f"sample keys: {list(ticker_dfs_shared.keys())[:5]}")
+# st.write(two_botak_hist.shape, two_botak_hist.head(2))  # remove after confirming
+# st.write(f"ticker_dfs_shared keys count: {len(ticker_dfs_shared)}")
+# st.write(f"sample keys: {list(ticker_dfs_shared.keys())[:5]}")
 
 if not two_botak_hist.empty:
     # 1. Create a temporary copy to prevent altering your original dataframe
