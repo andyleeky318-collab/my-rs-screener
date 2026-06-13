@@ -19,7 +19,7 @@ def timed(label, fn, *args, **kwargs):
 
 # 1. Setup Streamlit Page
 st.set_page_config(page_title="Chrome Sector RS", layout="wide")
-st.title("🐱 Theme Tracker")
+#st.title("🐱 Theme Tracker")
 
 st.markdown(
     """
