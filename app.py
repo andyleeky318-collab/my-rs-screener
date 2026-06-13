@@ -525,8 +525,29 @@ if lime_perf_rows:
     X0_1w = PADDING + COL_W + GAP
     X0_1m = PADDING + (COL_W + GAP) * 2
 
+    HEADER_H = 20  # height reserved for header row
+    SVG_H    = N * ROW_H + PADDING * 2 + HEADER_H  # add header height to SVG
+
+    def col_header(col_x, label):
+        center_x = col_x + LABEL_W + BAR_MAX_PX // 2
+        return (
+            f'<text x="{center_x}" y="{PADDING + 12}" '
+            f'font-size="10" font-family="Source Sans Pro,sans-serif" '
+            f'font-weight="700" fill="#888888" text-anchor="middle" '
+            f'letter-spacing="1">{label}</text>'
+            f'<line x1="{col_x}" y1="{PADDING + 16}" '
+            f'x2="{col_x + LABEL_W + BAR_MAX_PX}" y1="{PADDING + 16}" y2="{PADDING + 16}" '
+            f'stroke="#2a2a2a" stroke-width="1"/>'
+        )
+
+    headers_html = (
+        col_header(X0_1d, "DAILY") +
+        col_header(X0_1w, "1 WEEK") +
+        col_header(X0_1m, "1 MONTH")
+    )
+
     def row_y(i):
-        return PADDING + i * ROW_H + ROW_H // 2
+        return PADDING + HEADER_H + i * ROW_H + ROW_H
 
     def bar_end_x(col_x, pct, max_abs):
         return col_x + LABEL_W + int(abs(pct) / max_abs * BAR_MAX_PX)
@@ -665,6 +686,7 @@ if lime_perf_rows:
       <svg xmlns="http://www.w3.org/2000/svg"
            width="{SVG_W}" height="{SVG_H}"
            style="display:block;">
+        {headers_html}
         {lines_html}
         {cols_html}
       </svg>
