@@ -1185,283 +1185,283 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         return None, None, None, {}, None, None, None, None, None
 
 # Reference Scanner Logic Functions
-def scan_two_botak(df, lookback=0):
-    idx = -1 - lookback
-    if len(df) < abs(idx) + 1: return False
-    botak = (
-        (abs(df['Close'] - df['High']) < 0.05) & 
-        (df['Close'] > df['Open'])
-    )
-    percentile = (
-        (df['Close'] > df['Open']) & 
-        (((df['Close'] - df['Open']) / ((df['High'] - df['Open']).replace(0, 0.001))) > 0.9)
-    )
-    twoBotak = (
-        ((botak & botak.shift(1)) |
-        (botak & percentile.shift(1)) |
-        (percentile & botak.shift(1)) |
-        (percentile & percentile.shift(1))) &
-        (df['Close'] > 20)
-    )
-    return bool(twoBotak.iloc[idx])
+# def scan_two_botak(df, lookback=0):
+#     idx = -1 - lookback
+#     if len(df) < abs(idx) + 1: return False
+#     botak = (
+#         (abs(df['Close'] - df['High']) < 0.05) & 
+#         (df['Close'] > df['Open'])
+#     )
+#     percentile = (
+#         (df['Close'] > df['Open']) & 
+#         (((df['Close'] - df['Open']) / ((df['High'] - df['Open']).replace(0, 0.001))) > 0.9)
+#     )
+#     twoBotak = (
+#         ((botak & botak.shift(1)) |
+#         (botak & percentile.shift(1)) |
+#         (percentile & botak.shift(1)) |
+#         (percentile & percentile.shift(1))) &
+#         (df['Close'] > 20)
+#     )
+#     return bool(twoBotak.iloc[idx])
 
-def scan_gapper(df, lookback=0):
-    idx = -1 - lookback
-    if len(df) < 22 + lookback: return False
+# def scan_gapper(df, lookback=0):
+#     idx = -1 - lookback
+#     if len(df) < 22 + lookback: return False
 
-    df = df.copy().reset_index(drop=True)  # guarantee clean integer index
+#     df = df.copy().reset_index(drop=True)  # guarantee clean integer index
 
-    strictGapUp = df['Low'] > df['High'].shift(1)
-    gapPercent  = (df['Close'] / df['Close'].shift(1)) - 1
-    gapUp10     = strictGapUp & (gapPercent >= 0.10)
+#     strictGapUp = df['Low'] > df['High'].shift(1)
+#     gapPercent  = (df['Close'] / df['Close'].shift(1)) - 1
+#     gapUp10     = strictGapUp & (gapPercent >= 0.10)
 
-    bars_since        = pd.Series(np.inf,  index=df.index)
-    gap_floor         = pd.Series(np.nan,  index=df.index)
-    gap_ceiling       = pd.Series(np.nan,  index=df.index)
-    min_low_since_gap = pd.Series(np.nan,  index=df.index)
+#     bars_since        = pd.Series(np.inf,  index=df.index)
+#     gap_floor         = pd.Series(np.nan,  index=df.index)
+#     gap_ceiling       = pd.Series(np.nan,  index=df.index)
+#     min_low_since_gap = pd.Series(np.nan,  index=df.index)
 
-    counter         = np.inf
-    last_floor      = np.nan
-    last_ceiling    = np.nan
-    running_min_low = np.nan
+#     counter         = np.inf
+#     last_floor      = np.nan
+#     last_ceiling    = np.nan
+#     running_min_low = np.nan
 
-    for i in range(1, len(df)):   # start at 1 — need i-1 to always be valid
-        if gapUp10.iloc[i]:
-            counter         = 0
-            last_floor      = df['High'].iloc[i - 1]   # top of pre-gap candle = gap bottom
-            last_ceiling    = df['Low'].iloc[i]         # bottom of gap candle  = gap top
-            running_min_low = df['Low'].iloc[i]
-        else:
-            counter += 1
-            if not np.isnan(running_min_low):
-                running_min_low = min(running_min_low, df['Low'].iloc[i])
+#     for i in range(1, len(df)):   # start at 1 — need i-1 to always be valid
+#         if gapUp10.iloc[i]:
+#             counter         = 0
+#             last_floor      = df['High'].iloc[i - 1]   # top of pre-gap candle = gap bottom
+#             last_ceiling    = df['Low'].iloc[i]         # bottom of gap candle  = gap top
+#             running_min_low = df['Low'].iloc[i]
+#         else:
+#             counter += 1
+#             if not np.isnan(running_min_low):
+#                 running_min_low = min(running_min_low, df['Low'].iloc[i])
                 
-                # --- THE FIX: Check if the gap was filled on this bar ---
-                if running_min_low <= last_floor:
-                    # Gap is filled! Reset variables so it doesn't carry forward
-                    counter         = np.inf
-                    last_floor      = np.nan
-                    last_ceiling    = np.nan
-                    running_min_low = np.nan
+#                 # --- THE FIX: Check if the gap was filled on this bar ---
+#                 if running_min_low <= last_floor:
+#                     # Gap is filled! Reset variables so it doesn't carry forward
+#                     counter         = np.inf
+#                     last_floor      = np.nan
+#                     last_ceiling    = np.nan
+#                     running_min_low = np.nan
 
-        bars_since.iloc[i]         = counter
-        gap_floor.iloc[i]          = last_floor
-        gap_ceiling.iloc[i]        = last_ceiling
-        min_low_since_gap.iloc[i]  = running_min_low
+#         bars_since.iloc[i]         = counter
+#         gap_floor.iloc[i]          = last_floor
+#         gap_ceiling.iloc[i]        = last_ceiling
+#         min_low_since_gap.iloc[i]  = running_min_low
 
-    gapIn20 = bars_since <= 20
+#     gapIn20 = bars_since <= 20
 
-    # Gap is unfilled only if the lowest low since gap never touched the gap floor
-    # Use gap_ceiling as an extra sanity check: floor must be below ceiling
-    validGap       = gap_floor < gap_ceiling
-    strictUnfilled = min_low_since_gap > gap_floor
+#     # Gap is unfilled only if the lowest low since gap never touched the gap floor
+#     # Use gap_ceiling as an extra sanity check: floor must be below ceiling
+#     validGap       = gap_floor < gap_ceiling
+#     strictUnfilled = min_low_since_gap > gap_floor
 
-    result = gapIn20 & strictUnfilled & validGap & (df['Close'] >= 20)
+#     result = gapIn20 & strictUnfilled & validGap & (df['Close'] >= 20)
 
-    # remap idx back since we reset_index
-    mapped_idx = len(df) + idx
-    if mapped_idx < 0 or mapped_idx >= len(df):
-        return False
-    return bool(result.iloc[mapped_idx])
+#     # remap idx back since we reset_index
+#     mapped_idx = len(df) + idx
+#     if mapped_idx < 0 or mapped_idx >= len(df):
+#         return False
+#     return bool(result.iloc[mapped_idx])
 
-def scan_engulfing(df, lookback=0):
-    idx = -1 - lookback
-    if len(df) < 30 + lookback: return False, False
-    bullish_engulfing = (
-        (df['Open'] < df['Low'].shift(1)) &
-        (df['Close'] > df['High'].shift(1))
-    )
-    engulf_count_series = bullish_engulfing.rolling(window=30).sum()
+# def scan_engulfing(df, lookback=0):
+#     idx = -1 - lookback
+#     if len(df) < 30 + lookback: return False, False
+#     bullish_engulfing = (
+#         (df['Open'] < df['Low'].shift(1)) &
+#         (df['Close'] > df['High'].shift(1))
+#     )
+#     engulf_count_series = bullish_engulfing.rolling(window=30).sum()
     
-    # Logic for historical comparison
-    df_temp = df.iloc[:len(df)-lookback] if lookback > 0 else df
-    current_idx = df_temp.index[-1]
+#     # Logic for historical comparison
+#     df_temp = df.iloc[:len(df)-lookback] if lookback > 0 else df
+#     current_idx = df_temp.index[-1]
     
-    engulf_closes = df_temp.loc[bullish_engulfing, 'Close']
-    prior_engulfs = engulf_closes[engulf_closes.index < current_idx]
+#     engulf_closes = df_temp.loc[bullish_engulfing, 'Close']
+#     prior_engulfs = engulf_closes[engulf_closes.index < current_idx]
 
-    eng1 = prior_engulfs.iloc[-1] if len(prior_engulfs) >= 1 else 0
-    eng2 = prior_engulfs.iloc[-2] if len(prior_engulfs) >= 2 else 0
-    eng3 = prior_engulfs.iloc[-3] if len(prior_engulfs) >= 3 else 0
+#     eng1 = prior_engulfs.iloc[-1] if len(prior_engulfs) >= 1 else 0
+#     eng2 = prior_engulfs.iloc[-2] if len(prior_engulfs) >= 2 else 0
+#     eng3 = prior_engulfs.iloc[-3] if len(prior_engulfs) >= 3 else 0
 
-    current_close = df_temp['Close'].iloc[-1]
-    current_count = engulf_count_series.iloc[idx]
+#     current_close = df_temp['Close'].iloc[-1]
+#     current_count = engulf_count_series.iloc[idx]
 
-    two_engulf = (
-        (current_count >= 2) and
-        (current_close > 20) and
-        (current_close > eng1) and
-        (current_close > eng2)
-    )
-    three_engulf = (
-        (current_count >= 3) and
-        (current_close > 20) and
-        (current_close > eng1) and
-        (current_close > eng2) and
-        (current_close > eng3)
-    )
-    return bool(two_engulf), bool(three_engulf)
+#     two_engulf = (
+#         (current_count >= 2) and
+#         (current_close > 20) and
+#         (current_close > eng1) and
+#         (current_close > eng2)
+#     )
+#     three_engulf = (
+#         (current_count >= 3) and
+#         (current_close > 20) and
+#         (current_close > eng1) and
+#         (current_close > eng2) and
+#         (current_close > eng3)
+#     )
+#     return bool(two_engulf), bool(three_engulf)
 
-def scan_powertrend(df, lookback=0):
-    idx = -1 - lookback
-    if len(df) < 52 + lookback: return False
-    powerma = df['Close'].ewm(span=50, adjust=False).mean()
-    gradient = powerma - powerma.shift(1)
-    gradientPct = ((powerma - powerma.shift(1)) / powerma.shift(1)) * 100
-    absGradient = abs(gradientPct)
-    powertrend = (
-        (gradient > 0) &
-        (absGradient >= 1.0) & 
-        (df['Close'] >= 20)
-    )
-    return bool(powertrend.iloc[idx])
+# def scan_powertrend(df, lookback=0):
+#     idx = -1 - lookback
+#     if len(df) < 52 + lookback: return False
+#     powerma = df['Close'].ewm(span=50, adjust=False).mean()
+#     gradient = powerma - powerma.shift(1)
+#     gradientPct = ((powerma - powerma.shift(1)) / powerma.shift(1)) * 100
+#     absGradient = abs(gradientPct)
+#     powertrend = (
+#         (gradient > 0) &
+#         (absGradient >= 1.0) & 
+#         (df['Close'] >= 20)
+#     )
+#     return bool(powertrend.iloc[idx])
 
-def scan_powertrend_not_extended(df, lookback=0):
-    idx = -1 - lookback
-    if len(df) < 52 + lookback: return False
-    powerma = df['Close'].ewm(span=50, adjust=False).mean()
-    gradient = powerma - powerma.shift(1)
-    gradientPct = ((powerma - powerma.shift(1)) / powerma.shift(1)) * 100
-    absGradient = abs(gradientPct)
+# def scan_powertrend_not_extended(df, lookback=0):
+#     idx = -1 - lookback
+#     if len(df) < 52 + lookback: return False
+#     powerma = df['Close'].ewm(span=50, adjust=False).mean()
+#     gradient = powerma - powerma.shift(1)
+#     gradientPct = ((powerma - powerma.shift(1)) / powerma.shift(1)) * 100
+#     absGradient = abs(gradientPct)
     
-    powertrend = (
-        (gradient > 0) &
-        (absGradient >= 1.0) &
-        (df['Close'] >= 20)
-    )
+#     powertrend = (
+#         (gradient > 0) &
+#         (absGradient >= 1.0) &
+#         (df['Close'] >= 20)
+#     )
 
-    high_low = df['High'] - df['Low']
-    high_close = abs(df['High'] - df['Close'].shift(1))
-    low_close = abs(df['Low'] - df['Close'].shift(1))
-    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-    absATR = tr.rolling(14).mean()
-    atrPercent = (absATR / df['Close']) * 100
-    sma50 = df['Close'].rolling(50).mean()
-    percentGainFromMA = ((df['Close'] - sma50) / sma50) * 100
-    atrMultiple2 = percentGainFromMA / atrPercent.replace(0, 0.001)
-    atrMultiple = (atrMultiple2 * 10).fillna(0).astype(int) / 10
+#     high_low = df['High'] - df['Low']
+#     high_close = abs(df['High'] - df['Close'].shift(1))
+#     low_close = abs(df['Low'] - df['Close'].shift(1))
+#     tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+#     absATR = tr.rolling(14).mean()
+#     atrPercent = (absATR / df['Close']) * 100
+#     sma50 = df['Close'].rolling(50).mean()
+#     percentGainFromMA = ((df['Close'] - sma50) / sma50) * 100
+#     atrMultiple2 = percentGainFromMA / atrPercent.replace(0, 0.001)
+#     atrMultiple = (atrMultiple2 * 10).fillna(0).astype(int) / 10
 
-    result = (powertrend & (atrMultiple <= 4))
-    return bool(result.iloc[idx])
+#     result = (powertrend & (atrMultiple <= 4))
+#     return bool(result.iloc[idx])
 
-def scan_value_trap(df, lookback=0):
-    idx = -1 - lookback
-    if len(df) < 50 + lookback: return False
+# def scan_value_trap(df, lookback=0):
+#     idx = -1 - lookback
+#     if len(df) < 50 + lookback: return False
     
-    high_low = df['High'] - df['Low']
-    high_close = abs(df['High'] - df['Close'].shift(1))
-    low_close = abs(df['Low'] - df['Close'].shift(1))
+#     high_low = df['High'] - df['Low']
+#     high_close = abs(df['High'] - df['Close'].shift(1))
+#     low_close = abs(df['Low'] - df['Close'].shift(1))
     
-    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-    absATR = tr.rolling(14).mean()
-    atrPercent = (absATR / df['Close']) * 100
+#     tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+#     absATR = tr.rolling(14).mean()
+#     atrPercent = (absATR / df['Close']) * 100
     
-    sma50 = df['Close'].rolling(50).mean()
-    percentGainFromMA = ((df['Close'] - sma50) / sma50) * 100
+#     sma50 = df['Close'].rolling(50).mean()
+#     percentGainFromMA = ((df['Close'] - sma50) / sma50) * 100
     
-    atrMultiple2 = percentGainFromMA / atrPercent.replace(0, 0.001)
-    atrMultiple2 = atrMultiple2.replace([float('inf'), -float('inf')], pd.NA)
-    atrMultiple = ((atrMultiple2.fillna(0) * 10).astype(int) / 10)
+#     atrMultiple2 = percentGainFromMA / atrPercent.replace(0, 0.001)
+#     atrMultiple2 = atrMultiple2.replace([float('inf'), -float('inf')], pd.NA)
+#     atrMultiple = ((atrMultiple2.fillna(0) * 10).astype(int) / 10)
     
-    result = ((atrMultiple < -4) & (df['Close'] >= 20))
-    return bool(result.iloc[idx])
+#     result = ((atrMultiple < -4) & (df['Close'] >= 20))
+#     return bool(result.iloc[idx])
 
-def scan_ppp(df, lookback=0):
-    idx = -1 - lookback
-    if len(df) < 200 + lookback: return False
-    high_low = df['High'] - df['Low']
-    high_close = abs(df['High'] - df['Close'].shift(1))
-    low_close = abs(df['Low'] - df['Close'].shift(1))
-    tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-    myAtr = tr.rolling(14).mean()
-    myAtr3 = myAtr / df['Close'] * 100
-    dynamicSensitivity = myAtr3 * 0.2
+# def scan_ppp(df, lookback=0):
+#     idx = -1 - lookback
+#     if len(df) < 200 + lookback: return False
+#     high_low = df['High'] - df['Low']
+#     high_close = abs(df['High'] - df['Close'].shift(1))
+#     low_close = abs(df['Low'] - df['Close'].shift(1))
+#     tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+#     myAtr = tr.rolling(14).mean()
+#     myAtr3 = myAtr / df['Close'] * 100
+#     dynamicSensitivity = myAtr3 * 0.2
 
-    day0 = (df['Open'] + df['Close']) / 2
-    day1 = day0.shift(1)
-    day2 = day0.shift(2)
+#     day0 = (df['Open'] + df['Close']) / 2
+#     day1 = day0.shift(1)
+#     day2 = day0.shift(2)
 
-    diff0 = abs((day0 - day1) / day1.replace(0, 0.001) * 100)
-    diff1 = abs((day1 - day2) / day2.replace(0, 0.001) * 100)
+#     diff0 = abs((day0 - day1) / day1.replace(0, 0.001) * 100)
+#     diff1 = abs((day1 - day2) / day2.replace(0, 0.001) * 100)
 
-    sma50 = df['Close'].rolling(50).mean()
-    sma200 = df['Close'].rolling(200).mean()
+#     sma50 = df['Close'].rolling(50).mean()
+#     sma200 = df['Close'].rolling(200).mean()
 
-    ma21_and_ma50_or_ma200 = (
-        (
-            ((df['Close'] >= sma200) & (df['Close'] >= sma50))
-        ) &
-        (df['Close'] >= 20)
-    )
+#     ma21_and_ma50_or_ma200 = (
+#         (
+#             ((df['Close'] >= sma200) & (df['Close'] >= sma50))
+#         ) &
+#         (df['Close'] >= 20)
+#     )
 
-    ppp = (
-        (diff0 < dynamicSensitivity) &
-        (diff1 < dynamicSensitivity) &
-        ma21_and_ma50_or_ma200
-    )
-    return bool(ppp.iloc[idx])
+#     ppp = (
+#         (diff0 < dynamicSensitivity) &
+#         (diff1 < dynamicSensitivity) &
+#         ma21_and_ma50_or_ma200
+#     )
+#     return bool(ppp.iloc[idx])
 
-def scan_leader(df, benchmark_df, lookback=0):
-    idx = -1 - lookback
+# def scan_leader(df, benchmark_df, lookback=0):
+#     idx = -1 - lookback
 
-    if len(df) < 250 + lookback or len(benchmark_df) < 250 + lookback:
-        return False
+#     if len(df) < 250 + lookback or len(benchmark_df) < 250 + lookback:
+#         return False
 
-    try:
-        # =========================
-        # MATCH PINE SCRIPT LOGIC
-        # =========================
+#     try:
+#         # =========================
+#         # MATCH PINE SCRIPT LOGIC
+#         # =========================
 
-        # RS Curve
-        rs = df['Close'] / benchmark_df['Close']
+#         # RS Curve
+#         rs = df['Close'] / benchmark_df['Close']
 
-        # RS Moving Average
-        rsMA = rs.ewm(span=21, adjust=False).mean()
+#         # RS Moving Average
+#         rsMA = rs.ewm(span=21, adjust=False).mean()
 
-        # Historical RS High
-        histNH = rs.rolling(250).max()
+#         # Historical RS High
+#         histNH = rs.rolling(250).max()
 
-        # Current values
-        rs_now = rs.iloc[idx]
-        rsMA_now = rsMA.iloc[idx]
-        histNH_now = histNH.iloc[idx]
-        close_now = df['Close'].iloc[idx]
+#         # Current values
+#         rs_now = rs.iloc[idx]
+#         rsMA_now = rsMA.iloc[idx]
+#         histNH_now = histNH.iloc[idx]
+#         close_now = df['Close'].iloc[idx]
 
-        # =========================
-        # circleCond
-        # =========================
-        circleCond = rs == histNH
+#         # =========================
+#         # circleCond
+#         # =========================
+#         circleCond = rs == histNH
 
-        # =========================
-        # twoCircles30
-        # =========================
-        circleCount30 = circleCond.rolling(30).sum()
-        twoCircles30 = circleCount30.iloc[idx] >= 2
+#         # =========================
+#         # twoCircles30
+#         # =========================
+#         circleCount30 = circleCond.rolling(30).sum()
+#         twoCircles30 = circleCount30.iloc[idx] >= 2
 
-        # =========================
-        # MA CONDITIONS
-        # =========================
-        sma50 = df['Close'].rolling(50).mean()
-        sma200 = df['Close'].rolling(200).mean()
+#         # =========================
+#         # MA CONDITIONS
+#         # =========================
+#         sma50 = df['Close'].rolling(50).mean()
+#         sma200 = df['Close'].rolling(200).mean()
 
-        sma50_now = sma50.iloc[idx]
-        sma200_now = sma200.iloc[idx]
+#         sma50_now = sma50.iloc[idx]
+#         sma200_now = sma200.iloc[idx]
 
-        # =========================
-        # FINAL LEADER CONDITION
-        # =========================
-        leader_cond = (
-            (twoCircles30 or rs_now == histNH_now) and
-            (rs_now > rsMA_now) and
-            (close_now > sma50_now) and
-            (close_now > sma200_now) and
-            (close_now >= 20)
-        )
+#         # =========================
+#         # FINAL LEADER CONDITION
+#         # =========================
+#         leader_cond = (
+#             (twoCircles30 or rs_now == histNH_now) and
+#             (rs_now > rsMA_now) and
+#             (close_now > sma50_now) and
+#             (close_now > sma200_now) and
+#             (close_now >= 20)
+#         )
 
-        return bool(leader_cond)
+#         return bool(leader_cond)
 
-    except:
-        return False
+#     except:
+#         return False
 
 @st.cache_data(ttl=3600)
 def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
