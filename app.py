@@ -500,7 +500,7 @@ for sym in LIME_STOCKS:
     lime_perf_rows.append({"sym": sym, "pct": pct_1d, "pct_1w": pct_1w, "pct_1m": pct_1m})
 
 if lime_perf_rows:
-    BAR_MAX_PX = 165  # was 200
+    BAR_MAX_PX = 175  # was 200
 
     rows_1d = sorted(lime_perf_rows, key=lambda x: -x["pct"])
     rows_1w = sorted([r for r in lime_perf_rows if r["pct_1w"] is not None], key=lambda x: -x["pct_1w"])
@@ -510,10 +510,10 @@ if lime_perf_rows:
     max_abs_1w = max(abs(r["pct_1w"])  for r in rows_1w) or 1
     max_abs_1m = max(abs(r["pct_1m"])  for r in rows_1m) or 1
 
-    ROW_H   = 17   # was 18
-    LABEL_W = 104   # was 110
+    ROW_H   = 18   # was 18
+    LABEL_W = 108   # was 110
     COL_W   = LABEL_W + BAR_MAX_PX
-    GAP     = 45   # was 60
+    GAP     = 50   # was 60
     PADDING = 11    # was 12
     FS      = 11    # font size
 
@@ -587,14 +587,14 @@ if lime_perf_rows:
             html += (
                 f'<rect class="hitbar" data-sym="{sym}" '
                 f'x="{col_x}" y="{y - 7}" '
-                f'width="{LABEL_W + bw}" height="15" '  # between 14 and 16
+                f'width="{LABEL_W + bw}" height="17" '  # between 14 and 16
                 f'fill="transparent" style="cursor:pointer;"/>'
             )
             # bar rect height 9 (between 8 and 10):
             html += (
                 f'<rect class="bar bar-{sym}" data-sym="{sym}" '
                 f'x="{col_x + LABEL_W}" y="{y - 4}" '
-                f'width="{bw}" height="9" rx="2" fill="{c}" '
+                f'width="{bw}" height="10" rx="2" fill="{c}" '
                 f'style="cursor:pointer;"/>'
             )
             # label x positions scaled to new LABEL_W=100:
