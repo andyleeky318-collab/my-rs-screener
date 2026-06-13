@@ -507,7 +507,7 @@ if lime_perf_rows:
         pct_color = "#378ADD" if pct >= 0 else "#FF69B4"
 
         rows_html += f"""
-        <div style="display:flex; align-items:center; margin-bottom:4px; gap:8px;">
+        <div style="display:flex; align-items:center; margin-bottom:4px; gap:2px;">
           <div style="width:60px; text-align:right; font-size:12px; font-weight:600;
                       color:{pct_color}; flex-shrink:0;">{sign_str}</div>
           <div style="width:80px; text-align:right; font-size:12px;
