@@ -529,15 +529,12 @@ if lime_perf_rows:
     SVG_H    = N * ROW_H + PADDING * 2 + HEADER_H  # add header height to SVG
 
     def col_header(col_x, label):
-        center_x = col_x + LABEL_W + BAR_MAX_PX // 2
+        center_x = col_x + LABEL_W // 2 + BAR_MAX_PX // 2
         return (
             f'<text x="{center_x}" y="{PADDING + 12}" '
             f'font-size="10" font-family="Source Sans Pro,sans-serif" '
             f'font-weight="700" fill="#888888" text-anchor="middle" '
             f'letter-spacing="1">{label}</text>'
-            f'<line x1="{col_x}" y1="{PADDING + 16}" '
-            f'x2="{col_x + LABEL_W + BAR_MAX_PX}" y1="{PADDING + 16}" y2="{PADDING + 16}" '
-            f'stroke="#2a2a2a" stroke-width="1"/>'
         )
 
     headers_html = (
