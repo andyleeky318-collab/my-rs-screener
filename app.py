@@ -250,9 +250,9 @@ LIME_STOCKS = [
     'USO', 'XOP', 'IGV', 'CIBR', 'TAN', 'IHI', 'IPAY', 
     'VTV', 'KRE', 'VUG', 'PBW', 'MAGS', 'XRT', 'JETS', 'XTL', 'SHLD', 
     'IBIT', 'UFO', 'XBI', 'SLX', 'REMX', 'LIT', 'KWEB', 'SMH', 
-    'XME', 'URA', 'DRAM', 'GDX', 'WGMI', 'COPX', 'SIL', 'IAT', 'ITB'
+    'XME', 'URA', 'DRAM', 'GDX', 'WGMI', 'COPX', 'SIL', 'ITB'
 ] 
-#'KBE', 'NLR', 'CLOU', 'XHB', 'BUG', 'HACK', 'ITA', 
+#'KBE', 'NLR', 'CLOU', 'XHB', 'BUG', 'HACK', 'ITA', 'IAT', 
 
 # ============================================================
 # SHARED DOWNLOAD: runs once, feeds all history compute fns
@@ -1924,37 +1924,37 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                         if bool(circle_s.iloc[-1]):          # ADD THIS BLOCK
                             leader_rs_nh_matches.append(ticker)
 
-                    # ── KLAC DEBUG ──────────────────────────────────────────
-                    if ticker == "KLAC":
-                        rs_now      = rs_series.iloc[-1]
-                        rs_ma_now   = rs_ma_s.iloc[-1]
-                        hist_nh_now = hist_nh_s.iloc[-1]
-                        cc30_now    = int(cc30_s.iloc[-1])
-                        c30_now     = bool(circle_s.iloc[-1])
-                        two_c_now   = bool(two_c_s.iloc[-1])
-                        c_now       = close_series.iloc[-1]
-                        s50_now     = sma50_series.iloc[-1]
-                        s200_now    = sma200_series.iloc[-1]
+                    # # ── KLAC DEBUG ──────────────────────────────────────────
+                    # if ticker == "KLAC":
+                    #     rs_now      = rs_series.iloc[-1]
+                    #     rs_ma_now   = rs_ma_s.iloc[-1]
+                    #     hist_nh_now = hist_nh_s.iloc[-1]
+                    #     cc30_now    = int(cc30_s.iloc[-1])
+                    #     c30_now     = bool(circle_s.iloc[-1])
+                    #     two_c_now   = bool(two_c_s.iloc[-1])
+                    #     c_now       = close_series.iloc[-1]
+                    #     s50_now     = sma50_series.iloc[-1]
+                    #     s200_now    = sma200_series.iloc[-1]
 
-                        st.sidebar.markdown("---")
-                        st.sidebar.markdown("**🔍 KLAC Leader Debug**")
-                        st.sidebar.json({
-                            "✅ df_len >= 250"         : df_len >= 250,
-                            "circle (rs==250d_high)"   : c30_now,
-                            "twoCircles30 (cc30>=2)"   : two_c_now,
-                            "cc30 count"               : cc30_now,
-                            "rs_now"                   : round(float(rs_now), 6),
-                            "hist_nh_now"              : round(float(hist_nh_now), 6),
-                            "rs > rs_ema21"            : bool(rs_now > rs_ma_now),
-                            "rs_ema21"                 : round(float(rs_ma_now), 6),
-                            "close > SMA50"            : bool(c_now > s50_now),
-                            "close"                    : round(float(c_now), 2),
-                            "sma50"                    : round(float(s50_now), 2),
-                            "close > SMA200"           : bool(c_now > s200_now),
-                            "sma200"                   : round(float(s200_now), 2),
-                            "close >= 20"              : bool(c_now >= 20),
-                            "👉 LEADER TODAY"          : bool(leader_s.iloc[-1]),
-                        })
+                    #     st.sidebar.markdown("---")
+                    #     st.sidebar.markdown("**🔍 KLAC Leader Debug**")
+                    #     st.sidebar.json({
+                    #         "✅ df_len >= 250"         : df_len >= 250,
+                    #         "circle (rs==250d_high)"   : c30_now,
+                    #         "twoCircles30 (cc30>=2)"   : two_c_now,
+                    #         "cc30 count"               : cc30_now,
+                    #         "rs_now"                   : round(float(rs_now), 6),
+                    #         "hist_nh_now"              : round(float(hist_nh_now), 6),
+                    #         "rs > rs_ema21"            : bool(rs_now > rs_ma_now),
+                    #         "rs_ema21"                 : round(float(rs_ma_now), 6),
+                    #         "close > SMA50"            : bool(c_now > s50_now),
+                    #         "close"                    : round(float(c_now), 2),
+                    #         "sma50"                    : round(float(s50_now), 2),
+                    #         "close > SMA200"           : bool(c_now > s200_now),
+                    #         "sma200"                   : round(float(s200_now), 2),
+                    #         "close >= 20"              : bool(c_now >= 20),
+                    #         "👉 LEADER TODAY"          : bool(leader_s.iloc[-1]),
+                    #     })
 
             except:
                 continue
