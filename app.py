@@ -247,11 +247,12 @@ KNOWN_STOCKS = [
 KNOWN_STOCKS = list(set(KNOWN_STOCKS))
 
 LIME_STOCKS = [
-    'USO', 'IGV', 'CIBR', 'TAN', 'IHI', 'IPAY', 
-    'VTV', 'KRE', 'VUG', 'PBW', 'MAGS', 'XRT', 'JETS', 'XTL', 'SHLD', 
-    'IBIT', 'UFO', 'XBI', 'SLX', 'REMX', 'LIT', 'KWEB', 'SMH', 
-    'XME', 'URA', 'DRAM', 'GDX', 'WGMI', 'COPX', 'SIL', 'ITB'
-] 
+    'CIBR', 'COPX', 'DRAM', 'GDX', 'IBIT', 'IGV', 'IHI',
+    'IPAY', 'ITB', 'JETS', 'KRE', 'KWEB', 'LIT', 'MAGS',
+    'PBW', 'REMX', 'SHLD', 'SIL', 'SLX', 'SMH', 'TAN',
+    'UFO', 'URA', 'USO', 'VTV', 'VUG', 'WGMI', 'XBI',
+    'XME', 'XRT', 'XTL'
+]
 #'KBE', 'NLR', 'CLOU', 'XHB', 'BUG', 'HACK', 'ITA', 'IAT', 'XOP', 
 
 # ============================================================
