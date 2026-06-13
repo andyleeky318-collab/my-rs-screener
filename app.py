@@ -3748,7 +3748,7 @@ with st.spinner("Scanning RS New High Before Price..."):
     )
 
 # st.markdown("---")
-st.markdown(f"#### 🔵 RS NH Before Price ({len(rs_nh_b4_today)})")
+st.markdown(f"#### 🔵 RS NH Before Price = Opportunity ({len(rs_nh_b4_today)})")
 
 if rs_nh_b4_today or rs_nh_b4_yest:
     html_rsnh = ""
@@ -3904,6 +3904,187 @@ else:
     st.info("No active setups discovered.")
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
+st.markdown("---")
+
+# --- GAPPER SECTION ---
+st.markdown(f"#### 🚀 Gapper Earning Drift = Opportunity ({len(gapper_list)})")
+
+if gapper_list or gapper_yest:
+    # ── Badge row ─────────────────────────────────────────────────────────
+    html_g = ""
+    for sym in gapper_list:
+        #cls = "new-pattern-badge" if sym not in gapper_yest else ""
+        #html_g += f'<div class="ticker-badge {cls}">{sym}</div>'
+        html_g += setup_badge(sym, is_new=(sym not in gapper_yest))
+
+    removed_gapper = [sym for sym in gapper_yest if sym not in gapper_list]
+    for sym in sorted(removed_gapper):
+        html_g += f'<div class="ticker-badge removed-badge">{sym}</div>'
+
+    st.markdown(html_g, unsafe_allow_html=True)
+
+    # ── All charts together, 5 per row ────────────────────────────────────
+    if gapper_list and show_gap_charts:
+        st.write("")
+        GAPPER_CHARTS_PER_ROW = 4
+        GAPPER_CHART_SIZE     = 280
+
+        for row_start in range(0, len(gapper_list), GAPPER_CHARTS_PER_ROW):
+            row_tickers = gapper_list[row_start : row_start + GAPPER_CHARTS_PER_ROW]
+            cols = st.columns(GAPPER_CHARTS_PER_ROW)
+
+            for col_idx, sym in enumerate(row_tickers):
+                with cols[col_idx]:
+                    ohlcv_json = get_gapper_ohlcv_json(sym)
+                    chart_id   = f"gapper_{sym}_{row_start}_{col_idx}"
+                    _levels        = gapper_gap_levels.get(sym, {})
+                    gap_floor_js   = str(_levels["floor"])   if _levels else "null"
+                    gap_ceiling_js = str(_levels["ceiling"]) if _levels else "null"
+                    gap_date_js    = f'"{_levels["date"]}"'  if _levels else "null"
+
+                    chart_html = f"""
+<div style="font-family:'JetBrains Mono','Fira Code',monospace;">
+  <div style="position:relative;width:{GAPPER_CHART_SIZE+60}px;height:{GAPPER_CHART_SIZE}px;
+              border:1px solid #30363d;border-radius:6px;background:#0d1117;">
+    <div id="{chart_id}"
+         style="width:{GAPPER_CHART_SIZE+60}px;height:{GAPPER_CHART_SIZE}px;">
+    </div>
+    <div style="
+      position:absolute;top:10%;left:50%;
+      transform:translate(-50%,-50%);
+      font-size:48px;font-weight:900;
+      color:rgba(255,255,255,0.08);
+      letter-spacing:0.05em;
+      pointer-events:none;
+      z-index:999;
+      user-select:none;
+      white-space:nowrap;">
+      {sym}
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+(function(){{
+  var ohlcv = {ohlcv_json};
+  var el = document.getElementById('{chart_id}');
+  if (!ohlcv || ohlcv.length === 0) {{
+    el.innerHTML = '<p style="color:#7d8590;padding:12px;font-size:11px;">No data.</p>';
+    return;
+  }}
+
+  var chart = LightweightCharts.createChart(el, {{
+    width:  {GAPPER_CHART_SIZE},
+    height: {GAPPER_CHART_SIZE},
+    layout: {{
+      background: {{ type:'solid', color:'#0d1117' }},
+      textColor:  '#c9d1d9',
+    }},
+    grid: {{
+      vertLines: {{ color:'#21262d', style:1 }},
+      horzLines: {{ color:'#21262d', style:1 }},
+    }},
+    crosshair: {{
+      mode: LightweightCharts.CrosshairMode.Normal,
+      vertLine: {{ color:'#58a6ff', width:1, style:1, labelBackgroundColor:'#1f6feb' }},
+      horzLine: {{ color:'#58a6ff', width:1, style:1, labelBackgroundColor:'#1f6feb' }},
+    }},
+    rightPriceScale: {{ borderColor:'#30363d', textColor:'#8b949e' }},
+    timeScale: {{
+      borderColor:'#30363d', textColor:'#8b949e',
+      timeVisible:true, secondsVisible:false,
+      fixLeftEdge:true, fixRightEdge:true,
+    }},
+  }});
+
+  var gapBottom = {gap_floor_js};
+  var gapTop    = {gap_ceiling_js};
+
+if (gapBottom !== null && gapTop !== null && {gap_date_js} !== null) {{
+    var gapStartDate = {gap_date_js};
+    var t1 = ohlcv[ohlcv.length - 1].time;
+
+    // Upper boundary — fills grey DOWN from gapTop
+    var upperArea = chart.addAreaSeries({{
+      topColor:    'rgba(160,160,160,0.20)',
+      bottomColor: 'rgba(160,160,160,0.20)',
+      lineColor:   'rgba(160,160,160,0.55)',
+      lineWidth:   1,
+      priceLineVisible:       false,
+      lastValueVisible:       false,
+      crosshairMarkerVisible: false,
+    }});
+    upperArea.setData([
+      {{ time: gapStartDate, value: gapTop }},
+      {{ time: t1,           value: gapTop }},
+    ]);
+
+    // Lower boundary — fills solid background DOWN from gapBottom to erase bleed
+    var lowerArea = chart.addAreaSeries({{
+      topColor:    '#0d1117',
+      bottomColor: '#0d1117',
+      lineColor:   'rgba(160,160,160,0.55)',
+      lineWidth:   1,
+      priceLineVisible:       false,
+      lastValueVisible:       false,
+      crosshairMarkerVisible: false,
+    }});
+    lowerArea.setData([
+      {{ time: gapStartDate, value: gapBottom }},
+      {{ time: t1,           value: gapBottom }},
+    ]);
+  }}  
+
+  var candles = chart.addCandlestickSeries({{
+    upColor:'#26a641',   downColor:'#f85149',
+    borderUpColor:'#26a641', borderDownColor:'#f85149',
+    wickUpColor:'#26a641',   wickDownColor:'#f85149',
+  }});
+  candles.setData(ohlcv);
+
+  function calcEMA(data, span) {{
+    var k = 2/(span+1), ema = data[0].close, out = [];
+    for (var i=0;i<data.length;i++) {{
+      ema = data[i].close*k + ema*(1-k);
+      if (i >= span-1) out.push({{time:data[i].time, value:parseFloat(ema.toFixed(4))}});
+    }}
+    return out;
+  }}
+
+  function calcSMA(data, period) {{
+    var out = [];
+    for (var i=period-1;i<data.length;i++) {{
+      var s=0; for(var j=i-period+1;j<=i;j++) s+=data[j].close;
+      out.push({{time:data[i].time, value:parseFloat((s/period).toFixed(4))}});
+    }}
+    return out;
+  }}
+
+  chart.addLineSeries({{color:'#e3b341',lineWidth:1,
+    priceLineVisible:false,lastValueVisible:false}})
+    .setData(calcEMA(ohlcv,21));
+
+  chart.addLineSeries({{color:'#58a6ff',lineWidth:1,
+    priceLineVisible:false,lastValueVisible:false}})
+    .setData(calcSMA(ohlcv,50));
+
+  chart.timeScale().fitContent();
+
+  new ResizeObserver(function(entries){{
+    for(var e of entries){{
+      chart.applyOptions({{width:e.contentRect.width}});
+    }}
+  }}).observe(el);
+}})();
+</script>
+"""
+                    import streamlit.components.v1 as components
+                    components.html(chart_html, height=GAPPER_CHART_SIZE + 32, scrolling=False)
+
+else:
+    st.info("No active setups discovered.")
+
 st.markdown("---")
 
 with st.spinner("Scanning for Two Botak History..."):
@@ -4089,187 +4270,6 @@ if not engulf_hist.empty:
 #st.markdown("---")
 #st.markdown("### 📊 Extra Trend Metrics (PowerTrend Indicators)")
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
-
-st.markdown("---")
-
-# --- GAPPER SECTION ---
-st.markdown(f"#### 🚀 Gapper Earning Drift ({len(gapper_list)})")
-
-if gapper_list or gapper_yest:
-    # ── Badge row ─────────────────────────────────────────────────────────
-    html_g = ""
-    for sym in gapper_list:
-        #cls = "new-pattern-badge" if sym not in gapper_yest else ""
-        #html_g += f'<div class="ticker-badge {cls}">{sym}</div>'
-        html_g += setup_badge(sym, is_new=(sym not in gapper_yest))
-
-    removed_gapper = [sym for sym in gapper_yest if sym not in gapper_list]
-    for sym in sorted(removed_gapper):
-        html_g += f'<div class="ticker-badge removed-badge">{sym}</div>'
-
-    st.markdown(html_g, unsafe_allow_html=True)
-
-    # ── All charts together, 5 per row ────────────────────────────────────
-    if gapper_list and show_gap_charts:
-        st.write("")
-        GAPPER_CHARTS_PER_ROW = 4
-        GAPPER_CHART_SIZE     = 280
-
-        for row_start in range(0, len(gapper_list), GAPPER_CHARTS_PER_ROW):
-            row_tickers = gapper_list[row_start : row_start + GAPPER_CHARTS_PER_ROW]
-            cols = st.columns(GAPPER_CHARTS_PER_ROW)
-
-            for col_idx, sym in enumerate(row_tickers):
-                with cols[col_idx]:
-                    ohlcv_json = get_gapper_ohlcv_json(sym)
-                    chart_id   = f"gapper_{sym}_{row_start}_{col_idx}"
-                    _levels        = gapper_gap_levels.get(sym, {})
-                    gap_floor_js   = str(_levels["floor"])   if _levels else "null"
-                    gap_ceiling_js = str(_levels["ceiling"]) if _levels else "null"
-                    gap_date_js    = f'"{_levels["date"]}"'  if _levels else "null"
-
-                    chart_html = f"""
-<div style="font-family:'JetBrains Mono','Fira Code',monospace;">
-  <div style="position:relative;width:{GAPPER_CHART_SIZE+60}px;height:{GAPPER_CHART_SIZE}px;
-              border:1px solid #30363d;border-radius:6px;background:#0d1117;">
-    <div id="{chart_id}"
-         style="width:{GAPPER_CHART_SIZE+60}px;height:{GAPPER_CHART_SIZE}px;">
-    </div>
-    <div style="
-      position:absolute;top:10%;left:50%;
-      transform:translate(-50%,-50%);
-      font-size:48px;font-weight:900;
-      color:rgba(255,255,255,0.08);
-      letter-spacing:0.05em;
-      pointer-events:none;
-      z-index:999;
-      user-select:none;
-      white-space:nowrap;">
-      {sym}
-    </div>
-  </div>
-</div>
-
-<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
-<script>
-(function(){{
-  var ohlcv = {ohlcv_json};
-  var el = document.getElementById('{chart_id}');
-  if (!ohlcv || ohlcv.length === 0) {{
-    el.innerHTML = '<p style="color:#7d8590;padding:12px;font-size:11px;">No data.</p>';
-    return;
-  }}
-
-  var chart = LightweightCharts.createChart(el, {{
-    width:  {GAPPER_CHART_SIZE},
-    height: {GAPPER_CHART_SIZE},
-    layout: {{
-      background: {{ type:'solid', color:'#0d1117' }},
-      textColor:  '#c9d1d9',
-    }},
-    grid: {{
-      vertLines: {{ color:'#21262d', style:1 }},
-      horzLines: {{ color:'#21262d', style:1 }},
-    }},
-    crosshair: {{
-      mode: LightweightCharts.CrosshairMode.Normal,
-      vertLine: {{ color:'#58a6ff', width:1, style:1, labelBackgroundColor:'#1f6feb' }},
-      horzLine: {{ color:'#58a6ff', width:1, style:1, labelBackgroundColor:'#1f6feb' }},
-    }},
-    rightPriceScale: {{ borderColor:'#30363d', textColor:'#8b949e' }},
-    timeScale: {{
-      borderColor:'#30363d', textColor:'#8b949e',
-      timeVisible:true, secondsVisible:false,
-      fixLeftEdge:true, fixRightEdge:true,
-    }},
-  }});
-
-  var gapBottom = {gap_floor_js};
-  var gapTop    = {gap_ceiling_js};
-
-if (gapBottom !== null && gapTop !== null && {gap_date_js} !== null) {{
-    var gapStartDate = {gap_date_js};
-    var t1 = ohlcv[ohlcv.length - 1].time;
-
-    // Upper boundary — fills grey DOWN from gapTop
-    var upperArea = chart.addAreaSeries({{
-      topColor:    'rgba(160,160,160,0.20)',
-      bottomColor: 'rgba(160,160,160,0.20)',
-      lineColor:   'rgba(160,160,160,0.55)',
-      lineWidth:   1,
-      priceLineVisible:       false,
-      lastValueVisible:       false,
-      crosshairMarkerVisible: false,
-    }});
-    upperArea.setData([
-      {{ time: gapStartDate, value: gapTop }},
-      {{ time: t1,           value: gapTop }},
-    ]);
-
-    // Lower boundary — fills solid background DOWN from gapBottom to erase bleed
-    var lowerArea = chart.addAreaSeries({{
-      topColor:    '#0d1117',
-      bottomColor: '#0d1117',
-      lineColor:   'rgba(160,160,160,0.55)',
-      lineWidth:   1,
-      priceLineVisible:       false,
-      lastValueVisible:       false,
-      crosshairMarkerVisible: false,
-    }});
-    lowerArea.setData([
-      {{ time: gapStartDate, value: gapBottom }},
-      {{ time: t1,           value: gapBottom }},
-    ]);
-  }}  
-
-  var candles = chart.addCandlestickSeries({{
-    upColor:'#26a641',   downColor:'#f85149',
-    borderUpColor:'#26a641', borderDownColor:'#f85149',
-    wickUpColor:'#26a641',   wickDownColor:'#f85149',
-  }});
-  candles.setData(ohlcv);
-
-  function calcEMA(data, span) {{
-    var k = 2/(span+1), ema = data[0].close, out = [];
-    for (var i=0;i<data.length;i++) {{
-      ema = data[i].close*k + ema*(1-k);
-      if (i >= span-1) out.push({{time:data[i].time, value:parseFloat(ema.toFixed(4))}});
-    }}
-    return out;
-  }}
-
-  function calcSMA(data, period) {{
-    var out = [];
-    for (var i=period-1;i<data.length;i++) {{
-      var s=0; for(var j=i-period+1;j<=i;j++) s+=data[j].close;
-      out.push({{time:data[i].time, value:parseFloat((s/period).toFixed(4))}});
-    }}
-    return out;
-  }}
-
-  chart.addLineSeries({{color:'#e3b341',lineWidth:1,
-    priceLineVisible:false,lastValueVisible:false}})
-    .setData(calcEMA(ohlcv,21));
-
-  chart.addLineSeries({{color:'#58a6ff',lineWidth:1,
-    priceLineVisible:false,lastValueVisible:false}})
-    .setData(calcSMA(ohlcv,50));
-
-  chart.timeScale().fitContent();
-
-  new ResizeObserver(function(entries){{
-    for(var e of entries){{
-      chart.applyOptions({{width:e.contentRect.width}});
-    }}
-  }}).observe(el);
-}})();
-</script>
-"""
-                    import streamlit.components.v1 as components
-                    components.html(chart_html, height=GAPPER_CHART_SIZE + 32, scrolling=False)
-
-else:
-    st.info("No active setups discovered.")
 
 st.markdown("---")
 
