@@ -249,9 +249,10 @@ KNOWN_STOCKS = list(set(KNOWN_STOCKS))
 LIME_STOCKS = [
     'USO', 'XOP', 'IGV', 'CIBR', 'TAN', 'IHI', 'IPAY', 
     'VTV', 'KRE', 'VUG', 'PBW', 'MAGS', 'XRT', 'JETS', 'XTL', 'SHLD', 
-    'IBIT', 'UFO', 'XBI', 'SLX', 'ITA', 'REMX', 'LIT', 'KWEB', 'SMH', 
+    'IBIT', 'UFO', 'XBI', 'SLX', 'REMX', 'LIT', 'KWEB', 'SMH', 
     'XME', 'URA', 'DRAM', 'GDX', 'WGMI', 'COPX', 'SIL', 'IAT', 'ITB'
-] #'KBE', 'NLR', 'CLOU', 'XHB', 'BUG', 'HACK'
+] 
+#'KBE', 'NLR', 'CLOU', 'XHB', 'BUG', 'HACK', 'ITA', 
 
 # ============================================================
 # SHARED DOWNLOAD: runs once, feeds all history compute fns
