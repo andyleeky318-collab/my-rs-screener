@@ -3045,19 +3045,6 @@ if breadth_total > 0:
 else:
     st.info("Insufficient data to compute breadth & stage analysis.")
 
-with st.spinner("Scanning pattern anomalies across known instruments..."):
-    results       = timed("process_pattern_scanners",      process_pattern_scanners,      stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
-    # historical_df   = compute_historical_know_counts(stocks_tuple, ticker_dfs_shared)   # moved here: renders first
-    # two_botak_hist  = compute_two_botak_history(stocks_tuple, ticker_dfs_shared)
-    # engulf_hist     = compute_engulfing_history(stocks_tuple, ticker_dfs_shared)
-    # powertrend_hist = compute_powertrend_history(stocks_tuple, ticker_dfs_shared)
-    # leader_hist     = compute_leader_history(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
-    b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list, leader_list, gapper_list = results[:9]
-    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest, leader_yest, gapper_yest = results[9:18]
-    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200, leader_rs_nh_matches, gapper_gap_levels, ath_list, ath_yest = results[18:]
-
-st.markdown("---")
-
 # ==============================================================================
 # 11. MARKET REGIME REFERENCE TABLE (Dynamic Highlight)
 # ==============================================================================
@@ -3142,6 +3129,21 @@ st.dataframe(
 )
 
 st.markdown("---")
+
+with st.spinner("Scanning pattern anomalies across known instruments..."):
+    results       = timed("process_pattern_scanners",      process_pattern_scanners,      stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
+    # historical_df   = compute_historical_know_counts(stocks_tuple, ticker_dfs_shared)   # moved here: renders first
+    # two_botak_hist  = compute_two_botak_history(stocks_tuple, ticker_dfs_shared)
+    # engulf_hist     = compute_engulfing_history(stocks_tuple, ticker_dfs_shared)
+    # powertrend_hist = compute_powertrend_history(stocks_tuple, ticker_dfs_shared)
+    # leader_hist     = compute_leader_history(stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
+    b_list, e2_list, e3_list, pt_list, ptne_list, vt_list, ppp_list, leader_list, gapper_list = results[:9]
+    b_yest, e2_yest, e3_yest, pt_yest, ptne_yest, vt_yest, ppp_yest, leader_yest, gapper_yest = results[9:18]
+    know_pos_pct, know_positive_count, know_total_count, email_content_stocks, email_content_removed, extra_52wk_high_symbols, extra_52wk_high_removed, pct_above_ema200, leader_rs_nh_matches, gapper_gap_levels, ath_list, ath_yest = results[18:]
+
+st.markdown("---")
+
+
 
 st.markdown(
     f"#### ⭐ Minervini ("
