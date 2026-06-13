@@ -518,12 +518,12 @@ if lime_perf_rows:
     max_abs_1w = max(abs(r["pct_1w"])  for r in rows_1w) or 1
     max_abs_1m = max(abs(r["pct_1m"])  for r in rows_1m) or 1
 
-    ROW_H   = 20   # was 18
-    LABEL_W = 118   # was 110
+    ROW_H   = 22   # was 18
+    LABEL_W = 126   # was 110
     COL_W   = LABEL_W + BAR_MAX_PX
-    GAP     = 55   # was 60
-    PADDING = 12    # was 12
-    FS      = 12    # font size
+    GAP     = 60   # was 60
+    PADDING = 14    # was 12
+    FS      = 14    # font size
 
     N      = max(len(rows_1d), len(rows_1w), len(rows_1m))
     SVG_H  = N * ROW_H + PADDING * 2
@@ -613,27 +613,27 @@ if lime_perf_rows:
             html += (
                 f'<rect class="hitbar" data-sym="{sym}" '
                 f'x="{col_x}" y="{y - 7}" '
-                f'width="{LABEL_W + bw}" height="17" '  # between 14 and 16
+                f'width="{LABEL_W + bw}" height="19" '  # between 14 and 16
                 f'fill="transparent" style="cursor:pointer;"/>'
             )
             # bar rect height 9 (between 8 and 10):
             html += (
                 f'<rect class="bar bar-{sym}" data-sym="{sym}" '
                 f'x="{col_x + LABEL_W}" y="{y - 4}" '
-                f'width="{bw}" height="10" rx="2" fill="{c}" '
+                f'width="{bw}" height="11" rx="2" fill="{c}" '
                 f'style="cursor:pointer;"/>'
             )
             # label x positions scaled to new LABEL_W=100:
             html += (
                 f'<text class="lbl lbl-{sym}" data-sym="{sym}" '
-                f'x="{col_x + 52}" y="{y + 4}" '  # ~52% of LABEL_W
+                f'x="{col_x + 58}" y="{y + 4}" '  # ~52% of LABEL_W
                 f'font-size="{FS}" font-family="Source Sans Pro,sans-serif" '
                 f'font-weight="600" fill="{c}" '
                 f'text-anchor="end" style="cursor:pointer;">{label}</text>'
             )
             html += (
                 f'<text class="lbl lbl-{sym}" data-sym="{sym}" '
-                f'x="{col_x + 56}" y="{y + 4}" '  # 4px gap after %
+                f'x="{col_x + 62}" y="{y + 4}" '  # 4px gap after %
                 f'font-size="{FS}" font-family="Source Sans Pro,sans-serif" '
                 f'font-weight="600" fill="#cccccc" '
                 f'text-anchor="start" style="cursor:pointer;">{sym}</text>'
