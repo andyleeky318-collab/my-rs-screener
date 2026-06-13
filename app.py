@@ -2955,7 +2955,7 @@ if quad_points:
         mode="markers+text",
         text=labels,
         textposition="top center",
-        textfont=dict(size=8, color="#111111"),
+        textfont=dict(size=10, color="#111111"),
         marker=dict(
             color=dot_colors,
             size=7,
