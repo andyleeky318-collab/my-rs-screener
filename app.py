@@ -3001,7 +3001,7 @@ if quad_points:
         ),
         plot_bgcolor ="rgba(20,22,30,1)",
         paper_bgcolor="rgba(13,17,23,0)",
-        height=750,
+        height=900,
         margin=dict(l=55, r=25, t=65, b=55),
         font=dict(color="#cccccc"),
         hoverlabel=dict(
