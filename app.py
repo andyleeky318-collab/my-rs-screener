@@ -2234,7 +2234,7 @@ if all_data:
     <th style="text-align: center; width: 40px;">RS</th>
     <th style="text-align: center; width: 40px;">1W</th>
     <th style="text-align: center; width: 40px;">1M</th>
-    <th style="text-align: left;">Tickers</th>
+    <th style="text-align: left;">Tickers (RS > 80)</th>
     <th style="text-align: left; width: 190px;">21ema_Valid</th>
     <th style="text-align: left; width: 190px;">21ema_Cloud</th>
     <th style="text-align: left; width: 190px;">21ema_Wick</th>
