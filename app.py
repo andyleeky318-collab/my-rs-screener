@@ -500,7 +500,7 @@ for sym in LIME_STOCKS:
     lime_perf_rows.append({"sym": sym, "pct": pct_1d, "pct_1w": pct_1w, "pct_1m": pct_1m})
 
 if lime_perf_rows:
-    BAR_MAX_PX = 120  # was 200
+    BAR_MAX_PX = 165  # was 200
 
     rows_1d = sorted(lime_perf_rows, key=lambda x: -x["pct"])
     rows_1w = sorted([r for r in lime_perf_rows if r["pct_1w"] is not None], key=lambda x: -x["pct_1w"])
@@ -510,12 +510,12 @@ if lime_perf_rows:
     max_abs_1w = max(abs(r["pct_1w"])  for r in rows_1w) or 1
     max_abs_1m = max(abs(r["pct_1m"])  for r in rows_1m) or 1
 
-    ROW_H   = 16   # was 18
-    LABEL_W = 100   # was 110
+    ROW_H   = 17   # was 18
+    LABEL_W = 104   # was 110
     COL_W   = LABEL_W + BAR_MAX_PX
-    GAP     = 40   # was 60
-    PADDING = 10    # was 12
-    FS      = 10    # font size
+    GAP     = 45   # was 60
+    PADDING = 11    # was 12
+    FS      = 11    # font size
 
     N      = max(len(rows_1d), len(rows_1w), len(rows_1m))
     SVG_H  = N * ROW_H + PADDING * 2
