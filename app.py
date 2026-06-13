@@ -283,6 +283,25 @@ def download_known_stocks_data(stocks_tuple):
 
     return ticker_dfs, benchmark_df
 
+@st.cache_data(ttl=3600)
+def download_lime_stocks_data(stocks_tuple):
+    raw_data = yf.download(list(stocks_tuple), period="2y", interval="1d", progress=False, auto_adjust=False)
+    ticker_dfs = {}
+    for ticker in stocks_tuple:
+        try:
+            df = pd.DataFrame({
+                'Open':   raw_data['Open'][ticker],
+                'High':   raw_data['High'][ticker],
+                'Low':    raw_data['Low'][ticker],
+                'Close':  raw_data['Close'][ticker],
+                'Volume': raw_data['Volume'][ticker]
+            }).dropna()
+            if not df.empty:
+                ticker_dfs[ticker] = df
+        except Exception:
+            continue
+    return ticker_dfs
+
 # ==============================================================================
 # MARKET BREADTH & STAGE ANALYSIS FOR KNOWN_STOCKS
 # (Place this block ABOVE the Timing Summary section, after the Gapper section)
@@ -454,7 +473,7 @@ with st.sidebar:
 
     if st.button("Refresh Deepvue Theme", use_container_width=True):
         # Clear the caches for BOTH functions so fresh data is requested
-        download_known_stocks_data.clear()
+        download_lime_stocks_data.clear()
         st.toast("Cache cleared! Fetching real-time market data...", icon="🔄")
 
     if st.button("Refresh Deepvue Breadth", use_container_width=True):
@@ -462,27 +481,14 @@ with st.sidebar:
         compute_breadth_and_stage.clear()
         st.toast("Cache cleared! Fetching real-time market data...", icon="🔄")
 
-# ============================================================
-# SINGLE DOWNLOAD + SPINNER: all compute fns share one fetch
-# ============================================================
-stocks_tuple = tuple(KNOWN_STOCKS)
-
-# Single download — all history fns share this cached result
-ticker_dfs_shared, benchmark_df_shared = timed(
-    "download_known_stocks_data",
-    download_known_stocks_data,
-    stocks_tuple
-)
-
-# Inject benchmark so history functions can look it up by symbol
-ticker_dfs_shared[benchmark] = benchmark_df_shared
-
 # st.markdown("---")
 #st.markdown(f"#### 📊 Market Breadth")
 
+lime_ticker_dfs = download_lime_stocks_data(tuple(LIME_STOCKS))
+
 lime_perf_rows = []
 for sym in LIME_STOCKS:
-    df_sym = ticker_dfs_shared.get(sym)
+    df_sym = lime_ticker_dfs.get(sym)
     if df_sym is None or len(df_sym) < 2:
         continue
     c_today = df_sym['Close'].iloc[-1]
@@ -696,6 +702,21 @@ else:
     st.info("No Lime Stocks performance data available.")
 
 st.markdown("---")
+
+# ============================================================
+# SINGLE DOWNLOAD + SPINNER: all compute fns share one fetch
+# ============================================================
+stocks_tuple = tuple(KNOWN_STOCKS)
+
+# Single download — all history fns share this cached result
+ticker_dfs_shared, benchmark_df_shared = timed(
+    "download_known_stocks_data",
+    download_known_stocks_data,
+    stocks_tuple
+)
+
+# Inject benchmark so history functions can look it up by symbol
+ticker_dfs_shared[benchmark] = benchmark_df_shared
 
 # ── Compute ─────────────────────────────────────────────────────────────────
 with st.spinner("Computing market breadth & stage analysis..."):
