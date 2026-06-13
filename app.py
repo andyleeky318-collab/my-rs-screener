@@ -451,12 +451,12 @@ with st.sidebar:
     if st.button("Clear Cache & Refresh"):
         st.cache_data.clear()
 
-    if st.button("Refresh Deepvue 1", use_container_width=True):
+    if st.button("Refresh Deepvue Theme", use_container_width=True):
         # Clear the caches for BOTH functions so fresh data is requested
         download_known_stocks_data.clear()
         st.toast("Cache cleared! Fetching real-time market data...", icon="🔄")
 
-    if st.button("Refresh Deepvue 2", use_container_width=True):
+    if st.button("Refresh Deepvue Breadth", use_container_width=True):
         # Clear the caches for BOTH functions so fresh data is requested
         compute_breadth_and_stage.clear()
         st.toast("Cache cleared! Fetching real-time market data...", icon="🔄")
