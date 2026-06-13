@@ -2482,7 +2482,7 @@ def compute_two_botak_history(stocks_list, _ticker_dfs):
                 errors.append(f"{ticker}: {e}")  # ADD THIS
                 continue
 
-        st.write(f"all_series count: {len(all_series)}, errors sample: {errors[:3]}")  # ADD THIS
+        #st.write(f"all_series count: {len(all_series)}, errors sample: {errors[:3]}")  # ADD THIS
 
         if not all_series:
             return pd.DataFrame()
