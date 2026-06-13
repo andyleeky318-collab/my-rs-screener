@@ -488,34 +488,63 @@ for sym in LIME_STOCKS:
     c_prev  = df_sym['Close'].iloc[-2]
     if pd.isna(c_today) or pd.isna(c_prev) or c_prev == 0:
         continue
-    pct = round((c_today - c_prev) / c_prev * 100, 2)
-    lime_perf_rows.append({"sym": sym, "pct": pct})
+    pct_1d = round((c_today - c_prev) / c_prev * 100, 2)
+
+    # 1-week: ~5 trading days back
+    c_1w = df_sym['Close'].iloc[-6] if len(df_sym) >= 6 else None
+    pct_1w = round((c_today - c_1w) / c_1w * 100, 2) if c_1w and c_1w != 0 else None
+
+    # 1-month: ~21 trading days back
+    c_1m = df_sym['Close'].iloc[-22] if len(df_sym) >= 22 else None
+    pct_1m = round((c_today - c_1m) / c_1m * 100, 2) if c_1m and c_1m != 0 else None
+
+    lime_perf_rows.append({"sym": sym, "pct": pct_1d, "pct_1w": pct_1w, "pct_1m": pct_1m})
 
 if lime_perf_rows:
-    # Sort descending by pct
     lime_perf_rows.sort(key=lambda x: -x["pct"])
 
-    max_abs = max(abs(r["pct"]) for r in lime_perf_rows) or 1
-    BAR_MAX_PX = 300  # max bar width in pixels
+    max_abs_1d = max(abs(r["pct"])                          for r in lime_perf_rows) or 1
+    max_abs_1w = max(abs(r["pct_1w"]) for r in lime_perf_rows if r["pct_1w"] is not None) or 1
+    max_abs_1m = max(abs(r["pct_1m"]) for r in lime_perf_rows if r["pct_1m"] is not None) or 1
+    BAR_MAX_PX = 160  # reduced so three bars fit side by side
+
+    def make_bar(pct, max_abs, bar_max=BAR_MAX_PX):
+        if pct is None:
+            return '<div style="width:{bar_max}px;"></div>'.format(bar_max=bar_max)
+        bar_w     = max(int(abs(pct) / max_abs * bar_max), 2)
+        bar_color = "#378ADD" if pct >= 0 else "#FF69B4"
+        sign_str  = f"+{pct:.1f}%" if pct >= 0 else f"{pct:.1f}%"
+        txt_color = bar_color
+        return (
+            f'<div style="display:flex; align-items:center; gap:4px; width:{bar_max+52}px;">'
+            f'  <div style="width:{bar_w}px; height:10px; background:{bar_color};'
+            f'              border-radius:0 3px 3px 0; flex-shrink:0;"></div>'
+            f'  <span style="font-size:10px; color:{txt_color}; white-space:nowrap;">{sign_str}</span>'
+            f'</div>'
+        )
 
     rows_html = ""
     for r in lime_perf_rows:
-        sym  = r["sym"]
-        pct  = r["pct"]
-        bar_w = int(abs(pct) / max_abs * BAR_MAX_PX)
-        bar_color = "#378ADD" if pct >= 0 else "#FF69B4"
-        sign_str  = f"+{pct:.2f}%" if pct >= 0 else f"{pct:.2f}%"
-        pct_color = "#378ADD" if pct >= 0 else "#FF69B4"
+        sym    = r["sym"]
+        bar_1d = make_bar(r["pct"],    max_abs_1d)
+        bar_1w = make_bar(r["pct_1w"], max_abs_1w)
+        bar_1m = make_bar(r["pct_1m"], max_abs_1m)
 
         rows_html += f"""
-        <div style="display:flex; align-items:center; margin-bottom:2px; gap:8px;">
-          <div style="width:60px; text-align:right; font-size:11px; font-weight:600;
-                      color:{pct_color}; flex-shrink:0;">{sign_str}</div>
-          <div style="width:40px; text-align:left; font-size:11px;
-                      font-weight:600; color:#cccccc; flex-shrink:0;">{sym}</div>
-          <div style="flex:1; display:flex; align-items:center;">
-            <div style="width:{bar_w}px; height:12px; background:{bar_color};
-                        border-radius:0 3px 3px 0; min-width:2px;"></div>
+        <div style="display:flex; align-items:center; margin-bottom:2px; gap:6px;">
+          <div style="width:40px; text-align:right; font-size:11px; font-weight:600;
+                      color:#cccccc; flex-shrink:0;">{sym}</div>
+          <div style="display:flex; align-items:center; gap:2px;">
+            <span style="font-size:9px; color:#888; width:14px; flex-shrink:0;">1D</span>
+            {bar_1d}
+          </div>
+          <div style="display:flex; align-items:center; gap:2px;">
+            <span style="font-size:9px; color:#888; width:14px; flex-shrink:0;">1W</span>
+            {bar_1w}
+          </div>
+          <div style="display:flex; align-items:center; gap:2px;">
+            <span style="font-size:9px; color:#888; width:14px; flex-shrink:0;">1M</span>
+            {bar_1m}
           </div>
         </div>"""
 
