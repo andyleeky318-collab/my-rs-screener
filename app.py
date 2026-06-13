@@ -508,9 +508,9 @@ if lime_perf_rows:
 
         rows_html += f"""
         <div style="display:flex; align-items:center; margin-bottom:4px; gap:8px;">
-          <div style="width:45px; text-align:right; font-size:12px; font-weight:600;
+          <div style="width:60px; text-align:right; font-size:12px; font-weight:600;
                       color:{pct_color}; flex-shrink:0;">{sign_str}</div>
-          <div style="width:80px; text-align:right; font-size:12px;
+          <div style="width:80px; text-align:left; font-size:12px;
                       font-weight:600; color:#cccccc; flex-shrink:0;">{sym}</div>
           <div style="flex:1; display:flex; align-items:center;">
             <div style="width:{bar_w}px; height:14px; background:{bar_color};
