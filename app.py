@@ -4294,7 +4294,8 @@ if pt_list or pt_yest:
                     #f'C${pt_close:.2f} H${pt_high:.2f}'
                     f'</span>'
                 )
-        html_pt += f'<div class="ticker-badge {cls}">{sym}{pt_price}</div>'
+        #html_pt += f'<div class="ticker-badge {cls}">{sym}{pt_price}</div>'
+        html_pt += setup_badge(sym, is_new=(sym not in pt_yest))
     
     # Process and append removed stocks
     removed_pt = [sym for sym in pt_yest if sym not in pt_list]
@@ -4349,8 +4350,9 @@ st.markdown(f"#### ⚡ PowerTrend ... Not Extended ({len(ptne_list)})")
 if ptne_list:
     html_ptne = ""
     for sym in ptne_list:
-        cls = "new-pattern-badge" if sym not in ptne_yest else ""
-        html_ptne += f'<div class="ticker-badge {cls}">{sym}</div>'
+        #cls = "new-pattern-badge" if sym not in ptne_yest else ""
+        #html_ptne += f'<div class="ticker-badge {cls}">{sym}</div>'
+        html_ptne += setup_badge(sym, is_new=(sym not in ptne_yest))
     st.markdown(html_ptne, unsafe_allow_html=True)
 else:
     st.info("No active setups discovered.")
@@ -4363,8 +4365,9 @@ st.markdown(f"#### ⚠️ Value Trap ({len(vt_list)})")
 if vt_list or vt_yest:
     html_vt = ""
     for sym in vt_list:
-        cls = "new-pattern-badge" if sym not in vt_yest else ""
-        html_vt += f'<div class="ticker-badge {cls}">{sym}</div>'
+        #cls = "new-pattern-badge" if sym not in vt_yest else ""
+        #html_vt += f'<div class="ticker-badge {cls}">{sym}</div>'
+        html_vt += setup_badge(sym, is_new=(sym not in vt_yest))
     
     # Process and append removed stocks
     removed_vt = [sym for sym in vt_yest if sym not in vt_list]
