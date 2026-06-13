@@ -571,11 +571,11 @@ if breadth_total > 0:
             f"    {title} <span style='color:{bull_color};'>({pct_display})</span>"
             f"  </div>"
             # Bar — 40% width, left-aligned
-            f"  <div style='width:40%;height:7px;display:flex;overflow:hidden;border-radius:999px;background:{bear_color};'>"
+            f"  <div style='width:350px;max-width:100%;height:7px;display:flex;overflow:hidden;border-radius:999px;background:{bear_color};'>"
             f"    {bar_segs}"
             f"  </div>"
             # Counts row
-            f"  <div style='display:flex;justify-content:space-between;width:40%;margin-top:4px;'>"
+            f"  <div style='display:flex;justify-content:space-between;width:350px;max-width:100%;margin-top:4px;'>"
             f"    <span style='font-size:12px;color:#888888;'>{val:,} {title.split(' vs ')[0]}</span>"
             f"    <span style='font-size:12px;color:#888888;'>{counterpart:,} {title.split(' vs ')[1]}</span>"
             f"  </div>"
