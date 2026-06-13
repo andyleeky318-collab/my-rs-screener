@@ -490,100 +490,60 @@ for sym in LIME_STOCKS:
         continue
     pct_1d = round((c_today - c_prev) / c_prev * 100, 2)
 
-    # 1-week: ~5 trading days back
     c_1w = df_sym['Close'].iloc[-6] if len(df_sym) >= 6 else None
     pct_1w = round((c_today - c_1w) / c_1w * 100, 2) if (c_1w is not None and not pd.isna(c_1w) and c_1w != 0) else None
 
-    # 1-month: ~21 trading days back
     c_1m = df_sym['Close'].iloc[-22] if len(df_sym) >= 22 else None
     pct_1m = round((c_today - c_1m) / c_1m * 100, 2) if (c_1m is not None and not pd.isna(c_1m) and c_1m != 0) else None
 
     lime_perf_rows.append({"sym": sym, "pct": pct_1d, "pct_1w": pct_1w, "pct_1m": pct_1m})
 
 if lime_perf_rows:
-    # --- original daily sort (unchanged) ---
-    lime_perf_rows.sort(key=lambda x: -x["pct"])
-
-    max_abs = max(abs(r["pct"]) for r in lime_perf_rows) or 1
     BAR_MAX_PX = 300
 
-    rows_html = ""
-    for r in lime_perf_rows:
-        sym  = r["sym"]
-        pct  = r["pct"]
-        bar_w = int(abs(pct) / max_abs * BAR_MAX_PX)
-        bar_color = "#378ADD" if pct >= 0 else "#FF69B4"
-        sign_str  = f"+{pct:.2f}%" if pct >= 0 else f"{pct:.2f}%"
-        pct_color = "#378ADD" if pct >= 0 else "#FF69B4"
+    # each timeframe sorted independently
+    rows_1d = sorted(lime_perf_rows, key=lambda x: -x["pct"])
+    rows_1w = sorted([r for r in lime_perf_rows if r["pct_1w"] is not None], key=lambda x: -x["pct_1w"])
+    rows_1m = sorted([r for r in lime_perf_rows if r["pct_1m"] is not None], key=lambda x: -x["pct_1m"])
 
-        rows_html += f"""
-        <div style="display:flex; align-items:center; margin-bottom:2px; gap:8px;">
-          <div style="width:60px; text-align:right; font-size:11px; font-weight:600;
-                      color:{pct_color}; flex-shrink:0;">{sign_str}</div>
-          <div style="width:40px; text-align:left; font-size:11px;
-                      font-weight:600; color:#cccccc; flex-shrink:0;">{sym}</div>
-          <div style="flex:1; display:flex; align-items:center;">
-            <div style="width:{bar_w}px; height:12px; background:{bar_color};
-                        border-radius:0 3px 3px 0; min-width:2px;"></div>
-          </div>
-        </div>"""
+    max_abs_1d = max(abs(r["pct"])    for r in rows_1d) or 1
+    max_abs_1w = max(abs(r["pct_1w"]) for r in rows_1w) or 1
+    max_abs_1m = max(abs(r["pct_1m"]) for r in rows_1m) or 1
 
-    # --- 1W section: sorted by pct_1w descending ---
-    lime_1w = [r for r in lime_perf_rows if r["pct_1w"] is not None]
-    lime_1w.sort(key=lambda x: -x["pct_1w"])
-    max_abs_1w = max(abs(r["pct_1w"]) for r in lime_1w) or 1
+    def build_col(rows, pct_key, max_abs):
+        html = ""
+        for r in rows:
+            pct       = r[pct_key]
+            sym       = r["sym"]
+            bar_w     = int(abs(pct) / max_abs * BAR_MAX_PX)
+            bar_color = "#378ADD" if pct >= 0 else "#FF69B4"
+            sign_str  = f"+{pct:.2f}%" if pct >= 0 else f"{pct:.2f}%"
+            html += f"""
+            <div style="display:flex; align-items:center; margin-bottom:2px; gap:8px;">
+              <div style="width:60px; text-align:right; font-size:11px; font-weight:600;
+                          color:{bar_color}; flex-shrink:0;">{sign_str}</div>
+              <div style="width:40px; text-align:left; font-size:11px;
+                          font-weight:600; color:#cccccc; flex-shrink:0;">{sym}</div>
+              <div style="flex:1; display:flex; align-items:center;">
+                <div style="width:{bar_w}px; height:12px; background:{bar_color};
+                            border-radius:0 3px 3px 0; min-width:2px;"></div>
+              </div>
+            </div>"""
+        return html
 
-    rows_html += "<div style='margin-top:14px; margin-bottom:4px; font-size:11px; font-weight:700; color:#888; letter-spacing:1px;'>1 WEEK</div>"
-    for r in lime_1w:
-        sym   = r["sym"]
-        pct   = r["pct_1w"]
-        bar_w = int(abs(pct) / max_abs_1w * BAR_MAX_PX)
-        bar_color = "#378ADD" if pct >= 0 else "#FF69B4"
-        sign_str  = f"+{pct:.2f}%" if pct >= 0 else f"{pct:.2f}%"
-        pct_color = bar_color
-
-        rows_html += f"""
-        <div style="display:flex; align-items:center; margin-bottom:2px; gap:8px;">
-          <div style="width:60px; text-align:right; font-size:11px; font-weight:600;
-                      color:{pct_color}; flex-shrink:0;">{sign_str}</div>
-          <div style="width:40px; text-align:left; font-size:11px;
-                      font-weight:600; color:#cccccc; flex-shrink:0;">{sym}</div>
-          <div style="flex:1; display:flex; align-items:center;">
-            <div style="width:{bar_w}px; height:12px; background:{bar_color};
-                        border-radius:0 3px 3px 0; min-width:2px;"></div>
-          </div>
-        </div>"""
-
-    # --- 1M section: sorted by pct_1m descending ---
-    lime_1m = [r for r in lime_perf_rows if r["pct_1m"] is not None]
-    lime_1m.sort(key=lambda x: -x["pct_1m"])
-    max_abs_1m = max(abs(r["pct_1m"]) for r in lime_1m) or 1
-
-    rows_html += "<div style='margin-top:14px; margin-bottom:4px; font-size:11px; font-weight:700; color:#888; letter-spacing:1px;'>1 MONTH</div>"
-    for r in lime_1m:
-        sym   = r["sym"]
-        pct   = r["pct_1m"]
-        bar_w = int(abs(pct) / max_abs_1m * BAR_MAX_PX)
-        bar_color = "#378ADD" if pct >= 0 else "#FF69B4"
-        sign_str  = f"+{pct:.2f}%" if pct >= 0 else f"{pct:.2f}%"
-        pct_color = bar_color
-
-        rows_html += f"""
-        <div style="display:flex; align-items:center; margin-bottom:2px; gap:8px;">
-          <div style="width:60px; text-align:right; font-size:11px; font-weight:600;
-                      color:{pct_color}; flex-shrink:0;">{sign_str}</div>
-          <div style="width:40px; text-align:left; font-size:11px;
-                      font-weight:600; color:#cccccc; flex-shrink:0;">{sym}</div>
-          <div style="flex:1; display:flex; align-items:center;">
-            <div style="width:{bar_w}px; height:12px; background:{bar_color};
-                        border-radius:0 3px 3px 0; min-width:2px;"></div>
-          </div>
-        </div>"""
+    col_1d = build_col(rows_1d, "pct",    max_abs_1d)
+    col_1w = build_col(rows_1w, "pct_1w", max_abs_1w)
+    col_1m = build_col(rows_1m, "pct_1m", max_abs_1m)
 
     st.markdown(
-        f"<div style='background:#0e1117; padding:16px 12px; border-radius:6px;'>"
-        f"{rows_html}"
-        f"</div>",
+        f"""<div style='background:#0e1117; padding:16px 12px; border-radius:6px;
+                        display:flex; gap:24px; align-items:flex-start;'>
+              <div style='flex:1;'>{col_1d}</div>
+              <div style='width:1px; background:#2a2a2a; align-self:stretch;'></div>
+              <div style='flex:1;'>{col_1w}</div>
+              <div style='width:1px; background:#2a2a2a; align-self:stretch;'></div>
+              <div style='flex:1;'>{col_1m}</div>
+            </div>""",
         unsafe_allow_html=True
     )
 else:
