@@ -823,68 +823,6 @@ if breadth_total > 0:
     st.markdown(breadth_html, unsafe_allow_html=True)
 
 st.markdown("---")
-#st.markdown(f"#### 🎯 Stage Analysis")
-
-if breadth_total > 0:
-    # ── Stage: single stacked bar ─────────────────────────────────────────
-    stage_order  = [1, 2, 3, 4]
-    stage_colors = {1: "#a9a9a9", 2: "#378ADD", 3: "#EF9F27", 4: "#FF69B4"}
-    stage_labels = {1: "S1", 2: "S2", 3: "S3", 4: "S4"}
-
-    bar_total = sum(stage_counts.get(s, 0) for s in stage_order)
-
-    if bar_total > 0:
-        segs = [
-            {"s": s, "cnt": stage_counts.get(s, 0),
-             "pct": stage_counts.get(s, 0) / bar_total * 100,
-             "color": stage_colors[s]}
-            for s in stage_order
-        ]
-
-        bar_segs = ""
-        legend = ""
-        
-        for i, seg in enumerate(segs):
-            # 1. Build the bar segment
-            r = ("border-radius:999px 0 0 999px;" if i == 0
-                 else "border-radius:0 999px 999px 0;" if i == len(segs) - 1
-                 else "")
-            bar_segs += (
-                f"<div style='width:{seg['pct']:.2f}%; background:{seg['color']};"
-                f"height:100%; {r}'></div>"
-            )
-
-            # 2. Build the perfectly aligned label area below it
-            # Hide text details entirely if the percentage is 0 to avoid overlapping strings
-            display_style = "display:flex;" if seg['pct'] > 0 else "display:none;"
-            
-            legend += (
-                f"<div style='width:{seg['pct']:.2f}%; {display_style} flex-direction:column;"
-                f"align-items:center; text-align:center; box-sizing:border-box; padding:0 2px; overflow:hidden;'>"
-                f"<div style='display:flex;align-items:center;gap:5px;justify-content:center; white-space:nowrap;'>"
-                f"<span style='width:8px;height:8px;border-radius:50%;"
-                f"background:{seg['color']};display:inline-block;flex-shrink:0;'></span>"
-                f"<span style='font-size:13px;font-weight:500;color:#ffffff;'>"
-                f"{stage_labels[seg['s']]}</span></div>"
-                f"<span style='font-size:11px;color:#888888;white-space:nowrap;'>"
-                f"{seg['cnt']} · {seg['pct']:.0f}%</span>"
-                f"</div>"
-            )
-
-        st.markdown(
-            f"<div style='padding:8px 0 4px; width:100%;'>"
-            f"<div style='text-align: center; font-size: 30px; font-weight: bold; color: #ffffff; margin-bottom: 18px;'>Stage</div>"
-            f"<div style='width:100%;height:12px;display:flex;"
-            f"overflow:hidden;border-radius:999px;'>{bar_segs}</div>"
-            f"<div style='display:flex; width:100%; margin-top:10px;'>"
-            f"{legend}</div></div>",
-            unsafe_allow_html=True
-        )
-
-else:
-    st.info("Insufficient data to compute breadth & stage analysis.")
-
-st.markdown("---")
 
 
 # 4. IMPLEMENTATION OF NEW NORMALIZED RS METHOD AND EMA CLOUD
@@ -3044,6 +2982,68 @@ if quad_points:
  
 else:
     st.info("No industry RS data available to render the quadrant map.")
+
+st.markdown("---")
+#st.markdown(f"#### 🎯 Stage Analysis")
+
+if breadth_total > 0:
+    # ── Stage: single stacked bar ─────────────────────────────────────────
+    stage_order  = [1, 2, 3, 4]
+    stage_colors = {1: "#a9a9a9", 2: "#378ADD", 3: "#EF9F27", 4: "#FF69B4"}
+    stage_labels = {1: "S1", 2: "S2", 3: "S3", 4: "S4"}
+
+    bar_total = sum(stage_counts.get(s, 0) for s in stage_order)
+
+    if bar_total > 0:
+        segs = [
+            {"s": s, "cnt": stage_counts.get(s, 0),
+             "pct": stage_counts.get(s, 0) / bar_total * 100,
+             "color": stage_colors[s]}
+            for s in stage_order
+        ]
+
+        bar_segs = ""
+        legend = ""
+        
+        for i, seg in enumerate(segs):
+            # 1. Build the bar segment
+            r = ("border-radius:999px 0 0 999px;" if i == 0
+                 else "border-radius:0 999px 999px 0;" if i == len(segs) - 1
+                 else "")
+            bar_segs += (
+                f"<div style='width:{seg['pct']:.2f}%; background:{seg['color']};"
+                f"height:100%; {r}'></div>"
+            )
+
+            # 2. Build the perfectly aligned label area below it
+            # Hide text details entirely if the percentage is 0 to avoid overlapping strings
+            display_style = "display:flex;" if seg['pct'] > 0 else "display:none;"
+            
+            legend += (
+                f"<div style='width:{seg['pct']:.2f}%; {display_style} flex-direction:column;"
+                f"align-items:center; text-align:center; box-sizing:border-box; padding:0 2px; overflow:hidden;'>"
+                f"<div style='display:flex;align-items:center;gap:5px;justify-content:center; white-space:nowrap;'>"
+                f"<span style='width:8px;height:8px;border-radius:50%;"
+                f"background:{seg['color']};display:inline-block;flex-shrink:0;'></span>"
+                f"<span style='font-size:13px;font-weight:500;color:#ffffff;'>"
+                f"{stage_labels[seg['s']]}</span></div>"
+                f"<span style='font-size:11px;color:#888888;white-space:nowrap;'>"
+                f"{seg['cnt']} · {seg['pct']:.0f}%</span>"
+                f"</div>"
+            )
+
+        st.markdown(
+            f"<div style='padding:8px 0 4px; width:100%;'>"
+            f"<div style='text-align: center; font-size: 30px; font-weight: bold; color: #ffffff; margin-bottom: 18px;'>Stage</div>"
+            f"<div style='width:100%;height:12px;display:flex;"
+            f"overflow:hidden;border-radius:999px;'>{bar_segs}</div>"
+            f"<div style='display:flex; width:100%; margin-top:10px;'>"
+            f"{legend}</div></div>",
+            unsafe_allow_html=True
+        )
+
+else:
+    st.info("Insufficient data to compute breadth & stage analysis.")
 
 with st.spinner("Scanning pattern anomalies across known instruments..."):
     results       = timed("process_pattern_scanners",      process_pattern_scanners,      stocks_tuple, ticker_dfs_shared, benchmark_df_shared)
