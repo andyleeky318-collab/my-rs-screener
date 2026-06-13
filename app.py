@@ -4122,6 +4122,8 @@ st.write("")
 #         use_container_width=True
 #     )
 
+st.write(two_botak_hist.shape, two_botak_hist.head(2))  # remove after confirming
+
 if not two_botak_hist.empty:
     # 1. Create a temporary copy to prevent altering your original dataframe
     chart_df = two_botak_hist.copy()
