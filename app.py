@@ -4123,6 +4123,8 @@ st.write("")
 #     )
 
 st.write(two_botak_hist.shape, two_botak_hist.head(2))  # remove after confirming
+st.write(f"ticker_dfs_shared keys count: {len(ticker_dfs_shared)}")
+st.write(f"sample keys: {list(ticker_dfs_shared.keys())[:5]}")
 
 if not two_botak_hist.empty:
     # 1. Create a temporary copy to prevent altering your original dataframe
