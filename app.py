@@ -3781,7 +3781,7 @@ with st.spinner("Scanning RS New High Before Price..."):
     )
 
 # st.markdown("---")
-st.markdown(f"#### 🔵 RS NH Before Price = Opportunity ({len(rs_nh_b4_today)})")
+st.markdown(f"#### 🔵 RS NH B4 Price = Opportunity ({len(rs_nh_b4_today)})")
 
 if rs_nh_b4_today or rs_nh_b4_yest:
     html_rsnh = ""
