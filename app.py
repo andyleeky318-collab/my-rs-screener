@@ -513,7 +513,7 @@ if lime_perf_rows:
           <div style="width:40px; text-align:left; font-size:12px;
                       font-weight:600; color:#cccccc; flex-shrink:0;">{sym}</div>
           <div style="flex:1; display:flex; align-items:center;">
-            <div style="width:{bar_w}px; height:14px; background:{bar_color};
+            <div style="width:{bar_w}px; height:12px; background:{bar_color};
                         border-radius:0 3px 3px 0; min-width:2px;"></div>
           </div>
         </div>"""
