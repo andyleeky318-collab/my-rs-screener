@@ -500,7 +500,7 @@ for sym in LIME_STOCKS:
     lime_perf_rows.append({"sym": sym, "pct": pct_1d, "pct_1w": pct_1w, "pct_1m": pct_1m})
 
 if lime_perf_rows:
-    BAR_MAX_PX = 200
+    BAR_MAX_PX = 120  # was 200
 
     rows_1d = sorted(lime_perf_rows, key=lambda x: -x["pct"])
     rows_1w = sorted([r for r in lime_perf_rows if r["pct_1w"] is not None], key=lambda x: -x["pct_1w"])
@@ -510,14 +510,16 @@ if lime_perf_rows:
     max_abs_1w = max(abs(r["pct_1w"])  for r in rows_1w) or 1
     max_abs_1m = max(abs(r["pct_1m"])  for r in rows_1m) or 1
 
-    ROW_H    = 18
-    LABEL_W  = 110
-    COL_W    = LABEL_W + BAR_MAX_PX
-    GAP      = 60
-    PADDING  = 12
-    N        = max(len(rows_1d), len(rows_1w), len(rows_1m))
-    SVG_H    = N * ROW_H + PADDING * 2
-    SVG_W    = COL_W * 3 + GAP * 2 + PADDING * 2
+    ROW_H   = 14   # was 18
+    LABEL_W = 90   # was 110
+    COL_W   = LABEL_W + BAR_MAX_PX
+    GAP     = 30   # was 60
+    PADDING = 8    # was 12
+    FS      = 9    # font size
+
+    N      = max(len(rows_1d), len(rows_1w), len(rows_1m))
+    SVG_H  = N * ROW_H + PADDING * 2
+    SVG_W  = COL_W * 3 + GAP * 2 + PADDING * 2
 
     X0_1d = PADDING
     X0_1w = PADDING + COL_W + GAP
@@ -545,14 +547,13 @@ if lime_perf_rows:
     idx_1w = build_index(rows_1w, "pct_1w", max_abs_1w, X0_1w)
     idx_1m = build_index(rows_1m, "pct_1m", max_abs_1m, X0_1m)
 
-    # ── mesh lines (hidden by default, shown on click) ──────────────
     lines_html = ""
 
     for sym, (i_1d, ex_1d) in idx_1d.items():
         if sym not in idx_1w:
             continue
         i_1w, ex_1w = idx_1w[sym]
-        y1 = row_y(i_1d);  y2 = row_y(i_1w)
+        y1 = row_y(i_1d); y2 = row_y(i_1w)
         c  = color(rows_1d[i_1d]["pct"])
         lines_html += (
             f'<line class="mesh mesh-{sym}" '
@@ -565,7 +566,7 @@ if lime_perf_rows:
         if sym not in idx_1m:
             continue
         i_1m, ex_1m = idx_1m[sym]
-        y1 = row_y(i_1w);  y2 = row_y(i_1m)
+        y1 = row_y(i_1w); y2 = row_y(i_1m)
         c  = color(rows_1w[i_1w]["pct_1w"])
         lines_html += (
             f'<line class="mesh mesh-{sym}" '
@@ -574,7 +575,6 @@ if lime_perf_rows:
             f'style="transition:stroke-opacity 0.2s;pointer-events:none;"/>'
         )
 
-    # ── bars + labels (with data-sym for click targeting) ───────────
     def draw_col(rows, pct_key, max_abs, col_x):
         html = ""
         for i, r in enumerate(rows):
@@ -584,29 +584,30 @@ if lime_perf_rows:
             c     = color(pct)
             y     = row_y(i)
             label = sign(pct)
-            # invisible wide hit-area rect so click is easy
             html += (
                 f'<rect class="hitbar" data-sym="{sym}" '
-                f'x="{col_x}" y="{y - 8}" '
-                f'width="{LABEL_W + bw}" height="16" '
+                f'x="{col_x}" y="{y - 7}" '
+                f'width="{LABEL_W + bw}" height="14" '
                 f'fill="transparent" style="cursor:pointer;"/>'
             )
             html += (
                 f'<text class="lbl lbl-{sym}" data-sym="{sym}" '
-                f'x="{col_x + 58}" y="{y + 4}" '
-                f'font-size="10" font-weight="600" fill="{c}" '
+                f'x="{col_x + 46}" y="{y + 4}" '
+                f'font-size="{FS}" font-family="Source Sans Pro,sans-serif" '
+                f'font-weight="600" fill="{c}" '
                 f'text-anchor="end" style="cursor:pointer;">{label}</text>'
             )
             html += (
                 f'<text class="lbl lbl-{sym}" data-sym="{sym}" '
-                f'x="{col_x + 66}" y="{y + 4}" '
-                f'font-size="10" font-weight="600" fill="#cccccc" '
+                f'x="{col_x + 50}" y="{y + 4}" '
+                f'font-size="{FS}" font-family="Source Sans Pro,sans-serif" '
+                f'font-weight="600" fill="#cccccc" '
                 f'text-anchor="start" style="cursor:pointer;">{sym}</text>'
             )
             html += (
                 f'<rect class="bar bar-{sym}" data-sym="{sym}" '
-                f'x="{col_x + LABEL_W}" y="{y - 5}" '
-                f'width="{bw}" height="10" rx="2" fill="{c}" '
+                f'x="{col_x + LABEL_W}" y="{y - 4}" '
+                f'width="{bw}" height="8" rx="2" fill="{c}" '
                 f'style="cursor:pointer;"/>'
             )
         return html
@@ -620,16 +621,6 @@ if lime_perf_rows:
     (function() {
       let selected = null;
 
-      function setOpacity(all, meshOpacity, barOpacity) {
-        all.forEach(function(el) {
-          if (el.classList.contains('mesh')) {
-            el.style.strokeOpacity = meshOpacity;
-          } else {
-            el.style.opacity = barOpacity;
-          }
-        });
-      }
-
       function reset() {
         document.querySelectorAll('.mesh').forEach(function(el) {
           el.style.strokeOpacity = '0';
@@ -641,19 +632,15 @@ if lime_perf_rows:
       }
 
       function select(sym) {
-        // dim all bars/labels
         document.querySelectorAll('.bar, .lbl').forEach(function(el) {
           el.style.opacity = '0.15';
         });
-        // hide all mesh lines
         document.querySelectorAll('.mesh').forEach(function(el) {
           el.style.strokeOpacity = '0';
         });
-        // highlight this sym's bars/labels
         document.querySelectorAll('.bar-' + sym + ', .lbl-' + sym).forEach(function(el) {
           el.style.opacity = '1';
         });
-        // show this sym's mesh lines
         document.querySelectorAll('.mesh-' + sym).forEach(function(el) {
           el.style.strokeOpacity = '0.9';
         });
@@ -672,18 +659,18 @@ if lime_perf_rows:
     """
 
     html_out = f"""
-    <div style="background:#0e1117; border-radius:6px; overflow-x:auto;">
+    <div style="background:#0e1117; border-radius:6px;">
       <svg xmlns="http://www.w3.org/2000/svg"
-           width="100%" viewBox="0 0 {SVG_W} {SVG_H}"
-           style="display:block; min-width:{SVG_W}px;">
+           width="{SVG_W}" height="{SVG_H}"
+           style="display:block;">
         {lines_html}
         {cols_html}
       </svg>
     </div>
     {js}
     """
-    SVG_H = N * ROW_H + PADDING * 10  # was PADDING * 2
-    st.components.v1.html(html_out, height=SVG_H + 200, scrolling=False)
+
+    st.components.v1.html(html_out, height=SVG_H + 24, scrolling=False)
 else:
     st.info("No Lime Stocks performance data available.")
 
