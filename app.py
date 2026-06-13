@@ -499,53 +499,125 @@ for sym in LIME_STOCKS:
     lime_perf_rows.append({"sym": sym, "pct": pct_1d, "pct_1w": pct_1w, "pct_1m": pct_1m})
 
 if lime_perf_rows:
-    BAR_MAX_PX = 300
+    BAR_MAX_PX = 200  # per-column bar max width
 
-    # each timeframe sorted independently
     rows_1d = sorted(lime_perf_rows, key=lambda x: -x["pct"])
     rows_1w = sorted([r for r in lime_perf_rows if r["pct_1w"] is not None], key=lambda x: -x["pct_1w"])
     rows_1m = sorted([r for r in lime_perf_rows if r["pct_1m"] is not None], key=lambda x: -x["pct_1m"])
 
-    max_abs_1d = max(abs(r["pct"])    for r in rows_1d) or 1
-    max_abs_1w = max(abs(r["pct_1w"]) for r in rows_1w) or 1
-    max_abs_1m = max(abs(r["pct_1m"]) for r in rows_1m) or 1
+    max_abs_1d = max(abs(r["pct"])     for r in rows_1d) or 1
+    max_abs_1w = max(abs(r["pct_1w"])  for r in rows_1w) or 1
+    max_abs_1m = max(abs(r["pct_1m"])  for r in rows_1m) or 1
 
-    def build_col(rows, pct_key, max_abs):
+    ROW_H      = 18    # px per row
+    LABEL_W    = 110   # width for "% SYM" label area
+    COL_W      = LABEL_W + BAR_MAX_PX   # total width of one column
+    GAP        = 60    # gap between columns (mesh lines live here)
+    PADDING    = 12
+    N          = max(len(rows_1d), len(rows_1w), len(rows_1m))
+    SVG_H      = N * ROW_H + PADDING * 2
+    SVG_W      = COL_W * 3 + GAP * 2 + PADDING * 2
+
+    # x origins for the three columns (left edge of label area)
+    X0_1d = PADDING
+    X0_1w = PADDING + COL_W + GAP
+    X0_1m = PADDING + (COL_W + GAP) * 2
+
+    def row_y(i):
+        return PADDING + i * ROW_H + ROW_H // 2
+
+    def bar_end_x(col_x, pct, max_abs):
+        bar_w = int(abs(pct) / max_abs * BAR_MAX_PX)
+        return col_x + LABEL_W + bar_w
+
+    def color(pct):
+        return "#378ADD" if pct >= 0 else "#FF69B4"
+
+    def sign(pct):
+        return f"+{pct:.2f}%" if pct >= 0 else f"{pct:.2f}%"
+
+    # build a lookup: sym -> (row_index, bar_end_x) for each timeframe
+    def build_index(rows, pct_key, max_abs, col_x):
+        return {
+            r["sym"]: (i, bar_end_x(col_x, r[pct_key], max_abs))
+            for i, r in enumerate(rows)
+        }
+
+    idx_1d = build_index(rows_1d, "pct",    max_abs_1d, X0_1d)
+    idx_1w = build_index(rows_1w, "pct_1w", max_abs_1w, X0_1w)
+    idx_1m = build_index(rows_1m, "pct_1m", max_abs_1m, X0_1m)
+
+    lines_html = ""
+
+    # mesh lines: 1D bar-end → 1W bar-end
+    for sym, (i_1d, ex_1d) in idx_1d.items():
+        if sym not in idx_1w:
+            continue
+        i_1w, ex_1w = idx_1w[sym]
+        y1 = row_y(i_1d)
+        y2 = row_y(i_1w)
+        c  = color(rows_1d[i_1d]["pct"])
+        lines_html += (
+            f'<line x1="{ex_1d}" y1="{y1}" x2="{ex_1w}" y2="{y2}" '
+            f'stroke="{c}" stroke-width="0.6" stroke-opacity="0.35"/>'
+        )
+
+    # mesh lines: 1W bar-end → 1M bar-end
+    for sym, (i_1w, ex_1w) in idx_1w.items():
+        if sym not in idx_1m:
+            continue
+        i_1m, ex_1m = idx_1m[sym]
+        y1 = row_y(i_1w)
+        y2 = row_y(i_1m)
+        c  = color(rows_1w[i_1w]["pct_1w"])
+        lines_html += (
+            f'<line x1="{ex_1w}" y1="{y1}" x2="{ex_1m}" y2="{y2}" '
+            f'stroke="{c}" stroke-width="0.6" stroke-opacity="0.35"/>'
+        )
+
+    # draw column rows (labels + bars) as SVG text + rect
+    def draw_col(rows, pct_key, max_abs, col_x):
         html = ""
-        for r in rows:
-            pct       = r[pct_key]
-            sym       = r["sym"]
-            bar_w     = int(abs(pct) / max_abs * BAR_MAX_PX)
-            bar_color = "#378ADD" if pct >= 0 else "#FF69B4"
-            sign_str  = f"+{pct:.2f}%" if pct >= 0 else f"{pct:.2f}%"
-            html += f"""
-            <div style="display:flex; align-items:center; margin-bottom:2px; gap:8px;">
-              <div style="width:60px; text-align:right; font-size:11px; font-weight:600;
-                          color:{bar_color}; flex-shrink:0;">{sign_str}</div>
-              <div style="width:40px; text-align:left; font-size:11px;
-                          font-weight:600; color:#cccccc; flex-shrink:0;">{sym}</div>
-              <div style="flex:1; display:flex; align-items:center;">
-                <div style="width:{bar_w}px; height:12px; background:{bar_color};
-                            border-radius:0 3px 3px 0; min-width:2px;"></div>
-              </div>
-            </div>"""
+        for i, r in enumerate(rows):
+            pct   = r[pct_key]
+            sym   = r["sym"]
+            bw    = int(abs(pct) / max_abs * BAR_MAX_PX)
+            c     = color(pct)
+            y     = row_y(i)
+            label = sign(pct)
+            # % value (right-aligned in label area)
+            html += (
+                f'<text x="{col_x + 58}" y="{y + 4}" '
+                f'font-size="10" font-weight="600" fill="{c}" '
+                f'text-anchor="end">{label}</text>'
+            )
+            # sym (left side of bar area)
+            html += (
+                f'<text x="{col_x + 66}" y="{y + 4}" '
+                f'font-size="10" font-weight="600" fill="#cccccc" '
+                f'text-anchor="start">{sym}</text>'
+            )
+            # bar rect
+            html += (
+                f'<rect x="{col_x + LABEL_W}" y="{y - 5}" '
+                f'width="{bw}" height="10" rx="2" fill="{c}"/>'
+            )
         return html
 
-    col_1d = build_col(rows_1d, "pct",    max_abs_1d)
-    col_1w = build_col(rows_1w, "pct_1w", max_abs_1w)
-    col_1m = build_col(rows_1m, "pct_1m", max_abs_1m)
+    cols_html  = draw_col(rows_1d, "pct",    max_abs_1d, X0_1d)
+    cols_html += draw_col(rows_1w, "pct_1w", max_abs_1w, X0_1w)
+    cols_html += draw_col(rows_1m, "pct_1m", max_abs_1m, X0_1m)
 
-    st.markdown(
-        f"""<div style='background:#0e1117; padding:16px 12px; border-radius:6px;
-                        display:flex; gap:24px; align-items:flex-start;'>
-              <div style='flex:1;'>{col_1d}</div>
-              <div style='width:1px; background:#2a2a2a; align-self:stretch;'></div>
-              <div style='flex:1;'>{col_1w}</div>
-              <div style='width:1px; background:#2a2a2a; align-self:stretch;'></div>
-              <div style='flex:1;'>{col_1m}</div>
-            </div>""",
-        unsafe_allow_html=True
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="100%" viewBox="0 0 {SVG_W} {SVG_H}" '
+        f'style="background:#0e1117; border-radius:6px; display:block;">'
+        f'{lines_html}'   # lines drawn first (behind bars)
+        f'{cols_html}'
+        f'</svg>'
     )
+
+    st.markdown(svg, unsafe_allow_html=True)
 else:
     st.info("No Lime Stocks performance data available.")
 
