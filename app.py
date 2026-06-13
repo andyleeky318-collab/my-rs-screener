@@ -2508,6 +2508,8 @@ def compute_engulfing_history(stocks_list, _ticker_dfs):
         all_3x = []
 
         for ticker, df in _ticker_dfs.items():
+            if not all(col in df.columns for col in ['Open', 'High', 'Low', 'Close']):
+                continue
             if len(df) < 30:
                 continue
 
