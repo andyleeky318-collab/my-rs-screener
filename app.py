@@ -251,7 +251,7 @@ LIME_STOCKS = [
     'IPAY', 'ITB', 'JETS', 'KRE', 'KWEB', 'LIT', 'MAGS',
     'PBW', 'REMX', 'SHLD', 'SIL', 'SLX', 'SMH', 'TAN',
     'UFO', 'URA', 'USO', 'VTV', 'VUG', 'WGMI', 'XBI',
-    'XME', 'XRT', 'XTL'
+    'XME', 'XRT', 'XTL', 'SPY'
 ]
 #'KBE', 'NLR', 'CLOU', 'XHB', 'BUG', 'HACK', 'ITA', 'IAT', 'XOP', 
 
