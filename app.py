@@ -469,6 +469,7 @@ with st.sidebar:
     show_all_rs = st.toggle("Show RS < 80 Tickers", value=False)
     show_ppp_charts = st.toggle("Show PPP Charts", value=False)
     show_gap_charts = st.toggle("Show Gap Charts", value=False)
+    show_all_setups = st.toggle("Show All Setups (top-5)", value=True)
     
     if st.button("Clear Cache & Refresh"):
         st.cache_data.clear()
@@ -2311,7 +2312,7 @@ if all_data:
         sorted_cloud = sorted(item["Cloud"], key=lambda sym: rs_lookup.get(sym, 0), reverse=True)
 
         # --- SLICE LOGIC: Slices the sorted array to isolate the top 5 items only ---
-        top_5_cloud = sorted_cloud[:5]
+        top_5_cloud = sorted_cloud if show_all_setups else sorted_cloud[:5]
         
         for cloud_sym in top_5_cloud:
             # Retrieve the RS Score from our data map (default to 0 if not found)
@@ -2344,7 +2345,7 @@ if all_data:
         # ================================
         cloud_21ema_html = ""
         sorted_cloud_21ema = sorted(item["Cloud21EMA"], key=lambda sym: rs_lookup.get(sym, 0), reverse=True)
-        top_5_cloud_21ema = sorted_cloud_21ema[:5]
+        top_5_cloud_21ema = sorted_cloud_21ema if show_all_setups else sorted_cloud_21ema[:5]
 
         for cloud_sym in top_5_cloud_21ema:
             cloud_rs = rs_lookup.get(cloud_sym, 0)
@@ -2377,7 +2378,7 @@ if all_data:
         # ================================
         cloud_wick_html = ""
         sorted_cloud_wick = sorted(item["CloudWick"], key=lambda sym: rs_lookup.get(sym, 0), reverse=True)
-        top_5_cloud_wick = sorted_cloud_wick[:5]
+        top_5_cloud_wick = sorted_cloud_wick if show_all_setups else sorted_cloud_wick[:5]
 
         for cloud_sym in top_5_cloud_wick:
             cloud_rs = rs_lookup.get(cloud_sym, 0)
@@ -2409,7 +2410,7 @@ if all_data:
         # ================================
         ma50_bounce_html = ""
         sorted_ma50_bounce = sorted(item["MA50Bounce"], key=lambda sym: rs_lookup.get(sym, 0), reverse=True)
-        top_5_ma50_bounce = sorted_ma50_bounce[:5]
+        top_5_ma50_bounce = sorted_ma50_bounce if show_all_setups else sorted_ma50_bounce[:5]
 
         for cloud_sym in top_5_ma50_bounce:
             cloud_rs = rs_lookup.get(cloud_sym, 0)
