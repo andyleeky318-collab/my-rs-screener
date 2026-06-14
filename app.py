@@ -4509,6 +4509,102 @@ with st.spinner("Computing Setup Rank history..."):
         tuple(sorted(global_setup_tickers)), global_setup_ticker_groups
     )
 
+# ── DEBUG: Setup Rank "today" bar vs live avgRank ───────────────────────
+with st.sidebar.expander("🐛 Setup Rank — Today Bar Debug", expanded=False):
+
+    st.markdown(f"**global_setup_count:** {global_setup_count}")
+    st.markdown(f"**rank_sum (live):** {rank_sum if 'rank_sum' in dir() else 'N/A'}")
+    st.markdown(f"**setup_avg_rank (live):** {setup_avg_rank if 'setup_avg_rank' in dir() else 'N/A'}")
+
+    if not setup_avgrank_hist.empty:
+        st.markdown(f"**History fn last date:** {setup_avgrank_hist['Date'].iloc[-1]}")
+        st.markdown(f"**History fn last Avg Rank:** {setup_avgrank_hist['Avg Rank'].iloc[-1]}")
+    else:
+        st.markdown("**History fn returned empty DataFrame**")
+
+    # Rebuild wide_df exactly as compute_setup_avgrank_history does, for today only
+    bench_close_dbg = None
+    for ticker, df in ticker_dfs_shared.items():
+        if ticker == benchmark:
+            bench_close_dbg = df['Close']
+            break
+
+    industry_tickers_map_dbg = {
+        item["Industry"]: [r["Ticker"] for _, r in item["Tickers"].iterrows()]
+        for item in all_data
+    }
+
+    top_n_dbg = 5
+    industry_grouprs_today = {}
+
+    for industry, tickers_in_group in industry_tickers_map_dbg.items():
+        scores = []
+        for sym in tickers_in_group:
+            df = ticker_dfs_shared.get(sym)
+            if df is None or len(df) < 95:
+                continue
+            aligned, bench_aligned = df['Close'].align(bench_close_dbg, join='inner')
+            if len(aligned) < 90:
+                continue
+            rs_ratio = aligned / bench_aligned
+            hh = rs_ratio.rolling(90).max().iloc[-1]
+            ll = rs_ratio.rolling(90).min().iloc[-1]
+            cur = rs_ratio.iloc[-1]
+            if pd.isna(hh) or pd.isna(ll) or hh == ll:
+                score = 0
+            else:
+                score = int(((99-1)*(cur-ll)/(hh-ll)) + 1)
+            scores.append(score)
+        top5 = sorted(scores, reverse=True)[:top_n_dbg]
+        industry_grouprs_today[industry] = sum(top5)/len(top5) if top5 else 0
+
+    # Rank industries by this recomputed today GroupRS (history-fn style)
+    grouprs_series = pd.Series(industry_grouprs_today)
+    day_ranks_dbg = grouprs_series.rank(ascending=False, method='min').astype(int)
+
+    # Live ranks
+    industry_rank_map_live = dict(zip(df_main['Industry'], df_main['Current Rank']))
+
+    compare_rows = []
+    for industry in industry_tickers_map_dbg.keys():
+        compare_rows.append({
+            "Industry": industry,
+            "HistFn GroupRS (today)": round(industry_grouprs_today.get(industry, 0), 2),
+            "HistFn Rank (today)": int(day_ranks_dbg.get(industry, -1)),
+            "Live Group RS": round(float(industry_rank_map_live and df_main.set_index('Industry')['Group RS'].get(industry, np.nan)), 2) if industry in industry_rank_map_live else None,
+            "Live Current Rank": industry_rank_map_live.get(industry, None),
+        })
+    compare_df = pd.DataFrame(compare_rows).sort_values("Live Current Rank")
+    st.dataframe(compare_df, use_container_width=True, hide_index=True)
+
+    # Now recompute rank_sum using HistFn ranks for the SAME global_setup_tickers
+    rank_sum_histfn = 0
+    setup_count_histfn = 0
+    ticker_rows = []
+    for sym in sorted(global_setup_tickers):
+        industries = global_setup_ticker_groups.get(sym, [])
+        live_ranks = [industry_rank_map_live.get(ind) for ind in industries if ind in industry_rank_map_live]
+        hist_ranks = [int(day_ranks_dbg.get(ind, -1)) for ind in industries if ind in day_ranks_dbg.index]
+
+        live_min = min([r for r in live_ranks if r is not None], default=0)
+        hist_min = min([r for r in hist_ranks if r != -1], default=0)
+
+        rank_sum_histfn += hist_min
+        setup_count_histfn += 1
+
+        ticker_rows.append({
+            "Ticker": sym,
+            "Industries": ", ".join(industries),
+            "Live Min Rank": live_min,
+            "HistFn Min Rank": hist_min,
+        })
+
+    avg_rank_histfn_recalc = round(rank_sum_histfn / setup_count_histfn, 1) if setup_count_histfn else 0
+
+    st.markdown(f"**Recomputed avgRank using HistFn-style ranks for same tickers:** {avg_rank_histfn_recalc}")
+    st.dataframe(pd.DataFrame(ticker_rows), use_container_width=True, hide_index=True)
+# ─────────────────────────────────────────────────────────────────────
+
 st.markdown(f"#### 📐 Setup Rank")
 
 if not setup_avgrank_hist.empty:
