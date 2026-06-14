@@ -1069,12 +1069,21 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
                 is_pine_7_valid
             )
 
-            if ticker == "AMD" and _latest_bar_dropped:
+            if ticker == "CDNS" or ticker == "COPX" and _latest_bar_dropped:
                 st.sidebar.warning("⚠️ DEBUGGING FOR AMD ACTIVATED")
                 
                 # Check metrics availability
                 debug_info = {
                     "Ticker Symbol": ticker,
+                    "cond1": cond1,
+                    "cond2": cond2,
+                    "cond3": cond3,
+                    "cond4": cond4,
+                    "pbb_cond2": pbb_cond2,
+                    "pbb_cond1": pbb_cond1,
+                    "pbb_cond3": pbb_cond3,
+                    "ma50Rising": ma50Rising,
+                    "is_pine_7_valid": is_pine_7_valid,
                     "Current Cached Price": round(current_price, 2) if 'current_price' in locals() else "N/A",
                     "Total Raw RS Score": total_score,
                     "Has Data Available": ticker in close_data.columns,
