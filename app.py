@@ -2842,18 +2842,14 @@ def compute_setup_avgrank_history(all_data_snapshot, ticker_dfs_all, benchmark_d
 
         bench_close = benchmark_df_all['Close']
 
-        # industry -> list of tickers (from INDUSTRIES, via all_data_snapshot's Industry names)
         industry_tickers_map = {
             item["Industry"]: list(INDUSTRIES.get(item["Industry"], []))
             for item in all_data_snapshot
         }
         all_industries = list(industry_tickers_map.keys())
 
-        top_n = 5  # mirror sidebar default
+        top_n = 5
 
-        # For each industry, compute the FULL daily Group RS series
-        # using the SAME normalization formula as get_rs_and_cloud_data_cached:
-        #   total_score = int(((99-1)*(rs-ll)/(hh-ll)) + 1)
         industry_daily_grouprs = {}
 
         for industry in all_industries:
@@ -2874,7 +2870,6 @@ def compute_setup_avgrank_history(all_data_snapshot, ticker_dfs_all, benchmark_d
                 ll = rs_ratio.rolling(window=rs_length).min()
                 denom = hh - ll
 
-                # Match live formula exactly: int(((99-1)*(rs-ll)/(hh-ll)) + 1)
                 raw = ((99 - 1) * (rs_ratio - ll) / denom.replace(0, np.nan)) + 1
                 score = raw.apply(lambda x: int(x) if pd.notna(x) else 0)
                 ticker_scores_list.append(score)
@@ -2895,7 +2890,6 @@ def compute_setup_avgrank_history(all_data_snapshot, ticker_dfs_all, benchmark_d
         if not industry_daily_grouprs:
             return pd.DataFrame()
 
-        # Wide DataFrame: columns = industries, rows = dates
         wide_df = pd.DataFrame(industry_daily_grouprs).dropna(how='all')
 
         full_timeline = bench_close.index
@@ -2917,10 +2911,8 @@ def compute_setup_avgrank_history(all_data_snapshot, ticker_dfs_all, benchmark_d
             if day_scores.empty:
                 continue
 
-            # Rank: highest Group RS = rank 1 (matches df_main['Current Rank'] logic)
             day_ranks = day_scores.rank(ascending=False, method='min').astype(int)
 
-            # Fixed set of setup tickers (same as global_setup_tickers, frozen to "today")
             rank_sum = 0
             setup_count = 0
             for sym in setup_tickers:
@@ -2935,6 +2927,7 @@ def compute_setup_avgrank_history(all_data_snapshot, ticker_dfs_all, benchmark_d
             records.append({
                 "Date": target_date.strftime("%Y-%m-%d"),
                 "Avg Rank": avg_rank,
+                "Setup Count": setup_count,
             })
 
         return pd.DataFrame(records)
@@ -4565,27 +4558,42 @@ with st.spinner("Computing Setup Rank history..."):
 
 st.markdown(f"#### 📐 Setup Quality")
 
+# if not setup_avgrank_hist.empty:
+#     chart_df_rank = setup_avgrank_hist.copy()
+#     today_rank = chart_df_rank["Avg Rank"].iloc[-1]
+#     min_rank = chart_df_rank["Avg Rank"].min()
+
+#     if today_rank == min_rank:
+#         chart_df_rank["Bar_Color"] = "#29B5E8"
+#         chart_df_rank.iloc[-1, chart_df_rank.columns.get_loc("Bar_Color")] = "#FF4B4B"
+#     else:
+#         chart_df_rank["Bar_Color"] = "#29B5E8"
+
+#     st.bar_chart(
+#         data=chart_df_rank,
+#         x="Date",
+#         y="Avg Rank",
+#         color="Bar_Color",
+#         use_container_width=True
+#     )
+# else:
+#     st.info("Insufficient data to compute Setup Avg Rank history.")
+
 if not setup_avgrank_hist.empty:
     chart_df_rank = setup_avgrank_hist.copy()
-    today_rank = chart_df_rank["Avg Rank"].iloc[-1]
-    min_rank = chart_df_rank["Avg Rank"].min()
+    # Invert: higher = better quality (101 - rank), so a rank of 1 becomes 100
+    chart_df_rank["Quality Score"] = 101 - chart_df_rank["Avg Rank"]
 
-    if today_rank == min_rank:
-        chart_df_rank["Bar_Color"] = "#29B5E8"
-        chart_df_rank.iloc[-1, chart_df_rank.columns.get_loc("Bar_Color")] = "#FF4B4B"
-    else:
-        chart_df_rank["Bar_Color"] = "#29B5E8"
-
-    st.bar_chart(
+    st.line_chart(
         data=chart_df_rank,
         x="Date",
-        y="Avg Rank",
-        color="Bar_Color",
+        y=["Quality Score", "Setup Count"],
+        color=["#29B5E8", "#FF4B4B"],
         use_container_width=True
     )
 else:
     st.info("Insufficient data to compute Setup Avg Rank history.")
-  
+
 # ── Timing Summary ───────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown("#### ⏱ Test Time")
