@@ -3313,27 +3313,27 @@ st.write("")
 # )
 # st.markdown(extra_header_html, unsafe_allow_html=True)
 
-st.markdown(f"#### 🌟 ATH , but fail Minervini criteria ({len(extra_52wk_high_symbols)})")
-# Render if there are either active items OR removed items to show
-if extra_52wk_high_symbols or extra_52wk_high_removed:
-    extra_html = ""
+# st.markdown(f"#### 🌟 ATH , but fail Minervini criteria ({len(extra_52wk_high_symbols)})")
+# # Render if there are either active items OR removed items to show
+# if extra_52wk_high_symbols or extra_52wk_high_removed:
+#     extra_html = ""
     
-    # 1. Render Active Symbols (Sorted alphabetically)
-    for sym, is_new_addition_52w in sorted(extra_52wk_high_symbols, key=lambda x: x[0]):
-        if is_new_addition_52w:
-            # Uses your exact native gold badge class for brand new additions today
-            extra_html += f'<div class="ticker-badge new-pattern-badge">{sym}</div>'
-        else:
-            # Standard dark badge layout for stocks that were already on this list yesterday
-            extra_html += f'<div class="ticker-badge">{sym}</div>'
+#     # 1. Render Active Symbols (Sorted alphabetically)
+#     for sym, is_new_addition_52w in sorted(extra_52wk_high_symbols, key=lambda x: x[0]):
+#         if is_new_addition_52w:
+#             # Uses your exact native gold badge class for brand new additions today
+#             extra_html += f'<div class="ticker-badge new-pattern-badge">{sym}</div>'
+#         else:
+#             # Standard dark badge layout for stocks that were already on this list yesterday
+#             extra_html += f'<div class="ticker-badge">{sym}</div>'
             
-    # 2. Append Removed Symbols (Sorted alphabetically with the removed badge style)
-    for sym in sorted(extra_52wk_high_removed):
-        extra_html += f'<div class="ticker-badge removed-badge">{sym}</div>'
+#     # 2. Append Removed Symbols (Sorted alphabetically with the removed badge style)
+#     for sym in sorted(extra_52wk_high_removed):
+#         extra_html += f'<div class="ticker-badge removed-badge">{sym}</div>'
         
-    st.markdown(extra_html, unsafe_allow_html=True)
-else:
-    st.info("No active setups discovered.")
+#     st.markdown(extra_html, unsafe_allow_html=True)
+# else:
+#     st.info("No active setups discovered.")
 
 #st.markdown("---")
 st.write("")
