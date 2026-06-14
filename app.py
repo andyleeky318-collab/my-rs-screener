@@ -2932,11 +2932,9 @@ def compute_setup_avgrank_history(all_data_snapshot, ticker_dfs_all, benchmark_d
                 setup_count += 1
 
             avg_rank = round(rank_sum / setup_count, 1) if setup_count > 0 else 0
-            avg_rank_display = round(101 - avg_rank, 1) if avg_rank > 0 else 0
             records.append({
                 "Date": target_date.strftime("%Y-%m-%d"),
-                "Avg Rank": avg_rank_display,
-                "Setup Count": setup_count,
+                "Avg Rank": avg_rank,
             })
 
         return pd.DataFrame(records)
@@ -4547,64 +4545,27 @@ with st.spinner("Computing Setup Rank history..."):
 
 st.markdown(f"#### 📐 Setup Quality")
 
-# if not setup_avgrank_hist.empty:
-#     chart_df_rank = setup_avgrank_hist.copy()
-#     today_rank = chart_df_rank["Avg Rank"].iloc[-1]
-#     min_rank = chart_df_rank["Avg Rank"].min()
-
-#     if today_rank == min_rank:
-#         chart_df_rank["Bar_Color"] = "#29B5E8"
-#         chart_df_rank.iloc[-1, chart_df_rank.columns.get_loc("Bar_Color")] = "#FF4B4B"
-#     else:
-#         chart_df_rank["Bar_Color"] = "#29B5E8"
-
-#     st.bar_chart(
-#         data=chart_df_rank,
-#         x="Date",
-#         y="Avg Rank",
-#         color="Bar_Color",
-#         use_container_width=True
-#     )
-# else:
-#     st.info("Insufficient data to compute Setup Avg Rank history.")
-
 if not setup_avgrank_hist.empty:
     chart_df_rank = setup_avgrank_hist.copy()
+    today_rank = chart_df_rank["Avg Rank"].iloc[-1]
+    min_rank = chart_df_rank["Avg Rank"].min()
 
-    fig_rank = go.Figure()
+    if today_rank == min_rank:
+        chart_df_rank["Bar_Color"] = "#29B5E8"
+        chart_df_rank.iloc[-1, chart_df_rank.columns.get_loc("Bar_Color")] = "#FF4B4B"
+    else:
+        chart_df_rank["Bar_Color"] = "#29B5E8"
 
-    fig_rank.add_trace(go.Bar(
-        x=chart_df_rank["Date"],
-        y=chart_df_rank["Avg Rank"],
-        name="Setup Quality (101 - avgRank)",
-        marker_color="#29B5E8",
-        yaxis="y1",
-    ))
-
-    fig_rank.add_trace(go.Scatter(
-        x=chart_df_rank["Date"],
-        y=chart_df_rank["Setup Count"],
-        name="Setup Count",
-        mode="lines+markers",
-        line=dict(color="#FFA500", width=2),
-        yaxis="y2",
-    ))
-
-    fig_rank.update_layout(
-        yaxis=dict(title="Setup Quality", side="left"),
-        yaxis2=dict(title="Setup Count", side="right", overlaying="y", showgrid=False),
-        plot_bgcolor="rgba(20,22,30,1)",
-        paper_bgcolor="rgba(13,17,23,0)",
-        font=dict(color="#cccccc"),
-        legend=dict(orientation="h", y=1.1),
-        height=400,
-        margin=dict(l=40, r=40, t=40, b=40),
+    st.bar_chart(
+        data=chart_df_rank,
+        x="Date",
+        y="Avg Rank",
+        color="Bar_Color",
+        use_container_width=True
     )
-
-    st.plotly_chart(fig_rank, use_container_width=True)
 else:
     st.info("Insufficient data to compute Setup Avg Rank history.")
-
+  
 # ── Timing Summary ───────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown("#### ⏱ Test Time")
