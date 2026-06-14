@@ -2221,6 +2221,30 @@ if all_data:
     else:
         setup_rank_str = ''
 
+    # ── DEBUG: avgRank calculation breakdown ─────────────────────────────
+    if global_setup_count > 0 and 'df_main' in dir():
+        with st.sidebar.expander("🐛 avgRank Debug", expanded=False):
+            debug_rows = []
+            for sym in sorted(global_setup_tickers):
+                industries = global_setup_ticker_groups.get(sym, [])
+                ranks = [(ind, industry_rank_map.get(ind)) for ind in industries if ind in industry_rank_map]
+                ranks_only = [r for _, r in ranks]
+                best_rank = min(ranks_only) if ranks_only else 0
+                debug_rows.append({
+                    "Ticker": sym,
+                    "Industries (rank)": ", ".join(f"{ind}({r})" for ind, r in ranks),
+                    "Min Rank Used": best_rank
+                })
+
+            st.dataframe(pd.DataFrame(debug_rows), use_container_width=True, hide_index=True)
+
+            st.markdown(
+                f"**Sum of min ranks** = {rank_sum}  \n"
+                f"**Setup count** = {global_setup_count}  \n"
+                f"**avgRank** = {rank_sum} / {global_setup_count} = **{setup_avg_rank}**"
+            )
+    # ─────────────────────────────────────────────────────────────────────
+
     st.markdown(
         f'<div style="text-align: right; font-size: 20px; color: #888888; margin-bottom: 4px; font-family: monospace;">'
         f'Setup = <span style="color: #4ecdc4; font-weight: bold;">{global_setup_count}</span>'
