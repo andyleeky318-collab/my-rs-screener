@@ -460,33 +460,6 @@ def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
     except Exception as e:
         return {}, {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}, 0
 
-@st.cache_data(ttl=3600)
-def download_all_industry_stocks_data(stocks_tuple):
-    benchmark_symbol = "^GSPC"
-    all_symbols = list(stocks_tuple) + [benchmark_symbol]
-    raw_data = yf.download(all_symbols, period="9mo", interval="1d", progress=False, auto_adjust=True)
-
-    ticker_dfs = {}
-    for ticker in stocks_tuple:
-        try:
-            df = pd.DataFrame({
-                'Open':   raw_data['Open'][ticker],
-                'High':   raw_data['High'][ticker],
-                'Low':    raw_data['Low'][ticker],
-                'Close':  raw_data['Close'][ticker],
-                'Volume': raw_data['Volume'][ticker]
-            }).dropna()
-            if not df.empty:
-                ticker_dfs[ticker] = df
-        except Exception:
-            continue
-
-    benchmark_df = pd.DataFrame({
-        'Close': raw_data['Close'][benchmark_symbol]
-    }).dropna()
-
-    return ticker_dfs, benchmark_df
-
 # 3. Sidebar Inputs
 with st.sidebar:
     st.header("Settings")
@@ -4549,10 +4522,42 @@ for tickers in INDUSTRIES.values():
     all_industry_tickers.update(tickers)
 all_industry_tickers_tuple = tuple(sorted(all_industry_tickers))
 
+@st.cache_data(ttl=3600)
+def download_all_industry_stocks_data(stocks_tuple, known_ticker_dfs):
+    benchmark_symbol = "^GSPC"
+    missing = [t for t in stocks_tuple if t not in known_ticker_dfs]
+
+    ticker_dfs = {t: known_ticker_dfs[t] for t in stocks_tuple if t in known_ticker_dfs}
+    benchmark_df = pd.DataFrame({'Close': known_ticker_dfs[benchmark_symbol]['Close']}) \
+        if benchmark_symbol in known_ticker_dfs else None
+
+    if missing or benchmark_df is None:
+        all_symbols = missing + ([benchmark_symbol] if benchmark_df is None else [])
+        raw_data = yf.download(all_symbols, period="2y", interval="1d", progress=False, auto_adjust=True)
+
+        for ticker in missing:
+            try:
+                df = pd.DataFrame({
+                    'Open':   raw_data['Open'][ticker],
+                    'High':   raw_data['High'][ticker],
+                    'Low':    raw_data['Low'][ticker],
+                    'Close':  raw_data['Close'][ticker],
+                    'Volume': raw_data['Volume'][ticker]
+                }).dropna()
+                if not df.empty:
+                    ticker_dfs[ticker] = df
+            except Exception:
+                continue
+
+        if benchmark_df is None:
+            benchmark_df = pd.DataFrame({'Close': raw_data['Close'][benchmark_symbol]}).dropna()
+
+    return ticker_dfs, benchmark_df
+
 ticker_dfs_all_industries, benchmark_df_all_industries = timed(
     "download_all_industry_stocks_data",
     download_all_industry_stocks_data,
-    all_industry_tickers_tuple
+    all_industry_tickers_tuple, ticker_dfs_shared
 )
 
 with st.spinner("Computing Setup Rank history..."):
