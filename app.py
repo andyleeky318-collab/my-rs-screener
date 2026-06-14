@@ -460,6 +460,33 @@ def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
     except Exception as e:
         return {}, {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}, 0
 
+@st.cache_data(ttl=3600)
+def download_all_industry_stocks_data(stocks_tuple):
+    benchmark_symbol = "^GSPC"
+    all_symbols = list(stocks_tuple) + [benchmark_symbol]
+    raw_data = yf.download(all_symbols, period="2y", interval="1d", progress=False, auto_adjust=True)
+
+    ticker_dfs = {}
+    for ticker in stocks_tuple:
+        try:
+            df = pd.DataFrame({
+                'Open':   raw_data['Open'][ticker],
+                'High':   raw_data['High'][ticker],
+                'Low':    raw_data['Low'][ticker],
+                'Close':  raw_data['Close'][ticker],
+                'Volume': raw_data['Volume'][ticker]
+            }).dropna()
+            if not df.empty:
+                ticker_dfs[ticker] = df
+        except Exception:
+            continue
+
+    benchmark_df = pd.DataFrame({
+        'Close': raw_data['Close'][benchmark_symbol]
+    }).dropna()
+
+    return ticker_dfs, benchmark_df
+
 # 3. Sidebar Inputs
 with st.sidebar:
     st.header("Settings")
@@ -2808,25 +2835,19 @@ def compute_historical_know_counts(stocks_list, _ticker_dfs):
         return pd.DataFrame()
 
 @st.cache_data(ttl=3600)
-def compute_setup_avgrank_history(stocks_list, _ticker_dfs, all_data_snapshot, benchmark_ticker, rs_length, setup_tickers, ticker_industry_groups):
+def compute_setup_avgrank_history(all_data_snapshot, ticker_dfs_all, benchmark_df_all, rs_length, setup_tickers, ticker_industry_groups):
     try:
-        if not _ticker_dfs or not all_data_snapshot or not setup_tickers:
+        if not ticker_dfs_all or not all_data_snapshot or not setup_tickers:
             return pd.DataFrame()
 
-        # Build industry -> tickers map (same universe as live calc)
+        bench_close = benchmark_df_all['Close']
+
+        # industry -> list of tickers (from INDUSTRIES, via all_data_snapshot's Industry names)
         industry_tickers_map = {
-            item["Industry"]: [r["Ticker"] for _, r in item["Tickers"].iterrows()]
+            item["Industry"]: list(INDUSTRIES.get(item["Industry"], []))
             for item in all_data_snapshot
         }
         all_industries = list(industry_tickers_map.keys())
-
-        bench_close = None
-        for ticker, df in _ticker_dfs.items():
-            if ticker == benchmark_ticker:
-                bench_close = df['Close']
-                break
-        if bench_close is None:
-            return pd.DataFrame()
 
         top_n = 5  # mirror sidebar default
 
@@ -2840,7 +2861,7 @@ def compute_setup_avgrank_history(stocks_list, _ticker_dfs, all_data_snapshot, b
             ticker_scores_list = []
 
             for sym in tickers_in_group:
-                df = _ticker_dfs.get(sym)
+                df = ticker_dfs_all.get(sym)
                 if df is None or len(df) < rs_length + 5:
                     continue
 
@@ -2877,8 +2898,7 @@ def compute_setup_avgrank_history(stocks_list, _ticker_dfs, all_data_snapshot, b
         # Wide DataFrame: columns = industries, rows = dates
         wide_df = pd.DataFrame(industry_daily_grouprs).dropna(how='all')
 
-        any_ticker = next(iter(_ticker_dfs))
-        full_timeline = _ticker_dfs[any_ticker].index
+        full_timeline = bench_close.index
         days_to_compute = min(60, len(wide_df))
 
         records = []
@@ -4501,11 +4521,25 @@ else:
 
 st.markdown("---")
 
+stocks_tuple = tuple(KNOWN_STOCKS)
+
+# Union of every ticker referenced across all industries (for Setup Rank history)
+all_industry_tickers = set()
+for tickers in INDUSTRIES.values():
+    all_industry_tickers.update(tickers)
+all_industry_tickers_tuple = tuple(sorted(all_industry_tickers))
+
+ticker_dfs_all_industries, benchmark_df_all_industries = timed(
+    "download_all_industry_stocks_data",
+    download_all_industry_stocks_data,
+    all_industry_tickers_tuple
+)
+
 with st.spinner("Computing Setup Rank history..."):
     setup_avgrank_hist = timed(
         "compute_setup_avgrank_history",
         compute_setup_avgrank_history,
-        stocks_tuple, ticker_dfs_shared, all_data, benchmark, 90,
+        all_data, ticker_dfs_all_industries, benchmark_df_all_industries, 90,
         tuple(sorted(global_setup_tickers)), global_setup_ticker_groups
     )
 
