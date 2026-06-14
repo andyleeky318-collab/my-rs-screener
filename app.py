@@ -2249,27 +2249,27 @@ if all_data:
         setup_rank_str = ''
 
     # ── DEBUG: avgRank calculation breakdown ─────────────────────────────
-    if global_setup_count > 0 and 'df_main' in dir():
-        with st.sidebar.expander("🐛 avgRank Debug", expanded=False):
-            debug_rows = []
-            for sym in sorted(global_setup_tickers):
-                industries = global_setup_ticker_groups.get(sym, [])
-                ranks = [(ind, industry_rank_map.get(ind)) for ind in industries if ind in industry_rank_map]
-                ranks_only = [r for _, r in ranks]
-                best_rank = min(ranks_only) if ranks_only else 0
-                debug_rows.append({
-                    "Ticker": sym,
-                    "Industries (rank)": ", ".join(f"{ind}({r})" for ind, r in ranks),
-                    "Min Rank Used": best_rank
-                })
+    # if global_setup_count > 0 and 'df_main' in dir():
+    #     with st.sidebar.expander("🐛 avgRank Debug", expanded=False):
+    #         debug_rows = []
+    #         for sym in sorted(global_setup_tickers):
+    #             industries = global_setup_ticker_groups.get(sym, [])
+    #             ranks = [(ind, industry_rank_map.get(ind)) for ind in industries if ind in industry_rank_map]
+    #             ranks_only = [r for _, r in ranks]
+    #             best_rank = min(ranks_only) if ranks_only else 0
+    #             debug_rows.append({
+    #                 "Ticker": sym,
+    #                 "Industries (rank)": ", ".join(f"{ind}({r})" for ind, r in ranks),
+    #                 "Min Rank Used": best_rank
+    #             })
 
-            st.dataframe(pd.DataFrame(debug_rows), use_container_width=True, hide_index=True)
+    #         st.dataframe(pd.DataFrame(debug_rows), use_container_width=True, hide_index=True)
 
-            st.markdown(
-                f"**Sum of min ranks** = {rank_sum}  \n"
-                f"**Setup count** = {global_setup_count}  \n"
-                f"**avgRank** = {rank_sum} / {global_setup_count} = **{setup_avg_rank}**"
-            )
+    #         st.markdown(
+    #             f"**Sum of min ranks** = {rank_sum}  \n"
+    #             f"**Setup count** = {global_setup_count}  \n"
+    #             f"**avgRank** = {rank_sum} / {global_setup_count} = **{setup_avg_rank}**"
+    #         )
     # ─────────────────────────────────────────────────────────────────────
 
     st.markdown(
@@ -2932,9 +2932,11 @@ def compute_setup_avgrank_history(all_data_snapshot, ticker_dfs_all, benchmark_d
                 setup_count += 1
 
             avg_rank = round(rank_sum / setup_count, 1) if setup_count > 0 else 0
+            avg_rank_display = round(101 - avg_rank, 1) if avg_rank > 0 else 0
             records.append({
                 "Date": target_date.strftime("%Y-%m-%d"),
-                "Avg Rank": avg_rank,
+                "Avg Rank": avg_rank_display,
+                "Setup Count": setup_count,
             })
 
         return pd.DataFrame(records)
@@ -4543,125 +4545,66 @@ with st.spinner("Computing Setup Rank history..."):
         tuple(sorted(global_setup_tickers)), global_setup_ticker_groups
     )
 
-# ── DEBUG: Setup Rank "today" bar vs live avgRank ───────────────────────
-with st.sidebar.expander("🐛 Setup Rank — Today Bar Debug", expanded=False):
+st.markdown(f"#### 📐 Setup Quality")
 
-    st.markdown(f"**global_setup_count:** {global_setup_count}")
-    st.markdown(f"**rank_sum (live):** {rank_sum if 'rank_sum' in dir() else 'N/A'}")
-    st.markdown(f"**setup_avg_rank (live):** {setup_avg_rank if 'setup_avg_rank' in dir() else 'N/A'}")
+# if not setup_avgrank_hist.empty:
+#     chart_df_rank = setup_avgrank_hist.copy()
+#     today_rank = chart_df_rank["Avg Rank"].iloc[-1]
+#     min_rank = chart_df_rank["Avg Rank"].min()
 
-    if not setup_avgrank_hist.empty:
-        st.markdown(f"**History fn last date:** {setup_avgrank_hist['Date'].iloc[-1]}")
-        st.markdown(f"**History fn last Avg Rank:** {setup_avgrank_hist['Avg Rank'].iloc[-1]}")
-    else:
-        st.markdown("**History fn returned empty DataFrame**")
+#     if today_rank == min_rank:
+#         chart_df_rank["Bar_Color"] = "#29B5E8"
+#         chart_df_rank.iloc[-1, chart_df_rank.columns.get_loc("Bar_Color")] = "#FF4B4B"
+#     else:
+#         chart_df_rank["Bar_Color"] = "#29B5E8"
 
-    # Rebuild wide_df exactly as compute_setup_avgrank_history does, for today only
-    bench_close_dbg = None
-    for ticker, df in ticker_dfs_shared.items():
-        if ticker == benchmark:
-            bench_close_dbg = df['Close']
-            break
-
-    industry_tickers_map_dbg = {
-        item["Industry"]: [r["Ticker"] for _, r in item["Tickers"].iterrows()]
-        for item in all_data
-    }
-
-    top_n_dbg = 5
-    industry_grouprs_today = {}
-
-    for industry, tickers_in_group in industry_tickers_map_dbg.items():
-        scores = []
-        for sym in tickers_in_group:
-            df = ticker_dfs_shared.get(sym)
-            if df is None or len(df) < 95:
-                continue
-            aligned, bench_aligned = df['Close'].align(bench_close_dbg, join='inner')
-            if len(aligned) < 90:
-                continue
-            rs_ratio = aligned / bench_aligned
-            hh = rs_ratio.rolling(90).max().iloc[-1]
-            ll = rs_ratio.rolling(90).min().iloc[-1]
-            cur = rs_ratio.iloc[-1]
-            if pd.isna(hh) or pd.isna(ll) or hh == ll:
-                score = 0
-            else:
-                score = int(((99-1)*(cur-ll)/(hh-ll)) + 1)
-            scores.append(score)
-        top5 = sorted(scores, reverse=True)[:top_n_dbg]
-        industry_grouprs_today[industry] = sum(top5)/len(top5) if top5 else 0
-
-    # Rank industries by this recomputed today GroupRS (history-fn style)
-    grouprs_series = pd.Series(industry_grouprs_today)
-    day_ranks_dbg = grouprs_series.rank(ascending=False, method='min').astype(int)
-
-    # Live ranks
-    industry_rank_map_live = dict(zip(df_main['Industry'], df_main['Current Rank']))
-
-    compare_rows = []
-    for industry in industry_tickers_map_dbg.keys():
-        compare_rows.append({
-            "Industry": industry,
-            "HistFn GroupRS (today)": round(industry_grouprs_today.get(industry, 0), 2),
-            "HistFn Rank (today)": int(day_ranks_dbg.get(industry, -1)),
-            "Live Group RS": round(float(industry_rank_map_live and df_main.set_index('Industry')['Group RS'].get(industry, np.nan)), 2) if industry in industry_rank_map_live else None,
-            "Live Current Rank": industry_rank_map_live.get(industry, None),
-        })
-    compare_df = pd.DataFrame(compare_rows).sort_values("Live Current Rank")
-    st.dataframe(compare_df, use_container_width=True, hide_index=True)
-
-    # Now recompute rank_sum using HistFn ranks for the SAME global_setup_tickers
-    rank_sum_histfn = 0
-    setup_count_histfn = 0
-    ticker_rows = []
-    for sym in sorted(global_setup_tickers):
-        industries = global_setup_ticker_groups.get(sym, [])
-        live_ranks = [industry_rank_map_live.get(ind) for ind in industries if ind in industry_rank_map_live]
-        hist_ranks = [int(day_ranks_dbg.get(ind, -1)) for ind in industries if ind in day_ranks_dbg.index]
-
-        live_min = min([r for r in live_ranks if r is not None], default=0)
-        hist_min = min([r for r in hist_ranks if r != -1], default=0)
-
-        rank_sum_histfn += hist_min
-        setup_count_histfn += 1
-
-        ticker_rows.append({
-            "Ticker": sym,
-            "Industries": ", ".join(industries),
-            "Live Min Rank": live_min,
-            "HistFn Min Rank": hist_min,
-        })
-
-    avg_rank_histfn_recalc = round(rank_sum_histfn / setup_count_histfn, 1) if setup_count_histfn else 0
-
-    st.markdown(f"**Recomputed avgRank using HistFn-style ranks for same tickers:** {avg_rank_histfn_recalc}")
-    st.dataframe(pd.DataFrame(ticker_rows), use_container_width=True, hide_index=True)
-# ─────────────────────────────────────────────────────────────────────
-
-st.markdown(f"#### 📐 Setup Rank")
+#     st.bar_chart(
+#         data=chart_df_rank,
+#         x="Date",
+#         y="Avg Rank",
+#         color="Bar_Color",
+#         use_container_width=True
+#     )
+# else:
+#     st.info("Insufficient data to compute Setup Avg Rank history.")
 
 if not setup_avgrank_hist.empty:
     chart_df_rank = setup_avgrank_hist.copy()
-    today_rank = chart_df_rank["Avg Rank"].iloc[-1]
-    min_rank = chart_df_rank["Avg Rank"].min()
 
-    if today_rank == min_rank:
-        chart_df_rank["Bar_Color"] = "#29B5E8"
-        chart_df_rank.iloc[-1, chart_df_rank.columns.get_loc("Bar_Color")] = "#FF4B4B"
-    else:
-        chart_df_rank["Bar_Color"] = "#29B5E8"
+    fig_rank = go.Figure()
 
-    st.bar_chart(
-        data=chart_df_rank,
-        x="Date",
-        y="Avg Rank",
-        color="Bar_Color",
-        use_container_width=True
+    fig_rank.add_trace(go.Bar(
+        x=chart_df_rank["Date"],
+        y=chart_df_rank["Avg Rank"],
+        name="Setup Quality (101 - avgRank)",
+        marker_color="#29B5E8",
+        yaxis="y1",
+    ))
+
+    fig_rank.add_trace(go.Scatter(
+        x=chart_df_rank["Date"],
+        y=chart_df_rank["Setup Count"],
+        name="Setup Count",
+        mode="lines+markers",
+        line=dict(color="#FFA500", width=2),
+        yaxis="y2",
+    ))
+
+    fig_rank.update_layout(
+        yaxis=dict(title="Setup Quality", side="left"),
+        yaxis2=dict(title="Setup Count", side="right", overlaying="y", showgrid=False),
+        plot_bgcolor="rgba(20,22,30,1)",
+        paper_bgcolor="rgba(13,17,23,0)",
+        font=dict(color="#cccccc"),
+        legend=dict(orientation="h", y=1.1),
+        height=400,
+        margin=dict(l=40, r=40, t=40, b=40),
     )
+
+    st.plotly_chart(fig_rank, use_container_width=True)
 else:
     st.info("Insufficient data to compute Setup Avg Rank history.")
-  
+
 # ── Timing Summary ───────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown("#### ⏱ Test Time")
