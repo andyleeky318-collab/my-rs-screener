@@ -287,7 +287,7 @@ def download_known_stocks_data(stocks_tuple):
 
 @st.cache_data(ttl=3600)
 def download_lime_stocks_data(stocks_tuple):
-    raw_data = yf.download(list(stocks_tuple), period="2y", interval="1d", progress=False, auto_adjust=True)
+    raw_data = yf.download(list(stocks_tuple), period="9mo", interval="1d", progress=False, auto_adjust=True)
     ticker_dfs = {}
     for ticker in stocks_tuple:
         try:
