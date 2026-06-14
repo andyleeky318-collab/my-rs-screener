@@ -463,7 +463,7 @@ def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
 # 3. Sidebar Inputs
 with st.sidebar:
     st.header("Settings")
-    benchmark = st.selectbox("Benchmark", ["^GSPC", "^IXIC"], index=0)
+    benchmark = "^GSPC" #benchmark = st.selectbox("Benchmark", ["^GSPC", "^IXIC"], index=0)
     rs_length = st.number_input("RS Lookback Length", value=90, min_value=10)
     top_n = st.number_input("Top N for Group Avg", value=5, min_value=1)
     show_all_rs = st.toggle("Show RS < 80 Tickers", value=False)
