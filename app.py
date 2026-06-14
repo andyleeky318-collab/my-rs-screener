@@ -3159,7 +3159,42 @@ st.markdown("---")
 # 11. MARKET REGIME REFERENCE TABLE (Dynamic Highlight)
 # ==============================================================================
 #st.markdown("---")
-st.markdown(f"#### 🧭 Market Regime ({pct_above_ema200:.2f}%)")
+
+# 3. Determine which row index should be highlighted based on your live variable
+# (Using nested if/elif structure matching the hierarchy)
+highlight_idx = None
+
+if pct_above_ema200 > 70:
+    highlight_idx = 4
+elif pct_above_ema200 > 60:
+    highlight_idx = 3
+elif 50 <= pct_above_ema200 <= 60:
+    highlight_idx = 2
+elif 40 <= pct_above_ema200 < 50:
+    highlight_idx = 1
+elif pct_above_ema200 < 40:
+    highlight_idx = 0
+
+#st.markdown(f"#### 🧭 Market Regime ({pct_above_ema200:.2f}%)")
+if highlight_idx in [4, 3]:
+    pct_color = "#90EE90"
+elif highlight_idx in [2, 1]:
+    pct_color = "#EF9F27"
+else:
+    pct_color = "#FF6B6B"
+
+st.markdown(
+    f"""
+    <h4>
+        🧭 Market Regime
+        <span style="color:{pct_color}; font-weight:bold;">
+            ({pct_above_ema200:.2f}%)
+        </span>
+    </h4>
+    """,
+    unsafe_allow_html=True
+)
+
 # 1. Define raw data exactly from your reference image
 regime_data = {
     "Market Condition": [
@@ -3180,21 +3215,6 @@ regime_data = {
 
 # 2. Convert to DataFrame
 df_regime = pd.DataFrame(regime_data)
-
-# 3. Determine which row index should be highlighted based on your live variable
-# (Using nested if/elif structure matching the hierarchy)
-highlight_idx = None
-
-if pct_above_ema200 > 70:
-    highlight_idx = 4
-elif pct_above_ema200 > 60:
-    highlight_idx = 3
-elif 50 <= pct_above_ema200 <= 60:
-    highlight_idx = 2
-elif 40 <= pct_above_ema200 < 50:
-    highlight_idx = 1
-elif pct_above_ema200 < 40:
-    highlight_idx = 0
 
 # 4. Create a styling function to apply the lime background
 def highlight_current_regime(row):
