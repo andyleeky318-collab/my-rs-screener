@@ -1069,7 +1069,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
                 is_pine_7_valid
             )
 
-            if ticker == "CDNS" or ticker == "COPX" and _latest_bar_dropped:
+            if ticker == "CDNS" or ticker == "COPX":# and _latest_bar_dropped:
                 st.sidebar.warning("⚠️ DEBUGGING FOR AMD ACTIVATED")
                 
                 # Check metrics availability
