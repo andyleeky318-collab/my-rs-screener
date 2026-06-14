@@ -340,7 +340,7 @@ def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
                 prevVol      = df['Volume'].iloc[-2]
 
                 # 52-week high/low (exclude today for high, mirror original logic)
-                low_of_52week  = float(df['Low'].values[-260:].min())
+                low_of_52week  = float(df['Low'].values[-261:-1].min()) if len(df) >= 261 else float(df['Low'].values[:-1].min())
                 high_of_52week = float(df['High'].values[-260:-1].max()) if len(df) >= 260 else float(df['High'].values[:-1].max())
 
                 pct_change = (currentClose - prevClose) / prevClose if prevClose != 0 else 0
