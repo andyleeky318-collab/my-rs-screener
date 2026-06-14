@@ -4569,12 +4569,13 @@ if not setup_avgrank_hist.empty:
     chart_df_rank = setup_avgrank_hist.copy()
     today_rank = chart_df_rank["Avg Rank"].iloc[-1]
     min_rank = chart_df_rank["Avg Rank"].min()
+    min_idx = chart_df_rank["Avg Rank"].idxmin()
+
+    chart_df_rank["Bar_Color"] = "#29B5E8"
+    chart_df_rank.loc[min_idx, "Bar_Color"] = "#90EE90"  # overall lowest bar (best rank)
 
     if today_rank == min_rank:
-        chart_df_rank["Bar_Color"] = "#29B5E8"
-        chart_df_rank.iloc[-1, chart_df_rank.columns.get_loc("Bar_Color")] = "#FF4B4B"
-    else:
-        chart_df_rank["Bar_Color"] = "#29B5E8"
+        chart_df_rank.iloc[-1, chart_df_rank.columns.get_loc("Bar_Color")] = "#FF4B4B"  # today is also the lowest
 
     st.bar_chart(
         data=chart_df_rank,
