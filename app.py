@@ -632,11 +632,12 @@ if lime_perf_rows:
                 f'font-weight="600" fill="{c}" '
                 f'text-anchor="end" style="cursor:pointer;">{label}</text>'
             )
+            ticker_color = "#FFD700" if sym == "SPY" else "#cccccc"
             html += (
                 f'<text class="lbl lbl-{sym}" data-sym="{sym}" '
                 f'x="{col_x + 62}" y="{y + 4}" '  # 4px gap after %
                 f'font-size="{FS}" font-family="Source Sans Pro,sans-serif" '
-                f'font-weight="600" fill="#cccccc" '
+                f'font-weight="600" fill="{ticker_color}" '
                 f'text-anchor="start" style="cursor:pointer;">{sym}</text>'
             )
         return html
