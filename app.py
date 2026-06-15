@@ -471,9 +471,6 @@ with st.sidebar:
     show_gap_charts = st.toggle("Show Gap Charts", value=False)
     show_all_setups = st.toggle("Show All Setups (top-5)", value=True)
     
-    if st.button("Clear Cache & Refresh"):
-        st.cache_data.clear()
-
     if st.button("Refresh Deepvue Theme", use_container_width=True):
         # Clear the caches for BOTH functions so fresh data is requested
         download_lime_stocks_data.clear()
@@ -483,6 +480,9 @@ with st.sidebar:
         # Clear the caches for BOTH functions so fresh data is requested
         compute_breadth_and_stage.clear()
         st.toast("Cache cleared! Fetching real-time market data...", icon="🔄")
+
+    if st.button("Clear Cache & Refresh"):
+        st.cache_data.clear()
 
 # st.markdown("---")
 #st.markdown(f"#### 📊 Market Breadth")
