@@ -91,7 +91,7 @@ INDUSTRIES = {
     'ELEC-MISC PRODUCTS': ['OLED', 'LFUS', 'VSH'],
     'WHOLESALE-ELECT': ['SNX', 'ARW', 'AVT', 'REZI', 'GWW', 'FAST', 'FERG', 'GPC', 'POOL', 'AIT', 'WCC', 'MSM', 'UGI'],
     'RETAIL-CNSMR ELEC': ['BBY', 'GME'],
-    'CONSUMER PROD-ELEC': ['SN', 'ROKU', 'WHR', 'SPB', 'AAPL'],
+    'CONSUMER PROD-ELEC': ['SN', 'ROKU', 'WHR', 'SPB'],
     'BLDG-HEAVY CONSTR': ['PWR', 'IESC', 'EME', 'FIX', 'ACM', 'TTEK', 'MTZ', 'APG', 'FLR', 'DY', 'STRL', 'ROAD', 'GVA', 'PRIM'],
     'BLDG-RSIDNT/COMML': ['ITB', 'BLD', 'IBP', 'EXPO', 'DHI', 'LEN', 'NVR', 'PHM', 'TOL', 'MTH', 'TMHC', 'KBH', 'SKY', 'MHO', 'TPH', 'FTDR', 'GRBK', 'DFH', 'CCS', 'LGIH'],
     'BLDG-MBILE/MFG & RV': ['CVCO', 'PATK'],
