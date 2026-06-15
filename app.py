@@ -209,7 +209,7 @@ INDUSTRIES = {
 
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
-    'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
+    'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
     'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EWY', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'NTAP', 'OR', 
     'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
@@ -4533,7 +4533,7 @@ def download_all_industry_stocks_data(stocks_tuple, known_ticker_dfs):
 
     if missing or benchmark_df is None:
         all_symbols = missing + ([benchmark_symbol] if benchmark_df is None else [])
-        raw_data = yf.download(all_symbols, period="2y", interval="1d", progress=False, auto_adjust=True)
+        raw_data = yf.download(all_symbols, period="9mo", interval="1d", progress=False, auto_adjust=True)
 
         for ticker in missing:
             try:
