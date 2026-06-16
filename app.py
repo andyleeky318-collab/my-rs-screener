@@ -3522,7 +3522,7 @@ if leader_list or leader_yest:
 
         streak = leader_streaks.get(sym, 0)
         streak_html = (
-            f'<span style="color:#888888; font-size:10px; margin-left:5px;">· {streak}</span>'
+            f'<span style="color:#333333; font-size:10px; margin-left:5px;">· {streak}</span>'
             if streak > 0 else ""
         )
 
@@ -3548,7 +3548,7 @@ if leader_list or leader_yest:
                 f'<div class="ticker-badge purple-badge">'
                 f'{dot}'
                 f'<span style="color:#000000;font-weight:bold;">{sym}</span>'
-                f'<span style="color:#000000;font-weight:bold;">{streak_html}</span>'
+                f'<span style="color:#7e22ce;font-weight:bold;">{streak_html}</span>'
                 f'</div>'
             )
         else:
