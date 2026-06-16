@@ -1914,12 +1914,29 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                     cc30_s     = circle_s.rolling(30).sum()
                     two_c_s    = cc30_s >= 2
 
+                    # Pine7 as a boolean Series
+                    pine7_s = pd.Series(False, index=close_series.index)
+                    if df_len >= 260 and sma150_series is not None:
+                        c_sma200_22 = sma200_series.shift(22)
+                        c_highest   = high_series.rolling(260).max()
+                        c_lowest    = low_series.rolling(260).min()
+                        pine7_s = (
+                            ((close_series > sma150_series) & (close_series > sma200_series)).astype(int)
+                            + (sma150_series > sma200_series).astype(int)
+                            + (sma200_series > c_sma200_22).astype(int)
+                            + (sma150_series > sma200_series).astype(int)
+                            + (close_series > sma50_series).astype(int)
+                            + (((close_series / c_lowest) - 1) * 100 >= 25).astype(int)
+                            + ((1 - (close_series / c_highest)) * 100 <= 25).astype(int)
+                        ) == 7
+
                     leader_s = (
                         (two_c_s | circle_s)         &
-                        (rs_series > rs_ma_s)         &
+                        #(rs_series > rs_ma_s)         &
                         (close_series > sma50_series) &
                         (close_series > sma200_series)&
-                        (close_series >= 20)
+                        (close_series >= 20) &
+                        pine7_s
                     )
                     if bool(leader_s.iloc[-1]): leader_matches.append(ticker)
                     if bool(leader_s.iloc[-2]): leader_yest.append(ticker)
