@@ -1936,7 +1936,7 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                         (close_series > sma50_series) &
                         (close_series > sma200_series)&
                         (close_series >= 20) &
-                        (pine7_s | rs_series > rs_ma_s)
+                        (pine7_s | (rs_series > rs_ma_s))
                     )
                     if bool(leader_s.iloc[-1]): leader_matches.append(ticker)
                     if bool(leader_s.iloc[-2]): leader_yest.append(ticker)
