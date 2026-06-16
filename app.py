@@ -3548,7 +3548,7 @@ if leader_list or leader_yest:
                 f'<div class="ticker-badge purple-badge">'
                 f'{dot}'
                 f'<span style="color:#000000;font-weight:bold;">{sym}</span>'
-                f'<span style="color:#7e22ce;font-weight:bold;">{streak_html}</span>'
+                f'<span style="color:#000000;font-weight:bold;">{streak_html}</span>'
                 f'</div>'
             )
         else:
