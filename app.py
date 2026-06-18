@@ -4801,24 +4801,45 @@ if not ratio_chart_df.empty:
     normalized_ratio_df = ratio_chart_df.divide(ratio_chart_df.iloc[0]).mul(100)
 
     fig = go.Figure()
+    annotations = []
     for ratio_name in normalized_ratio_df.columns:
+        y_values = normalized_ratio_df[ratio_name]
         fig.add_trace(
             go.Scatter(
                 x=normalized_ratio_df.index,
-                y=normalized_ratio_df[ratio_name],
+                y=y_values,
                 mode="lines",
                 name=ratio_name,
+                showlegend=False,
                 hovertemplate=f"{ratio_name}<br>%{{x|%Y-%m-%d}}<br>Indexed: %{{y:.2f}}<extra></extra>"
+            )
+        )
+
+        annotations.append(
+            dict(
+                x=normalized_ratio_df.index[-1],
+                y=y_values.iloc[-1],
+                xref="x",
+                yref="y",
+                text=ratio_name,
+                xanchor="left",
+                yanchor="middle",
+                showarrow=False,
+                font=dict(size=11),
+                bgcolor="rgba(255,255,255,0.7)",
+                bordercolor="rgba(0,0,0,0.1)",
+                borderwidth=1,
+                borderpad=2
             )
         )
 
     fig.update_layout(
         height=420,
-        margin=dict(l=0, r=0, t=10, b=0),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        margin=dict(l=0, r=120, t=10, b=0),
         yaxis_title="Indexed to 100",
         xaxis_title=None,
-        hovermode="x unified"
+        hovermode="x unified",
+        annotations=annotations
     )
     st.plotly_chart(fig, use_container_width=True)
 else:
