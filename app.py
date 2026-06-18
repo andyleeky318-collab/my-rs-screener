@@ -304,9 +304,31 @@ def download_lime_stocks_data(stocks_tuple):
             continue
     return ticker_dfs
 
-# ==============================================================================
-# MARKET BREADTH & STAGE ANALYSIS FOR KNOWN_STOCKS
-# (Place this block ABOVE the Timing Summary section, after the Gapper section)
+@st.cache_data(ttl=900)
+def fetch_etf_daily_direction(etf_symbols):
+    if not etf_symbols:
+        return {}, None
+
+    raw_data = yf.download(list(etf_symbols), period="2d", interval="1d", progress=False, auto_adjust=True)
+    close_data = raw_data['Close'] if isinstance(raw_data, pd.DataFrame) else pd.DataFrame()
+    if isinstance(close_data, pd.Series):
+        close_data = close_data.to_frame()
+
+    latest_date = None
+    changes = {}
+    for sym in etf_symbols:
+        if sym not in close_data.columns:
+            continue
+        series = close_data[sym].dropna()
+        if len(series) >= 2:
+            changes[sym] = float(series.iloc[-1] - series.iloc[-2])
+            latest_date = series.index[-1]
+        elif len(series) == 1:
+            changes[sym] = 0.0
+            latest_date = series.index[-1]
+
+    return changes, latest_date
+
 # ==============================================================================
 
 @st.cache_data(ttl=3600)
@@ -4658,6 +4680,43 @@ if _timing_log:
 
     total_ms = sum(_timing_log.values())
     st.caption(f"Total measured wall-clock time: **{total_ms/1000:.2f}s** across {len(_timing_log)} tracked calls")
+
+# ETF daily direction pie chart at the bottom of the page
+etf_symbols = INDUSTRIES.get('ETF', [])
+if etf_symbols:
+    etf_changes, etf_latest_date = fetch_etf_daily_direction(tuple(etf_symbols))
+    if etf_changes:
+        positive = sum(1 for change in etf_changes.values() if change > 0)
+        negative = sum(1 for change in etf_changes.values() if change < 0)
+        flat = sum(1 for change in etf_changes.values() if change == 0)
+
+        labels = ['Positive', 'Negative'] if flat == 0 else ['Positive', 'Negative', 'Flat']
+        values = [positive, negative] if flat == 0 else [positive, negative, flat]
+        colors = ['#00b894', '#d63031', '#95a5a6'] if flat > 0 else ['#00b894', '#d63031']
+
+        fig = go.Figure(
+            data=[go.Pie(
+                labels=labels,
+                values=values,
+                hole=0.45,
+                marker=dict(colors=colors),
+                sort=False,
+                textinfo='label+percent',
+                hoverinfo='label+value'
+            )]
+        )
+        fig.update_layout(
+            title={
+                'text': f"ETF Daily Direction ({len(etf_changes)} symbols){' - ' + etf_latest_date.strftime('%Y-%m-%d') if etf_latest_date is not None else ''}",
+                'x': 0.5,
+                'xanchor': 'center'
+            },
+            margin=dict(l=0, r=0, t=36, b=0),
+            legend=dict(orientation='h', y=-0.12, x=0.5, xanchor='center')
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info('ETF daily direction data unavailable.')
 
 st.markdown("---")
 
