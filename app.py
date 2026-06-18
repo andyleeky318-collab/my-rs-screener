@@ -4741,14 +4741,11 @@ if etf_symbols:
                 insidetextorientation='radial',
                 showlegend=False,
                 hovertemplate='%{label}<br>Daily Change: %{text}<br>Size: %{value:.2f}B<extra></extra>'
+            )]
+        )
         fig.update_traces(textfont_size=11, pull=[0.02] * len(labels))
         fig.update_layout(
-            title={
-                'text': f"ETF Industry Weight & Daily Direction{' - ' + etf_latest_date.strftime('%Y-%m-%d') if etf_latest_date is not None else ''}",
-                'x': 0.5,
-                'xanchor': 'center'
-            },
-            margin=dict(l=0, r=0, t=40, b=0)
+            margin=dict(l=0, r=0, t=10, b=0)
         )
         st.plotly_chart(fig, use_container_width=True)
     else:
