@@ -316,6 +316,7 @@ def fetch_etf_daily_direction(etf_symbols):
 
     latest_date = None
     changes = {}
+    pct_changes = {}
     market_caps = {
         'XLK': 125.3,
         'XLF': 51.2,
@@ -334,10 +335,14 @@ def fetch_etf_daily_direction(etf_symbols):
             continue
         series = close_data[sym].dropna()
         if len(series) >= 2:
-            changes[sym] = float(series.iloc[-1] - series.iloc[-2])
+            prev_val = series.iloc[-2]
+            curr_val = series.iloc[-1]
+            changes[sym] = float(curr_val - prev_val)
+            pct_changes[sym] = float((curr_val - prev_val) / prev_val * 100) if prev_val != 0 else 0.0
             latest_date = series.index[-1]
         elif len(series) == 1:
             changes[sym] = 0.0
+            pct_changes[sym] = 0.0
             latest_date = series.index[-1]
 
         if market_caps.get(sym) is None:
@@ -348,7 +353,7 @@ def fetch_etf_daily_direction(etf_symbols):
             except Exception:
                 market_caps[sym] = None
 
-    return changes, latest_date, market_caps
+    return changes, pct_changes, latest_date, market_caps
 
 # ==============================================================================
 
@@ -4705,48 +4710,37 @@ if _timing_log:
 # ETF daily direction pie chart at the bottom of the page
 etf_symbols = INDUSTRIES.get('ETF', [])
 if etf_symbols:
-    etf_changes, etf_latest_date, etf_market_caps = fetch_etf_daily_direction(tuple(etf_symbols))
+    etf_changes, etf_changes_pct, etf_latest_date, etf_market_caps = fetch_etf_daily_direction(tuple(etf_symbols))
     if etf_changes and etf_market_caps:
-        etf_industries = {
-            'XLK': 'Technology',
-            'XLF': 'Financials',
-            'XLV': 'Health Care',
-            'XLE': 'Energy',
-            'XLI': 'Industrials',
-            'XLY': 'Consumer Discretionary',
-            'XLP': 'Consumer Staples',
-            'XLC': 'Communication Services',
-            'XLB': 'Materials',
-            'XLU': 'Utilities'
-        }
-
         labels = []
         values = []
+        custom_text = []
         colors = []
 
         for sym in etf_symbols:
             cap = etf_market_caps.get(sym)
             if cap is None:
                 cap = 1.0
+            pct = etf_changes_pct.get(sym, 0.0)
             direction = etf_changes.get(sym, 0.0)
-            labels.append(f"{sym} ({etf_industries.get(sym, '')})")
+            labels.append(sym)
             values.append(cap)
+            custom_text.append(f"{pct:+.2f}%")
             colors.append('#00b894' if direction > 0 else '#d63031' if direction < 0 else '#95a5a6')
 
         fig = go.Figure(
             data=[go.Pie(
                 labels=labels,
                 values=values,
+                text=custom_text,
                 hole=0.4,
                 marker=dict(colors=colors, line=dict(color='#ffffff', width=1)),
                 sort=False,
-                textinfo='label+percent',
-                textposition='outside',
+                textinfo='label+text',
+                textposition='inside',
                 insidetextorientation='radial',
                 showlegend=False,
-                hovertemplate='%{label}<br>Size: %{value:.2f}B<br>Direction: %{percent}<extra></extra>'
-            )]
-        )
+                hovertemplate='%{label}<br>Daily Change: %{text}<br>Size: %{value:.2f}B<extra></extra>'
         fig.update_traces(textfont_size=11, pull=[0.02] * len(labels))
         fig.update_layout(
             title={
