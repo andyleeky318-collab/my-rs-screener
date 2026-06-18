@@ -209,7 +209,7 @@ INDUSTRIES = {
 
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
-    'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
+    'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
     'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EWY', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'NTAP', 'OR', 
     'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
@@ -354,6 +354,33 @@ def fetch_etf_daily_direction(etf_symbols):
                 market_caps[sym] = None
 
     return changes, pct_changes, latest_date, market_caps
+
+@st.cache_data(ttl=3600)
+def fetch_ratio_chart_data(ratio_pairs, period="3mo"):
+    symbols = sorted({sym for pair in ratio_pairs for sym in pair})
+    if not symbols:
+        return pd.DataFrame()
+
+    raw_data = yf.download(symbols, period=period, interval="1d", progress=False, auto_adjust=True)
+    if raw_data.empty or "Close" not in raw_data:
+        return pd.DataFrame()
+
+    close_data = raw_data["Close"]
+    if isinstance(close_data, pd.Series):
+        close_data = close_data.to_frame(name=symbols[0])
+
+    ratio_df = pd.DataFrame(index=close_data.index)
+    for numerator, denominator in ratio_pairs:
+        if numerator not in close_data.columns or denominator not in close_data.columns:
+            continue
+
+        ratio = close_data[numerator].div(close_data[denominator]).replace([np.inf, -np.inf], np.nan).dropna()
+        if ratio.empty:
+            continue
+
+        ratio_df[f"{numerator}/{denominator}"] = ratio
+
+    return ratio_df.dropna(how="all").tail(60)
 
 # ==============================================================================
 
@@ -896,7 +923,6 @@ if breadth_total > 0:
     st.markdown(breadth_html, unsafe_allow_html=True)
 
 st.markdown("---")
-
 
 # 4. IMPLEMENTATION OF NEW NORMALIZED RS METHOD AND EMA CLOUD
 @st.cache_data(ttl=3600)
@@ -4753,4 +4779,43 @@ if etf_symbols:
 
 st.markdown("---")
 
+ratio_pairs = (
+    ("XLK", "SPY"),
+    ("XLY", "XLP"),
+    ("SPHB", "SPY"),
+    ("IWM", "QQQ"),
+    ("VUG", "VTV"),
+)
+
+st.markdown("#### Relative ETF Ratios (60 Days)")
+ratio_chart_df = fetch_ratio_chart_data(ratio_pairs)
+
+if not ratio_chart_df.empty:
+    normalized_ratio_df = ratio_chart_df.divide(ratio_chart_df.iloc[0]).mul(100)
+
+    fig = go.Figure()
+    for ratio_name in normalized_ratio_df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=normalized_ratio_df.index,
+                y=normalized_ratio_df[ratio_name],
+                mode="lines",
+                name=ratio_name,
+                hovertemplate=f"{ratio_name}<br>%{{x|%Y-%m-%d}}<br>Indexed: %{{y:.2f}}<extra></extra>"
+            )
+        )
+
+    fig.update_layout(
+        height=420,
+        margin=dict(l=0, r=0, t=10, b=0),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        yaxis_title="Indexed to 100",
+        xaxis_title=None,
+        hovermode="x unified"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.info("Relative ETF ratio data unavailable.")
+
+st.markdown("---")
 
