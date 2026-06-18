@@ -316,6 +316,19 @@ def fetch_etf_daily_direction(etf_symbols):
 
     latest_date = None
     changes = {}
+    market_caps = {
+        'XLK': 125.3,
+        'XLF': 51.2,
+        'XLV': 39.4,
+        'XLE': 39.1,
+        'XLI': 31.1,
+        'XLC': 23.8,
+        'XLU': 22.7,
+        'XLY': 22.4,
+        'XLP': 14.7,
+        'XLB': 8.0
+    }
+
     for sym in etf_symbols:
         if sym not in close_data.columns:
             continue
@@ -327,7 +340,15 @@ def fetch_etf_daily_direction(etf_symbols):
             changes[sym] = 0.0
             latest_date = series.index[-1]
 
-    return changes, latest_date
+        if market_caps.get(sym) is None:
+            try:
+                info = yf.Ticker(sym).info
+                cap = info.get('marketCap')
+                market_caps[sym] = round(cap / 1e9, 2) if cap else None
+            except Exception:
+                market_caps[sym] = None
+
+    return changes, latest_date, market_caps
 
 # ==============================================================================
 
@@ -4684,35 +4705,56 @@ if _timing_log:
 # ETF daily direction pie chart at the bottom of the page
 etf_symbols = INDUSTRIES.get('ETF', [])
 if etf_symbols:
-    etf_changes, etf_latest_date = fetch_etf_daily_direction(tuple(etf_symbols))
-    if etf_changes:
-        positive = sum(1 for change in etf_changes.values() if change > 0)
-        negative = sum(1 for change in etf_changes.values() if change < 0)
-        flat = sum(1 for change in etf_changes.values() if change == 0)
+    etf_changes, etf_latest_date, etf_market_caps = fetch_etf_daily_direction(tuple(etf_symbols))
+    if etf_changes and etf_market_caps:
+        etf_industries = {
+            'XLK': 'Technology',
+            'XLF': 'Financials',
+            'XLV': 'Health Care',
+            'XLE': 'Energy',
+            'XLI': 'Industrials',
+            'XLY': 'Consumer Discretionary',
+            'XLP': 'Consumer Staples',
+            'XLC': 'Communication Services',
+            'XLB': 'Materials',
+            'XLU': 'Utilities'
+        }
 
-        labels = ['Positive', 'Negative'] if flat == 0 else ['Positive', 'Negative', 'Flat']
-        values = [positive, negative] if flat == 0 else [positive, negative, flat]
-        colors = ['#00b894', '#d63031', '#95a5a6'] if flat > 0 else ['#00b894', '#d63031']
+        labels = []
+        values = []
+        colors = []
+
+        for sym in etf_symbols:
+            cap = etf_market_caps.get(sym)
+            if cap is None:
+                cap = 1.0
+            direction = etf_changes.get(sym, 0.0)
+            labels.append(f"{sym} ({etf_industries.get(sym, '')})")
+            values.append(cap)
+            colors.append('#00b894' if direction > 0 else '#d63031' if direction < 0 else '#95a5a6')
 
         fig = go.Figure(
             data=[go.Pie(
                 labels=labels,
                 values=values,
-                hole=0.45,
-                marker=dict(colors=colors),
+                hole=0.4,
+                marker=dict(colors=colors, line=dict(color='#ffffff', width=1)),
                 sort=False,
                 textinfo='label+percent',
-                hoverinfo='label+value'
+                textposition='outside',
+                insidetextorientation='radial',
+                showlegend=False,
+                hovertemplate='%{label}<br>Size: %{value:.2f}B<br>Direction: %{percent}<extra></extra>'
             )]
         )
+        fig.update_traces(textfont_size=11, pull=[0.02] * len(labels))
         fig.update_layout(
             title={
-                'text': f"ETF Daily Direction ({len(etf_changes)} symbols){' - ' + etf_latest_date.strftime('%Y-%m-%d') if etf_latest_date is not None else ''}",
+                'text': f"ETF Industry Weight & Daily Direction{' - ' + etf_latest_date.strftime('%Y-%m-%d') if etf_latest_date is not None else ''}",
                 'x': 0.5,
                 'xanchor': 'center'
             },
-            margin=dict(l=0, r=0, t=36, b=0),
-            legend=dict(orientation='h', y=-0.12, x=0.5, xanchor='center')
+            margin=dict(l=0, r=0, t=40, b=0)
         )
         st.plotly_chart(fig, use_container_width=True)
     else:
