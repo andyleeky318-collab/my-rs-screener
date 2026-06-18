@@ -4770,8 +4770,15 @@ if etf_symbols:
             )]
         )
         fig.update_traces(textfont_size=11, pull=[0.02] * len(labels))
+
+        positive_count = sum(1 for change in etf_changes.values() if change > 0)
         fig.update_layout(
-            margin=dict(l=0, r=0, t=10, b=0)
+            title={
+                'text': f"{positive_count}/10",
+                'x': 0.5,
+                'xanchor': 'center'
+            },
+            margin=dict(l=0, r=0, t=30, b=0)
         )
         st.plotly_chart(fig, use_container_width=True)
     else:
