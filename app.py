@@ -4826,7 +4826,7 @@ if not ratio_chart_df.empty:
                 yanchor="middle",
                 showarrow=False,
                 font=dict(size=11),
-                bgcolor="rgba(255,255,255,0.7)",
+                bgcolor="rgba(0,0,0,0.5)",
                 bordercolor="rgba(0,0,0,0.1)",
                 borderwidth=1,
                 borderpad=2
