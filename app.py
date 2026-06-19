@@ -3749,9 +3749,9 @@ def build_leader_industry_map(leader_list, industries_dict):
     return industry_counts, ticker_industry
 
 def generate_leader_ai_analysis(leader_list, industry_counts, ticker_industry, rs_nh_list, quad_points=None):
-    """Call Gemini first, fall back to OpenAI GPT-4o-mini if Gemini is unavailable."""
+    """Call Gemini first, fall back to OpenAI GPT-4o-mini, then Grok if both unavailable."""
 
-    # ── Build the prompt (shared by both providers) ──────────────────────
+    # ── Build the prompt (shared by all providers) ──────────────────────
     sorted_industries = sorted(industry_counts.items(), key=lambda x: -x[1])
     top_industries_str = "\n".join(
         f"  - {ind}: {cnt} leader(s)" for ind, cnt in sorted_industries[:10]
@@ -3801,6 +3801,9 @@ In 4-5 SHORT bullet points:
 Be direct, use industry names, no fluff.
 """
 
+    # Track failures for the final error message
+    failures = {}
+
     # ── Attempt 1: Gemini ─────────────────────────────────────────────────
     gemini_key = st.secrets.get("GEMINI_API_KEY")
     if gemini_key:
@@ -3814,45 +3817,78 @@ Be direct, use industry names, no fluff.
             return f"🟦 **Gemini 2.5 Flash**\n\n{response.text}"
         except Exception as e:
             error_str = str(e)
-            # Only fall through on transient/capacity errors
             is_transient = any(code in error_str for code in [
                 "503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED",
                 "quota", "overloaded", "high demand"
             ])
             if not is_transient:
                 return f"🔴 **Gemini error**\n\n{error_str}"
-            # Fall through to OpenAI silently
+            failures["Gemini"] = "503 UNAVAILABLE (high demand)"
+            # Fall through to OpenAI
 
-    # ── Attempt 2: OpenAI fallback ────────────────────────────────────────
+    # ── Attempt 2: OpenAI ─────────────────────────────────────────────────
     openai_key = st.secrets.get("OPENAI_API_KEY")
-    if not openai_key:
-        return (
-            "🔴 **Both AI providers failed**\n\n"
-            "- Gemini: 503 UNAVAILABLE (high demand)\n"
-            "- OpenAI: No `OPENAI_API_KEY` found in Streamlit secrets."
-        )
+    if openai_key:
+        try:
+            from openai import OpenAI
+            openai_client = OpenAI(api_key=openai_key)
+            completion = openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a concise IBD-style market analyst."},
+                    {"role": "user",   "content": prompt}
+                ],
+                max_tokens=600,
+                temperature=0.4,
+            )
+            result = completion.choices[0].message.content
+            return f"🟩 **GPT-4o-mini** *(Gemini was unavailable)*\n\n{result}"
+        except Exception as e:
+            error_str = str(e)
+            is_transient = any(code in error_str for code in [
+                "503", "429", "rate_limit", "overloaded",
+                "quota", "high demand", "unavailable"
+            ])
+            if not is_transient:
+                return f"🔴 **OpenAI error**\n\n{error_str}"
+            failures["OpenAI"] = f"Rate limit / capacity error: {error_str[:80]}"
+            # Fall through to Grok
+    else:
+        failures["OpenAI"] = "No OPENAI_API_KEY found in Streamlit secrets"
 
-    try:
-        from openai import OpenAI
-        openai_client = OpenAI(api_key=openai_key)
-        completion = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a concise IBD-style market analyst."},
-                {"role": "user",   "content": prompt}
-            ],
-            max_tokens=600,
-            temperature=0.4,
-        )
-        result = completion.choices[0].message.content
-        return f"🟩 **GPT-4o-mini** *(Gemini was unavailable)*\n\n{result}"
+    # ── Attempt 3: Grok (xAI) ────────────────────────────────────────────
+    # Grok uses the OpenAI-compatible SDK, just with a different base_url and model
+    grok_key = st.secrets.get("GROK_API_KEY")
+    if grok_key:
+        try:
+            from openai import OpenAI as OpenAIClient
+            grok_client = OpenAIClient(
+                api_key=grok_key,
+                base_url="https://api.x.ai/v1",
+            )
+            completion = grok_client.chat.completions.create(
+                model="grok-3-mini",
+                messages=[
+                    {"role": "system", "content": "You are a concise IBD-style market analyst."},
+                    {"role": "user",   "content": prompt}
+                ],
+                max_tokens=600,
+                temperature=0.4,
+            )
+            result = completion.choices[0].message.content
+            prior_failures = ", ".join(failures.keys())
+            return f"⬛ **Grok-3-mini** *({prior_failures} unavailable)*\n\n{result}"
+        except Exception as e:
+            failures["Grok"] = str(e)
+    else:
+        failures["Grok"] = "No GROK_API_KEY found in Streamlit secrets"
 
-    except Exception as e:
-        return (
-            "🔴 **Both AI providers failed**\n\n"
-            f"- Gemini: 503 UNAVAILABLE (high demand)\n"
-            f"- OpenAI: {str(e)}"
-        )
+    # ── All providers failed ──────────────────────────────────────────────
+    failure_lines = "\n".join(f"- {provider}: {reason}" for provider, reason in failures.items())
+    return (
+        "🔴 **All AI providers failed**\n\n"
+        f"{failure_lines}"
+    )
 
 # ==========================================
 # UI - RS LEADER AI ANALYSIS
