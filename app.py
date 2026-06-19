@@ -3749,45 +3749,36 @@ def build_leader_industry_map(leader_list, industries_dict):
     return industry_counts, ticker_industry
 
 def generate_leader_ai_analysis(leader_list, industry_counts, ticker_industry, rs_nh_list, quad_points=None):
-    """Call Gemini to summarize RS leader industry concentration."""
-    api_key = st.secrets.get("GEMINI_API_KEY")
-    if not api_key:
-        st.error("🔑 Missing `GEMINI_API_KEY` in Streamlit secrets.")
-        return None
+    """Call Gemini first, fall back to OpenAI GPT-4o-mini if Gemini is unavailable."""
 
-    try:
-        client = genai.Client(api_key=api_key)
+    # ── Build the prompt (shared by both providers) ──────────────────────
+    sorted_industries = sorted(industry_counts.items(), key=lambda x: -x[1])
+    top_industries_str = "\n".join(
+        f"  - {ind}: {cnt} leader(s)" for ind, cnt in sorted_industries[:10]
+    )
 
-        # Sort industries by leader count descending
-        sorted_industries = sorted(industry_counts.items(), key=lambda x: -x[1])
-        top_industries_str = "\n".join(
-            f"  - {ind}: {cnt} leader(s)" for ind, cnt in sorted_industries[:10]
-        )
+    tagged_leaders = []
+    for t in leader_list:
+        tag  = " [BLUE DOT]" if t in rs_nh_list else ""
+        inds = ", ".join(ticker_industry.get(t, ["?"]))
+        tagged_leaders.append(f"{t}{tag} ({inds})")
+    leaders_str = "\n".join(tagged_leaders[:40])
 
-        # Tag blue dot (RS new high) tickers
-        tagged_leaders = []
-        for t in leader_list:
-            tag = " [BLUE DOT]" if t in rs_nh_list else ""
-            inds = ", ".join(ticker_industry.get(t, ["?"]))
-            tagged_leaders.append(f"{t}{tag} ({inds})")
+    quad_summary = ""
+    if quad_points:
+        strong    = [p["industry"] for p in quad_points if p["weekly_rs"] >= 50 and p["monthly_rs"] >= 50]
+        improving = [p["industry"] for p in quad_points if p["weekly_rs"] >= 50 and p["monthly_rs"] <  50]
+        weakening = [p["industry"] for p in quad_points if p["weekly_rs"] <  50 and p["monthly_rs"] >= 50]
+        weak      = [p["industry"] for p in quad_points if p["weekly_rs"] <  50 and p["monthly_rs"] <  50]
+        quad_summary = f"""
+Industry RS Quadrant Map (Weekly vs Monthly):
+- Strong (high weekly AND monthly RS, {len(strong)}): {', '.join(strong[:10])}
+- Improving (high weekly, low monthly — rising, {len(improving)}): {', '.join(improving[:10])}
+- Weakening (low weekly, high monthly — fading, {len(weakening)}): {', '.join(weakening[:10])}
+- Weak (low both, {len(weak)}): {', '.join(weak[:10])}
+"""
 
-        leaders_str = "\n".join(tagged_leaders[:40])
-
-        quad_summary = ""
-        if quad_points:
-            strong    = [p["industry"] for p in quad_points if p["weekly_rs"] >= 50 and p["monthly_rs"] >= 50]
-            improving = [p["industry"] for p in quad_points if p["weekly_rs"] >= 50 and p["monthly_rs"] <  50]
-            weakening = [p["industry"] for p in quad_points if p["weekly_rs"] <  50 and p["monthly_rs"] >= 50]
-            weak      = [p["industry"] for p in quad_points if p["weekly_rs"] <  50 and p["monthly_rs"] <  50]
-            quad_summary = f"""
-        Industry RS Quadrant Map (Weekly vs Monthly):
-        - Strong (high weekly AND monthly RS, {len(strong)}): {', '.join(strong[:10])}
-        - Improving (high weekly, low monthly — rising, {len(improving)}): {', '.join(improving[:10])}
-        - Weakening (low weekly, high monthly — fading, {len(weakening)}): {', '.join(weakening[:10])}
-        - Weak (low both, {len(weak)}): {', '.join(weak[:10])}
-        """
-
-        prompt = f"""
+    prompt = f"""
 You are a concise IBD-style market analyst. I will give you a list of RS Leader stocks, their industry groups, and the industry RS quadrant map.
 
 RS Leaders ({len(leader_list)} total):
@@ -3810,15 +3801,58 @@ In 4-5 SHORT bullet points:
 Be direct, use industry names, no fluff.
 """
 
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt
+    # ── Attempt 1: Gemini ─────────────────────────────────────────────────
+    gemini_key = st.secrets.get("GEMINI_API_KEY")
+    if gemini_key:
+        try:
+            from google import genai as google_genai
+            client = google_genai.Client(api_key=gemini_key)
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt
+            )
+            return f"🟦 **Gemini 2.5 Flash**\n\n{response.text}"
+        except Exception as e:
+            error_str = str(e)
+            # Only fall through on transient/capacity errors
+            is_transient = any(code in error_str for code in [
+                "503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED",
+                "quota", "overloaded", "high demand"
+            ])
+            if not is_transient:
+                return f"🔴 **Gemini error**\n\n{error_str}"
+            # Fall through to OpenAI silently
+
+    # ── Attempt 2: OpenAI fallback ────────────────────────────────────────
+    openai_key = st.secrets.get("OPENAI_API_KEY")
+    if not openai_key:
+        return (
+            "🔴 **Both AI providers failed**\n\n"
+            "- Gemini: 503 UNAVAILABLE (high demand)\n"
+            "- OpenAI: No `OPENAI_API_KEY` found in Streamlit secrets."
         )
-        return response.text
+
+    try:
+        from openai import OpenAI
+        openai_client = OpenAI(api_key=openai_key)
+        completion = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a concise IBD-style market analyst."},
+                {"role": "user",   "content": prompt}
+            ],
+            max_tokens=600,
+            temperature=0.4,
+        )
+        result = completion.choices[0].message.content
+        return f"🟩 **GPT-4o-mini** *(Gemini was unavailable)*\n\n{result}"
 
     except Exception as e:
-        return f"AI analysis error: {str(e)}"
-
+        return (
+            "🔴 **Both AI providers failed**\n\n"
+            f"- Gemini: 503 UNAVAILABLE (high demand)\n"
+            f"- OpenAI: {str(e)}"
+        )
 
 # ==========================================
 # UI - RS LEADER AI ANALYSIS
