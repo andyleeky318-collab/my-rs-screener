@@ -4930,6 +4930,10 @@ def _relative_etf_ratios():
                 )
             )
 
+            # Highlight label if the latest value is a new high for the period
+            is_new_high = y_values.iloc[-1] >= y_values.max()
+            label_color = "lime" if is_new_high else "white"
+
             annotations.append(
                 dict(
                     x=normalized_ratio_df.index[-1],
@@ -4940,7 +4944,7 @@ def _relative_etf_ratios():
                     xanchor="left",
                     yanchor="middle",
                     showarrow=False,
-                    font=dict(size=11),
+                    font=dict(size=11, color=label_color),
                     bgcolor="rgba(0,0,0,0.5)",
                     bordercolor="rgba(0,0,0,0.1)",
                     borderwidth=1,
