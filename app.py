@@ -5016,8 +5016,10 @@ if _timing_log:
 # ============================================================
 @st.cache_data(ttl=3600)
 def fetch_trending_stocks_today():
-    """Fetch up to 50 trending tickers from stockanalysis.com/trending/"""
+    """Fetch trending tickers from stockanalysis.com/trending/ with Market Cap >= $1B"""
+
     url = "https://stockanalysis.com/trending/"
+
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -5026,54 +5028,126 @@ def fetch_trending_stocks_today():
         ),
         "Accept-Language": "en-US,en;q=0.9",
     }
+
+    def parse_market_cap(cap_str):
+        """
+        Convert market cap string into numeric value.
+
+        Examples:
+        2.44T  -> 2440000000000
+        323.5B -> 323500000000
+        850M   -> 850000000
+        """
+        try:
+            cap_str = cap_str.strip().upper()
+
+            if not cap_str or cap_str == "-":
+                return 0
+
+            if cap_str.endswith("T"):
+                return float(cap_str[:-1]) * 1_000_000_000_000
+
+            if cap_str.endswith("B"):
+                return float(cap_str[:-1]) * 1_000_000_000
+
+            if cap_str.endswith("M"):
+                return float(cap_str[:-1]) * 1_000_000
+
+            return float(cap_str)
+
+        except Exception:
+            return 0
+
     try:
         resp = requests.get(url, headers=headers, timeout=10)
         resp.raise_for_status()
+
         soup = BeautifulSoup(resp.content, "html.parser")
 
-        # Primary: look for the explicit #main-table id
+        # Primary table
         table = soup.find("table", {"id": "main-table"})
 
-        # Fallback 1: any <table> on the page
+        # Fallback
         if table is None:
             table = soup.find("table")
 
-        # Fallback 2: stockanalysis sometimes renders via a <div> data grid
         if table is None:
-            rows_divs = soup.select("div[class*='symbol'], a[href*='/stocks/']")
-            symbols = []
-            seen = set()
-            for el in rows_divs:
-                text = el.get_text(strip=True).upper()
-                if text and text not in seen and len(text) <= 6 and text.isalpha():
-                    seen.add(text)
-                    symbols.append(text)
-                if len(symbols) >= 50:
-                    break
-            return symbols  # may be empty list if page structure changed
+            return []
 
-        # Parse table rows — symbol expected in column index 1 (0-based)
+        # --------------------------------------------------
+        # Find column positions dynamically
+        # --------------------------------------------------
+        headers_row = table.find("tr")
+
+        if not headers_row:
+            return []
+
+        header_cells = headers_row.find_all(["th", "td"])
+
+        symbol_idx = None
+        marketcap_idx = None
+
+        for idx, cell in enumerate(header_cells):
+            txt = cell.get_text(strip=True)
+
+            if txt == "Symbol":
+                symbol_idx = idx
+
+            elif "Market Cap" in txt:
+                marketcap_idx = idx
+
+        # Fallback to current StockAnalysis layout
+        if symbol_idx is None:
+            symbol_idx = 1
+
+        if marketcap_idx is None:
+            marketcap_idx = 4
+
+        # --------------------------------------------------
+        # Parse rows
+        # --------------------------------------------------
         symbols = []
         seen = set()
+
         for row in table.find_all("tr"):
             cells = row.find_all("td")
-            if not cells or len(cells) < 2:
+
+            if not cells:
                 continue
-            raw = cells[1].get_text(strip=True).upper()
-            # Strip any trailing annotation characters that aren't part of the ticker
-            symbol = "".join(c for c in raw if c.isalpha() or c == "-").strip()
+
+            max_required_idx = max(symbol_idx, marketcap_idx)
+
+            if len(cells) <= max_required_idx:
+                continue
+
+            raw_symbol = cells[symbol_idx].get_text(strip=True).upper()
+
+            symbol = "".join(
+                c for c in raw_symbol
+                if c.isalpha() or c == "-"
+            ).strip()
+
+            market_cap_text = cells[marketcap_idx].get_text(strip=True)
+            market_cap = parse_market_cap(market_cap_text)
+
+            # ==================================================
+            # FILTER: Market Cap must be at least $1 Billion
+            # ==================================================
+            if market_cap < 1_000_000_000:
+                continue
+
             if symbol and symbol not in seen:
                 seen.add(symbol)
                 symbols.append(symbol)
+
             if len(symbols) >= 50:
                 break
 
-        return symbols  # ordered list, preserving table rank
+        return symbols
 
     except Exception as e:
         st.warning(f"Quant Sentiment: could not fetch trending stocks — {e}")
         return []
-
 
 @st.cache_data(ttl=86400)   # cache yesterday's list for 24 h so it survives reruns
 def fetch_trending_stocks_yesterday():
