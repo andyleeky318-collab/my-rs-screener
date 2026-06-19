@@ -4688,54 +4688,57 @@ else:
 # ETF daily direction pie chart at the bottom of the page
 def _etf_pie_chart():
     etf_symbols = INDUSTRIES.get('ETF', [])
-if etf_symbols:
-    etf_changes, etf_changes_pct, etf_latest_date, etf_market_caps = fetch_etf_daily_direction(tuple(etf_symbols))
-    if etf_changes and etf_market_caps:
-        labels = []
-        values = []
-        custom_text = []
-        colors = []
+    if etf_symbols:
+        etf_changes, etf_changes_pct, etf_latest_date, etf_market_caps = fetch_etf_daily_direction(tuple(etf_symbols))
+        if etf_changes and etf_market_caps:
+            labels = []
+            values = []
+            custom_text = []
+            colors = []
 
-        for sym in etf_symbols:
-            cap = etf_market_caps.get(sym)
-            if cap is None:
-                cap = 1.0
-            pct = etf_changes_pct.get(sym, 0.0)
-            direction = etf_changes.get(sym, 0.0)
-            labels.append(sym)
-            values.append(cap)
-            custom_text.append(f"{pct:+.2f}%")
-            colors.append('#00b894' if direction > 0 else '#d63031' if direction < 0 else '#95a5a6')
+            for sym in etf_symbols:
+                cap = etf_market_caps.get(sym)
+                if cap is None:
+                    cap = 1.0
+                pct = etf_changes_pct.get(sym, 0.0)
+                direction = etf_changes.get(sym, 0.0)
+                labels.append(sym)
+                values.append(cap)
+                custom_text.append(f"{pct:+.2f}%")
+                colors.append('#00b894' if direction > 0 else '#d63031' if direction < 0 else '#95a5a6')
 
-        fig = go.Figure(
-            data=[go.Pie(
-                labels=labels,
-                values=values,
-                text=custom_text,
-                hole=0.4,
-                marker=dict(colors=colors, line=dict(color='#ffffff', width=1)),
-                sort=False,
-                textinfo='label+text',
-                textposition='inside',
-                insidetextorientation='radial',
-                showlegend=False,
-                hovertemplate='%{label}<br>Daily Change: %{text}<br>Size: %{value:.2f}B<extra></extra>'
-            )]
-        )
-        fig.update_traces(textfont_size=11, pull=[0.02] * len(labels))
+            fig = go.Figure(
+                data=[go.Pie(
+                    labels=labels,
+                    values=values,
+                    text=custom_text,
+                    hole=0.4,
+                    marker=dict(colors=colors, line=dict(color='#ffffff', width=1)),
+                    sort=False,
+                    textinfo='label+text',
+                    textposition='inside',
+                    insidetextorientation='radial',
+                    showlegend=False,
+                    hovertemplate='%{label}<br>Daily Change: %{text}<br>Size: %{value:.2f}B<extra></extra>'
+                )]
+            )
+            fig.update_traces(textfont_size=11, pull=[0.02] * len(labels))
 
-        positive_count = sum(1 for change in etf_changes.values() if change > 0)
-        fig.update_layout(
-            title={
-                'text': f"{positive_count}/10",
-                'x': 0.5,
-                'xanchor': 'center'
-            },
-            margin=dict(l=0, r=0, t=30, b=0)
-        )
-        st.plotly_chart(fig, use_container_width=True)
+            positive_count = sum(1 for change in etf_changes.values() if change > 0)
+            fig.update_layout(
+                title={
+                    'text': f"{positive_count}/10",
+                    'x': 0.5,
+                    'xanchor': 'center'
+                },
+                margin=dict(l=0, r=0, t=30, b=0)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info('ETF daily direction data unavailable.')
+
     else:
-        st.info('ETF daily direction data unavailable.')
+        st.info('ETF ETF list unavailable.')
 
 timed("ETF Pie Chart", _etf_pie_chart)
 
