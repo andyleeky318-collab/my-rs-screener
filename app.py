@@ -5016,139 +5016,63 @@ if _timing_log:
 # ============================================================
 @st.cache_data(ttl=3600)
 def fetch_trending_stocks_today():
-    """
-    Attempt multiple strategies to get 50 tickers from stockanalysis.com/trending/
-    Strategy 1: Direct API endpoint (JSON, clean)
-    Strategy 2: HTML scrape with next-page follow (2x 20-row pages -> 40 tickers)
-    Strategy 3: HTML scrape page 1 only (20 tickers fallback)
-    """
+    """Fetch up to 50 trending tickers from stockanalysis.com/trending/"""
+    url = "https://stockanalysis.com/trending/"
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/124.0.0.0 Safari/537.36"
         ),
-        "Accept": "application/json, text/html, */*",
         "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://stockanalysis.com/trending/",
     }
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.content, "html.parser")
 
-    # ── Strategy 1: JSON API endpoint ────────────────────────────────────
-    # These are the known endpoint patterns stockanalysis uses internally.
-    # Try each one; the first 200 response with parseable JSON wins.
-    api_candidates = [
-        "https://stockanalysis.com/api/screener/s/trending/?p=1&n=50",
-        "https://stockanalysis.com/api/screener/s/trending/?page=1&limit=50",
-        "https://stockanalysis.com/api/trending/?n=50",
-        "https://stockanalysis.com/api/trending/stocks/?limit=50",
-    ]
+        # Primary: look for the explicit #main-table id
+        table = soup.find("table", {"id": "main-table"})
 
-    for api_url in api_candidates:
-        try:
-            resp = requests.get(api_url, headers=headers, timeout=10)
-            if resp.status_code == 200:
-                data = resp.json()
+        # Fallback 1: any <table> on the page
+        if table is None:
+            table = soup.find("table")
 
-                # Handle various JSON shapes the API might return
-                rows = None
-                if isinstance(data, list):
-                    rows = data
-                elif isinstance(data, dict):
-                    # Common keys: 'data', 'stocks', 'results', 'rows'
-                    for key in ("data", "stocks", "results", "rows", "items"):
-                        if key in data and isinstance(data[key], list):
-                            rows = data[key]
-                            break
+        # Fallback 2: stockanalysis sometimes renders via a <div> data grid
+        if table is None:
+            rows_divs = soup.select("div[class*='symbol'], a[href*='/stocks/']")
+            symbols = []
+            seen = set()
+            for el in rows_divs:
+                text = el.get_text(strip=True).upper()
+                if text and text not in seen and len(text) <= 6 and text.isalpha():
+                    seen.add(text)
+                    symbols.append(text)
+                if len(symbols) >= 50:
+                    break
+            return symbols  # may be empty list if page structure changed
 
-                if rows:
-                    symbols = []
-                    seen = set()
-                    for item in rows:
-                        sym = None
-                        if isinstance(item, dict):
-                            # Common field names for ticker symbol
-                            for field in ("s", "symbol", "ticker", "Symbol", "Ticker"):
-                                if field in item and item[field]:
-                                    sym = str(item[field]).upper().strip()
-                                    break
-                        elif isinstance(item, str):
-                            sym = item.upper().strip()
-
-                        if sym and sym not in seen and sym.replace("-", "").isalpha():
-                            seen.add(sym)
-                            symbols.append(sym)
-                        if len(symbols) >= 50:
-                            break
-
-                    if symbols:
-                        return symbols  # SUCCESS via API
-
-        except Exception:
-            continue  # try next candidate
-
-    # ── Strategy 2: Scrape multiple HTML pages (20 rows each) ────────────
-    # Collect page 1 + page 2 to get ~40 tickers
-    all_symbols = []
-    seen = set()
-
-    page_urls = [
-        "https://stockanalysis.com/trending/",
-        "https://stockanalysis.com/trending/?p=2",
-        "https://stockanalysis.com/trending/?page=2",
-    ]
-
-    def parse_table_from_html(content):
-        """Extract ticker symbols from the first <table> found in HTML."""
-        soup = BeautifulSoup(content, "html.parser")
-        syms = []
-
-        table = soup.find("table", {"id": "main-table"}) or soup.find("table")
-        if table:
-            for row in table.find_all("tr"):
-                cells = row.find_all("td")
-                if len(cells) < 2:
-                    continue
-                raw = cells[1].get_text(strip=True).upper()
-                sym = "".join(c for c in raw if c.isalpha() or c == "-").strip()
-                if sym and len(sym) <= 6:
-                    syms.append(sym)
-
-        # Fallback: grab ticker links like /stocks/NVDA/
-        if not syms:
-            import re
-            links = soup.find_all("a", href=re.compile(r"^/stocks/[A-Z]+/$"))
-            for a in links:
-                parts = a["href"].strip("/").split("/")
-                if len(parts) >= 2:
-                    syms.append(parts[1].upper())
-
-        return syms
-
-    for page_url in page_urls:
-        try:
-            resp = requests.get(page_url, headers=headers, timeout=10)
-            if resp.status_code != 200:
+        # Parse table rows — symbol expected in column index 1 (0-based)
+        symbols = []
+        seen = set()
+        for row in table.find_all("tr"):
+            cells = row.find_all("td")
+            if not cells or len(cells) < 2:
                 continue
-            page_syms = parse_table_from_html(resp.content)
-            added = 0
-            for sym in page_syms:
-                if sym not in seen:
-                    seen.add(sym)
-                    all_symbols.append(sym)
-                    added += 1
-            # If page 2 URL gave same symbols as page 1, stop trying more pages
-            if added == 0:
+            raw = cells[1].get_text(strip=True).upper()
+            # Strip any trailing annotation characters that aren't part of the ticker
+            symbol = "".join(c for c in raw if c.isalpha() or c == "-").strip()
+            if symbol and symbol not in seen:
+                seen.add(symbol)
+                symbols.append(symbol)
+            if len(symbols) >= 50:
                 break
-            if len(all_symbols) >= 50:
-                break
-        except Exception:
-            continue
 
-    if all_symbols:
-        return all_symbols[:50]
+        return symbols  # ordered list, preserving table rank
 
-    # ── Strategy 3: Nothing worked ────────────────────────────────────────
-    return []
+    except Exception as e:
+        st.warning(f"Quant Sentiment: could not fetch trending stocks — {e}")
+        return []
 
 
 @st.cache_data(ttl=86400)   # cache yesterday's list for 24 h so it survives reruns
