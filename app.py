@@ -356,7 +356,7 @@ def fetch_etf_daily_direction(etf_symbols):
     return changes, pct_changes, latest_date, market_caps
 
 @st.cache_data(ttl=3600)
-def fetch_ratio_chart_data(ratio_pairs, period="3mo"):
+def fetch_ratio_chart_data(ratio_pairs, period="1y"):
     symbols = sorted({sym for pair in ratio_pairs for sym in pair})
     if not symbols:
         return pd.DataFrame()
@@ -4684,57 +4684,10 @@ if not setup_avgrank_hist.empty:
     )
 else:
     st.info("Insufficient data to compute Setup Avg Rank history.")
-  
-# ── Timing Summary ───────────────────────────────────────────────────────────
-st.markdown("---")
-st.markdown("#### ⏱ Test Time")
-
-if _timing_log:
-    # Separate industry-level rows from top-level function rows
-    industry_rows = {k: v for k, v in _timing_log.items() if k.startswith("RS+Cloud")}
-    main_rows     = {k: v for k, v in _timing_log.items() if not k.startswith("RS+Cloud")}
-
-    # Top-level functions table
-    # timing_records = [{"Function": k, "Time (ms)": f"{v:,.0f}", "Time (s)": f"{v/1000:.2f}"}
-    #                   for k, v in sorted(main_rows.items(), key=lambda x: -x[1])]
-    timing_records = [{"Function": k, "Time (s)": f"{v/1000:.2f}"}
-                      for k, v in main_rows.items()]
-
-    if timing_records:
-        st.dataframe(
-            pd.DataFrame(timing_records),
-            use_container_width=False,
-            width=350,
-            hide_index=True
-        )
-
-    # Industry RS breakdown — collapsed by default
-    if industry_rows:
-        total_rs_ms = sum(industry_rows.values())
-        with st.expander(f"RS+Cloud per industry — {len(industry_rows)} groups, total {total_rs_ms/1000:.2f}s"):
-            # industry_records = [
-            #     {"Industry": k.replace("RS+Cloud [", "").replace("]", ""),
-            #      "Time (ms)": f"{v:,.0f}",
-            #      "Time (s)": f"{v/1000:.2f}"}
-            #     for k, v in sorted(industry_rows.items(), key=lambda x: -x[1])
-            # ]
-            industry_records = [
-                {"Industry": k.replace("RS+Cloud [", "").replace("]", ""),
-                 "Time (s)": f"{v/1000:.2f}"}
-                for k, v in industry_rows.items()
-            ]
-            st.dataframe(
-                pd.DataFrame(industry_records),
-                use_container_width=False,
-                width=350,
-                hide_index=True
-            )
-
-    total_ms = sum(_timing_log.values())
-    st.caption(f"Total measured wall-clock time: **{total_ms/1000:.2f}s** across {len(_timing_log)} tracked calls")
 
 # ETF daily direction pie chart at the bottom of the page
-etf_symbols = INDUSTRIES.get('ETF', [])
+def _etf_pie_chart():
+    etf_symbols = INDUSTRIES.get('ETF', [])
 if etf_symbols:
     etf_changes, etf_changes_pct, etf_latest_date, etf_market_caps = fetch_etf_daily_direction(tuple(etf_symbols))
     if etf_changes and etf_market_caps:
@@ -4784,66 +4737,118 @@ if etf_symbols:
     else:
         st.info('ETF daily direction data unavailable.')
 
+timed("ETF Pie Chart", _etf_pie_chart)
+
 st.markdown("---")
 
-ratio_pairs = (
-    ("XLK", "SPY"),
-    ("XLY", "XLP"),
-    ("SPHB", "SPY"),
-    ("IWM", "QQQ"),
-    ("VUG", "VTV"),
-)
-
-st.markdown("#### Relative ETF Ratios (60 Days)")
-ratio_chart_df = fetch_ratio_chart_data(ratio_pairs)
-
-if not ratio_chart_df.empty:
-    normalized_ratio_df = ratio_chart_df.divide(ratio_chart_df.iloc[0]).mul(100)
-
-    fig = go.Figure()
-    annotations = []
-    for ratio_name in normalized_ratio_df.columns:
-        y_values = normalized_ratio_df[ratio_name]
-        fig.add_trace(
-            go.Scatter(
-                x=normalized_ratio_df.index,
-                y=y_values,
-                mode="lines",
-                name=ratio_name,
-                showlegend=False,
-                hovertemplate=f"{ratio_name}<br>%{{x|%Y-%m-%d}}<br>Indexed: %{{y:.2f}}<extra></extra>"
-            )
-        )
-
-        annotations.append(
-            dict(
-                x=normalized_ratio_df.index[-1],
-                y=y_values.iloc[-1],
-                xref="x",
-                yref="y",
-                text=ratio_name,
-                xanchor="left",
-                yanchor="middle",
-                showarrow=False,
-                font=dict(size=11),
-                bgcolor="rgba(0,0,0,0.5)",
-                bordercolor="rgba(0,0,0,0.1)",
-                borderwidth=1,
-                borderpad=2
-            )
-        )
-
-    fig.update_layout(
-        height=420,
-        margin=dict(l=0, r=120, t=10, b=0),
-        yaxis_title="Indexed to 100",
-        xaxis_title=None,
-        hovermode="x unified",
-        annotations=annotations
+def _relative_etf_ratios():
+    ratio_pairs = (
+        ("XLK", "SPY"),
+        ("XLY", "XLP"),
+        ("SPHB", "SPY"),
+        ("IWM", "QQQ"),
+        ("VUG", "VTV"),
     )
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    st.info("Relative ETF ratio data unavailable.")
+
+    st.markdown("#### Relative ETF Ratios (1 Year)")
+    ratio_chart_df = fetch_ratio_chart_data(ratio_pairs, period="1y")
+
+    if not ratio_chart_df.empty:
+        normalized_ratio_df = ratio_chart_df.divide(ratio_chart_df.iloc[0]).mul(100)
+
+        fig = go.Figure()
+        annotations = []
+        for ratio_name in normalized_ratio_df.columns:
+            y_values = normalized_ratio_df[ratio_name]
+            fig.add_trace(
+                go.Scatter(
+                    x=normalized_ratio_df.index,
+                    y=y_values,
+                    mode="lines",
+                    name=ratio_name,
+                    showlegend=False,
+                    hovertemplate=f"{ratio_name}<br>%{{x|%Y-%m-%d}}<br>Indexed: %{{y:.2f}}<extra></extra>"
+                )
+            )
+
+            annotations.append(
+                dict(
+                    x=normalized_ratio_df.index[-1],
+                    y=y_values.iloc[-1],
+                    xref="x",
+                    yref="y",
+                    text=ratio_name,
+                    xanchor="left",
+                    yanchor="middle",
+                    showarrow=False,
+                    font=dict(size=11),
+                    bgcolor="rgba(0,0,0,0.5)",
+                    bordercolor="rgba(0,0,0,0.1)",
+                    borderwidth=1,
+                    borderpad=2
+                )
+            )
+
+        fig.update_layout(
+            height=420,
+            margin=dict(l=0, r=120, t=10, b=0),
+            yaxis_title="Indexed to 100",
+            xaxis_title=None,
+            hovermode="x unified",
+            annotations=annotations
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Relative ETF ratio data unavailable.")
+
+timed("Relative ETF Ratios", _relative_etf_ratios)
 
 st.markdown("---")
+
+# ── Timing Summary ───────────────────────────────────────────────────────────
+st.markdown("#### ⏱ Test Time")
+
+if _timing_log:
+    # Separate industry-level rows from top-level function rows
+    industry_rows = {k: v for k, v in _timing_log.items() if k.startswith("RS+Cloud")}
+    main_rows     = {k: v for k, v in _timing_log.items() if not k.startswith("RS+Cloud")}
+
+    # Top-level functions table
+    # timing_records = [{"Function": k, "Time (ms)": f"{v:,.0f}", "Time (s)": f"{v/1000:.2f}"}
+    #                   for k, v in sorted(main_rows.items(), key=lambda x: -x[1])]
+    timing_records = [{"Function": k, "Time (s)": f"{v/1000:.2f}"}
+                      for k, v in main_rows.items()]
+
+    if timing_records:
+        st.dataframe(
+            pd.DataFrame(timing_records),
+            use_container_width=False,
+            width=350,
+            hide_index=True
+        )
+
+    # Industry RS breakdown — collapsed by default
+    if industry_rows:
+        total_rs_ms = sum(industry_rows.values())
+        with st.expander(f"RS+Cloud per industry — {len(industry_rows)} groups, total {total_rs_ms/1000:.2f}s"):
+            # industry_records = [
+            #     {"Industry": k.replace("RS+Cloud [", "").replace("]", ""),
+            #      "Time (ms)": f"{v:,.0f}",
+            #      "Time (s)": f"{v/1000:.2f}"}
+            #     for k, v in sorted(industry_rows.items(), key=lambda x: -x[1])
+            # ]
+            industry_records = [
+                {"Industry": k.replace("RS+Cloud [", "").replace("]", ""),
+                 "Time (s)": f"{v/1000:.2f}"}
+                for k, v in industry_rows.items()
+            ]
+            st.dataframe(
+                pd.DataFrame(industry_records),
+                use_container_width=False,
+                width=350,
+                hide_index=True
+            )
+
+    total_ms = sum(_timing_log.values())
+    st.caption(f"Total measured wall-clock time: **{total_ms/1000:.2f}s** across {len(_timing_log)} tracked calls")
 
