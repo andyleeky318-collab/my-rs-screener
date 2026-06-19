@@ -22,37 +22,37 @@ def timed(label, fn, *args, **kwargs):
 st.set_page_config(page_title="Chrome Sector RS", layout="wide")
 #st.title("🐱 Theme Tracker")
 
-# ── AMD 1-Year OHLC Data Display ─────────────────────────────────────────────
-#@st.cache_data(ttl=3600)
-def load_amd_data():
-    df = yf.download("AMD", period="1y", interval="1d", auto_adjust=False, progress=False)
-    df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
-    df = df[["Open", "High", "Low", "Close", "Adj Close", "Volume"]].dropna()
-    df.index = df.index.strftime("%Y-%m-%d")
-    df = df.rename_axis("Date").reset_index()
-    for col in ["Open", "High", "Low", "Close", "Adj Close"]:
-        df[col] = df[col].round(2)
-    return df
+# # ── AMD 1-Year OHLC Data Display ─────────────────────────────────────────────
+# #@st.cache_data(ttl=3600)
+# def load_amd_data():
+#     df = yf.download("AMD", period="1y", interval="1d", auto_adjust=False, progress=False)
+#     df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
+#     df = df[["Open", "High", "Low", "Close", "Adj Close", "Volume"]].dropna()
+#     df.index = df.index.strftime("%Y-%m-%d")
+#     df = df.rename_axis("Date").reset_index()
+#     for col in ["Open", "High", "Low", "Close", "Adj Close"]:
+#         df[col] = df[col].round(2)
+#     return df
 
-amd_df = load_amd_data()
+# amd_df = load_amd_data()
 
-st.markdown("### 📈 AMD — 1 Year Daily OHLC")
-st.dataframe(
-    amd_df,
-    use_container_width=True,
-    hide_index=True,
-    height=400,
-    column_config={
-        "Date":      st.column_config.TextColumn("Date"),
-        "Open":      st.column_config.NumberColumn("Open",      format="$%.2f"),
-        "High":      st.column_config.NumberColumn("High",      format="$%.2f"),
-        "Low":       st.column_config.NumberColumn("Low",       format="$%.2f"),
-        "Close":     st.column_config.NumberColumn("Close",     format="$%.2f"),
-        "Adj Close": st.column_config.NumberColumn("Adj Close", format="$%.2f"),
-        "Volume":    st.column_config.NumberColumn("Volume",    format="%,d"),
-    }
-)
-st.markdown("---")
+# st.markdown("### 📈 AMD — 1 Year Daily OHLC")
+# st.dataframe(
+#     amd_df,
+#     use_container_width=True,
+#     hide_index=True,
+#     height=400,
+#     column_config={
+#         "Date":      st.column_config.TextColumn("Date"),
+#         "Open":      st.column_config.NumberColumn("Open",      format="$%.2f"),
+#         "High":      st.column_config.NumberColumn("High",      format="$%.2f"),
+#         "Low":       st.column_config.NumberColumn("Low",       format="$%.2f"),
+#         "Close":     st.column_config.NumberColumn("Close",     format="$%.2f"),
+#         "Adj Close": st.column_config.NumberColumn("Adj Close", format="$%.2f"),
+#         "Volume":    st.column_config.NumberColumn("Volume",    format="%,d"),
+#     }
+# )
+# st.markdown("---")
 
 st.markdown(
     """
