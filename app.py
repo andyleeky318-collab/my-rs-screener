@@ -6,6 +6,9 @@ import time
 from google import genai
 import plotly.graph_objects as go
 import streamlit.components.v1 as components
+import requests
+from bs4 import BeautifulSoup
+import datetime
 
 _timing_log = {}  # module-level dict, accumulates across all call sites
 _latest_bar_dropped = False
@@ -5008,3 +5011,170 @@ if _timing_log:
     total_ms = sum(_timing_log.values())
     st.caption(f"Total measured wall-clock time: **{total_ms/1000:.2f}s** across {len(_timing_log)} tracked calls")
 
+# ============================================================
+# QUANT SENTIMENT — Trending Stocks (stockanalysis.com)
+# ============================================================
+@st.cache_data(ttl=3600)
+def fetch_trending_stocks_today():
+    """Fetch up to 50 trending tickers from stockanalysis.com/trending/"""
+    url = "https://stockanalysis.com/trending/"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.content, "html.parser")
+
+        # Primary: look for the explicit #main-table id
+        table = soup.find("table", {"id": "main-table"})
+
+        # Fallback 1: any <table> on the page
+        if table is None:
+            table = soup.find("table")
+
+        # Fallback 2: stockanalysis sometimes renders via a <div> data grid
+        if table is None:
+            rows_divs = soup.select("div[class*='symbol'], a[href*='/stocks/']")
+            symbols = []
+            seen = set()
+            for el in rows_divs:
+                text = el.get_text(strip=True).upper()
+                if text and text not in seen and len(text) <= 6 and text.isalpha():
+                    seen.add(text)
+                    symbols.append(text)
+                if len(symbols) >= 50:
+                    break
+            return symbols  # may be empty list if page structure changed
+
+        # Parse table rows — symbol expected in column index 1 (0-based)
+        symbols = []
+        seen = set()
+        for row in table.find_all("tr"):
+            cells = row.find_all("td")
+            if not cells or len(cells) < 2:
+                continue
+            raw = cells[1].get_text(strip=True).upper()
+            # Strip any trailing annotation characters that aren't part of the ticker
+            symbol = "".join(c for c in raw if c.isalpha() or c == "-").strip()
+            if symbol and symbol not in seen:
+                seen.add(symbol)
+                symbols.append(symbol)
+            if len(symbols) >= 50:
+                break
+
+        return symbols  # ordered list, preserving table rank
+
+    except Exception as e:
+        st.warning(f"Quant Sentiment: could not fetch trending stocks — {e}")
+        return []
+
+
+@st.cache_data(ttl=86400)   # cache yesterday's list for 24 h so it survives reruns
+def fetch_trending_stocks_yesterday():
+    """
+    Fetch yesterday's trending list.
+    Uses a separate cache key so today's and yesterday's lists stay independent.
+    Stockanalysis.com doesn't expose a historical endpoint, so we re-fetch the
+    live page with a 'yesterday' cache key — in practice this means on first run
+    of the day both lists may look identical until tomorrow's cache expires.
+    Strategy: store today's list in session_state keyed on the date so that
+    on subsequent reruns within the same day we can diff against it.
+    """
+    yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+    # session_state key written by today's fetch on the previous calendar day
+    stored_key = f"trending_{yesterday}"
+    return st.session_state.get(stored_key, [])
+
+
+# ── Fetch both lists ──────────────────────────────────────────────────────────
+today_str   = datetime.date.today().isoformat()
+today_key   = f"trending_{today_str}"
+
+trending_today = timed("fetch_trending_stocks_today", fetch_trending_stocks_today)
+
+# Persist today's list in session_state so tomorrow's run can diff against it
+if trending_today and today_key not in st.session_state:
+    st.session_state[today_key] = trending_today
+
+# Yesterday's list — pulled from session_state (populated on the prior calendar day)
+yesterday_str = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+trending_yesterday = st.session_state.get(f"trending_{yesterday_str}", [])
+yesterday_set = set(trending_yesterday)
+
+# ── Render section ────────────────────────────────────────────────────────────
+st.markdown("---")
+st.markdown(
+    f"#### 📡 Quant Sentiment — Trending "
+    f"<span style='color:#888; font-size:14px;'>({len(trending_today)} tickers · "
+    f"<span style='color:#FFD700;'>gold</span> = new today)</span>",
+    unsafe_allow_html=True,
+)
+
+if trending_today:
+    # Build one HTML row preserving the ranked order from the table
+    qs_html = "<div style='display:flex; flex-wrap:wrap; gap:4px; padding:6px 0;'>"
+
+    for rank, sym in enumerate(trending_today, start=1):
+        is_new = sym not in yesterday_set
+
+        # Colour logic: gold if new, lime if also in LIME_STOCKS,
+        # gold-on-black (known) if in KNOWN_STOCKS, else default dark badge
+        if is_new:
+            badge_style = (
+                "background:#FFD700; border:1px solid #B8860B; color:#111111; font-weight:bold;"
+            )
+        elif sym in LIME_STOCKS:
+            badge_style = (
+                "background:#00FF00; border:1px solid #009900; color:#000000; font-weight:bold;"
+            )
+        elif sym in KNOWN_STOCKS:
+            badge_style = (
+                "background:#1e1e1e; border:1px solid #FFD700; color:#FFD700; font-weight:bold;"
+            )
+        else:
+            badge_style = (
+                "background:#1e1e1e; border:1px solid #444; color:#cccccc;"
+            )
+
+        qs_html += (
+            f"<div style='display:inline-flex; align-items:center; gap:4px; "
+            f"padding:2px 7px; border-radius:3px; font-size:11px; "
+            f"white-space:nowrap; {badge_style}'>"
+            f"<span style='color:#555; font-size:9px;'>#{rank}</span>"
+            f"<span>{sym}</span>"
+            f"{'<span style=\"font-size:9px;\">★</span>' if is_new else ''}"
+            f"</div>"
+        )
+
+    qs_html += "</div>"
+
+    # New-ticker callout strip above the badge list
+    new_tickers = [s for s in trending_today if s not in yesterday_set]
+    if new_tickers:
+        new_strip = (
+            "<div style='margin-bottom:8px; font-size:12px; color:#888;'>"
+            f"<span style='color:#FFD700; font-weight:bold;'>New vs yesterday:</span> "
+            + " · ".join(
+                f"<span style='color:#FFD700; font-weight:bold;'>{s}</span>"
+                for s in new_tickers
+            )
+            + "</div>"
+        )
+        st.markdown(new_strip, unsafe_allow_html=True)
+    else:
+        st.markdown(
+            "<div style='margin-bottom:8px; font-size:12px; color:#555;'>"
+            "No new tickers vs yesterday (or first run of the day)</div>",
+            unsafe_allow_html=True,
+        )
+
+    st.markdown(qs_html, unsafe_allow_html=True)
+
+else:
+    st.info("Quant Sentiment: no trending data available right now.")
