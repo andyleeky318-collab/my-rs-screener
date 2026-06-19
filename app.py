@@ -5155,24 +5155,24 @@ if trending_today:
     qs_html += "</div>"
 
     # New-ticker callout strip above the badge list
-    new_tickers = [s for s in trending_today if s not in yesterday_set]
-    if new_tickers:
-        new_strip = (
-            "<div style='margin-bottom:8px; font-size:12px; color:#888;'>"
-            f"<span style='color:#FFD700; font-weight:bold;'>New vs yesterday:</span> "
-            + " · ".join(
-                f"<span style='color:#FFD700; font-weight:bold;'>{s}</span>"
-                for s in new_tickers
-            )
-            + "</div>"
-        )
-        st.markdown(new_strip, unsafe_allow_html=True)
-    else:
-        st.markdown(
-            "<div style='margin-bottom:8px; font-size:12px; color:#555;'>"
-            "No new tickers vs yesterday (or first run of the day)</div>",
-            unsafe_allow_html=True,
-        )
+    # new_tickers = [s for s in trending_today if s not in yesterday_set]
+    # if new_tickers:
+    #     new_strip = (
+    #         "<div style='margin-bottom:8px; font-size:12px; color:#888;'>"
+    #         f"<span style='color:#FFD700; font-weight:bold;'>New vs yesterday:</span> "
+    #         + " · ".join(
+    #             f"<span style='color:#FFD700; font-weight:bold;'>{s}</span>"
+    #             for s in new_tickers
+    #         )
+    #         + "</div>"
+    #     )
+    #     st.markdown(new_strip, unsafe_allow_html=True)
+    # else:
+    #     st.markdown(
+    #         "<div style='margin-bottom:8px; font-size:12px; color:#555;'>"
+    #         "No new tickers vs yesterday (or first run of the day)</div>",
+    #         unsafe_allow_html=True,
+    #     )
 
     st.markdown(qs_html, unsafe_allow_html=True)
 
