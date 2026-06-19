@@ -3749,9 +3749,12 @@ def build_leader_industry_map(leader_list, industries_dict):
     return industry_counts, ticker_industry
 
 def generate_leader_ai_analysis(leader_list, industry_counts, ticker_industry, rs_nh_list, quad_points=None):
-    """Call Gemini first, fall back to OpenAI GPT-4o-mini, then Grok if both unavailable."""
+    """
+    Call AI providers in order: Gemini → Groq → GitHub Models → OpenRouter.
+    Falls through to the next provider only on transient/capacity errors.
+    """
 
-    # ── Build the prompt (shared by all providers) ──────────────────────
+    # ── Build the prompt ──────────────────────────────────────────────────
     sorted_industries = sorted(industry_counts.items(), key=lambda x: -x[1])
     top_industries_str = "\n".join(
         f"  - {ind}: {cnt} leader(s)" for ind, cnt in sorted_industries[:10]
@@ -3801,90 +3804,138 @@ In 4-5 SHORT bullet points:
 Be direct, use industry names, no fluff.
 """
 
-    # Track failures for the final error message
+    TRANSIENT_CODES = [
+        "503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED",
+        "quota", "overloaded", "high demand", "rate_limit",
+        "capacity", "timeout", "502", "529",
+    ]
+
+    def is_transient(error_str):
+        return any(code.lower() in error_str.lower() for code in TRANSIENT_CODES)
+
     failures = {}
 
-    # ── Attempt 1: Gemini ─────────────────────────────────────────────────
+    # ── Provider 1: Gemini ────────────────────────────────────────────────
     gemini_key = st.secrets.get("GEMINI_API_KEY")
     if gemini_key:
         try:
             from google import genai as google_genai
             client = google_genai.Client(api_key=gemini_key)
             response = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model="gemini-2.5-flash",
                 contents=prompt
             )
             return f"🟦 **Gemini 2.5 Flash**\n\n{response.text}"
         except Exception as e:
-            error_str = str(e)
-            is_transient = any(code in error_str for code in [
-                "503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED",
-                "quota", "overloaded", "high demand"
-            ])
-            if not is_transient:
-                return f"🔴 **Gemini error**\n\n{error_str}"
-            failures["Gemini"] = "503 UNAVAILABLE (high demand)"
-            # Fall through to OpenAI
-
-    # ── Attempt 2: OpenAI ─────────────────────────────────────────────────
-    openai_key = st.secrets.get("OPENAI_API_KEY")
-    if openai_key:
-        try:
-            from openai import OpenAI
-            openai_client = OpenAI(api_key=openai_key)
-            completion = openai_client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a concise IBD-style market analyst."},
-                    {"role": "user",   "content": prompt}
-                ],
-                max_tokens=600,
-                temperature=0.4,
-            )
-            result = completion.choices[0].message.content
-            return f"🟩 **GPT-4o-mini** *(Gemini was unavailable)*\n\n{result}"
-        except Exception as e:
-            error_str = str(e)
-            is_transient = any(code in error_str for code in [
-                "503", "429", "rate_limit", "overloaded",
-                "quota", "high demand", "unavailable"
-            ])
-            if not is_transient:
-                return f"🔴 **OpenAI error**\n\n{error_str}"
-            failures["OpenAI"] = f"Rate limit / capacity error: {error_str[:80]}"
-            # Fall through to Grok
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **Gemini error (non-transient)**\n\n{err}"
+            failures["Gemini"] = err[:120]
     else:
-        failures["OpenAI"] = "No OPENAI_API_KEY found in Streamlit secrets"
+        failures["Gemini"] = "No GEMINI_API_KEY in secrets"
 
-    # ── Attempt 3: Grok (xAI) ────────────────────────────────────────────
-    # Grok uses the OpenAI-compatible SDK, just with a different base_url and model
-    grok_key = st.secrets.get("GROK_API_KEY")
-    if grok_key:
+    # ── Provider 2: Groq ──────────────────────────────────────────────────
+    # Free tier: llama-3.3-70b-versatile, mixtral-8x7b-32768, gemma2-9b-it
+    # Docs: console.groq.com/docs/openai
+    groq_key = st.secrets.get("GROQ_API_KEY")
+    if groq_key:
         try:
             from openai import OpenAI as OpenAIClient
-            grok_client = OpenAIClient(
-                api_key=grok_key,
-                base_url="https://api.x.ai/v1",
+            groq_client = OpenAIClient(
+                api_key=groq_key,
+                base_url="https://api.groq.com/openai/v1",
             )
-            completion = grok_client.chat.completions.create(
-                model="grok-3-mini",
+            completion = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
                 messages=[
                     {"role": "system", "content": "You are a concise IBD-style market analyst."},
-                    {"role": "user",   "content": prompt}
+                    {"role": "user",   "content": prompt},
                 ],
                 max_tokens=600,
                 temperature=0.4,
             )
             result = completion.choices[0].message.content
-            prior_failures = ", ".join(failures.keys())
-            return f"⬛ **Grok-3-mini** *({prior_failures} unavailable)*\n\n{result}"
+            prior = ", ".join(failures.keys())
+            return f"🟧 **Groq / Llama-3.3-70b** *({prior} unavailable)*\n\n{result}"
         except Exception as e:
-            failures["Grok"] = str(e)
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **Groq error (non-transient)**\n\n{err}"
+            failures["Groq"] = err[:120]
     else:
-        failures["Grok"] = "No GROK_API_KEY found in Streamlit secrets"
+        failures["Groq"] = "No GROQ_API_KEY in secrets"
+
+    # ── Provider 3: GitHub Models ─────────────────────────────────────────
+    # Free while in preview (as of 2025). Uses OpenAI SDK + Azure endpoint.
+    # Available models: gpt-4o, gpt-4o-mini, Phi-3, Mistral-large, Llama etc.
+    # Full list: github.com/marketplace/models
+    github_token = st.secrets.get("GITHUB_MODELS_TOKEN")
+    if github_token:
+        try:
+            from openai import OpenAI as OpenAIClient
+            github_client = OpenAIClient(
+                api_key=github_token,
+                base_url="https://models.inference.ai.azure.com",
+            )
+            completion = github_client.chat.completions.create(
+                model="gpt-4o-mini",           # or "Meta-Llama-3.1-70B-Instruct"
+                messages=[
+                    {"role": "system", "content": "You are a concise IBD-style market analyst."},
+                    {"role": "user",   "content": prompt},
+                ],
+                max_tokens=600,
+                temperature=0.4,
+            )
+            result = completion.choices[0].message.content
+            prior = ", ".join(failures.keys())
+            return f"⬜ **GitHub Models / gpt-4o-mini** *({prior} unavailable)*\n\n{result}"
+        except Exception as e:
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **GitHub Models error (non-transient)**\n\n{err}"
+            failures["GitHub Models"] = err[:120]
+    else:
+        failures["GitHub Models"] = "No GITHUB_MODELS_TOKEN in secrets"
+
+    # ── Provider 4: OpenRouter ────────────────────────────────────────────
+    # Pay-per-token but has generous free models (look for ":free" suffix).
+    # Free models as of 2025: meta-llama/llama-3.1-8b-instruct:free,
+    #   mistralai/mistral-7b-instruct:free, google/gemma-3-27b-it:free
+    # Docs: openrouter.ai/docs
+    openrouter_key = st.secrets.get("OPENROUTER_API_KEY")
+    if openrouter_key:
+        try:
+            from openai import OpenAI as OpenAIClient
+            or_client = OpenAIClient(
+                api_key=openrouter_key,
+                base_url="https://openrouter.ai/api/v1",
+                default_headers={
+                    "HTTP-Referer": "https://your-app-name.streamlit.app",  # update this
+                    "X-Title": "Theme Tracker",
+                },
+            )
+            completion = or_client.chat.completions.create(
+                model="meta-llama/llama-3.1-8b-instruct:free",
+                messages=[
+                    {"role": "system", "content": "You are a concise IBD-style market analyst."},
+                    {"role": "user",   "content": prompt},
+                ],
+                max_tokens=600,
+                temperature=0.4,
+            )
+            result = completion.choices[0].message.content
+            prior = ", ".join(failures.keys())
+            return f"🟣 **OpenRouter / Llama-3.1-8b** *({prior} unavailable)*\n\n{result}"
+        except Exception as e:
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **OpenRouter error (non-transient)**\n\n{err}"
+            failures["OpenRouter"] = err[:120]
+    else:
+        failures["OpenRouter"] = "No OPENROUTER_API_KEY in secrets"
 
     # ── All providers failed ──────────────────────────────────────────────
-    failure_lines = "\n".join(f"- {provider}: {reason}" for provider, reason in failures.items())
+    failure_lines = "\n".join(f"- {p}: {r}" for p, r in failures.items())
     return (
         "🔴 **All AI providers failed**\n\n"
         f"{failure_lines}"
