@@ -5110,9 +5110,9 @@ yesterday_set = set(trending_yesterday)
 # ── Render section ────────────────────────────────────────────────────────────
 st.markdown("---")
 st.markdown(
-    f"#### 📡 Quant Sentiment — Trending "
-    f"<span style='color:#888; font-size:14px;'>({len(trending_today)} tickers · "
-    f"<span style='color:#FFD700;'>gold</span> = new today)</span>",
+    f"#### 📡 Quant Sentiment",
+    #f"<span style='color:#888; font-size:14px;'>({len(trending_today)} tickers · "
+    #f"<span style='color:#FFD700;'>gold</span> = new today)</span>",
     unsafe_allow_html=True,
 )
 
@@ -5146,7 +5146,7 @@ if trending_today:
             f"<div style='display:inline-flex; align-items:center; gap:4px; "
             f"padding:2px 7px; border-radius:3px; font-size:11px; "
             f"white-space:nowrap; {badge_style}'>"
-            f"<span style='color:#555; font-size:9px;'>#{rank}</span>"
+            #f"<span style='color:#555; font-size:9px;'>#{rank}</span>"
             f"<span>{sym}</span>"
             f"{'<span style=\"font-size:9px;\">★</span>' if is_new else ''}"
             f"</div>"
