@@ -347,47 +347,42 @@ def fetch_etf_daily_direction(etf_symbols):
     if not etf_symbols:
         return {}, {}, None, {}
 
-    fmp_key = st.secrets.get("FMP_API_KEY")
-    if not fmp_key:
-        st.warning("FMP_API_KEY missing from secrets.")
+    finnhub_key = st.secrets.get("FINNHUB_API_KEY")
+    if not finnhub_key:
+        st.warning("FINNHUB_API_KEY missing from secrets.")
         return {}, {}, None, {}
 
     changes      = {}
     pct_changes  = {}
-    market_caps  = {}
     latest_date  = None
+    market_caps  = {
+        'XLK': 125.3, 'XLF': 51.2, 'XLV': 39.4, 'XLE': 39.1, 'XLI': 31.1,
+        'XLC': 23.8, 'XLU': 22.7, 'XLY': 22.4, 'XLP': 14.7, 'XLB': 8.0
+    }
 
-    # ── NEW stable endpoint ──────────────────────────────────────
-    url = "https://financialmodelingprep.com/stable/quote"
+    for sym in etf_symbols:
+        try:
+            resp = requests.get(
+                "https://finnhub.io/api/v1/quote",
+                params={"symbol": sym, "token": finnhub_key},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            data = resp.json()
 
-    try:
-        resp = requests.get(
-            url,
-            params={"symbol": ",".join(etf_symbols), "apikey": fmp_key},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-
-        if not isinstance(data, list):
-            st.warning(f"FMP unexpected response: {data}")
-            return {}, {}, None, {}
-
-        for item in data:
-            sym = item.get("symbol")
-            if sym not in etf_symbols:
+            if data.get("c") is None:
                 continue
-            changes[sym]     = float(item.get("change") or 0.0)
-            pct_changes[sym] = float(item.get("changesPercentage") or 0.0)
-            cap = item.get("marketCap")
-            market_caps[sym] = round(cap / 1e9, 2) if cap else None
-            ts = item.get("timestamp")
+
+            changes[sym]     = float(data.get("d") or 0.0)
+            pct_changes[sym] = float(data.get("dp") or 0.0)
+
+            ts = data.get("t")
             if ts:
                 latest_date = datetime.datetime.fromtimestamp(ts)
 
-    except Exception as e:
-        st.warning(f"FMP fetch error: {e}")
-        return {}, {}, None, {}
+        except Exception as e:
+            st.warning(f"Finnhub fetch error for {sym}: {e}")
+            continue
 
     return changes, pct_changes, latest_date, market_caps
 
