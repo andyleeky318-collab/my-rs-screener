@@ -73,7 +73,7 @@ st.markdown(
 
 # 2. Cleaned Industry Database (Preserved as requested)
 INDUSTRIES = {
-    'COMPTR-DATA STRGE': ['DRAM', 'EWY', 'WDC', 'STX', 'MU', 'SNDK'],
+    'COMPTR-DATA STRGE': ['WDC', 'STX', 'MU', 'SNDK'],
 }
 
 # Cleaned Known Stocks List Reference Array
