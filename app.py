@@ -345,27 +345,30 @@ def download_lime_stocks_data(stocks_tuple):
 @st.cache_data(ttl=900)
 def fetch_etf_daily_direction(etf_symbols):
     if not etf_symbols:
-        return {}, {}, None, {}   # ← fixed: always return a 4-tuple (original had a 2-tuple bug here)
+        return {}, {}, None, {}
 
     fmp_key = st.secrets.get("FMP_API_KEY")
     if not fmp_key:
         st.warning("FMP_API_KEY missing from secrets.")
         return {}, {}, None, {}
 
-    symbols_str = ",".join(etf_symbols)
-    url = f"https://financialmodelingprep.com/api/v3/quote/{symbols_str}"
-
     changes      = {}
     pct_changes  = {}
     market_caps  = {}
     latest_date  = None
 
+    # ── NEW stable endpoint ──────────────────────────────────────
+    url = "https://financialmodelingprep.com/stable/quote"
+
     try:
-        resp = requests.get(url, params={"apikey": fmp_key}, timeout=10)
+        resp = requests.get(
+            url,
+            params={"symbol": ",".join(etf_symbols), "apikey": fmp_key},
+            timeout=10,
+        )
         resp.raise_for_status()
         data = resp.json()
 
-        # FMP returns a plain list of quote objects, or an error dict
         if not isinstance(data, list):
             st.warning(f"FMP unexpected response: {data}")
             return {}, {}, None, {}
@@ -374,13 +377,10 @@ def fetch_etf_daily_direction(etf_symbols):
             sym = item.get("symbol")
             if sym not in etf_symbols:
                 continue
-
             changes[sym]     = float(item.get("change") or 0.0)
             pct_changes[sym] = float(item.get("changesPercentage") or 0.0)
-
             cap = item.get("marketCap")
             market_caps[sym] = round(cap / 1e9, 2) if cap else None
-
             ts = item.get("timestamp")
             if ts:
                 latest_date = datetime.datetime.fromtimestamp(ts)
