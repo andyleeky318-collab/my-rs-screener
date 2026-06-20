@@ -79,7 +79,7 @@ INDUSTRIES = {
     'Crypto': ['MSTR', 'CRCL', 'COIN', 'IBIT'],
     'Nuclear': ['URA', 'NLR', 'CEG', 'CCJ', 'OKLO', 'UUUU', 'SMR', 'LEU'],
     'MAG7': ['MAGS', 'AAPL', 'GOOGL', 'NVDA', 'META', 'MSFT', 'AMZN', 'TSLA'],
-    'ETF': ['XLK', 'XLF', 'XLV', 'XLE', 'XLU', 'XLP', 'XLY', 'XLI', 'XLC', 'XLB'],
+    'ETF': ['XLK', 'XLF', 'XLV', 'XLE', 'XLU', 'XLP', 'XLY', 'XLC', 'XLI', 'XLB'],
     'SPACE': ['SPCX', 'UFO', 'VSAT', 'RKLB', 'SATL', 'RDW', 'LUNR', 'BKSY', 'PL', 'IRDM', 'SATS', 'GSAT', 'ASTS', 'ARKX', 'FLY', 'SPCE', 'KRMN', 'SIDU'],
     'CATHIE WOOD': ['ARKG', 'ARKK', 'ARKQ', 'ARKW', 'ARKF', 'ARKX'],
     'CHINA': ['FUTU', 'LI', 'KWEB', 'XPEV', 'NIO', 'PDD', 'BIDU', 'JD', 'BABA'],
