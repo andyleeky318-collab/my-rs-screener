@@ -29,7 +29,7 @@ st.set_page_config(page_title="Chrome Sector RS", layout="wide")
 # ── AMD 1-Year OHLC Data Display ─────────────────────────────────────────────
 #@st.cache_data(ttl=3600)
 def load_amd_data():
-    df = yf.download("SNDK", period="1y", interval="1d", auto_adjust=False, progress=False)
+    df = yf.download("EWY", period="1y", interval="1d", auto_adjust=False, progress=False)
     df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
     df = df[["Open", "High", "Low", "Close", "Adj Close", "Volume"]].dropna()
     df.index = df.index.strftime("%Y-%m-%d")
