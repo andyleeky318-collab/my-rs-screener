@@ -13,6 +13,8 @@ import datetime
 _timing_log = {}  # module-level dict, accumulates across all call sites
 _latest_bar_dropped = False
 _latest_nan_report_log = {}
+_latest_nan_tickers = set()   # 🔧 was: _latest_row_has_nan_reported = False
+_benchmark_nan_seen = False
 
 def timed(label, fn, *args, **kwargs):
     """Call fn(*args, **kwargs), record elapsed ms in _timing_log, return result."""
@@ -973,22 +975,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length):
         low_data = data['Low']
         open_data = data['Open']
 
-        # st.sidebar.write(f"[{tickers[0] if tickers else '?'} group] close_data shape:", close_data.shape)
-        # st.sidebar.write("Last 3 index dates:", list(close_data.index[-3:]))
-        # st.sidebar.write("Tickers requested:", tickers)
-        # st.sidebar.write("Tickers actually in columns:", [t for t in tickers if t in close_data.columns])
-
-        # Drop the latest bar if it is mostly NaN — this is the unsettled intraday row
-        # yf.download with auto_adjust=False sometimes appends it; download_known_stocks_data
-        # avoids it via per-ticker .dropna(), so we align here to prevent NaN RS scores
-        # Don't drop the last bar wholesale — instead, forward-fill ONLY the NaN cells in the
-        # last row from the previous row, per-column. This means:
-        #   - A ticker with today's data keeps today's data.
-        #   - The benchmark (or any ticker) missing today's data falls back to yesterday's,
-        #     independently of whatever the other columns are doing.
-        #   - If a ticker is ALSO missing today, both it and the benchmark naturally fall back
-        #     to yesterday for that ticker's calculation, since both get filled the same way.
-        global _latest_bar_dropped, _latest_nan_report_log  # 🔧 renamed, now a dict not a bool
+        global _latest_bar_dropped, _latest_nan_tickers, _benchmark_nan_seen  # 🔧
 
         last_row_nan_mask = close_data.iloc[-1].isna()
         latest_row_nan_pct = last_row_nan_mask.mean()
@@ -998,14 +985,14 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length):
             if benchmark_ticker in close_data.columns else False
         )
 
-        # 🔧 FIX: log EVERY group that has a NaN today, not just the first one ever seen.
+        # 🔧 FIX: accumulate into a shared, deduped set across ALL industry groups.
+        # Only record actual STOCK tickers (exclude the benchmark symbol itself
+        # from the "missing tickers" list — that's tracked separately).
         if latest_row_nan_pct > 0:
-            nan_cols = last_row_nan_mask[last_row_nan_mask].index.tolist()
-            group_label = f"{tickers[0]}..{tickers[-1]}" if tickers else "?"
-            _latest_nan_report_log[group_label] = {
-                "benchmark_last_is_nan": benchmark_last_is_nan,
-                "nan_columns": nan_cols,
-            }
+            nan_cols = [c for c in last_row_nan_mask[last_row_nan_mask].index.tolist() if c != benchmark_ticker]
+            _latest_nan_tickers.update(nan_cols)
+            if benchmark_last_is_nan:
+                _benchmark_nan_seen = True
 
         if latest_row_nan_pct > 0:
             close_data.iloc[-1] = close_data.iloc[-1].fillna(close_data.iloc[-2])
@@ -2257,12 +2244,10 @@ for idx, (industry_name, tickers) in enumerate(industry_items):
 status_text.empty()
 progress_bar.empty()
 
-if _latest_nan_report_log:
-    with st.sidebar.expander(f"⚠️ NaN-today report ({len(_latest_nan_report_log)} groups)", expanded=False):
-        for group_label, info in _latest_nan_report_log.items():
-            st.write(f"**{group_label}**")
-            st.write("benchmark_last_is_nan:", info["benchmark_last_is_nan"])
-            st.write("NaN columns:", info["nan_columns"])
+with st.sidebar.expander(f"⚠️ NaN-today report ({len(_latest_nan_tickers)} tickers)", expanded=False):
+    st.write("benchmark_last_is_nan:", _benchmark_nan_seen)
+    st.write(f"Tickers missing today's data: {len(_latest_nan_tickers)}")
+    st.write(sorted(_latest_nan_tickers))
 
 global_setup_tickers = set()
 global_setup_ticker_groups = {}  # ticker -> list of group RS ranks it appears in
