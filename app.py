@@ -345,51 +345,49 @@ def download_lime_stocks_data(stocks_tuple):
 @st.cache_data(ttl=900)
 def fetch_etf_daily_direction(etf_symbols):
     if not etf_symbols:
-        return {}, None
+        return {}, {}, None, {}   # ← fixed: always return a 4-tuple (original had a 2-tuple bug here)
 
-    raw_data = yf.download(list(etf_symbols), period="2d", interval="1d", progress=False, auto_adjust=True)
-    close_data = raw_data['Close'] if isinstance(raw_data, pd.DataFrame) else pd.DataFrame()
-    if isinstance(close_data, pd.Series):
-        close_data = close_data.to_frame()
+    fmp_key = st.secrets.get("FMP_API_KEY")
+    if not fmp_key:
+        st.warning("FMP_API_KEY missing from secrets.")
+        return {}, {}, None, {}
 
-    latest_date = None
-    changes = {}
-    pct_changes = {}
-    market_caps = {
-        'XLK': 125.3,
-        'XLF': 51.2,
-        'XLV': 39.4,
-        'XLE': 39.1,
-        'XLI': 31.1,
-        'XLC': 23.8,
-        'XLU': 22.7,
-        'XLY': 22.4,
-        'XLP': 14.7,
-        'XLB': 8.0
-    }
+    symbols_str = ",".join(etf_symbols)
+    url = f"https://financialmodelingprep.com/api/v3/quote/{symbols_str}"
 
-    for sym in etf_symbols:
-        if sym not in close_data.columns:
-            continue
-        series = close_data[sym].dropna()
-        if len(series) >= 2:
-            prev_val = series.iloc[-2]
-            curr_val = series.iloc[-1]
-            changes[sym] = float(curr_val - prev_val)
-            pct_changes[sym] = float((curr_val - prev_val) / prev_val * 100) if prev_val != 0 else 0.0
-            latest_date = series.index[-1]
-        elif len(series) == 1:
-            changes[sym] = 0.0
-            pct_changes[sym] = 0.0
-            latest_date = series.index[-1]
+    changes      = {}
+    pct_changes  = {}
+    market_caps  = {}
+    latest_date  = None
 
-        if market_caps.get(sym) is None:
-            try:
-                info = yf.Ticker(sym).info
-                cap = info.get('marketCap')
-                market_caps[sym] = round(cap / 1e9, 2) if cap else None
-            except Exception:
-                market_caps[sym] = None
+    try:
+        resp = requests.get(url, params={"apikey": fmp_key}, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+
+        # FMP returns a plain list of quote objects, or an error dict
+        if not isinstance(data, list):
+            st.warning(f"FMP unexpected response: {data}")
+            return {}, {}, None, {}
+
+        for item in data:
+            sym = item.get("symbol")
+            if sym not in etf_symbols:
+                continue
+
+            changes[sym]     = float(item.get("change") or 0.0)
+            pct_changes[sym] = float(item.get("changesPercentage") or 0.0)
+
+            cap = item.get("marketCap")
+            market_caps[sym] = round(cap / 1e9, 2) if cap else None
+
+            ts = item.get("timestamp")
+            if ts:
+                latest_date = datetime.datetime.fromtimestamp(ts)
+
+    except Exception as e:
+        st.warning(f"FMP fetch error: {e}")
+        return {}, {}, None, {}
 
     return changes, pct_changes, latest_date, market_caps
 
