@@ -392,23 +392,54 @@ def fetch_ratio_chart_data(ratio_pairs, period="1y"):
     if not symbols:
         return pd.DataFrame()
 
-    raw_data = yf.download(symbols, period=period, interval="1d", progress=False, auto_adjust=True)
-    if raw_data.empty or "Close" not in raw_data:
+    td_key = st.secrets.get("TWELVEDATA_API_KEY")
+    if not td_key:
+        st.warning("TWELVEDATA_API_KEY missing from secrets.")
         return pd.DataFrame()
 
-    close_data = raw_data["Close"]
-    if isinstance(close_data, pd.Series):
-        close_data = close_data.to_frame(name=symbols[0])
+    try:
+        resp = requests.get(
+            "https://api.twelvedata.com/time_series",
+            params={
+                "symbol": ",".join(symbols),
+                "interval": "1day",
+                "outputsize": 260,   # ~1 trading year of daily bars
+                "apikey": td_key,
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        st.warning(f"Twelve Data fetch error: {e}")
+        return pd.DataFrame()
 
-    ratio_df = pd.DataFrame(index=close_data.index)
-    for numerator, denominator in ratio_pairs:
-        if numerator not in close_data.columns or denominator not in close_data.columns:
+    # Single-symbol responses aren't keyed by symbol — normalize to the batch shape
+    if len(symbols) == 1:
+        data = {symbols[0]: data}
+
+    close_series_map = {}
+    for sym in symbols:
+        sym_data = data.get(sym)
+        if not sym_data or sym_data.get("status") != "ok" or "values" not in sym_data:
             continue
+        rows = sym_data["values"]
+        s = pd.Series({row["datetime"]: float(row["close"]) for row in rows})
+        s.index = pd.to_datetime(s.index)
+        close_series_map[sym] = s.sort_index()
 
-        ratio = close_data[numerator].div(close_data[denominator]).replace([np.inf, -np.inf], np.nan).dropna()
+    if not close_series_map:
+        return pd.DataFrame()
+
+    close_df = pd.DataFrame(close_series_map).dropna(how="all")
+
+    ratio_df = pd.DataFrame(index=close_df.index)
+    for numerator, denominator in ratio_pairs:
+        if numerator not in close_df.columns or denominator not in close_df.columns:
+            continue
+        ratio = close_df[numerator].div(close_df[denominator]).replace([np.inf, -np.inf], np.nan).dropna()
         if ratio.empty:
             continue
-
         ratio_df[f"{numerator}/{denominator}"] = ratio
 
     return ratio_df.dropna(how="all").tail(60)
