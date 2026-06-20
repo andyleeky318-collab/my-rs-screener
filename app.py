@@ -5001,7 +5001,7 @@ def _relative_etf_ratios():
         ("VUG", "VTV"),
     )
 
-    st.markdown("#### Relative ETF Ratios (1 Year)")
+    #st.markdown("#### Relative ETF Ratios (1 Year)")
     ratio_chart_df = fetch_ratio_chart_data(ratio_pairs, period="1y")
 
     if not ratio_chart_df.empty:
