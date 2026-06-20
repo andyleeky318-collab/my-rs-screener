@@ -1066,12 +1066,12 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             current_hh = hh.iloc[-1]
             current_ll = ll.iloc[-1]
 
-            st.sidebar.write(
-                f"{ticker}: rs={current_rs}, hh={current_hh}, ll={current_ll}, "
-                f"hh_isna={pd.isna(current_hh)}, ll_isna={pd.isna(current_ll)}, "
-                f"hh==ll: {current_hh == current_ll if pd.notna(current_hh) and pd.notna(current_ll) else 'n/a'}"
-            )
-            # Also check the raw rolling window itself, not just the last value:
+            # st.sidebar.write(
+            #     f"{ticker}: rs={current_rs}, hh={current_hh}, ll={current_ll}, "
+            #     f"hh_isna={pd.isna(current_hh)}, ll_isna={pd.isna(current_ll)}, "
+            #     f"hh==ll: {current_hh == current_ll if pd.notna(current_hh) and pd.notna(current_ll) else 'n/a'}"
+            # )
+            # # Also check the raw rolling window itself, not just the last value:
             # st.sidebar.write(f"  {ticker} rs_ratio tail(5): {rs_ratio_series.tail(5).tolist()}")
             # st.sidebar.write(f"  {ticker} hh tail(5): {hh.tail(5).tolist()}")
             # st.sidebar.write(f"  {ticker} ll tail(5): {ll.tail(5).tolist()}")
