@@ -807,6 +807,11 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         low_data = data['Low']
         open_data = data['Open']
 
+        st.sidebar.write(f"[{tickers[0] if tickers else '?'} group] close_data shape:", close_data.shape)
+        st.sidebar.write("Last 3 index dates:", list(close_data.index[-3:]))
+        st.sidebar.write("Tickers requested:", tickers)
+        st.sidebar.write("Tickers actually in columns:", [t for t in tickers if t in close_data.columns])
+
         # Drop the latest bar if it is mostly NaN — this is the unsettled intraday row
         # yf.download with auto_adjust=False sometimes appends it; download_known_stocks_data
         # avoids it via per-ticker .dropna(), so we align here to prevent NaN RS scores
@@ -824,12 +829,28 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             _latest_bar_dropped = True
         else:
             _latest_bar_dropped = False
+
+        st.sidebar.write("latest_row_nan_pct:", latest_row_nan_pct)
+        st.sidebar.write("_latest_bar_dropped:", _latest_bar_dropped)
+        st.sidebar.write("Per-ticker NaN on last row:", close_data.iloc[-1][tickers].isna().to_dict())
         
         valid_tickers = [t for t in tickers if t in close_data.columns and close_data[t].notna().sum() >= length]
+
+        st.sidebar.write("valid_tickers:", valid_tickers)
+        for t in tickers:
+            if t in close_data.columns:
+                st.sidebar.write(f"  {t}: notna count = {close_data[t].notna().sum()} (need >= {length})")
+            else:
+                st.sidebar.write(f"  {t}: NOT in close_data.columns at all")
+
         if not valid_tickers: return None, None, None, {}, None, None, None, None, None
 
         # --- New RS Logic ---
         bench_close = close_data[benchmark_ticker]
+
+        st.sidebar.write("benchmark tail(5):", bench_close.tail(5).tolist())
+        st.sidebar.write("benchmark NaN count:", bench_close.isna().sum())
+
         stock_scores = {}
         stock_scores_prev = {}
         stock_scores_1m = {}
@@ -852,6 +873,16 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
             current_rs = rs_ratio_series.iloc[-1]
             current_hh = hh.iloc[-1]
             current_ll = ll.iloc[-1]
+
+            st.sidebar.write(
+                f"{ticker}: rs={current_rs}, hh={current_hh}, ll={current_ll}, "
+                f"hh_isna={pd.isna(current_hh)}, ll_isna={pd.isna(current_ll)}, "
+                f"hh==ll: {current_hh == current_ll if pd.notna(current_hh) and pd.notna(current_ll) else 'n/a'}"
+            )
+            # Also check the raw rolling window itself, not just the last value:
+            st.sidebar.write(f"  {ticker} rs_ratio tail(5): {rs_ratio_series.tail(5).tolist()}")
+            st.sidebar.write(f"  {ticker} hh tail(5): {hh.tail(5).tolist()}")
+            st.sidebar.write(f"  {ticker} ll tail(5): {ll.tail(5).tolist()}")
 
             # Get values from 1 week ago (5 trading days ago)
             prev_rs = rs_ratio_series.iloc[-6]
@@ -882,6 +913,9 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
 
             # This will now store a clean whole number (e.g., 85 instead of 85.34)
             stock_scores[ticker] = total_score
+
+            st.sidebar.write(f"  {ticker} total_score = {total_score}, current_price = {price_lookup.get(ticker)}")
+
             stock_scores_prev[ticker] = total_score_prev
             stock_scores_1m[ticker] = total_score_1m
 
@@ -1123,6 +1157,11 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         
         # Build a list of tickers that strictly have a price greater than 20
         valid_price_tickers = [ticker for ticker, price in price_lookup.items() if price > 20]
+
+        st.sidebar.write("price_lookup:", price_lookup)
+        st.sidebar.write("valid_price_tickers (>$20):", valid_price_tickers)
+        st.sidebar.write("rs_perf before price filter:", rs_perf_raw.to_dict())
+        st.sidebar.write("rs_perf after price filter:", rs_perf.to_dict())
         
         # Filter the series so only stocks with a price > 20 remain
         rs_perf = rs_perf_raw[rs_perf_raw.index.isin(valid_price_tickers)]
