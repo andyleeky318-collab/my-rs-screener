@@ -978,6 +978,8 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         # avoids it via per-ticker .dropna(), so we align here to prevent NaN RS scores
         global _latest_bar_dropped
         latest_row_nan_pct = close_data.iloc[-1].isna().mean()
+        st.sidebar.warning("⚠️ latest_row_nan_pct: {:.2%}".format(latest_row_nan_pct))
+        
         if latest_row_nan_pct > 0.3:
             close_data = close_data.iloc[:-1]
             high_data  = high_data.iloc[:-1]
