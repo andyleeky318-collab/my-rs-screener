@@ -815,20 +815,46 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         # Drop the latest bar if it is mostly NaN — this is the unsettled intraday row
         # yf.download with auto_adjust=False sometimes appends it; download_known_stocks_data
         # avoids it via per-ticker .dropna(), so we align here to prevent NaN RS scores
+        # Don't drop the last bar wholesale — instead, forward-fill ONLY the NaN cells in the
+        # last row from the previous row, per-column. This means:
+        #   - A ticker with today's data keeps today's data.
+        #   - The benchmark (or any ticker) missing today's data falls back to yesterday's,
+        #     independently of whatever the other columns are doing.
+        #   - If a ticker is ALSO missing today, both it and the benchmark naturally fall back
+        #     to yesterday for that ticker's calculation, since both get filled the same way.
         global _latest_bar_dropped, _latest_row_has_nan_reported
-        latest_row_nan_pct = close_data.iloc[-1].isna().mean()
+
+        last_row_nan_mask = close_data.iloc[-1].isna()
+        latest_row_nan_pct = last_row_nan_mask.mean()
+
+        benchmark_last_is_nan = (
+            pd.isna(close_data[benchmark_ticker].iloc[-1])
+            if benchmark_ticker in close_data.columns else False
+        )
+
         if latest_row_nan_pct > 0 and not _latest_row_has_nan_reported:
             st.sidebar.write("latest_row_has_nan:", True)
+            st.sidebar.write("benchmark_last_is_nan:", benchmark_last_is_nan)
+            st.sidebar.write("columns with NaN today:", last_row_nan_mask[last_row_nan_mask].index.tolist())
             _latest_row_has_nan_reported = True
 
-        if latest_row_nan_pct > 0.3:
-            close_data = close_data.iloc[:-1]
-            high_data  = high_data.iloc[:-1]
-            low_data   = low_data.iloc[:-1]
-            open_data  = open_data.iloc[:-1]
-            _latest_bar_dropped = True
+        if latest_row_nan_pct > 0:
+            # Forward-fill just the last row's NaNs from the row before it, per DataFrame.
+            # This preserves today's values for every column that HAS today's value,
+            # and only back-fills the specific columns (ticker and/or benchmark) missing it.
+            close_data.iloc[-1] = close_data.iloc[-1].fillna(close_data.iloc[-2])
+            high_data.iloc[-1]  = high_data.iloc[-1].fillna(high_data.iloc[-2])
+            low_data.iloc[-1]   = low_data.iloc[-1].fillna(low_data.iloc[-2])
+            open_data.iloc[-1]  = open_data.iloc[-1].fillna(open_data.iloc[-2])
+            _latest_bar_dropped = True   # repurposed as "latest_bar_was_patched" — kept name for compat
         else:
             _latest_bar_dropped = False
+
+        # 🔍 DEBUG: confirm the fill worked and didn't clobber legitimate today's values
+        st.sidebar.write("After fill — benchmark tail(3):", close_data[benchmark_ticker].tail(3).tolist())
+        for t in tickers:
+            if t in close_data.columns:
+                st.sidebar.write(f"After fill — {t} tail(3): {close_data[t].tail(3).tolist()}")
 
         st.sidebar.write("latest_row_nan_pct:", latest_row_nan_pct)
         st.sidebar.write("_latest_bar_dropped:", _latest_bar_dropped)
@@ -1158,10 +1184,10 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         # Build a list of tickers that strictly have a price greater than 20
         valid_price_tickers = [ticker for ticker, price in price_lookup.items() if price > 20]
 
-        st.sidebar.write("price_lookup:", price_lookup)
-        st.sidebar.write("valid_price_tickers (>$20):", valid_price_tickers)
-        st.sidebar.write("rs_perf before price filter:", rs_perf_raw.to_dict())
-        st.sidebar.write("rs_perf after price filter:", rs_perf.to_dict())
+        # st.sidebar.write("price_lookup:", price_lookup)
+        # st.sidebar.write("valid_price_tickers (>$20):", valid_price_tickers)
+        # st.sidebar.write("rs_perf before price filter:", rs_perf_raw.to_dict())
+        # st.sidebar.write("rs_perf after price filter:", rs_perf.to_dict())
         
         # Filter the series so only stocks with a price > 20 remain
         rs_perf = rs_perf_raw[rs_perf_raw.index.isin(valid_price_tickers)]
