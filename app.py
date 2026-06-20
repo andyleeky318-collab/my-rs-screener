@@ -397,30 +397,36 @@ def fetch_ratio_chart_data(ratio_pairs, period="1y"):
         st.warning("TWELVEDATA_API_KEY missing from secrets.")
         return pd.DataFrame()
 
-    try:
-        resp = requests.get(
-            "https://api.twelvedata.com/time_series",
-            params={
-                "symbol": ",".join(symbols),
-                "interval": "1day",
-                "outputsize": 260,   # ~1 trading year of daily bars
-                "apikey": td_key,
-            },
-            timeout=15,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception as e:
-        st.warning(f"Twelve Data fetch error: {e}")
-        return pd.DataFrame()
+    CHUNK_SIZE = 7  # stay under the 8-credits/minute free-tier ceiling
+    chunks = [symbols[i:i + CHUNK_SIZE] for i in range(0, len(symbols), CHUNK_SIZE)]
+    all_data = {}
 
-    # Single-symbol responses aren't keyed by symbol — normalize to the batch shape
-    if len(symbols) == 1:
-        data = {symbols[0]: data}
+    for i, chunk in enumerate(chunks):
+        try:
+            resp = requests.get(
+                "https://api.twelvedata.com/time_series",
+                params={
+                    "symbol": ",".join(chunk),
+                    "interval": "1day",
+                    "outputsize": 260,
+                    "apikey": td_key,
+                },
+                timeout=15,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if len(chunk) == 1:
+                data = {chunk[0]: data}
+            all_data.update(data)
+        except Exception as e:
+            st.warning(f"Twelve Data fetch error (chunk {i+1}): {e}")
+
+        if i < len(chunks) - 1:
+            time.sleep(61)  # wait for credit quota to reset before next chunk
 
     close_series_map = {}
     for sym in symbols:
-        sym_data = data.get(sym)
+        sym_data = all_data.get(sym)
         if not sym_data or sym_data.get("status") != "ok" or "values" not in sym_data:
             continue
         rows = sym_data["values"]
@@ -432,7 +438,6 @@ def fetch_ratio_chart_data(ratio_pairs, period="1y"):
         return pd.DataFrame()
 
     close_df = pd.DataFrame(close_series_map).dropna(how="all")
-
     ratio_df = pd.DataFrame(index=close_df.index)
     for numerator, denominator in ratio_pairs:
         if numerator not in close_df.columns or denominator not in close_df.columns:
