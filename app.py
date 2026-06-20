@@ -12,6 +12,7 @@ import datetime
 
 _timing_log = {}  # module-level dict, accumulates across all call sites
 _latest_bar_dropped = False
+_latest_row_has_nan_reported = False
 
 def timed(label, fn, *args, **kwargs):
     """Call fn(*args, **kwargs), record elapsed ms in _timing_log, return result."""
@@ -976,9 +977,11 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
         # Drop the latest bar if it is mostly NaN — this is the unsettled intraday row
         # yf.download with auto_adjust=False sometimes appends it; download_known_stocks_data
         # avoids it via per-ticker .dropna(), so we align here to prevent NaN RS scores
-        global _latest_bar_dropped
+        global _latest_bar_dropped, _latest_row_has_nan_reported
         latest_row_nan_pct = close_data.iloc[-1].isna().mean()
-        st.sidebar.write("latest_row_has_nan:", latest_row_nan_pct > 0)
+        if latest_row_nan_pct > 0 and not _latest_row_has_nan_reported:
+            st.sidebar.write("latest_row_has_nan:", True)
+            _latest_row_has_nan_reported = True
 
         if latest_row_nan_pct > 0.3:
             close_data = close_data.iloc[:-1]
