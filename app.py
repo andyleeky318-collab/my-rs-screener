@@ -1216,21 +1216,21 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length): # <--
                 is_pine_7_valid
             )
 
-            if ticker == "AMD" and _latest_bar_dropped:
-                st.sidebar.warning("⚠️ DEBUGGING FOR AMD ACTIVATED")
+            # if ticker == "AMD" and _latest_bar_dropped:
+            #     st.sidebar.warning("⚠️ DEBUGGING FOR AMD ACTIVATED")
                 
-                # Check metrics availability
-                debug_info = {
-                    "Ticker Symbol": ticker,
-                    "Current Cached Price": round(current_price, 2) if 'current_price' in locals() else "N/A",
-                    "Total Raw RS Score": total_score,
-                    "Has Data Available": ticker in close_data.columns,
-                    "Historical Bars Fetched": int(close_data[ticker].notna().sum()),
-                    "Requested Window Length": length,
-                    "Is Current High NaN": pd.isna(current_hh),
-                    "Is Current Low NaN": pd.isna(current_ll)
-                }
-                st.sidebar.json(debug_info)            
+            #     # Check metrics availability
+            #     debug_info = {
+            #         "Ticker Symbol": ticker,
+            #         "Current Cached Price": round(current_price, 2) if 'current_price' in locals() else "N/A",
+            #         "Total Raw RS Score": total_score,
+            #         "Has Data Available": ticker in close_data.columns,
+            #         "Historical Bars Fetched": int(close_data[ticker].notna().sum()),
+            #         "Requested Window Length": length,
+            #         "Is Current High NaN": pd.isna(current_hh),
+            #         "Is Current Low NaN": pd.isna(current_ll)
+            #     }
+            #     st.sidebar.json(debug_info)            
 
             # ================================
             # DEBUG AMAT
