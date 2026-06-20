@@ -4938,9 +4938,10 @@ def _etf_pie_chart():
                 title={
                     'text': f"{positive_count}/10",
                     'x': 0.5,
-                    'xanchor': 'center'
+                    'xanchor': 'center',
+                    'font': {'size': 30}  # <--- Added this to increase font size
                 },
-                margin=dict(l=0, r=0, t=30, b=0)
+                margin=dict(l=0, r=0, t=50, b=0)  # Bumped 't' up slightly so a larger font doesn't get cut off
             )
             st.plotly_chart(fig, use_container_width=True)
         else:
