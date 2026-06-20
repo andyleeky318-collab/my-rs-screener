@@ -4930,6 +4930,8 @@ if not setup_avgrank_hist.empty:
 else:
     st.info("Insufficient data to compute Setup Avg Rank history.")
 
+st.markdown("---")
+
 # ETF daily direction pie chart at the bottom of the page
 def _etf_pie_chart():
     etf_symbols = INDUSTRIES.get('ETF', [])
