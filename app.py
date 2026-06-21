@@ -2420,6 +2420,9 @@ if all_data:
     table { width:100%; border-collapse: collapse; }
     th { padding: 4px 8px !important; background-color: #1f77b4; color: white; font-size: 12px; }
     td { padding: 2px 8px !important; border-bottom: 1px solid #333; font-size: 12px; }
+    th:nth-child(6), td:nth-child(6) {
+        border-right: 3px solid #ffffff;
+    }
     </style>
     """, unsafe_allow_html=True)
 
