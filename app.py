@@ -996,16 +996,20 @@ st.markdown("---")
 
 # 4. IMPLEMENTATION OF NEW NORMALIZED RS METHOD AND EMA CLOUD
 @st.cache_data(ttl=3600)
-def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length):
+def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, _benchmark_df):
     tickers = list(tickers_tuple)
     try:
-        all_tickers = tickers + [benchmark_ticker]
-        data = yf.download(all_tickers, period="2y", interval="1d", progress=False, auto_adjust=True)
+        #all_tickers = tickers + [benchmark_ticker]
+        #data = yf.download(all_tickers, period="2y", interval="1d", progress=False, auto_adjust=True)
+        data = yf.download(tickers, period="2y", interval="1d", progress=False, auto_adjust=True)
 
         close_data = data['Close']
         high_data = data['High']
         low_data = data['Low']
         open_data = data['Open']
+
+        close_data = close_data.copy()
+        close_data[benchmark_ticker] = _benchmark_df['Close'].reindex(close_data.index)
 
         global _latest_bar_dropped, _latest_nan_tickers, _benchmark_nan_seen  # 🔧
 
@@ -2238,7 +2242,7 @@ for idx, (industry_name, tickers) in enumerate(industry_items):
     perf, rs_scores, cloud_list, price_lookup, rs_scores_prev, rs_scores_1m, cloud_21ema_list, cloud_wick_list, ma50_bounce_list = timed(
         f"RS+Cloud [{industry_name}]",
         get_rs_and_cloud_data_cached,
-        tuple(tickers), benchmark, 90
+        tuple(tickers), benchmark, 90, benchmark_df_shared   # ← added benchmark_df_shared
     )
     
     if rs_scores is not None:
