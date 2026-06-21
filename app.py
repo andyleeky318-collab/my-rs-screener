@@ -9,6 +9,9 @@ import streamlit.components.v1 as components
 import requests
 from bs4 import BeautifulSoup
 import datetime
+import base64
+
+GITHUB_API = "https://api.github.com"
 
 _timing_log = {}  # module-level dict, accumulates across all call sites
 _latest_bar_dropped = False
@@ -5248,44 +5251,112 @@ def fetch_trending_stocks_today():
         st.warning(f"Quant Sentiment: could not fetch trending stocks — {e}")
         return []
 
-@st.cache_data(ttl=86400)   # cache yesterday's list for 24 h so it survives reruns
-def fetch_trending_stocks_yesterday():
+def _github_headers():
+    token = st.secrets.get("GITHUB_TOKEN")
+    return {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+    }
+
+def _github_filepath(date_obj):
+    return f"trending_history/trending_{date_obj.isoformat()}.txt"
+
+def save_trending_list_github(date_obj, tickers):
+    """Commit today's trending tickers to the GitHub data repo (creates or updates)."""
+    repo   = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+
+    if not repo or not st.secrets.get("GITHUB_TOKEN"):
+        st.warning("GitHub secrets (GITHUB_TOKEN / GITHUB_REPO) not configured — skipping save.")
+        return
+
+    path = _github_filepath(date_obj)
+    url  = f"{GITHUB_API}/repos/{repo}/contents/{path}"
+
+    content_str = "\n".join(tickers)
+    content_b64 = base64.b64encode(content_str.encode()).decode()
+
+    # Check if a file already exists for this date (need its sha to overwrite)
+    sha = None
+    try:
+        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
+        if resp.status_code == 200:
+            sha = resp.json().get("sha")
+    except Exception:
+        pass
+
+    payload = {
+        "message": f"Trending snapshot {date_obj.isoformat()}",
+        "content": content_b64,
+        "branch": branch,
+    }
+    if sha:
+        payload["sha"] = sha  # required when overwriting an existing file
+
+    try:
+        put_resp = requests.put(url, headers=_github_headers(), json=payload, timeout=10)
+        if put_resp.status_code not in (200, 201):
+            st.warning(f"GitHub save failed: {put_resp.status_code} {put_resp.text[:150]}")
+    except Exception as e:
+        st.warning(f"GitHub save error: {e}")
+
+def load_trending_list_github(date_obj):
+    """Load tickers for an exact date from GitHub. Returns None if not found."""
+    repo   = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+
+    if not repo or not st.secrets.get("GITHUB_TOKEN"):
+        return None
+
+    path = _github_filepath(date_obj)
+    url  = f"{GITHUB_API}/repos/{repo}/contents/{path}"
+
+    try:
+        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        decoded = base64.b64decode(data["content"]).decode()
+        return [line.strip() for line in decoded.splitlines() if line.strip()]
+    except Exception:
+        return None
+
+def find_nearest_backward_trending_list_github(start_date, max_lookback_days=30):
     """
-    Fetch yesterday's trending list.
-    Uses a separate cache key so today's and yesterday's lists stay independent.
-    Stockanalysis.com doesn't expose a historical endpoint, so we re-fetch the
-    live page with a 'yesterday' cache key — in practice this means on first run
-    of the day both lists may look identical until tomorrow's cache expires.
-    Strategy: store today's list in session_state keyed on the date so that
-    on subsequent reruns within the same day we can diff against it.
+    Walk backward from start_date (exclusive) day by day until a saved
+    trending file is found in the GitHub data repo.
+    Returns (tickers, date_found) or ([], None) if nothing found within the lookback window.
     """
-    yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
-    # session_state key written by today's fetch on the previous calendar day
-    stored_key = f"trending_{yesterday}"
-    return st.session_state.get(stored_key, [])
+    for i in range(1, max_lookback_days + 1):
+        check_date = start_date - datetime.timedelta(days=i)
+        tickers = load_trending_list_github(check_date)
+        if tickers is not None:
+            return tickers, check_date
+    return [], None
 
 
-# ── Fetch both lists ──────────────────────────────────────────────────────────
-today_str   = datetime.date.today().isoformat()
-today_key   = f"trending_{today_str}"
+# ── Fetch today's list, persist to GitHub, find comparison baseline ─────────
+today_date = datetime.date.today()
 
 trending_today = timed("fetch_trending_stocks_today", fetch_trending_stocks_today)
 
-# Persist today's list in session_state so tomorrow's run can diff against it
-if trending_today and today_key not in st.session_state:
-    st.session_state[today_key] = trending_today
+if trending_today:
+    timed("save_trending_list_github", save_trending_list_github, today_date, trending_today)
 
-# Yesterday's list — pulled from session_state (populated on the prior calendar day)
-yesterday_str = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
-trending_yesterday = st.session_state.get(f"trending_{yesterday_str}", [])
+trending_yesterday, comparison_date = timed(
+    "find_nearest_backward_trending_list_github",
+    find_nearest_backward_trending_list_github,
+    today_date
+)
 yesterday_set = set(trending_yesterday)
 
 # ── Render section ────────────────────────────────────────────────────────────
 st.markdown("---")
+
+comparison_label = comparison_date.isoformat() if comparison_date else "no prior data"
 st.markdown(
-    f"#### 📡 Quant Sentiment",
-    #f"<span style='color:#888; font-size:14px;'>({len(trending_today)} tickers · "
-    #f"<span style='color:#FFD700;'>gold</span> = new today)</span>",
+    f"#### 📡 Quant Sentiment "
+    f"<span style='color:#888; font-size:12px;'>(vs {comparison_label})</span>",
     unsafe_allow_html=True,
 )
 
@@ -5319,33 +5390,12 @@ if trending_today:
             f"<div style='display:inline-flex; align-items:center; gap:4px; "
             f"padding:2px 7px; border-radius:3px; font-size:11px; "
             f"white-space:nowrap; {badge_style}'>"
-            #f"<span style='color:#555; font-size:9px;'>#{rank}</span>"
             f"<span>{sym}</span>"
             f"{'<span style=\"font-size:9px;\">★</span>' if is_new else ''}"
             f"</div>"
         )
 
     qs_html += "</div>"
-
-    # New-ticker callout strip above the badge list
-    # new_tickers = [s for s in trending_today if s not in yesterday_set]
-    # if new_tickers:
-    #     new_strip = (
-    #         "<div style='margin-bottom:8px; font-size:12px; color:#888;'>"
-    #         f"<span style='color:#FFD700; font-weight:bold;'>New vs yesterday:</span> "
-    #         + " · ".join(
-    #             f"<span style='color:#FFD700; font-weight:bold;'>{s}</span>"
-    #             for s in new_tickers
-    #         )
-    #         + "</div>"
-    #     )
-    #     st.markdown(new_strip, unsafe_allow_html=True)
-    # else:
-    #     st.markdown(
-    #         "<div style='margin-bottom:8px; font-size:12px; color:#555;'>"
-    #         "No new tickers vs yesterday (or first run of the day)</div>",
-    #         unsafe_allow_html=True,
-    #     )
 
     st.markdown(qs_html, unsafe_allow_html=True)
 
