@@ -5377,17 +5377,17 @@ if trending_today:
             badge_style = (
                 "background:#FFD700; border:1px solid #B8860B; color:#111111; font-weight:bold;"
             )
-        elif sym in LIME_STOCKS:
-            badge_style = (
-                "background:#00FF00; border:1px solid #009900; color:#000000; font-weight:bold;"
-            )
-        elif sym in KNOWN_STOCKS:
-            badge_style = (
-                "background:#1e1e1e; border:1px solid #FFD700; color:#FFD700; font-weight:bold;"
-            )
+        # elif sym in LIME_STOCKS:
+        #     badge_style = (
+        #         "background:#00FF00; border:1px solid #009900; color:#000000; font-weight:bold;"
+        #     )
+        # elif sym in KNOWN_STOCKS:
+        #     badge_style = (
+        #         "background:#1e1e1e; border:1px solid #FFD700; color:#FFD700; font-weight:bold;"
+        #     )
         else:
             badge_style = (
-                "background:#1e1e1e; border:1px solid #444; color:#cccccc;"
+                "background:#1e1e1e; border:1px solid #444; color:#FFFFFF;"
             )
 
         qs_html += (
@@ -5395,7 +5395,7 @@ if trending_today:
             f"padding:2px 7px; border-radius:3px; font-size:11px; "
             f"white-space:nowrap; {badge_style}'>"
             f"<span>{sym}</span>"
-            f"{'<span style=\"font-size:9px;\">★</span>' if is_new else ''}"
+            #f"{'<span style=\"font-size:9px;\">★</span>' if is_new else ''}"
             f"</div>"
         )
 
