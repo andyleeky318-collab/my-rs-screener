@@ -3746,7 +3746,7 @@ if leader_list or leader_yest:
         )
 
         streak = leader_streaks.get(sym, 0)
-        streak_color = "#333333" if sym in (ma50bounce_all | cloudwick_all | cloud21ema_all) else "#888888"
+        streak_color = "#FF4B4B" if streak >= 10 else "#333333" if sym in (ma50bounce_all | cloudwick_all | cloud21ema_all) else "#888888"
         streak_html = (
             f'<span style="color:{streak_color}; font-size:10px; margin-left:5px;">· {streak}</span>'
             if streak > 0 else ""
