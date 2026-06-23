@@ -1394,6 +1394,11 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, _bench
         st.error(f"Error: {e}")
         return None, None, None, {}, None, None, None, None, None
 
+with st.sidebar:
+    if st.button("Refresh Industry RS Table", use_container_width=True):
+        get_rs_and_cloud_data_cached.clear()
+        st.toast("Industry RS cache cleared! Reloading table...", icon="📊")
+
 # Reference Scanner Logic Functions
 # def scan_two_botak(df, lookback=0):
 #     idx = -1 - lookback
