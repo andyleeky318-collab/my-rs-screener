@@ -921,8 +921,8 @@ if breadth_total > 0:
             f"  </div>"
             # Counts row
             f"  <div style='display:flex;justify-content:space-between;width:40%;margin-top:4px;'>"
-            f"    <span style='font-size:12px;color:#888888;'>{val:,} {title.split(' vs ')[0]}</span>"
-            f"    <span style='font-size:12px;color:#888888;'>{counterpart:,} {title.split(' vs ')[1]}</span>"
+            f"    <span style='font-size:12px;color:#888888;'>{val:,}</span>"
+            f"    <span style='font-size:12px;color:#888888;'>{counterpart:,}</span>"
             f"  </div>"
             f"</div>"
         )
