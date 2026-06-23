@@ -124,7 +124,7 @@ INDUSTRIES = {
     'RETAIL-DRUG STORES': ['CVS', 'UNH', 'ELV', 'HUM'],
     'UTILITY-ELCTRIC PWR': ['NEE', 'SO', 'CEG', 'DUK', 'AEP', 'SRE', 'D', 'VST', 'PEG', 'PCG', 'EXC', 'XEL', 'ED', 'EIX', 'WEC', 'ETR', 'DTE', 'FE', 'PPL', 'AEE', 'ES', 'CMS', 'NRG', 'CNP', 'LNT', 'EVRG', 'AES', 'PNW', 'OGE', 'IDA', 'POR', 'ORA', 'BKH', 'TXNM', 'NWE', 'MGEE'],
     'ELEC-POWER/EQPMT': ['GRID', 'ETN', 'ABBN', 'GEV', 'AME', 'ROK', 'HUBB', 'RRX', 'GNRC', 'AYI', 'BDC', 'ENS', 'FLNC', 'SMR', 'ATKR', 'PBW', 'POWL', 'VICR', 'BE', 'ENVX'],
-    'TELCOM-FIBR OPTCS': ['XTL', 'AAOI', 'COHR', 'CIEN', 'FN', 'LITE', 'AXTI'],
+    'TELCOM-FIBR OPTCS': ['XTL', 'FOTO', 'AAOI', 'COHR', 'CIEN', 'FN', 'LITE', 'AXTI'],
     'ELEC-PARTS': ['APH', 'GLW', 'NVT', 'CAMT', 'TEL'],
     'ELEC-SCNTIFIC/MSRNG': ['PH', 'EMR', 'KEYS', 'FTV', 'CGNX', 'NOVT', 'ST', 'NXT', 'ITRI', 'ESE', 'SXI', 'MTRN'],
     'ELEC-SEMICNDCTR EQP': ['EUV', 'KLIC', 'ASML', 'KLAC', 'AMAT', 'LRCX', 'ONTO', 'NVMI', 'TER', 'AEIS', 'MKSI', 'ENTG', 'ACLS', 'AEHR'],
@@ -250,7 +250,7 @@ INDUSTRIES = {
 
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
-    'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
+    'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
     'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EWY', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'NTAP', 'OR', 
     'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
@@ -294,7 +294,14 @@ LIME_STOCKS = [
     'UFO', 'URA', 'USO', 'VTV', 'VUG', 'WGMI', 'XBI',
     'XME', 'XRT', 'XTL', 'SPY', 'QQQ'
 ]
-#'KBE', 'NLR', 'CLOU', 'XHB', 'BUG', 'HACK', 'ITA', 'IAT', 'XOP', 
+
+LIME_STOCKS1 = [
+    'CIBR', 'COPX', 'DRAM', 'GDX', 'IBIT', 'IGV', 'IHI',
+    'IPAY', 'ITB', 'JETS', 'KRE', 'KWEB', 'LIT', 'MAGS',
+    'PBW', 'REMX', 'SHLD', 'SIL', 'SLX', 'SMH', 'TAN',
+    'UFO', 'URA', 'USO', 'VTV', 'VUG', 'WGMI', 'XBI',
+    'XME', 'XRT', 'XTL', 'SPY', 'QQQ', 'FOTO', 'KBE', 'NLR', 'CLOU', 'XHB', 'BUG', 'HACK', 'ITA', 'IAT', 'XOP'
+]
 
 # ============================================================
 # SHARED DOWNLOAD: runs once, feeds all history compute fns
@@ -966,7 +973,7 @@ if breadth_total > 0:
                 "padding:12px 4px;'>"
             )
             for sym in sorted(new_high_tickers):
-                if sym in LIME_STOCKS:
+                if sym in LIME_STOCKS1:
                     nh_html += (
                         f'<div class="ticker-badge lime-badge">'
                         f'<span style="color:#000;font-weight:bold;">{sym}</span></div>'
@@ -2534,7 +2541,7 @@ if all_data:
             
             if (show_all_rs or rs_score >= 80) and ticker_price > 20:
                 # If the ticker is inside KNOWN_STOCKS, apply high-contrast dark text rules
-                if ticker_sym in LIME_STOCKS:
+                if ticker_sym in LIME_STOCKS1:
                     ticker_html += (
                         f'<div class="ticker-badge lime-badge">'
                         f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{ticker_sym}</span>' 
@@ -2568,7 +2575,7 @@ if all_data:
             # Retrieve the RS Score from our data map (default to 0 if not found)
             cloud_rs = rs_lookup.get(cloud_sym, 0)
             
-            if cloud_sym in LIME_STOCKS:
+            if cloud_sym in LIME_STOCKS1:
                 cloud_html += (
                     f'<div class="ticker-badge lime-badge">'
                     f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{cloud_sym}</span>'
@@ -2600,7 +2607,7 @@ if all_data:
         for cloud_sym in top_5_cloud_21ema:
             cloud_rs = rs_lookup.get(cloud_sym, 0)
 
-            if cloud_sym in LIME_STOCKS:
+            if cloud_sym in LIME_STOCKS1:
                 cloud_21ema_html += (
                     f'<div class="ticker-badge lime-badge">'
                     f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{cloud_sym}</span>'
@@ -2633,7 +2640,7 @@ if all_data:
         for cloud_sym in top_5_cloud_wick:
             cloud_rs = rs_lookup.get(cloud_sym, 0)
 
-            if cloud_sym in LIME_STOCKS:
+            if cloud_sym in LIME_STOCKS1:
                 cloud_wick_html += (
                     f'<div class="ticker-badge lime-badge">'
                     f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{cloud_sym}</span>'
@@ -2665,7 +2672,7 @@ if all_data:
         for cloud_sym in top_5_ma50_bounce:
             cloud_rs = rs_lookup.get(cloud_sym, 0)
 
-            if cloud_sym in LIME_STOCKS:
+            if cloud_sym in LIME_STOCKS1:
                 ma50_bounce_html += (
                     f'<div class="ticker-badge lime-badge">'
                     f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{cloud_sym}</span>'
