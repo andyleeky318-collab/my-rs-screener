@@ -1395,7 +1395,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, _bench
         return None, None, None, {}, None, None, None, None, None
 
 with st.sidebar:
-    if st.button("Refresh Industry RS Table", use_container_width=True):
+    if st.button("Refresh Table", use_container_width=True):
         get_rs_and_cloud_data_cached.clear()
         st.toast("Industry RS cache cleared! Reloading table...", icon="📊")
 
