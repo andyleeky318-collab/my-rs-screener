@@ -787,7 +787,7 @@ if lime_perf_rows:
             ticker_color = (
                 "#FFD700" if sym == "SPY"
                 else "#ADFF2F" if sym == "QQQ"
-                else "#F08080" if sym == "RSP"
+                else "#F0E68C" if sym == "RSP"
                 else "#cccccc"
             )
             html += (
