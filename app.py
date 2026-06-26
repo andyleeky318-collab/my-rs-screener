@@ -2343,6 +2343,63 @@ def setup_badge(sym, is_new=False, is_removed=False, extra_prefix=""):
                 f'<span style="color:#111111;font-weight:bold;">{sym}</span></div>')
     return f'<div class="ticker-badge">{extra_prefix}{sym}</div>'
 
+@st.cache_data(ttl=3600)
+def compute_industry_vol_flags(industries_dict, _ticker_dfs):
+    """
+    For each industry, count how many tickers meet highVolCount >= 6 OR volScore >= 3.5.
+    Returns set of industry names where at least 2 tickers meet the condition.
+    """
+    flagged_industries = set()
+
+    for industry, tickers in industries_dict.items():
+        qualifying_count = 0
+
+        for ticker in tickers:
+            try:
+                df = _ticker_dfs.get(ticker)
+                if df is None or len(df) < 22:
+                    continue
+
+                high  = df['High']
+                low   = df['Low']
+
+                daily_range = 100 * (high / low - 1)
+                avg_range   = daily_range.rolling(20).mean()
+                std_range   = daily_range.rolling(20).std(ddof=1)
+
+                z_series    = (daily_range - avg_range) / std_range.replace(0, float('nan'))
+
+                # highVolDay = z > 1.5
+                high_vol_day = (z_series > 1.5).astype(int)
+
+                # highVolCount = sum of highVolDay over last 20 bars
+                high_vol_count = high_vol_day.rolling(20).sum().iloc[-1]
+
+                # volScore = sum of max(z - 1.5, 0) over last 20 bars
+                vol_score = (z_series - 1.5).clip(lower=0).rolling(20).sum().iloc[-1]
+
+                if pd.isna(high_vol_count) or pd.isna(vol_score):
+                    continue
+
+                if high_vol_count >= 6 or vol_score >= 3.5:
+                    qualifying_count += 1
+
+                if qualifying_count >= 2:
+                    flagged_industries.add(industry)
+                    break
+
+            except Exception:
+                continue
+
+    return flagged_industries
+
+with st.spinner("Computing industry volatility flags..."):
+    vol_flagged_industries = timed(
+        "compute_industry_vol_flags",
+        compute_industry_vol_flags,
+        INDUSTRIES, ticker_dfs_shared
+    )
+
 # 6. Compact Display Logic
 if all_data:
     df_main = pd.DataFrame([{"Industry": item["Industry"], "Group RS": item["Group RS"], "Group RS Prev": item["Group RS Prev"], "Group RS 1M": item["Group RS 1M"]} for item in all_data])
@@ -2704,8 +2761,10 @@ if all_data:
                     f'</div>'
                 )
 
+        num_color = "#FF4B4B" if row["Industry"] in vol_flagged_industries else "#888888"
+        
         table_html += f"""<tr style="background-color: {bg_color};">
-        <td style="text-align: center; color: #888; font-weight: bold;">{row_num}</td>
+        <td style="text-align: center; color: {num_color}; font-weight: bold;">{row_num}</td>
         <td style="font-weight: bold; color: #ffffff;">{row['Industry']}</td>
         <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.1f}</td>
         <td style="text-align: center; vertical-align: middle;">{rank_str}</td>
