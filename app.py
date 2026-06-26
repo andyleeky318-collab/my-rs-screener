@@ -5422,3 +5422,71 @@ if trending_today:
 
 else:
     st.info("Quant Sentiment: no trending data available right now.")
+
+# ============================================================
+# VOLATILITY PICKUP — Z-Score of Daily Range >= 2
+# ============================================================
+@st.cache_data(ttl=3600)
+def compute_volatility_pickup(stocks_list, _ticker_dfs):
+    """
+    For each ticker, compute:
+        dailyRange = 100 * (high / low - 1)
+        avgRange   = SMA(dailyRange, 20)
+        stdRange   = STDEV(dailyRange, 20)
+        z          = (dailyRange - avgRange) / stdRange
+    Return list of (ticker, z_score) where z >= 2, sorted descending by z.
+    """
+    results = []
+    for ticker in stocks_list:
+        try:
+            df = _ticker_dfs.get(ticker)
+            if df is None or len(df) < 22:
+                continue
+            high  = df['High']
+            low   = df['Low']
+            close = df['Close']
+
+            if close.iloc[-1] < 20:
+                continue
+
+            daily_range = 100 * (high / low - 1)
+            avg_range   = daily_range.rolling(20).mean()
+            std_range   = daily_range.rolling(20).std(ddof=1)
+
+            z_series = (daily_range - avg_range) / std_range.replace(0, float('nan'))
+
+            z_today = z_series.iloc[-1]
+            if pd.isna(z_today) or z_today < 2:
+                continue
+
+            results.append((ticker, round(float(z_today), 2)))
+        except Exception:
+            continue
+
+    results.sort(key=lambda x: -x[1])
+    return results
+
+
+with st.spinner("Scanning volatility pickup..."):
+    volatility_hits = timed(
+        "compute_volatility_pickup",
+        compute_volatility_pickup,
+        stocks_tuple, ticker_dfs_shared
+    )
+
+st.markdown("---")
+st.markdown(f"#### 📊 Volatility ({len(volatility_hits)})")
+
+if volatility_hits:
+    vol_html = "<div style='display:flex; flex-wrap:wrap; gap:4px; padding:6px 0;'>"
+    for sym, z in volatility_hits:
+        vol_html += (
+            f'<div class="ticker-badge">'
+            f'<span class="ticker-name">{sym}</span>'
+            f'<span style="color:#888888; font-size:10px; margin-left:4px;">· {z:.1f}</span>'
+            f'</div>'
+        )
+    vol_html += "</div>"
+    st.markdown(vol_html, unsafe_allow_html=True)
+else:
+    st.info("No tickers with volatility Z-score ≥ 2 today.")
