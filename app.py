@@ -1004,6 +1004,151 @@ if breadth_total > 0:
     )
     st.markdown(breadth_html, unsafe_allow_html=True)
 
+# ── Distribution Chart (after breadth bars) ──────────────────────────────────
+@st.cache_data(ttl=3600)
+def compute_pct_change_distribution(stocks_list, _ticker_dfs):
+    """
+    Bucket each stock's daily % change into bands matching the reference image.
+    Buckets: ≤-7%, -7~-5%, -5~-3%, -3~0%, 0 (unchanged), 0~3%, 3~5%, 5~7%, ≥7%
+    """
+    buckets = {
+        "≤-7%":   0,
+        "-7~-5%": 0,
+        "-5~-3%": 0,
+        "-3~0%":  0,
+        "0":      0,
+        "0~3%":   0,
+        "3~5%":   0,
+        "5~7%":   0,
+        "≥7%":    0,
+    }
+
+    for ticker in stocks_list:
+        df = _ticker_dfs.get(ticker)
+        if df is None or len(df) < 2:
+            continue
+        c_today = df['Close'].iloc[-1]
+        c_prev  = df['Close'].iloc[-2]
+        if pd.isna(c_today) or pd.isna(c_prev) or c_prev == 0:
+            continue
+
+        pct = (c_today - c_prev) / c_prev * 100
+
+        if pct == 0:
+            buckets["0"] += 1
+        elif pct <= -7:
+            buckets["≤-7%"] += 1
+        elif pct <= -5:
+            buckets["-7~-5%"] += 1
+        elif pct <= -3:
+            buckets["-5~-3%"] += 1
+        elif pct < 0:
+            buckets["-3~0%"] += 1
+        elif pct < 3:
+            buckets["0~3%"] += 1
+        elif pct < 5:
+            buckets["3~5%"] += 1
+        elif pct < 7:
+            buckets["5~7%"] += 1
+        else:
+            buckets["≥7%"] += 1
+
+    return buckets
+
+dist_buckets = timed(
+    "compute_pct_change_distribution",
+    compute_pct_change_distribution,
+    stocks_tuple, ticker_dfs_shared
+)
+
+# ── Render Distribution SVG ───────────────────────────────────────────────────
+bucket_order = ["≤-7%", "-7~-5%", "-5~-3%", "-3~0%", "0", "0~3%", "3~5%", "5~7%", "≥7%"]
+bucket_colors = {
+    "≤-7%":   "#FF4B6E",
+    "-7~-5%": "#FF4B6E",
+    "-5~-3%": "#FF4B6E",
+    "-3~0%":  "#FF4B6E",
+    "0":      "#888888",
+    "0~3%":   "#00C076",
+    "3~5%":   "#00C076",
+    "5~7%":   "#00C076",
+    "≥7%":    "#00C076",
+}
+
+vals       = [dist_buckets[b] for b in bucket_order]
+max_val    = max(vals) or 1
+
+SVG_W      = 680
+SVG_H      = 220
+PAD_L      = 30
+PAD_R      = 30
+PAD_TOP    = 50        # room for count labels above bars
+PAD_BOT    = 32        # room for bucket labels below bars
+MAX_BAR_H  = SVG_H - PAD_TOP - PAD_BOT   # 138px
+
+n          = len(bucket_order)
+slot_w     = (SVG_W - PAD_L - PAD_R) / n
+bar_w      = slot_w * 0.52
+
+bars_svg   = ""
+labels_svg = ""
+counts_svg = ""
+
+for i, (label, val) in enumerate(zip(bucket_order, vals)):
+    cx     = PAD_L + slot_w * i + slot_w / 2
+    bar_h  = max(int(val / max_val * MAX_BAR_H), 3)
+    bar_x  = cx - bar_w / 2
+    bar_y  = PAD_TOP + (MAX_BAR_H - bar_h)
+    color  = bucket_colors[label]
+
+    # Bar
+    bars_svg += (
+        f'<rect x="{bar_x:.1f}" y="{bar_y}" '
+        f'width="{bar_w:.1f}" height="{bar_h}" '
+        f'rx="3" fill="{color}"/>'
+    )
+
+    # Count label above bar
+    count_y = bar_y - 6
+    counts_svg += (
+        f'<text x="{cx:.1f}" y="{count_y}" '
+        f'text-anchor="middle" font-size="12" '
+        f'font-family="Source Sans Pro,sans-serif" '
+        f'font-weight="700" fill="{color}">{val:,}</text>'
+    )
+
+    # Bucket label below
+    label_y = SVG_H - 6
+    labels_svg += (
+        f'<text x="{cx:.1f}" y="{label_y}" '
+        f'text-anchor="middle" font-size="11" '
+        f'font-family="Source Sans Pro,sans-serif" '
+        f'fill="#888888">{label}</text>'
+    )
+
+# Baseline
+baseline_y = PAD_TOP + MAX_BAR_H
+baseline_svg = (
+    f'<line x1="{PAD_L}" y1="{baseline_y}" '
+    f'x2="{SVG_W - PAD_R}" y2="{baseline_y}" '
+    f'stroke="#444444" stroke-width="0.8"/>'
+)
+
+dist_html = f"""
+<div style="background:#0e1117; border-radius:6px; padding:8px 0 0;">
+  <svg xmlns="http://www.w3.org/2000/svg"
+       width="{SVG_W}" height="{SVG_H}"
+       style="display:block;">
+    {baseline_svg}
+    {bars_svg}
+    {counts_svg}
+    {labels_svg}
+  </svg>
+</div>
+"""
+
+st.markdown(dist_html, unsafe_allow_html=True)
+
 st.markdown("---")
 
 # 4. IMPLEMENTATION OF NEW NORMALIZED RS METHOD AND EMA CLOUD
