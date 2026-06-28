@@ -5098,7 +5098,7 @@ if volatility_hits:
             f'border:1px solid {border}; border-radius:3px; font-size:11px; '
             f'background:{bg}; white-space:nowrap;">'
             f'<span style="font-weight:bold; color:{txt_col};">{sym}</span>'
-            f'<span style="color:{z_col}; font-size:10px; margin-left:4px;">· z{z:.1f} {pct_sign}</span>'
+            f'<span style="color:{z_col}; font-size:10px; margin-left:4px;">· {z:.1f}</span>'
             f'</div>'
         )
     vol_html += "</div>"
