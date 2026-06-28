@@ -633,7 +633,7 @@ with st.sidebar:
         compute_breadth_and_stage.clear()
         st.toast("Cache cleared! Fetching real-time market data...", icon="🔄")
 
-    if st.button("Clear Cache & Refresh"):
+    if st.button("Clear Cache"):
         st.cache_data.clear()
 
 # st.markdown("---")
