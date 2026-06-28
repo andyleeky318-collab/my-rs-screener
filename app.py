@@ -5059,7 +5059,9 @@ def compute_volatility_pickup(stocks_list, _ticker_dfs):
             if pd.isna(z_today) or z_today < 2:
                 continue
 
-            results.append((ticker, round(float(z_today), 2)))
+            close = df['Close']
+            pct_chg = (close.iloc[-1] - close.iloc[-2]) / close.iloc[-2] * 100 if len(close) >= 2 and close.iloc[-2] != 0 else 0.0
+            results.append((ticker, round(float(z_today), 2), round(float(pct_chg), 2)))
         except Exception:
             continue
 
@@ -5079,11 +5081,24 @@ st.markdown(f"#### 〽️ Volatility ({len(volatility_hits)})")
 
 if volatility_hits:
     vol_html = "<div style='display:flex; flex-wrap:wrap; gap:4px; padding:6px 0;'>"
-    for sym, z in volatility_hits:
+    for sym, z, pct in volatility_hits:
+        if pct >= 0:
+            bg       = "#90EE90"   # light green
+            border   = "#228B22"
+            txt_col  = "#003300"   # dark green — readable on light green
+            z_col    = "#005500"
+        else:
+            bg       = "#FFB3B3"   # light red
+            border   = "#CC0000"
+            txt_col  = "#4B0000"   # dark red — readable on light red
+            z_col    = "#6B0000"
+        pct_sign = f"+{pct:.1f}%" if pct >= 0 else f"{pct:.1f}%"
         vol_html += (
-            f'<div class="ticker-badge">'
-            f'<span class="ticker-name">{sym}</span>'
-            f'<span style="color:#888888; font-size:10px; margin-left:4px;">· {z:.1f}</span>'
+            f'<div style="display:inline-block; margin:1px 3px; padding:1px 5px; '
+            f'border:1px solid {border}; border-radius:3px; font-size:11px; '
+            f'background:{bg}; white-space:nowrap;">'
+            f'<span style="font-weight:bold; color:{txt_col};">{sym}</span>'
+            f'<span style="color:{z_col}; font-size:10px; margin-left:4px;">· z{z:.1f} {pct_sign}</span>'
             f'</div>'
         )
     vol_html += "</div>"
