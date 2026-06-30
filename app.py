@@ -1078,30 +1078,30 @@ bucket_colors = {
 vals    = [dist_buckets[b] for b in bucket_order]
 max_val = max(vals) or 1
 
-bars_html = "<div style='display:flex; align-items:flex-end; gap:4px; width:100%; height:140px; padding:8px 0;'>"
+bars_html = "<div style='display:flex;align-items:flex-end;gap:6px;width:100%;height:140px;padding:12px 4px;'>"
 for label, val in zip(bucket_order, vals):
     color   = bucket_colors[label]
-    bar_pct = (val / max_val) * 100  # height as % of container
+    bar_pct = (val / max_val) * 100
     bars_html += (
-        f"<div style='flex:1; display:flex; flex-direction:column; align-items:center; "
-        f"justify-content:flex-end; height:100%; min-width:0;'>"
-        f"<span style='font-size:11px; font-weight:700; color:{color}; margin-bottom:3px;'>{val:,}</span>"
-        f"<div style='width:60%; height:{bar_pct:.1f}%; background:{color}; border-radius:3px 3px 0 0; min-height:3px;'></div>"
+        f"<div style='flex:1;display:flex;flex-direction:column;align-items:center;"
+        f"justify-content:flex-end;height:100%;min-width:0;'>"
+        f"<span style='font-size:11px;font-weight:700;color:{color};margin-bottom:3px;'>{val:,}</span>"
+        f"<div style='width:60%;height:{bar_pct:.1f}%;background:{color};border-radius:3px 3px 0 0;min-height:3px;'></div>"
         f"</div>"
     )
 bars_html += "</div>"
 
-labels_html = "<div style='display:flex; gap:4px; width:100%;'>"
+labels_html = "<div style='display:flex;gap:6px;width:100%;padding:0 4px;'>"
 for label in bucket_order:
     labels_html += (
-        f"<div style='flex:1; text-align:center; font-size:10px; color:#888888; min-width:0;'>{label}</div>"
+        f"<div style='flex:1;text-align:center;font-size:10px;color:#888888;min-width:0;'>{label}</div>"
     )
 labels_html += "</div>"
 
 dist_html = f"""
-<div style="background:#0e1117; border-radius:6px; padding:8px 8px 6px; width:100%; box-sizing:border-box;">
+<div style="background:#0e1117;border-radius:6px;width:100%;box-sizing:border-box;">
   {bars_html}
-  <div style="border-top:0.8px solid #444444; margin-bottom:4px;"></div>
+  <div style="border-top:0.8px solid #444444;margin:0 4px 4px;"></div>
   {labels_html}
 </div>
 """
