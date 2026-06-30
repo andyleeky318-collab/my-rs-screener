@@ -1063,6 +1063,7 @@ dist_buckets = timed(
 
 # ── Render Distribution SVG ───────────────────────────────────────────────────
 bucket_order = ["≤-7%", "-7~-5%", "-5~-3%", "-3~0%", "0", "0~3%", "3~5%", "5~7%", "≥7%"]
+
 bucket_colors = {
     "≤-7%":   "#FF4B6E",
     "-7~-5%": "#FF4B6E",
@@ -1075,76 +1076,114 @@ bucket_colors = {
     "≥7%":    "#00C076",
 }
 
-vals       = [dist_buckets[b] for b in bucket_order]
-max_val    = max(vals) or 1
+vals = [dist_buckets[b] for b in bucket_order]
+max_val = max(vals) or 1
 
-SVG_W      = 680
-SVG_H      = 220
-PAD_L      = 30
-PAD_R      = 30
-PAD_TOP    = 50        # room for count labels above bars
-PAD_BOT    = 32        # room for bucket labels below bars
-MAX_BAR_H  = SVG_H - PAD_TOP - PAD_BOT   # 138px
+SVG_W = 680
+SVG_H = 220
 
-n          = len(bucket_order)
-slot_w     = (SVG_W - PAD_L - PAD_R) / n
-bar_w      = slot_w * 0.52
+PAD_L = 30
+PAD_R = 30
+PAD_TOP = 50
+PAD_BOT = 32
 
-bars_svg   = ""
+MAX_BAR_H = SVG_H - PAD_TOP - PAD_BOT
+
+n = len(bucket_order)
+slot_w = (SVG_W - PAD_L - PAD_R) / n
+bar_w = slot_w * 0.52
+
+bars_svg = ""
 labels_svg = ""
 counts_svg = ""
 
-for i, (label, val) in enumerate(zip(bucket_order, vals)):
-    cx     = PAD_L + slot_w * i + slot_w / 2
-    bar_h  = max(int(val / max_val * MAX_BAR_H), 3)
-    bar_x  = cx - bar_w / 2
-    bar_y  = PAD_TOP + (MAX_BAR_H - bar_h)
-    color  = bucket_colors[label]
+for label, val in zip(bucket_order, vals):
+
+    i = bucket_order.index(label)
+
+    cx = PAD_L + slot_w * i + slot_w / 2
+
+    bar_h = max(int(val / max_val * MAX_BAR_H), 3)
+    bar_x = cx - bar_w / 2
+    bar_y = PAD_TOP + (MAX_BAR_H - bar_h)
+
+    color = bucket_colors[label]
 
     # Bar
-    bars_svg += (
-        f'<rect x="{bar_x:.1f}" y="{bar_y}" '
-        f'width="{bar_w:.1f}" height="{bar_h}" '
-        f'rx="3" fill="{color}"/>'
-    )
+    bars_svg += f"""
+    <rect
+        x="{bar_x:.1f}"
+        y="{bar_y}"
+        width="{bar_w:.1f}"
+        height="{bar_h}"
+        rx="3"
+        fill="{color}" />
+    """
 
-    # Count label above bar
-    count_y = bar_y - 6
-    counts_svg += (
-        f'<text x="{cx:.1f}" y="{count_y}" '
-        f'text-anchor="middle" font-size="12" '
-        f'font-family="Source Sans Pro,sans-serif" '
-        f'font-weight="700" fill="{color}">{val:,}</text>'
-    )
+    # Count above bar
+    counts_svg += f"""
+    <text
+        x="{cx:.1f}"
+        y="{bar_y-6}"
+        text-anchor="middle"
+        font-size="12"
+        font-family="Source Sans Pro,sans-serif"
+        font-weight="700"
+        fill="{color}">
+        {val:,}
+    </text>
+    """
 
-    # Bucket label below
-    label_y = SVG_H - 6
-    labels_svg += (
-        f'<text x="{cx:.1f}" y="{label_y}" '
-        f'text-anchor="middle" font-size="11" '
-        f'font-family="Source Sans Pro,sans-serif" '
-        f'fill="#888888">{label}</text>'
-    )
+    # Bucket label
+    labels_svg += f"""
+    <text
+        x="{cx:.1f}"
+        y="{SVG_H-6}"
+        text-anchor="middle"
+        font-size="11"
+        font-family="Source Sans Pro,sans-serif"
+        fill="#888888">
+        {label}
+    </text>
+    """
 
-# Baseline
 baseline_y = PAD_TOP + MAX_BAR_H
-baseline_svg = (
-    f'<line x1="{PAD_L}" y1="{baseline_y}" '
-    f'x2="{SVG_W - PAD_R}" y2="{baseline_y}" '
-    f'stroke="#444444" stroke-width="0.8"/>'
-)
+
+baseline_svg = f"""
+<line
+    x1="{PAD_L}"
+    y1="{baseline_y}"
+    x2="{SVG_W-PAD_R}"
+    y2="{baseline_y}"
+    stroke="#444444"
+    stroke-width="0.8"/>
+"""
 
 dist_html = f"""
-<div style="background:#0e1117; border-radius:6px; padding:8px 0 0;">
-    <svg xmlns="http://www.w3.org/2000/svg"
+<div style="
+    background:#0e1117;
+    border-radius:6px;
+    padding:8px 0 0;
+    width:100%;
+">
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 {SVG_W} {SVG_H}"
         preserveAspectRatio="xMidYMid meet"
-        style="display:block;width:100%;height:auto;">
-    {baseline_svg}
-    {bars_svg}
-    {counts_svg}
-    {labels_svg}
-  </svg>
+        style="
+            display:block;
+            width:100%;
+            max-width:{SVG_W}px;
+            height:auto;
+            margin:auto;
+        ">
+
+        {baseline_svg}
+        {bars_svg}
+        {counts_svg}
+        {labels_svg}
+
+    </svg>
 </div>
 """
 
