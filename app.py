@@ -1135,7 +1135,7 @@ baseline_svg = (
 )
 
 dist_html = f"""
-<div style="background:#0e1117; border-radius:6px; padding:8px 0 0; max-width:340px;">
+<div style="background:#0e1117; border-radius:6px; padding:8px 0 0; max-width:408px;">
   <svg xmlns="http://www.w3.org/2000/svg"
        viewBox="0 0 {SVG_W} {SVG_H}"
        width="100%" height="auto"
