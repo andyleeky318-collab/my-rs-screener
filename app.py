@@ -1078,10 +1078,10 @@ bucket_colors = {
 vals       = [dist_buckets[b] for b in bucket_order]
 max_val    = max(vals) or 1
 
-SVG_W      = 680
+SVG_W      = 340
 SVG_H      = 220
-PAD_L      = 30
-PAD_R      = 30
+PAD_L      = 15
+PAD_R      = 15
 PAD_TOP    = 50        # room for count labels above bars
 PAD_BOT    = 32        # room for bucket labels below bars
 MAX_BAR_H  = SVG_H - PAD_TOP - PAD_BOT   # 138px
@@ -1112,7 +1112,7 @@ for i, (label, val) in enumerate(zip(bucket_order, vals)):
     count_y = bar_y - 6
     counts_svg += (
         f'<text x="{cx:.1f}" y="{count_y}" '
-        f'text-anchor="middle" font-size="12" '
+        f'text-anchor="middle" font-size="9" '
         f'font-family="Source Sans Pro,sans-serif" '
         f'font-weight="700" fill="{color}">{val:,}</text>'
     )
@@ -1121,7 +1121,7 @@ for i, (label, val) in enumerate(zip(bucket_order, vals)):
     label_y = SVG_H - 6
     labels_svg += (
         f'<text x="{cx:.1f}" y="{label_y}" '
-        f'text-anchor="middle" font-size="11" '
+        f'text-anchor="middle" font-size="8" '
         f'font-family="Source Sans Pro,sans-serif" '
         f'fill="#888888">{label}</text>'
     )
@@ -1135,10 +1135,10 @@ baseline_svg = (
 )
 
 dist_html = f"""
-<div style="background:#0e1117; border-radius:6px; padding:8px 0 0; width:100%; max-width:{SVG_W}px; margin:0 auto;">
+<div style="background:#0e1117; border-radius:6px; padding:8px 0 0;">
   <svg xmlns="http://www.w3.org/2000/svg"
-       viewBox="0 0 {SVG_W} {SVG_H}"
-       style="width:100%; height:auto; display:block;">
+       width="{SVG_W}" height="{SVG_H}"
+       style="display:block;">
     {baseline_svg}
     {bars_svg}
     {counts_svg}
