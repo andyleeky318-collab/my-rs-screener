@@ -1075,35 +1075,76 @@ bucket_colors = {
     "≥7%":    "#00C076",
 }
 
-vals    = [dist_buckets[b] for b in bucket_order]
-max_val = max(vals) or 1
+vals       = [dist_buckets[b] for b in bucket_order]
+max_val    = max(vals) or 1
 
-bars_html = "<div style='display:flex;align-items:flex-end;gap:6px;width:100%;height:140px;padding:12px 4px;'>"
-for label, val in zip(bucket_order, vals):
-    color   = bucket_colors[label]
-    bar_pct = (val / max_val) * 100
-    bars_html += (
-        f"<div style='flex:1;display:flex;flex-direction:column;align-items:center;"
-        f"justify-content:flex-end;height:100%;min-width:0;'>"
-        f"<span style='font-size:11px;font-weight:700;color:{color};margin-bottom:3px;'>{val:,}</span>"
-        f"<div style='width:60%;height:{bar_pct:.1f}%;background:{color};border-radius:3px 3px 0 0;min-height:3px;'></div>"
-        f"</div>"
-    )
-bars_html += "</div>"
+SVG_W      = 680
+SVG_H      = 220
+PAD_L      = 30
+PAD_R      = 30
+PAD_TOP    = 50        # room for count labels above bars
+PAD_BOT    = 32        # room for bucket labels below bars
+MAX_BAR_H  = SVG_H - PAD_TOP - PAD_BOT   # 138px
 
-labels_html = "<div style='display:flex;gap:6px;width:100%;padding:0 4px;'>"
-for label in bucket_order:
-    labels_html += (
-        f"<div style='flex:1;text-align:center;font-size:10px;color:#888888;min-width:0;'>{label}</div>"
+n          = len(bucket_order)
+slot_w     = (SVG_W - PAD_L - PAD_R) / n
+bar_w      = slot_w * 0.52
+
+bars_svg   = ""
+labels_svg = ""
+counts_svg = ""
+
+for i, (label, val) in enumerate(zip(bucket_order, vals)):
+    cx     = PAD_L + slot_w * i + slot_w / 2
+    bar_h  = max(int(val / max_val * MAX_BAR_H), 3)
+    bar_x  = cx - bar_w / 2
+    bar_y  = PAD_TOP + (MAX_BAR_H - bar_h)
+    color  = bucket_colors[label]
+
+    # Bar
+    bars_svg += (
+        f'<rect x="{bar_x:.1f}" y="{bar_y}" '
+        f'width="{bar_w:.1f}" height="{bar_h}" '
+        f'rx="3" fill="{color}"/>'
     )
-labels_html += "</div>"
+
+    # Count label above bar
+    count_y = bar_y - 6
+    counts_svg += (
+        f'<text x="{cx:.1f}" y="{count_y}" '
+        f'text-anchor="middle" font-size="12" '
+        f'font-family="Source Sans Pro,sans-serif" '
+        f'font-weight="700" fill="{color}">{val:,}</text>'
+    )
+
+    # Bucket label below
+    label_y = SVG_H - 6
+    labels_svg += (
+        f'<text x="{cx:.1f}" y="{label_y}" '
+        f'text-anchor="middle" font-size="11" '
+        f'font-family="Source Sans Pro,sans-serif" '
+        f'fill="#888888">{label}</text>'
+    )
+
+# Baseline
+baseline_y = PAD_TOP + MAX_BAR_H
+baseline_svg = (
+    f'<line x1="{PAD_L}" y1="{baseline_y}" '
+    f'x2="{SVG_W - PAD_R}" y2="{baseline_y}" '
+    f'stroke="#444444" stroke-width="0.8"/>'
+)
 
 dist_html = f"""
-<div style="background:#0e1117;border-radius:6px;box-sizing:border-box;
-            width:47vw;max-width:340px;">
-  {bars_html}
-  <div style="border-top:0.8px solid #444444;margin:0 4px 4px;"></div>
-  {labels_html}
+<div style="background:#0e1117; border-radius:6px; padding:8px 0 0;">
+    <svg xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 {SVG_W} {SVG_H}"
+        preserveAspectRatio="xMidYMid meet"
+        style="display:block;width:100%;height:auto;">
+    {baseline_svg}
+    {bars_svg}
+    {counts_svg}
+    {labels_svg}
+  </svg>
 </div>
 """
 
