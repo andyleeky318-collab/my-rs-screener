@@ -1135,11 +1135,10 @@ baseline_svg = (
 )
 
 dist_html = f"""
-<div style="background:#0e1117; border-radius:6px; padding:8px 0 0; width:100%; max-width:{SVG_W}px;">
-  <svg xmlns="http://www.w3.org/2000/svg"
-       viewBox="0 0 {SVG_W} {SVG_H}"
+<div style="background:#0e1117; border-radius:6px; padding:8px 0 0; width:100%; max-width:{SVG_W}px; overflow-x:hidden; box-sizing:border-box;">
+  <svg viewBox="0 0 {SVG_W} {SVG_H}"
        preserveAspectRatio="xMinYMin meet"
-       style="display:block; width:100%; height:auto;">
+       style="display:block; width:100%; max-width:100%; height:auto;">
     {baseline_svg}
     {bars_svg}
     {counts_svg}
