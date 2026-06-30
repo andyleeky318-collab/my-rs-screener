@@ -1100,7 +1100,7 @@ labels_html += "</div>"
 
 dist_html = f"""
 <div style="background:#0e1117;border-radius:6px;box-sizing:border-box;
-            width:95vw;max-width:680px;">
+            width:47vw;max-width:340px;">
   {bars_html}
   <div style="border-top:0.8px solid #444444;margin:0 4px 4px;"></div>
   {labels_html}
