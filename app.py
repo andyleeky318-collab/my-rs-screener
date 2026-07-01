@@ -2253,7 +2253,9 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                     atr_mult_vt  = (atr_mult2_vt.fillna(0) * 10).astype(int) / 10
                     vt_s = (atr_mult_vt < -4) & (close_series >= 20)
 
-                    if bool(vt_s.iloc[-1]): value_trap_matches.append(ticker)
+                    if bool(vt_s.iloc[-1]):
+                        atr_value = round(float(atr_mult_vt.iloc[-1]), 1) if pd.notna(atr_mult_vt.iloc[-1]) else None
+                        value_trap_matches.append((ticker, atr_value))
                     if bool(vt_s.iloc[-2]): value_trap_yest.append(ticker)
 
                 # --- PPP ---
@@ -2496,24 +2498,25 @@ for item in all_data:
     cloudwick_all.update(item.get("CloudWick",   []))
     ma50bounce_all.update(item.get("MA50Bounce",  []))
 
-def setup_badge(sym, is_new=False, is_removed=False, extra_prefix=""):
+def setup_badge(sym, is_new=False, is_removed=False, extra_prefix="", extra_suffix=""):
     """Render a ticker badge, colored by setup-category precedence:
     50ma_bounce (orange) > 21ema_wick (aqua) > 21ema_cloud (purple) > new (gold) > default."""
+    suffix_html = f'<span style="margin-left:4px; color:#111111; font-weight:bold;">· {extra_suffix}</span>' if extra_suffix else ""
     if is_removed:
-        return f'<div class="ticker-badge removed-badge">{extra_prefix}{sym}</div>'
+        return f'<div class="ticker-badge removed-badge">{extra_prefix}{sym}{suffix_html}</div>'
     if sym in ma50bounce_all:
         return (f'<div class="ticker-badge orange-badge">{extra_prefix}'
-                f'<span style="color:#111111;font-weight:bold;">{sym}</span></div>')
+                f'<span style="color:#111111;font-weight:bold;">{sym}</span>{suffix_html}</div>')
     if sym in cloudwick_all:
         return (f'<div class="ticker-badge aqua-badge">{extra_prefix}'
-                f'<span style="color:#000000;font-weight:bold;">{sym}</span></div>')
+                f'<span style="color:#000000;font-weight:bold;">{sym}</span>{suffix_html}</div>')
     if sym in cloud21ema_all:
         return (f'<div class="ticker-badge purple-badge">{extra_prefix}'
-                f'<span style="color:#000000;font-weight:bold;">{sym}</span></div>')
+                f'<span style="color:#000000;font-weight:bold;">{sym}</span>{suffix_html}</div>')
     if is_new:
         return (f'<div class="ticker-badge new-pattern-badge">{extra_prefix}'
-                f'<span style="color:#111111;font-weight:bold;">{sym}</span></div>')
-    return f'<div class="ticker-badge">{extra_prefix}{sym}</div>'
+                f'<span style="color:#111111;font-weight:bold;">{sym}</span>{suffix_html}</div>')
+    return f'<div class="ticker-badge">{extra_prefix}{sym}{suffix_html}</div>'
 
 @st.cache_data(ttl=3600)
 def compute_industry_vol_flags(industries_dict, _ticker_dfs):
@@ -5143,13 +5146,16 @@ st.markdown("---")
 st.markdown(f"#### ⚠️ Value Trap ({len(vt_list)})")
 if vt_list or vt_yest:
     html_vt = ""
-    for sym in vt_list:
-        #cls = "new-pattern-badge" if sym not in vt_yest else ""
-        #html_vt += f'<div class="ticker-badge {cls}">{sym}</div>'
-        html_vt += setup_badge(sym, is_new=(sym not in vt_yest))
+    vt_yest_set = set(vt_yest)
+    current_vt_tickers = {item[0] if isinstance(item, tuple) else item for item in vt_list}
+    for item in vt_list:
+        sym = item[0] if isinstance(item, tuple) else item
+        atr_value = item[1] if isinstance(item, tuple) else None
+        suffix = f"{atr_value:.1f}" if atr_value is not None else ""
+        html_vt += setup_badge(sym, is_new=(sym not in vt_yest_set), extra_suffix=suffix)
     
     # Process and append removed stocks
-    removed_vt = [sym for sym in vt_yest if sym not in vt_list]
+    removed_vt = [sym for sym in vt_yest if sym not in current_vt_tickers]
     for sym in sorted(removed_vt):
         html_vt += f'<div class="ticker-badge removed-badge">{sym}</div>'
         
