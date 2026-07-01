@@ -292,7 +292,7 @@ LIME_STOCKS = [
     'IPAY', 'ITB', 'JETS', 'KRE', 'KWEB', 'LIT', 'MAGS',
     'PBW', 'REMX', 'SHLD', 'SIL', 'SLX', 'SMH', 'TAN',
     'UFO', 'URA', 'USO', 'VTV', 'VUG', 'WGMI', 'XBI',
-    'XME', 'XRT', 'XTL', 'SPY', 'QQQ', 'RSP', 'IWM'
+    'XME', 'XRT', 'XTL', 'SPY', 'QQQ', 'RSP'
 ]
 
 LIME_STOCKS1 = [
@@ -1174,6 +1174,10 @@ dist_html = f"""
 </div>
 """
 
+st.markdown(
+    "<div style='font-size:14px; font-weight:700; color:#ffffff; margin-bottom:4px;'>Binomial</div>",
+    unsafe_allow_html=True
+)
 st.markdown(dist_html, unsafe_allow_html=True)
 
 st.markdown("---")
