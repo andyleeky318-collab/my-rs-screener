@@ -3209,6 +3209,86 @@ def compute_leader_history(stocks_list, _ticker_dfs, benchmark_df_leader):
         return result
     except Exception:
         return pd.DataFrame()
+
+@st.cache_data(ttl=3600)
+def compute_stage_history(stocks_list, ticker_dfs, benchmark_df_input):
+    """
+    Vectorized version of the Stage logic in compute_breadth_and_stage,
+    evaluated across the full time series (not just the latest bar) so we
+    can get daily Stage 2 / Stage 4 counts for the trailing 60 days.
+    """
+    try:
+        if benchmark_df_input is None or benchmark_df_input.empty:
+            return pd.DataFrame()
+
+        bm_idx = benchmark_df_input.index.tz_localize(None) if benchmark_df_input.index.tz is not None else benchmark_df_input.index
+        bm_aligned = benchmark_df_input.copy()
+        bm_aligned.index = bm_idx
+
+        stage2_list = []
+        stage4_list = []
+
+        for ticker in stocks_list:
+            try:
+                df = ticker_dfs.get(ticker)
+                if df is None or len(df) < 260:
+                    continue
+
+                df_idx = df.index.tz_localize(None) if df.index.tz is not None else df.index
+                df_aligned = df.copy()
+                df_aligned.index = df_idx
+
+                combined = pd.merge(
+                    df_aligned[['Close', 'Open']],
+                    bm_aligned[['Close']].rename(columns={'Close': 'Close_bench'}),
+                    left_index=True, right_index=True, how='inner'
+                )
+                if len(combined) < 260:
+                    continue
+
+                ema126 = df_aligned['Close'].ewm(span=126, adjust=False).mean().reindex(combined.index, method='ffill')
+                rs = combined['Close'] / combined['Close_bench']
+
+                ema_spans = [21, 42, 63, 72, 84, 126, 147, 168]
+                r = {s: rs.ewm(span=s, adjust=False).mean() for s in ema_spans}
+
+                c, o, rsme = combined['Close'], combined['Open'], rs
+
+                stage1_cond = (rsme >= r[84]) & (rsme < r[126])
+                stage3_cond = (
+                    (rsme < r[42]) & (rsme >= r[72]) & (rsme >= r[84]) & (rsme >= r[126])
+                    & ((r[42] > r[63]) | (rsme < r[63])) & (r[63] > r[126]) & (c >= ema126)
+                )
+                stage2a_cond = (
+                    (rsme >= r[168]) & (rsme >= r[147]) & (rsme >= r[126])
+                    & (c >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+                )
+                stage2b_cond = (rsme >= r[126]) & (c >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+                stage4_cond = ((rsme < r[63]) & (rsme < r[126])) | ((r[63] < r[126]) & (rsme < r[126]))
+
+                stage2_final = (~stage1_cond & ~stage3_cond & (stage2a_cond | stage2b_cond))
+                stage4_final = (~stage1_cond & ~stage3_cond & ~stage2a_cond & ~stage2b_cond & stage4_cond)
+
+                stage2_list.append(stage2_final.astype(int))
+                stage4_list.append(stage4_final.astype(int))
+            except Exception:
+                continue
+
+        if not stage2_list:
+            return pd.DataFrame()
+
+        s2_daily = pd.concat(stage2_list, axis=1).fillna(0).sum(axis=1)
+        s4_daily = pd.concat(stage4_list, axis=1).fillna(0).sum(axis=1)
+
+        result = pd.DataFrame({
+            "Date": s2_daily.index,
+            "S2 Count": s2_daily.values,
+            "S4 Count": s4_daily.values,
+        }).tail(60)
+        result["Date"] = pd.to_datetime(result["Date"]).dt.strftime("%Y-%m-%d")
+        return result.reset_index(drop=True)
+    except Exception:
+        return pd.DataFrame()
     
 # ==============================================================================
 # 8. HISTORICAL KNOW_TOTAL_COUNT 30-DAY CHART (Completely New Logic at Bottom)
@@ -3598,6 +3678,35 @@ if breadth_total > 0:
             f"{legend}</div></div>",
             unsafe_allow_html=True
         )
+
+        with st.spinner("Computing Stage history..."):
+            stage_hist = timed(
+                "compute_stage_history",
+                compute_stage_history,
+                stocks_tuple, ticker_dfs_shared, benchmark_df_shared
+            )
+
+        if not stage_hist.empty:
+            fig_stage = go.Figure()
+            fig_stage.add_trace(go.Scatter(
+                x=stage_hist["Date"], y=stage_hist["S2 Count"],
+                mode="lines", name="S2", line=dict(color="#378ADD", width=2)
+            ))
+            fig_stage.add_trace(go.Scatter(
+                x=stage_hist["Date"], y=stage_hist["S4 Count"],
+                mode="lines", name="S4", line=dict(color="#FF69B4", width=2)
+            ))
+            fig_stage.update_layout(
+                height=260,
+                margin=dict(l=20, r=20, t=10, b=20),
+                plot_bgcolor="rgba(20,22,30,1)",
+                paper_bgcolor="rgba(13,17,23,0)",
+                font=dict(color="#cccccc"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="center", x=0.5),
+                xaxis=dict(showgrid=False, tickfont=dict(size=9, color="#888888")),
+                yaxis=dict(showgrid=True, gridcolor="rgba(120,120,120,0.15)", tickfont=dict(color="#888888")),
+            )
+            st.plotly_chart(fig_stage, use_container_width=True)
 
 else:
     st.info("Insufficient data to compute breadth & stage analysis.")
