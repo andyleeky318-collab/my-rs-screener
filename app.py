@@ -662,9 +662,28 @@ for sym in LIME_STOCKS:
     c_1m = df_sym['Close'].iloc[-22] if len(df_sym) >= 22 else None
     pct_1m = round((c_today - c_1m) / c_1m * 100, 2) if (c_1m is not None and not pd.isna(c_1m) and c_1m != 0) else None
 
-    lime_perf_rows.append({"sym": sym, "pct": pct_1d, "pct_1w": pct_1w, "pct_1m": pct_1m})
+    lime_perf_rows.append({
+        "sym": sym, "pct": pct_1d, "pct_1w": pct_1w, "pct_1m": pct_1m,
+        "is_2m_high": bool(c_today >= df_sym['Close'].max())   # NEW
+    })
 
 if lime_perf_rows:
+
+    two_month_high_syms = {r["sym"] for r in lime_perf_rows if r.get("is_2m_high")}
+
+    pattern_defs = """
+    <defs>
+    <pattern id="stripe-blue" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+        <rect width="6" height="6" fill="#378ADD"/>
+        <line x1="0" y1="0" x2="0" y2="6" stroke="#1f5f9e" stroke-width="3"/>
+    </pattern>
+    <pattern id="stripe-pink" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+        <rect width="6" height="6" fill="#FF69B4"/>
+        <line x1="0" y1="0" x2="0" y2="6" stroke="#cc4f8d" stroke-width="3"/>
+    </pattern>
+    </defs>
+    """
+
     BAR_MAX_PX = 175  # was 200
 
     rows_1d = sorted(lime_perf_rows, key=lambda x: -x["pct"])
@@ -758,7 +777,7 @@ if lime_perf_rows:
             f'style="transition:stroke-opacity 0.2s;pointer-events:none;"/>'
         )
 
-    def draw_col(rows, pct_key, max_abs, col_x):
+    def draw_col(rows, pct_key, max_abs, col_x, stripe_syms=None):
         html = ""
         for i, r in enumerate(rows):
             pct   = r[pct_key]
@@ -770,14 +789,16 @@ if lime_perf_rows:
             html += (
                 f'<rect class="hitbar" data-sym="{sym}" '
                 f'x="{col_x}" y="{y - 7}" '
-                f'width="{LABEL_W + bw}" height="19" '  # between 14 and 16
+                f'width="{LABEL_W + bw}" height="19" '
                 f'fill="transparent" style="cursor:pointer;"/>'
             )
-            # bar rect height 9 (between 8 and 10):
+            bar_fill = c
+            if stripe_syms and sym in stripe_syms:
+                bar_fill = "url(#stripe-blue)" if c == "#378ADD" else "url(#stripe-pink)"
             html += (
                 f'<rect class="bar bar-{sym}" data-sym="{sym}" '
                 f'x="{col_x + LABEL_W}" y="{y - 4}" '
-                f'width="{bw}" height="11" rx="2" fill="{c}" '
+                f'width="{bw}" height="11" rx="2" fill="{bar_fill}" '
                 f'style="cursor:pointer;"/>'
             )
             # label x positions scaled to new LABEL_W=100:
@@ -803,7 +824,7 @@ if lime_perf_rows:
             )
         return html
 
-    cols_html  = draw_col(rows_1d, "pct",    max_abs_1d, X0_1d)
+    cols_html  = draw_col(rows_1d, "pct",    max_abs_1d, X0_1d, stripe_syms=two_month_high_syms)
     cols_html += draw_col(rows_1w, "pct_1w", max_abs_1w, X0_1w)
     cols_html += draw_col(rows_1m, "pct_1m", max_abs_1m, X0_1m)
 
@@ -851,13 +872,14 @@ if lime_perf_rows:
 
     html_out = f"""
     <div style="background:#0e1117; border-radius:6px;">
-      <svg xmlns="http://www.w3.org/2000/svg"
-           width="{SVG_W}" height="{SVG_H}"
-           style="display:block;">
+    <svg xmlns="http://www.w3.org/2000/svg"
+        width="{SVG_W}" height="{SVG_H}"
+        style="display:block;">
+        {pattern_defs}
         {headers_html}
         {lines_html}
         {cols_html}
-      </svg>
+    </svg>
     </div>
     {js}
     """
