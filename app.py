@@ -2233,16 +2233,23 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
 
                     pt_s = (grad_s > 0) & (abs_grad_s >= 1.0) & (close_series >= 20)
 
-                    if bool(pt_s.iloc[-1]): powertrend_matches.append(ticker)
-                    if bool(pt_s.iloc[-2]): powertrend_yest.append(ticker)
-
+                    atr_mult_s = None
                     if atr_pct is not None and sma50_series is not None:
                         pct_gain_s  = ((close_series - sma50_series) / sma50_series) * 100
                         atr_mult2_s = pct_gain_s / atr_pct.replace(0, 0.001)
                         atr_mult_s  = (atr_mult2_s * 10).fillna(0).astype(int) / 10
+
+                    if bool(pt_s.iloc[-1]):
+                        atr_val_pt = round(float(atr_mult_s.iloc[-1]), 1) if atr_mult_s is not None and pd.notna(atr_mult_s.iloc[-1]) else None
+                        powertrend_matches.append((ticker, atr_val_pt))
+                    if bool(pt_s.iloc[-2]): powertrend_yest.append(ticker)
+
+                    if atr_mult_s is not None:
                         ptne_s = pt_s & (atr_mult_s <= 4)
 
-                        if bool(ptne_s.iloc[-1]): powertrend_ne_matches.append(ticker)
+                        if bool(ptne_s.iloc[-1]):
+                            atr_val_ptne = round(float(atr_mult_s.iloc[-1]), 1) if pd.notna(atr_mult_s.iloc[-1]) else None
+                            powertrend_ne_matches.append((ticker, atr_val_ptne))
                         if bool(ptne_s.iloc[-2]): powertrend_ne_yest.append(ticker)
 
                 # --- Value Trap ---
@@ -4978,25 +4985,16 @@ with st.spinner("Scanning for PowerTrend History..."):
 st.markdown(f"#### ⚡ PowerTrend = Thematic Extended ({len(pt_list)})")
 if pt_list or pt_yest:
     html_pt = ""
-    for sym in pt_list:
-        cls = "new-pattern-badge" if sym not in pt_yest else ""
-        # Get close price from shared ticker data
-        pt_price = ""
-        ticker_df_pt = ticker_dfs_shared.get(sym)
-        if ticker_df_pt is not None and not ticker_df_pt.empty:
-            pt_close = ticker_df_pt['Close'].iloc[-1]
-            pt_high  = ticker_df_pt['High'].iloc[-1]
-            if not pd.isna(pt_close) and not pd.isna(pt_high):
-                pt_price = (
-                    f'<span style="color:#aaaaaa; font-size:10px; margin-left:4px;">'
-                    #f'C${pt_close:.2f} H${pt_high:.2f}'
-                    f'</span>'
-                )
-        #html_pt += f'<div class="ticker-badge {cls}">{sym}{pt_price}</div>'
-        html_pt += setup_badge(sym, is_new=(sym not in pt_yest))
+    pt_yest_set = set(pt_yest)
+    current_pt_tickers = {item[0] if isinstance(item, tuple) else item for item in pt_list}
+    for item in pt_list:
+        sym = item[0] if isinstance(item, tuple) else item
+        atr_value = item[1] if isinstance(item, tuple) else None
+        suffix = f"{atr_value:.1f}" if atr_value is not None else ""
+        html_pt += setup_badge(sym, is_new=(sym not in pt_yest_set), extra_suffix=suffix)
     
     # Process and append removed stocks
-    removed_pt = [sym for sym in pt_yest if sym not in pt_list]
+    removed_pt = [sym for sym in pt_yest if sym not in current_pt_tickers]
     for sym in sorted(removed_pt):
         html_pt += f'<div class="ticker-badge removed-badge">{sym}</div>'
         
@@ -5047,10 +5045,12 @@ st.markdown("---")
 st.markdown(f"#### ⚡ PowerTrend ... Not Extended ({len(ptne_list)})")
 if ptne_list:
     html_ptne = ""
-    for sym in ptne_list:
-        #cls = "new-pattern-badge" if sym not in ptne_yest else ""
-        #html_ptne += f'<div class="ticker-badge {cls}">{sym}</div>'
-        html_ptne += setup_badge(sym, is_new=(sym not in ptne_yest))
+    ptne_yest_set = set(ptne_yest)
+    for item in ptne_list:
+        sym = item[0] if isinstance(item, tuple) else item
+        atr_value = item[1] if isinstance(item, tuple) else None
+        suffix = f"{atr_value:.1f}" if atr_value is not None else ""
+        html_ptne += setup_badge(sym, is_new=(sym not in ptne_yest_set), extra_suffix=suffix)
     st.markdown(html_ptne, unsafe_allow_html=True)
 else:
     st.info("No active setups discovered.")
