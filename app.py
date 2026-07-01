@@ -3687,14 +3687,23 @@ if breadth_total > 0:
             )
 
         if not stage_hist.empty:
+            valid_tickers = sum(
+                1 for ticker in stocks_tuple
+                if ticker in ticker_dfs_shared and ticker_dfs_shared.get(ticker) is not None and len(ticker_dfs_shared[ticker]) >= 260
+            ) or 1
+            s2_pct = stage_hist["S2 Count"] / valid_tickers
+            s4_pct = stage_hist["S4 Count"] / valid_tickers
+
             fig_stage = go.Figure()
             fig_stage.add_trace(go.Scatter(
-                x=stage_hist["Date"], y=stage_hist["S2 Count"],
-                mode="lines", name="S2", line=dict(color="#378ADD", width=2)
+                x=stage_hist["Date"], y=s2_pct,
+                mode="lines", name="S2", line=dict(color="#378ADD", width=2),
+                hovertemplate="%{y:.0%} of stocks<extra></extra>"
             ))
             fig_stage.add_trace(go.Scatter(
-                x=stage_hist["Date"], y=stage_hist["S4 Count"],
-                mode="lines", name="S4", line=dict(color="#FF69B4", width=2)
+                x=stage_hist["Date"], y=s4_pct,
+                mode="lines", name="S4", line=dict(color="#FF69B4", width=2),
+                hovertemplate="%{y:.0%} of stocks<extra></extra>"
             ))
             fig_stage.update_layout(
                 height=260,
@@ -3704,7 +3713,14 @@ if breadth_total > 0:
                 font=dict(color="#cccccc"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="center", x=0.5),
                 xaxis=dict(showgrid=False, tickfont=dict(size=9, color="#888888")),
-                yaxis=dict(showgrid=True, gridcolor="rgba(120,120,120,0.15)", tickfont=dict(color="#888888")),
+                yaxis=dict(
+                    showgrid=True,
+                    gridcolor="rgba(120,120,120,0.15)",
+                    tickfont=dict(color="#888888"),
+                    tickformat=".0%",
+                    title="Pct of stocks",
+                    range=[0, 1],
+                ),
             )
             st.plotly_chart(fig_stage, use_container_width=True)
 
