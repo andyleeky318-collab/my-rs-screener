@@ -674,12 +674,12 @@ if lime_perf_rows:
     pattern_defs = """
     <defs>
     <pattern id="stripe-blue" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
-        <rect width="6" height="6" fill="#378ADD"/>
-        <line x1="0" y1="0" x2="0" y2="6" stroke="#1f5f9e" stroke-width="3"/>
+        <rect width="6" height="6" fill="#9CC4EA"/>
+        <line x1="0" y1="0" x2="0" y2="6" stroke="#378ADD" stroke-width="3"/>
     </pattern>
     <pattern id="stripe-pink" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
-        <rect width="6" height="6" fill="#FF69B4"/>
-        <line x1="0" y1="0" x2="0" y2="6" stroke="#cc4f8d" stroke-width="3"/>
+        <rect width="6" height="6" fill="#FFC2DE"/>
+        <line x1="0" y1="0" x2="0" y2="6" stroke="#FF69B4" stroke-width="3"/>
     </pattern>
     </defs>
     """
