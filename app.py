@@ -79,7 +79,7 @@ st.markdown(
 # 2. Cleaned Industry Database (Preserved as requested)
 INDUSTRIES = {
     '3D Printing': ['XMTR', 'VELO', 'DDD', 'PRLB', 'MTLS', 'SSYS', 'NNDM'],
-    'Crypto': ['MSTR', 'CRCL', 'COIN', 'IBIT'],
+    'Crypto': ['MSTR', 'CRCL', 'COIN', 'IBIT', 'RIOT'],
     'Nuclear': ['URA', 'NLR', 'CEG', 'CCJ', 'OKLO', 'UUUU', 'SMR', 'LEU'],
     'MAG7': ['MAGS', 'AAPL', 'GOOGL', 'NVDA', 'META', 'MSFT', 'AMZN', 'TSLA'],
     'ETF': ['XLK', 'XLF', 'XLV', 'XLE', 'XLU', 'XLP', 'XLY', 'XLC', 'XLI', 'XLB'],
