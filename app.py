@@ -3419,8 +3419,10 @@ if quad_points:
     # ── Quadrant corner labels ────────────────────────────────────────────────
     quad_label_cfg = dict(
         xref="x", yref="y", showarrow=False,
-        font=dict(size=15, color="rgba(60,60,60,0.65)"),
+        font=dict(size=16, color="#f2c500", family="Arial Black"),
         xanchor="center",
+        bgcolor="rgba(0,0,0,0.12)",
+        borderpad=3,
     )
     q_strong    = sum(1 for p in quad_points if p["weekly_rs"] >= 50 and p["monthly_rs"] >= 50)
     q_improving = sum(1 for p in quad_points if p["weekly_rs"] >= 50 and p["monthly_rs"] <  50)
