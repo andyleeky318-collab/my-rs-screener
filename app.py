@@ -1145,11 +1145,12 @@ for i, (label, val) in enumerate(zip(bucket_order, vals)):
 
     # Bucket label below
     label_y = SVG_H - 6
+    display_label = "B" if label == "0" else label
     labels_svg += (
         f'<text x="{cx:.1f}" y="{label_y}" '
         f'text-anchor="middle" font-size="8" '
         f'font-family="Source Sans Pro,sans-serif" '
-        f'fill="#888888">{label}</text>'
+        f'fill="#888888">{display_label}</text>'
     )
 
 # Baseline
@@ -4990,7 +4991,7 @@ if pt_list or pt_yest:
     for item in pt_list:
         sym = item[0] if isinstance(item, tuple) else item
         atr_value = item[1] if isinstance(item, tuple) else None
-        suffix = f"{atr_value:.1f}" if atr_value is not None else ""
+        suffix = f"{atr_value:.1f}x" if atr_value is not None else ""
         html_pt += setup_badge(sym, is_new=(sym not in pt_yest_set), extra_suffix=suffix)
     
     # Process and append removed stocks
@@ -5049,7 +5050,7 @@ if ptne_list:
     for item in ptne_list:
         sym = item[0] if isinstance(item, tuple) else item
         atr_value = item[1] if isinstance(item, tuple) else None
-        suffix = f"{atr_value:.1f}" if atr_value is not None else ""
+        suffix = f"{atr_value:.1f}x" if atr_value is not None else ""
         html_ptne += setup_badge(sym, is_new=(sym not in ptne_yest_set), extra_suffix=suffix)
     st.markdown(html_ptne, unsafe_allow_html=True)
 else:
@@ -5130,7 +5131,7 @@ if volatility_hits:
             f'border:1px solid {border}; border-radius:3px; font-size:11px; '
             f'background:{bg}; white-space:nowrap;">'
             f'<span style="font-weight:bold; color:{txt_col};">{sym}</span>'
-            f'<span style="color:{z_col}; font-size:10px; margin-left:4px;">· {z:.1f}</span>'
+            f'<span style="color:{z_col}; font-size:10px; margin-left:4px;">· {z:.1f}z</span>'
             f'<span style="color:{txt_col}; font-size:10px; margin-left:4px;">· {pct_sign}</span>'
             f'</div>'
         )
@@ -5151,7 +5152,7 @@ if vt_list or vt_yest:
     for item in vt_list:
         sym = item[0] if isinstance(item, tuple) else item
         atr_value = item[1] if isinstance(item, tuple) else None
-        suffix = f"{atr_value:.1f}" if atr_value is not None else ""
+        suffix = f"{atr_value:.1f}x" if atr_value is not None else ""
         html_vt += setup_badge(sym, is_new=(sym not in vt_yest_set), extra_suffix=suffix)
     
     # Process and append removed stocks
