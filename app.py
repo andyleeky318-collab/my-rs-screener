@@ -2501,7 +2501,7 @@ for item in all_data:
 def setup_badge(sym, is_new=False, is_removed=False, extra_prefix="", extra_suffix=""):
     """Render a ticker badge, colored by setup-category precedence:
     50ma_bounce (orange) > 21ema_wick (aqua) > 21ema_cloud (purple) > new (gold) > default."""
-    suffix_html = f'<span style="margin-left:4px; color:#111111; font-weight:bold;">· {extra_suffix}</span>' if extra_suffix else ""
+    suffix_html = f'<span style="margin-left:4px; color:#888888; font-weight:bold;">· {extra_suffix}</span>' if extra_suffix else ""
     if is_removed:
         return f'<div class="ticker-badge removed-badge">{extra_prefix}{sym}{suffix_html}</div>'
     if sym in ma50bounce_all:
