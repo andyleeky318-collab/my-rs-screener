@@ -1174,10 +1174,6 @@ dist_html = f"""
 </div>
 """
 
-st.markdown(
-    "<div style='font-size:14px; font-weight:700; color:#ffffff; margin-bottom:4px;'>Binomial</div>",
-    unsafe_allow_html=True
-)
 st.markdown(dist_html, unsafe_allow_html=True)
 
 st.markdown("---")
