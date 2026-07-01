@@ -3689,10 +3689,12 @@ if breadth_total > 0:
         if not stage_hist.empty:
             fig_stage = go.Figure()
             fig_stage.add_trace(go.Scatter(
-                x=stage_hist["Date"], y=stage_hist["S2 Count"]
+                x=stage_hist["Date"], y=stage_hist["S2 Count"],
+                mode="lines", name="", line=dict(color="#378ADD", width=2), showlegend=False
             ))
             fig_stage.add_trace(go.Scatter(
-                x=stage_hist["Date"], y=stage_hist["S4 Count"]
+                x=stage_hist["Date"], y=stage_hist["S4 Count"],
+                mode="lines", name="", line=dict(color="#FF69B4", width=2), showlegend=False
             ))
             fig_stage.update_layout(
                 height=260,
