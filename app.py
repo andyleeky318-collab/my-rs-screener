@@ -639,7 +639,11 @@ with st.sidebar:
 # st.markdown("---")
 #st.markdown(f"#### 📊 Market Breadth")
 
-lime_ticker_dfs = download_lime_stocks_data(tuple(LIME_STOCKS))
+lime_ticker_dfs = timed(
+    "download_lime_stocks_data",
+    download_lime_stocks_data,
+    tuple(LIME_STOCKS)
+)
 
 lime_perf_rows = []
 for sym in LIME_STOCKS:
