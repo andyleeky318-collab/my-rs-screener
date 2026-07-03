@@ -154,7 +154,7 @@ INDUSTRIES = {
     'RTAIL-HME FRNSHNGS': ['MBC', 'WSM', 'W', 'RH'],
     'RETL WHSLE BLDG PRDS': ['HD', 'LOW', 'BLDR', 'FND', 'CNM', 'BCC'],
     'MEDCAL-HOSPITALS': ['HCA', 'THC', 'UHS'],
-    'MED-LONG-TRM CARE': ['CHE', 'PACS', 'SEM', 'SGRY', 'ARDT', 'ENSG', 'ADUS'],
+    'MED-LONG-TRM CARE': ['CHE', 'PACS', 'SGRY', 'ARDT', 'ENSG', 'ADUS'],
     'MEDICAL-SERVICES': ['DVA', 'SOLV', 'EHC', 'ACHC', 'RDNT', 'OPCH', 'HIMS', 'GH', 'BTSG', 'CON', 'AZTA', 'TDOC'],
     'LEISURE-LODGING': ['PEJ', 'MAR', 'HLT', 'RCL', 'CCL', 'VIK', 'H', 'NCLH', 'MTN', 'WH', 'CHH', 'RRR', 'TNL', 'VAC'],
     'COSMETICS/PERSNL CRE': ['PG', 'CL', 'KMB', 'KVUE', 'EL', 'CHD', 'CLX', 'ELF', 'IPAR'],
@@ -475,7 +475,8 @@ def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
             'up_volume': 0, 'down_volume': 0,
             'up_4pct': 0, 'down_4pct': 0
         }
-        new_high_tickers = []  # ADD THIS
+        new_high_tickers = []
+        new_low_tickers = []
         stage_counts = {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}
         total_processed = 0
 
@@ -502,9 +503,10 @@ def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
                 # 1. New High / New Low
                 if currentClose >= high_of_52week:
                     breadth_stats['new_high'] += 1
-                    new_high_tickers.append(ticker)  # ADD THIS
+                    new_high_tickers.append(ticker)
                 if currentClose <= low_of_52week:
                     breadth_stats['new_low'] += 1
+                    new_low_tickers.append(ticker)
 
                 # 2. Advance / Decline
                 if currentClose > prevClose:
@@ -607,10 +609,10 @@ def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
                 stage_counts[0] += 1
                 continue
 
-        return breadth_stats, stage_counts, total_processed, new_high_tickers
+        return breadth_stats, stage_counts, total_processed, new_high_tickers, new_low_tickers
 
     except Exception as e:
-        return {}, {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}, 0
+        return {}, {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}, 0, []
 
 # 3. Sidebar Inputs
 with st.sidebar:
@@ -907,7 +909,7 @@ ticker_dfs_shared[benchmark] = benchmark_df_shared
 
 # ── Compute ─────────────────────────────────────────────────────────────────
 with st.spinner("Computing market breadth & stage analysis..."):
-    breadth_stats, stage_counts, breadth_total, new_high_tickers = timed(
+    breadth_stats, stage_counts, breadth_total, new_high_tickers, new_low_tickers = timed(
         "compute_breadth_and_stage",
         compute_breadth_and_stage,
         stocks_tuple, ticker_dfs_shared, benchmark_df_shared
@@ -997,7 +999,7 @@ if breadth_total > 0:
 
     #col_nh, col_nl = st.columns([1, 9])
     #with col_nh:
-    with st.expander(f""):
+    with st.expander(f"New Highs ({len(new_high_tickers)})"):
         if new_high_tickers:
             nh_html = (
                 "<div style='display:flex;flex-wrap:wrap;gap:6px;"
@@ -1018,6 +1020,30 @@ if breadth_total > 0:
                     nh_html += f'<div class="ticker-badge">{sym}</div>'
             nh_html += "</div>"
             st.markdown(nh_html, unsafe_allow_html=True)
+        else:
+            st.info("")
+
+    with st.expander(f"New Lows ({len(new_low_tickers)})"):
+        if new_low_tickers:
+            nl_html = (
+                "<div style='display:flex;flex-wrap:wrap;gap:6px;"
+                "padding:12px 4px;'>"
+            )
+            for sym in sorted(new_low_tickers):
+                if sym in LIME_STOCKS1:
+                    nl_html += (
+                        f'<div class="ticker-badge lime-badge">'
+                        f'<span style="color:#000;font-weight:bold;">{sym}</span></div>'
+                    )
+                elif sym in KNOWN_STOCKS:
+                    nl_html += (
+                        f'<div class="ticker-badge new-pattern-badge">'
+                        f'<span style="color:#111;font-weight:bold;">{sym}</span></div>'
+                    )
+                else:
+                    nl_html += f'<div class="ticker-badge">{sym}</div>'
+            nl_html += "</div>"
+            st.markdown(nl_html, unsafe_allow_html=True)
         else:
             st.info("")
 
