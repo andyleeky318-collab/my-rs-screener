@@ -5382,7 +5382,12 @@ if b_list or b_yest:
         
     st.markdown(html_b, unsafe_allow_html=True)
 
-    render_group_ai_insight(b_list, "Two Botak (short-term group burst)", "two_botak")
+    render_group_ai_insight(
+        b_list,
+        "Two Botak (short-term group burst)",
+        "two_botak",
+        extra_note="2 consecutive daily bullish candles where the close is at or almost at the high of the day"
+    )
 else:
     st.info("No active setups discovered.")
 
@@ -5578,7 +5583,12 @@ if pt_list or pt_yest:
     st.markdown(html_pt, unsafe_allow_html=True)
 
     pt_syms = [item[0] if isinstance(item, tuple) else item for item in pt_list]
-    render_group_ai_insight(pt_syms, "PowerTrend (thematic extended)", "powertrend")
+    render_group_ai_insight(
+        pt_syms,
+        "PowerTrend (thematic extended)",
+        "powertrend",
+        extra_note="absolute gradient % of the 50-day EMA is greater than 1, indicating a fast-rising moving average"
+    )
 else:
     st.info("No active setups discovered.")
 
@@ -5718,7 +5728,12 @@ if volatility_hits:
     st.markdown(vol_html, unsafe_allow_html=True)
 
     vol_syms = [sym for sym, z, pct in volatility_hits]
-    render_group_ai_insight(vol_syms, "Volatility pickup (Z-score ≥2)", "volatility")
+    render_group_ai_insight(
+        vol_syms,
+        "Volatility pickup (Z-score ≥2)",
+        "volatility",
+        extra_note="daily range Z-score (vs its 20-day mean/stdev) is at or above 2, flagging an unusually large range day"
+    )
 else:
     st.info("No tickers with volatility Z-score ≥ 2 today.")
 
@@ -5745,7 +5760,12 @@ if vt_list or vt_yest:
     st.markdown(html_vt, unsafe_allow_html=True)
 
     vt_syms = [item[0] if isinstance(item, tuple) else item for item in vt_list]
-    render_group_ai_insight(vt_syms, "Value Trap", "value_trap")
+    render_group_ai_insight(
+        vt_syms,
+        "Value Trap",
+        "value_trap",
+        extra_note="price is roughly -4x ATR below its 50-day moving average, suggesting deep extension to the downside rather than genuine value"
+    )
 else:
     st.info("No active setups discovered.")
 
