@@ -2610,6 +2610,135 @@ with st.spinner("Computing industry volatility flags..."):
         INDUSTRIES, ticker_dfs_shared
     )
 
+def generate_top_industries_theme_insight(df_main_sorted, all_data_list, top_n_industries=20):
+    """
+    Standalone (no external function deps) — summarizes what theme/sector
+    rotation is dominating the top-N industries by Group RS right now.
+    Same provider fallback chain as generate_leader_ai_analysis, kept
+    self-contained so it can be called anywhere in the script.
+    """
+    if df_main_sorted is None or df_main_sorted.empty:
+        return None
+
+    top_rows = df_main_sorted.head(top_n_industries)
+
+    lines = []
+    for _, row in top_rows.iterrows():
+        industry = row["Industry"]
+        item = next((d for d in all_data_list if d["Industry"] == industry), None)
+        top_tickers = ""
+        if item is not None:
+            top5 = item["Tickers"].sort_values("RS Score", ascending=False).head(5)
+            top_tickers = ", ".join(f"{t}({s:.0f})" for t, s in zip(top5["Ticker"], top5["RS Score"]))
+        lines.append(f"  {row['Current Rank']}. {industry} — RS {row['Group RS']:.1f} — top: {top_tickers}")
+
+    industries_block = "\n".join(lines)
+
+    prompt = f"""
+You are a concise IBD-style market analyst. Below are the top {len(top_rows)} industries right now, ranked by Group Relative Strength, with their strongest tickers.
+
+{industries_block}
+
+In 3-4 SHORT bullet points:
+1. What is the dominant market theme or macro narrative connecting these top industries right now (e.g. AI/semis, defense, gold/metals, crypto, industrials, etc)?
+2. Are there 2-3 distinct sub-themes or clusters visible, rather than one single theme?
+3. Any industry here that looks like an outlier / doesn't fit the dominant theme?
+4. One-line tactical takeaway for a swing trader on where leadership is concentrated.
+
+Be direct, name industries explicitly, no fluff, no repeating the prompt.
+"""
+
+    TRANSIENT_CODES = ["503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "quota",
+                        "overloaded", "high demand", "rate_limit", "capacity", "timeout", "502", "529"]
+    def is_transient(e):
+        return any(c.lower() in e.lower() for c in TRANSIENT_CODES)
+
+    failures = {}
+
+    gemini_key = st.secrets.get("GEMINI_API_KEY")
+    if gemini_key:
+        try:
+            from google import genai as google_genai
+            client = google_genai.Client(api_key=gemini_key)
+            response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+            return f"🟦 **Gemini 2.5 Flash**\n\n{response.text}"
+        except Exception as e:
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **Gemini error (non-transient)**\n\n{err}"
+            failures["Gemini"] = err[:120]
+    else:
+        failures["Gemini"] = "No GEMINI_API_KEY"
+
+    groq_key = st.secrets.get("GROQ_API_KEY")
+    if groq_key:
+        try:
+            from openai import OpenAI as OpenAIClient
+            groq_client = OpenAIClient(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
+            completion = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
+                          {"role": "user", "content": prompt}],
+                max_tokens=400, temperature=0.4,
+            )
+            prior = ", ".join(failures.keys())
+            return f"🟧 **Groq / Llama-3.3-70b** *({prior} unavailable)*\n\n{completion.choices[0].message.content}"
+        except Exception as e:
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **Groq error (non-transient)**\n\n{err}"
+            failures["Groq"] = err[:120]
+    else:
+        failures["Groq"] = "No GROQ_API_KEY"
+
+    github_token = st.secrets.get("GITHUB_MODELS_TOKEN")
+    if github_token:
+        try:
+            from openai import OpenAI as OpenAIClient
+            github_client = OpenAIClient(api_key=github_token, base_url="https://models.inference.ai.azure.com")
+            completion = github_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
+                          {"role": "user", "content": prompt}],
+                max_tokens=400, temperature=0.4,
+            )
+            prior = ", ".join(failures.keys())
+            return f"⬜ **GitHub Models / gpt-4o-mini** *({prior} unavailable)*\n\n{completion.choices[0].message.content}"
+        except Exception as e:
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **GitHub Models error (non-transient)**\n\n{err}"
+            failures["GitHub Models"] = err[:120]
+    else:
+        failures["GitHub Models"] = "No GITHUB_MODELS_TOKEN"
+
+    openrouter_key = st.secrets.get("OPENROUTER_API_KEY")
+    if openrouter_key:
+        try:
+            from openai import OpenAI as OpenAIClient
+            or_client = OpenAIClient(
+                api_key=openrouter_key, base_url="https://openrouter.ai/api/v1",
+                default_headers={"HTTP-Referer": "https://your-app-name.streamlit.app", "X-Title": "Theme Tracker"},
+            )
+            completion = or_client.chat.completions.create(
+                model="meta-llama/llama-3.1-8b-instruct:free",
+                messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
+                          {"role": "user", "content": prompt}],
+                max_tokens=400, temperature=0.4,
+            )
+            prior = ", ".join(failures.keys())
+            return f"🟣 **OpenRouter / Llama-3.1-8b** *({prior} unavailable)*\n\n{completion.choices[0].message.content}"
+        except Exception as e:
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **OpenRouter error (non-transient)**\n\n{err}"
+            failures["OpenRouter"] = err[:120]
+    else:
+        failures["OpenRouter"] = "No OPENROUTER_API_KEY"
+
+    failure_lines = "\n".join(f"- {p}: {r}" for p, r in failures.items())
+    return f"🔴 **All AI providers failed**\n\n{failure_lines}"
+
 # 6. Compact Display Logic
 if all_data:
     df_main = pd.DataFrame([{"Industry": item["Industry"], "Group RS": item["Group RS"], "Group RS Prev": item["Group RS Prev"], "Group RS 1M": item["Group RS 1M"]} for item in all_data])
@@ -2987,6 +3116,24 @@ if all_data:
 
     table_html += "</tbody></table>"
     st.markdown(table_html, unsafe_allow_html=True)
+
+    # ── Top 20 industries theme insight ──────────────────────────────────
+    top20_sig = str(df_main.head(20)["Industry"].tolist()) + str(round(df_main.head(20)["Group RS"].sum(), 1))
+    force_theme = st.button("🔄 Refresh Theme Insight", key="retry_top20_theme")
+
+    if force_theme or st.session_state.get("top20_theme_key") != top20_sig:
+        with st.spinner("Analyzing top 20 industry theme..."):
+            theme_result = timed(
+                "generate_top_industries_theme_insight",
+                generate_top_industries_theme_insight,
+                df_main, all_data, 20
+            )
+        if theme_result:
+            st.session_state["top20_theme_result"] = theme_result
+            st.session_state["top20_theme_key"] = top20_sig
+
+    if "top20_theme_result" in st.session_state:
+        st.markdown(st.session_state["top20_theme_result"])
 
 # 7. EXTRA SEPARATE PATTERNS SCANNING BLOCK
 #st.markdown("---")
