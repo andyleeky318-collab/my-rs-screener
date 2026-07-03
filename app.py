@@ -4506,6 +4506,171 @@ Be direct, use industry names, no fluff.
         f"{failure_lines}"
     )
 
+def generate_group_theme_insight(tickers, section_title, session_key, extra_note="", industries_dict=None):
+    """
+    Generic, lightweight version of generate_leader_ai_analysis for ANY ticker
+    group (Two Botak, PowerTrend, Value Trap, Volatility, 21ema Cloud/Wick,
+    50ma Bounce, etc). Same provider fallback chain, shorter prompt/output.
+    """
+    if industries_dict is None:
+        industries_dict = INDUSTRIES
+    if not tickers:
+        return None
+
+    industry_counts, ticker_industry = build_leader_industry_map(tickers, industries_dict)
+    sorted_industries = sorted(industry_counts.items(), key=lambda x: -x[1])
+    top_industries_str = "\n".join(f"  - {ind}: {cnt}" for ind, cnt in sorted_industries[:8]) \
+        or "  - (no industry matches found)"
+
+    tagged = [f"{t} ({', '.join(ticker_industry.get(t, ['?']))})" for t in tickers[:40]]
+    tickers_str = "\n".join(tagged)
+
+    prompt = f"""
+You are a concise IBD-style market analyst. Below is a list of stocks that just triggered the "{section_title}" screen{(' — ' + extra_note) if extra_note else ''}.
+
+Tickers ({len(tickers)} total) with industry group:
+{tickers_str}
+
+Industry concentration:
+{top_industries_str}
+
+In 2-3 SHORT bullet points:
+1. Is there a common theme, sector, or sub-industry driving this list right now?
+2. Which 1-2 industries/sub-groups stand out, and what might that imply?
+3. One-line tactical takeaway for a swing trader watching this screen.
+
+Be direct, name industries/tickers explicitly, no fluff, no repeating the prompt.
+"""
+
+    TRANSIENT_CODES = ["503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "quota",
+                        "overloaded", "high demand", "rate_limit", "capacity", "timeout", "502", "529"]
+    def is_transient(e):
+        return any(c.lower() in e.lower() for c in TRANSIENT_CODES)
+
+    failures = {}
+
+    # ── Gemini ──
+    gemini_key = st.secrets.get("GEMINI_API_KEY")
+    if gemini_key:
+        try:
+            from google import genai as google_genai
+            client = google_genai.Client(api_key=gemini_key)
+            response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+            return f"🟦 **Gemini 2.5 Flash**\n\n{response.text}"
+        except Exception as e:
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **Gemini error (non-transient)**\n\n{err}"
+            failures["Gemini"] = err[:120]
+    else:
+        failures["Gemini"] = "No GEMINI_API_KEY"
+
+    # ── Groq ──
+    groq_key = st.secrets.get("GROQ_API_KEY")
+    if groq_key:
+        try:
+            from openai import OpenAI as OpenAIClient
+            groq_client = OpenAIClient(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
+            completion = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
+                          {"role": "user", "content": prompt}],
+                max_tokens=350, temperature=0.4,
+            )
+            prior = ", ".join(failures.keys())
+            return f"🟧 **Groq / Llama-3.3-70b** *({prior} unavailable)*\n\n{completion.choices[0].message.content}"
+        except Exception as e:
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **Groq error (non-transient)**\n\n{err}"
+            failures["Groq"] = err[:120]
+    else:
+        failures["Groq"] = "No GROQ_API_KEY"
+
+    # ── GitHub Models ──
+    github_token = st.secrets.get("GITHUB_MODELS_TOKEN")
+    if github_token:
+        try:
+            from openai import OpenAI as OpenAIClient
+            github_client = OpenAIClient(api_key=github_token, base_url="https://models.inference.ai.azure.com")
+            completion = github_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
+                          {"role": "user", "content": prompt}],
+                max_tokens=350, temperature=0.4,
+            )
+            prior = ", ".join(failures.keys())
+            return f"⬜ **GitHub Models / gpt-4o-mini** *({prior} unavailable)*\n\n{completion.choices[0].message.content}"
+        except Exception as e:
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **GitHub Models error (non-transient)**\n\n{err}"
+            failures["GitHub Models"] = err[:120]
+    else:
+        failures["GitHub Models"] = "No GITHUB_MODELS_TOKEN"
+
+    # ── OpenRouter ──
+    openrouter_key = st.secrets.get("OPENROUTER_API_KEY")
+    if openrouter_key:
+        try:
+            from openai import OpenAI as OpenAIClient
+            or_client = OpenAIClient(
+                api_key=openrouter_key, base_url="https://openrouter.ai/api/v1",
+                default_headers={"HTTP-Referer": "https://your-app-name.streamlit.app", "X-Title": "Theme Tracker"},
+            )
+            completion = or_client.chat.completions.create(
+                model="meta-llama/llama-3.1-8b-instruct:free",
+                messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
+                          {"role": "user", "content": prompt}],
+                max_tokens=350, temperature=0.4,
+            )
+            prior = ", ".join(failures.keys())
+            return f"🟣 **OpenRouter / Llama-3.1-8b** *({prior} unavailable)*\n\n{completion.choices[0].message.content}"
+        except Exception as e:
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **OpenRouter error (non-transient)**\n\n{err}"
+            failures["OpenRouter"] = err[:120]
+    else:
+        failures["OpenRouter"] = "No OPENROUTER_API_KEY"
+
+    failure_lines = "\n".join(f"- {p}: {r}" for p, r in failures.items())
+    return f"🔴 **All AI providers failed**\n\n{failure_lines}"
+
+
+def render_group_ai_insight(tickers, section_title, session_key, extra_note="", industries_dict=None):
+    """
+    Drop-in renderer: call right after any badge-list block.
+    Caches per section_key in session_state so it only re-calls the AI when
+    that section's ticker list actually changes; includes a manual retry button.
+    """
+    if not tickers:
+        return
+
+    ticker_key = f"{session_key}_ai_key"
+    result_key = f"{session_key}_ai_result"
+    current_sig = str(sorted(tickers))
+
+    force = st.button("🔄 AI Insight", key=f"retry_{session_key}")
+
+    if force or st.session_state.get(ticker_key) != current_sig:
+        with st.spinner(f"Analyzing {section_title} theme..."):
+            result = timed(
+                f"generate_group_theme_insight[{section_title}]",
+                generate_group_theme_insight,
+                tickers, section_title, session_key, extra_note, industries_dict
+            )
+        if result:
+            st.session_state[result_key] = result
+            st.session_state[ticker_key] = current_sig
+
+    if result_key in st.session_state:
+        industries_seen = list(build_leader_industry_map(tickers, industries_dict or INDUSTRIES)[0].keys())
+        formatted = format_ai_analysis_text(
+            st.session_state[result_key], tickers=tickers, industries=industries_seen
+        )
+        st.markdown(formatted, unsafe_allow_html=True)
+
 # ==========================================
 # UI - RS LEADER AI ANALYSIS
 # ==========================================
@@ -5014,6 +5179,8 @@ if b_list or b_yest:
         html_b += f'<div class="ticker-badge removed-badge">{sym}</div>'
         
     st.markdown(html_b, unsafe_allow_html=True)
+
+    render_group_ai_insight(b_list, "Two Botak (short-term group burst)", "two_botak")
 else:
     st.info("No active setups discovered.")
 
@@ -5207,6 +5374,9 @@ if pt_list or pt_yest:
         html_pt += f'<div class="ticker-badge removed-badge">{sym}</div>'
         
     st.markdown(html_pt, unsafe_allow_html=True)
+
+    pt_syms = [item[0] if isinstance(item, tuple) else item for item in pt_list]
+    render_group_ai_insight(pt_syms, "PowerTrend (thematic extended)", "powertrend")
 else:
     st.info("No active setups discovered.")
 
@@ -5344,6 +5514,9 @@ if volatility_hits:
         )
     vol_html += "</div>"
     st.markdown(vol_html, unsafe_allow_html=True)
+
+    vol_syms = [sym for sym, z, pct in volatility_hits]
+    render_group_ai_insight(vol_syms, "Volatility pickup (Z-score ≥2)", "volatility")
 else:
     st.info("No tickers with volatility Z-score ≥ 2 today.")
 
@@ -5368,6 +5541,9 @@ if vt_list or vt_yest:
         html_vt += f'<div class="ticker-badge removed-badge">{sym}</div>'
         
     st.markdown(html_vt, unsafe_allow_html=True)
+
+    vt_syms = [item[0] if isinstance(item, tuple) else item for item in vt_list]
+    render_group_ai_insight(vt_syms, "Value Trap", "value_trap")
 else:
     st.info("No active setups discovered.")
 
