@@ -2739,6 +2739,28 @@ Be direct, name industries explicitly, no fluff, no repeating the prompt.
     failure_lines = "\n".join(f"- {p}: {r}" for p, r in failures.items())
     return f"🔴 **All AI providers failed**\n\n{failure_lines}"
 
+SECTOR_KEYWORDS = {
+    "Healthcare": "#4ecdc4", "Health Care": "#4ecdc4", "Medical": "#4ecdc4",
+    "Biotech": "#4ecdc4", "Pharma": "#4ecdc4",
+    "Energy": "#FFA500", "Oil": "#FFA500", "Gas": "#FFA500", "Solar": "#FFA500",
+    "Financials": "#00BFFF", "Financial": "#00BFFF", "Banks": "#00BFFF", "Banking": "#00BFFF",
+    "Industrials": "#C0C0C0",
+    "Materials": "#D2B48C", "Mining": "#D2B48C", "Chemicals": "#D2B48C",
+    "Utilities": "#87CEEB", "Electric": "#87CEEB", "Elec": "#87CEEB",
+    "Technology": "#7FFFD4", "Software": "#7FFFD4",
+    "Semiconductor": "#00CED1", "Semiconductors": "#00CED1", "Semicon": "#00CED1",
+    "AI": "#FF00FF", "Artificial Intelligence": "#FF00FF",
+    "Consumer Discretionary": "#FFB6C1", "Retail": "#FFB6C1",
+    "Consumer Staples": "#98FB98",
+    "Real Estate": "#DDA0DD",
+    "Communication Services": "#F0E68C",
+    "Defense": "#8B0000", "Aerospace": "#8B0000",
+    "Insurance": "#ADD8E6",
+    "Transportation": "#A9A9A9", "Shipping": "#A9A9A9", "Airlines": "#A9A9A9",
+    "Housing": "#DEB887", "Homebuilders": "#DEB887",
+    "Crypto": "#F7931A", "Gold": "#FFD700",
+}
+
 def format_ai_analysis_text(text, tickers=None, industries=None):
     """
     Post-process AI markdown output to highlight key terms:
@@ -2769,6 +2791,13 @@ def format_ai_analysis_text(text, tickers=None, industries=None):
     }
     for word, color in quadrant_colors.items():
         pattern = re.compile(rf'\b{word}\b', re.IGNORECASE)
+        text = pattern.sub(
+            lambda m, c=color: f'<span style="color:{c}; font-weight:bold;">{m.group(0)}</span>',
+            text
+        )
+
+    for word, color in sorted(SECTOR_KEYWORDS.items(), key=lambda x: len(x[0]), reverse=True):
+        pattern = re.compile(rf'\b{re.escape(word)}\b', re.IGNORECASE)
         text = pattern.sub(
             lambda m, c=color: f'<span style="color:{c}; font-weight:bold;">{m.group(0)}</span>',
             text
