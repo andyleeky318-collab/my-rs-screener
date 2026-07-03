@@ -4797,7 +4797,8 @@ def render_group_ai_insight(tickers, section_title, session_key, extra_note="", 
     ticker_key = f"{session_key}_ai_key"
     result_key = f"{session_key}_ai_result"
     current_sig = str(sorted(tickers))
-
+    
+    st.write("")
     force = st.button("🔄 AI Insight", key=f"retry_{session_key}")
 
     if force or st.session_state.get(ticker_key) != current_sig:
