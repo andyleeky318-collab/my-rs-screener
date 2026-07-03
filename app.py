@@ -5910,13 +5910,17 @@ def _etf_pie_chart():
                 custom_text.append(f"{pct:+.2f}%")
                 colors.append('#00b894' if direction > 0 else '#d63031' if direction < 0 else '#95a5a6')
 
-            # ── Identify the strongest (highest % change) ETF today ──
+            # ── Identify the strongest and weakest ETF today ──
             strongest_idx = max(
                 range(len(etf_symbols)),
                 key=lambda i: etf_changes_pct.get(etf_symbols[i], float('-inf'))
             )
+            weakest_idx = min(
+                range(len(etf_symbols)),
+                key=lambda i: etf_changes_pct.get(etf_symbols[i], float('inf'))
+            )
             text_colors = [
-                '#FFD700' if i == strongest_idx else '#ffffff'
+                '#FFD700' if i in (strongest_idx, weakest_idx) else '#ffffff'
                 for i in range(len(etf_symbols))
             ]
 
