@@ -3133,7 +3133,21 @@ if all_data:
             st.session_state["top20_theme_key"] = top20_sig
 
     if "top20_theme_result" in st.session_state:
-        st.markdown(st.session_state["top20_theme_result"])
+        # Rebuild the same ticker/industry universe used to generate this insight
+        top20_industries = df_main.head(20)["Industry"].tolist()
+        top20_tickers = []
+        for industry in top20_industries:
+            item = next((d for d in all_data if d["Industry"] == industry), None)
+            if item is not None:
+                top5 = item["Tickers"].sort_values("RS Score", ascending=False).head(5)
+                top20_tickers.extend(top5["Ticker"].tolist())
+
+        formatted_theme = format_ai_analysis_text(
+            st.session_state["top20_theme_result"],
+            tickers=top20_tickers,
+            industries=top20_industries
+        )
+        st.markdown(formatted_theme, unsafe_allow_html=True)
 
 # 7. EXTRA SEPARATE PATTERNS SCANNING BLOCK
 #st.markdown("---")
