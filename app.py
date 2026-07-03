@@ -4246,6 +4246,72 @@ def build_leader_industry_map(leader_list, industries_dict):
     
     return industry_counts, ticker_industry
 
+def format_ai_analysis_text(text, tickers=None, industries=None):
+    """
+    Post-process AI markdown output to highlight key terms:
+    - numbers/percentages (light color)
+    - quadrant keywords: Strong/Improving/Weakening/Weak (color-coded)
+    - BLUE DOT (red, bold)
+    - ticker symbols (gold, bold)
+    - industry names (teal, bold)
+    Must be rendered with st.markdown(..., unsafe_allow_html=True).
+    """
+    if not text:
+        return text
+
+    # 1. Numbers/percentages FIRST — before any HTML is injected,
+    #    so we don't accidentally bold digits inside hex color codes.
+    text = re.sub(
+        r'\b(\d+(?:\.\d+)?%?)\b',
+        r'<span style="color:#cccccc; font-weight:bold;">\1</span>',
+        text
+    )
+
+    # 2. Quadrant keywords — distinct color per label
+    quadrant_colors = {
+        "Strong":    "#00FF00",
+        "Improving": "#378ADD",
+        "Weakening": "#FFA500",
+        "Weak":      "#FF4B4B",
+    }
+    for word, color in quadrant_colors.items():
+        pattern = re.compile(rf'\b{word}\b', re.IGNORECASE)
+        text = pattern.sub(
+            lambda m, c=color: f'<span style="color:{c}; font-weight:bold;">{m.group(0)}</span>',
+            text
+        )
+
+    # 3. BLUE DOT
+    text = re.sub(
+        r'\bBLUE DOT\b',
+        '<span style="color:#FF4B4B; font-weight:bold;">BLUE DOT</span>',
+        text
+    )
+
+    # 4. Ticker symbols — case-sensitive, only known tickers to avoid false hits
+    if tickers:
+        for t in sorted(set(tickers), key=len, reverse=True):
+            if not t or len(t) < 1:
+                continue
+            pattern = re.compile(rf'\b{re.escape(t)}\b')
+            text = pattern.sub(
+                f'<span style="color:#FFD700; font-weight:bold;">{t}</span>',
+                text
+            )
+
+    # 5. Industry names — longest first, case-insensitive
+    if industries:
+        for ind in sorted(set(industries), key=len, reverse=True):
+            if not ind:
+                continue
+            pattern = re.compile(re.escape(ind), re.IGNORECASE)
+            text = pattern.sub(
+                lambda m: f'<span style="color:#4ecdc4; font-weight:bold;">{m.group(0)}</span>',
+                text
+            )
+
+    return text
+
 def generate_leader_ai_analysis(leader_list, industry_counts, ticker_industry, rs_nh_list, quad_points=None):
     """
     Call AI providers in order: Gemini → Groq → GitHub Models → OpenRouter.
@@ -4493,7 +4559,12 @@ else:
             st.session_state["leader_ai_key"] = leader_list_key
 
     if "leader_ai_result" in st.session_state:
-        st.markdown(st.session_state["leader_ai_result"])
+        formatted_analysis = format_ai_analysis_text(
+            st.session_state["leader_ai_result"],
+            tickers=leader_list,
+            industries=list(industry_counts.keys())
+        )
+        st.markdown(formatted_analysis, unsafe_allow_html=True)
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
