@@ -2796,6 +2796,20 @@ def format_ai_analysis_text(text, tickers=None, industries=None):
             text
         )
 
+    industry_placeholders = {}
+    if industries:
+        for i, ind in enumerate(sorted(set(industries), key=len, reverse=True)):
+            if not ind:
+                continue
+            token = f"@@IND{i}@@"
+            pattern = re.compile(re.escape(ind), re.IGNORECASE)
+
+            def _stash(m, token=token):
+                industry_placeholders[token] = m.group(0)
+                return token
+
+            text = pattern.sub(_stash, text)
+
     for word, color in sorted(SECTOR_KEYWORDS.items(), key=lambda x: len(x[0]), reverse=True):
         pattern = re.compile(rf'\b{re.escape(word)}\b', re.IGNORECASE)
         text = pattern.sub(
@@ -2822,15 +2836,11 @@ def format_ai_analysis_text(text, tickers=None, industries=None):
             )
 
     # 5. Industry names — longest first, case-insensitive
-    if industries:
-        for ind in sorted(set(industries), key=len, reverse=True):
-            if not ind:
-                continue
-            pattern = re.compile(re.escape(ind), re.IGNORECASE)
-            text = pattern.sub(
-                lambda m: f'<span style="color:#4ecdc4; font-weight:bold;">{m.group(0)}</span>',
-                text
-            )
+    for token, original_text in industry_placeholders.items():
+        text = text.replace(
+            token,
+            f'<span style="color:#4ecdc4; font-weight:bold;">{original_text}</span>'
+        )
 
     return text
 
