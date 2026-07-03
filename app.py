@@ -5910,6 +5910,16 @@ def _etf_pie_chart():
                 custom_text.append(f"{pct:+.2f}%")
                 colors.append('#00b894' if direction > 0 else '#d63031' if direction < 0 else '#95a5a6')
 
+            # ── Identify the strongest (highest % change) ETF today ──
+            strongest_idx = max(
+                range(len(etf_symbols)),
+                key=lambda i: etf_changes_pct.get(etf_symbols[i], float('-inf'))
+            )
+            text_colors = [
+                '#FFD700' if i == strongest_idx else '#ffffff'
+                for i in range(len(etf_symbols))
+            ]
+
             fig = go.Figure(
                 data=[go.Pie(
                     labels=labels,
@@ -5922,6 +5932,7 @@ def _etf_pie_chart():
                     textposition='inside',
                     insidetextorientation='radial',
                     showlegend=False,
+                    textfont=dict(color=text_colors),
                     hovertemplate='%{label}<br>Daily Change: %{text}<br>Size: %{value:.2f}B<extra></extra>'
                 )]
             )
@@ -5933,9 +5944,9 @@ def _etf_pie_chart():
                     'text': f"{positive_count}/10",
                     'x': 0.5,
                     'xanchor': 'center',
-                    'font': {'size': 30}  # <--- Added this to increase font size
+                    'font': {'size': 30}
                 },
-                margin=dict(l=0, r=0, t=50, b=0)  # Bumped 't' up slightly so a larger font doesn't get cut off
+                margin=dict(l=0, r=0, t=50, b=0)
             )
             st.plotly_chart(fig, use_container_width=True)
         else:
