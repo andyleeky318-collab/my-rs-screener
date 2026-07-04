@@ -2972,9 +2972,9 @@ def render_ai_points_table(raw_text, tickers=None, industries=None):
         formatted_content = format_ai_analysis_text(content, tickers=tickers, industries=industries)
         rows_html += (
             f"<tr style='background:{bg};'>"
-            f"<td style='padding:8px 12px; border-bottom:1px solid #2a2d38; vertical-align:top; "
+            f"<td style='padding:8px 12px; border:2px solid #cccccc; vertical-align:top; "
             f"width:170px; font-weight:700; color:#4ecdc4; font-size:14.5px;'>{label}</td>"
-            f"<td style='padding:8px 12px; border-bottom:1px solid #2a2d38; vertical-align:top; "
+            f"<td style='padding:8px 12px; border:2px solid #cccccc; vertical-align:top; "
             f"color:#e0e0e0; font-size:14.5px; line-height:1.5;'>{formatted_content}</td>"
             f"</tr>"
         )
@@ -2987,7 +2987,7 @@ def render_ai_points_table(raw_text, tickers=None, industries=None):
     table_html = (
         f"{header_html}"
         f"<table style='width:100%; border-collapse:collapse; margin-bottom:6px; "
-        f"border:3px solid #cccccc; border-radius:6px; overflow:hidden;'>"
+        f"border:3px solid #cccccc;'>"
         f"<tbody>{rows_html}</tbody></table>"
     )
     st.markdown(table_html, unsafe_allow_html=True)
