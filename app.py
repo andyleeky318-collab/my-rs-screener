@@ -1000,7 +1000,7 @@ if breadth_total > 0:
 
     #col_nh, col_nl = st.columns([1, 9])
     #with col_nh:
-    with st.expander(f"New Highs ({len(new_high_tickers)})"):
+    with st.expander(f"New Highs ({len(new_high_tickers)})", expanded=True):
         if new_high_tickers:
             nh_html = (
                 "<div style='display:flex;flex-wrap:wrap;gap:6px;"
@@ -1024,7 +1024,7 @@ if breadth_total > 0:
         else:
             st.info("")
 
-    with st.expander(f"New Lows ({len(new_low_tickers)})"):
+    with st.expander(f"New Lows ({len(new_low_tickers)})", expanded=True):
         if new_low_tickers:
             nl_html = (
                 "<div style='display:flex;flex-wrap:wrap;gap:6px;"
