@@ -2898,6 +2898,100 @@ def format_ai_analysis_text(text, tickers=None, industries=None):
 
     return text
 
+def parse_ai_points(raw_text):
+    """Split an AI response into (provider_header, [(label, content), ...])."""
+    if not raw_text:
+        return None, []
+
+    text = raw_text.strip()
+    lines = text.split("\n")
+
+    header = None
+    if lines and re.match(r'^[🟦🟧⬜🟣🔴]', lines[0].strip()):
+        header = lines[0].strip()
+        rest_lines = lines[1:]
+        while rest_lines and not rest_lines[0].strip():
+            rest_lines.pop(0)
+        body = "\n".join(rest_lines)
+    else:
+        body = text
+
+    bullet_pattern = re.compile(r'^\s*(?:[-•*]|\d+[\.\)])\s+')
+    bullets = []
+    current = ""
+    for line in body.split("\n"):
+        if bullet_pattern.match(line):
+            if current:
+                bullets.append(current.strip())
+            current = bullet_pattern.sub("", line, count=1)
+        else:
+            if current:
+                current += " " + line.strip()
+            elif line.strip():
+                bullets.append(line.strip())
+    if current:
+        bullets.append(current.strip())
+
+    points = []
+    for i, b in enumerate(bullets, start=1):
+        b = b.strip()
+        label = None
+        content = b
+
+        m = re.match(r'^\*\*(.+?)\*\*[:\-]?\s*(.*)$', b)
+        if m and m.group(2).strip():
+            label = m.group(1).strip()
+            content = m.group(2).strip()
+        else:
+            m2 = re.match(r"^([A-Za-z][A-Za-z0-9 /&'\-]{2,45}):\s+(.+)$", b)
+            if m2:
+                label = m2.group(1).strip()
+                content = m2.group(2).strip()
+
+        if not label:
+            label = f"Point {i}"
+
+        points.append((label, content))
+
+    return header, points
+
+
+def render_ai_points_table(raw_text, tickers=None, industries=None):
+    """Render an AI analysis response as a 2-column (topic | detail) table."""
+    if not raw_text:
+        return
+
+    header, points = parse_ai_points(raw_text)
+    if not points:
+        formatted = format_ai_analysis_text(raw_text, tickers=tickers, industries=industries)
+        st.markdown(formatted, unsafe_allow_html=True)
+        return
+
+    rows_html = ""
+    for i, (label, content) in enumerate(points):
+        bg = "#1a1c23" if i % 2 == 0 else "#12141a"
+        formatted_content = format_ai_analysis_text(content, tickers=tickers, industries=industries)
+        rows_html += (
+            f"<tr style='background:{bg};'>"
+            f"<td style='padding:8px 12px; border-bottom:1px solid #2a2d38; vertical-align:top; "
+            f"width:170px; font-weight:700; color:#4ecdc4; font-size:12.5px;'>{label}</td>"
+            f"<td style='padding:8px 12px; border-bottom:1px solid #2a2d38; vertical-align:top; "
+            f"color:#e0e0e0; font-size:12.5px; line-height:1.5;'>{formatted_content}</td>"
+            f"</tr>"
+        )
+
+    header_html = ""
+    if header:
+        header_clean = re.sub(r'\*\*(.+?)\*\*', r'\1', header)
+        header_html = f"<div style='font-size:11px; color:#888; margin-bottom:6px;'>{header_clean}</div>"
+
+    table_html = (
+        f"{header_html}"
+        f"<table style='width:100%; border-collapse:collapse; margin-bottom:6px;'>"
+        f"<tbody>{rows_html}</tbody></table>"
+    )
+    st.markdown(table_html, unsafe_allow_html=True)
+
 # 6. Compact Display Logic
 if all_data:
     df_main = pd.DataFrame([{"Industry": item["Industry"], "Group RS": item["Group RS"], "Group RS Prev": item["Group RS Prev"], "Group RS 1M": item["Group RS 1M"]} for item in all_data])
@@ -3311,12 +3405,11 @@ if all_data:
         nh_nl_industries = _local_industry_set(new_high_tickers, INDUSTRIES) | _local_industry_set(new_low_tickers, INDUSTRIES)
         combined_industries = list(set(top20_industries) | nh_nl_industries)
 
-        formatted_theme = format_ai_analysis_text(
+        render_ai_points_table(
             st.session_state["top20_theme_result"],
             tickers=combined_tickers,
             industries=combined_industries
         )
-        st.markdown(formatted_theme, unsafe_allow_html=True)
 
     if vol_flagged_industries:
         dist_html = (
@@ -4972,10 +5065,9 @@ def render_group_ai_insight(tickers, section_title, session_key, extra_note="", 
 
     if result_key in st.session_state:
         industries_seen = list(build_leader_industry_map(tickers, industries_dict or INDUSTRIES)[0].keys())
-        formatted = format_ai_analysis_text(
+        render_ai_points_table(
             st.session_state[result_key], tickers=tickers, industries=industries_seen
         )
-        st.markdown(formatted, unsafe_allow_html=True)
 
 # ==========================================
 # UI - RS LEADER AI ANALYSIS
@@ -5031,12 +5123,11 @@ else:
             st.session_state["leader_ai_key"] = leader_list_key
 
     if "leader_ai_result" in st.session_state:
-        formatted_analysis = format_ai_analysis_text(
+        render_ai_points_table(
             st.session_state["leader_ai_result"],
             tickers=leader_list,
             industries=list(industry_counts.keys())
         )
-        st.markdown(formatted_analysis, unsafe_allow_html=True)
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
