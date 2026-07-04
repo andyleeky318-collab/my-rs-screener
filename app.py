@@ -2534,10 +2534,10 @@ for item in all_data:
     cloudwick_all.update(item.get("CloudWick",   []))
     ma50bounce_all.update(item.get("MA50Bounce",  []))
 
-def setup_badge(sym, is_new=False, is_removed=False, extra_prefix="", extra_suffix=""):
+def setup_badge(sym, is_new=False, is_removed=False, extra_prefix="", extra_suffix="", extra_suffix_color="#888888"):
     """Render a ticker badge, colored by setup-category precedence:
     50ma_bounce (orange) > 21ema_wick (aqua) > 21ema_cloud (purple) > new (gold) > default."""
-    suffix_html = f'<span style="margin-left:4px; color:#888888; font-weight:bold;">· {extra_suffix}</span>' if extra_suffix else ""
+    suffix_html = f'<span style="margin-left:4px; color:{extra_suffix_color}; font-weight:bold;">· {extra_suffix}</span>' if extra_suffix else ""
     if is_removed:
         return f'<div class="ticker-badge removed-badge">{extra_prefix}{sym}{suffix_html}</div>'
     if sym in ma50bounce_all:
@@ -5769,7 +5769,8 @@ if pt_list or pt_yest:
         sym = item[0] if isinstance(item, tuple) else item
         atr_value = item[1] if isinstance(item, tuple) else None
         suffix = f"{atr_value:.1f}x" if atr_value is not None else ""
-        html_pt += setup_badge(sym, is_new=(sym not in pt_yest_set), extra_suffix=suffix)
+        suffix_color = "#00FF00" if (atr_value is not None and atr_value < 4) else "#888888"
+        html_pt += setup_badge(sym, is_new=(sym not in pt_yest_set), extra_suffix=suffix, extra_suffix_color=suffix_color)
     
     # Process and append removed stocks
     removed_pt = [sym for sym in pt_yest if sym not in current_pt_tickers]
