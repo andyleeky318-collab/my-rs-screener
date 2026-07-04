@@ -2613,10 +2613,15 @@ with st.spinner("Computing industry volatility flags..."):
         INDUSTRIES, ticker_dfs_shared
     )
 
-def generate_top_industries_theme_insight(df_main_sorted, all_data_list, top_n_industries=20):
+def generate_top_industries_theme_insight(
+    df_main_sorted, all_data_list, top_n_industries=20,
+    new_high_tickers=None, new_low_tickers=None
+):
     """
     Standalone (no external function deps) — summarizes what theme/sector
     rotation is dominating the top-N industries by Group RS right now.
+    Optionally also folds in New High / New Low tickers to flag any
+    common industry/theme/subgroup driving those lists.
     Same provider fallback chain as generate_leader_ai_analysis, kept
     self-contained so it can be called anywhere in the script.
     """
@@ -2637,16 +2642,43 @@ def generate_top_industries_theme_insight(df_main_sorted, all_data_list, top_n_i
 
     industries_block = "\n".join(lines)
 
+    # ── NEW: New High / New Low industry breakdown ──────────────────────────
+    nh_nl_block = ""
+    new_high_tickers = new_high_tickers or []
+    new_low_tickers  = new_low_tickers or []
+
+    if new_high_tickers or new_low_tickers:
+        nh_industry_counts, _ = build_leader_industry_map(new_high_tickers, INDUSTRIES)
+        nl_industry_counts, _ = build_leader_industry_map(new_low_tickers, INDUSTRIES)
+
+        nh_sorted = sorted(nh_industry_counts.items(), key=lambda x: -x[1])
+        nl_sorted = sorted(nl_industry_counts.items(), key=lambda x: -x[1])
+
+        nh_str = ", ".join(f"{ind}({cnt})" for ind, cnt in nh_sorted[:10]) or "none"
+        nl_str = ", ".join(f"{ind}({cnt})" for ind, cnt in nl_sorted[:10]) or "none"
+
+        nh_tickers_str = ", ".join(sorted(new_high_tickers)[:40]) or "none"
+        nl_tickers_str = ", ".join(sorted(new_low_tickers)[:40]) or "none"
+
+        nh_nl_block = f"""
+New 52-Week Highs ({len(new_high_tickers)} tickers): {nh_tickers_str}
+New High industry concentration: {nh_str}
+
+New 52-Week Lows ({len(new_low_tickers)} tickers): {nl_tickers_str}
+New Low industry concentration: {nl_str}
+"""
+
     prompt = f"""
 You are a concise IBD-style market analyst. Below are the top {len(top_rows)} industries right now, ranked by Group Relative Strength, with their strongest tickers.
 
 {industries_block}
-
-In 3-4 SHORT bullet points:
+{nh_nl_block}
+In SHORT bullet points:
 1. What is the dominant market theme or macro narrative connecting these top industries right now (e.g. AI/semis, defense, gold/metals, crypto, industrials, etc)?
 2. Are there 2-3 distinct sub-themes or clusters visible, rather than one single theme?
 3. Any industry here that looks like an outlier / doesn't fit the dominant theme?
-4. One-line tactical takeaway for a swing trader on where leadership is concentrated.
+{"4. Is there a common industry, theme, or subgroup dominating the New Highs list? Same question for New Lows — is there a clear industry cluster showing weakness? Note any overlap or contrast between the two." if (new_high_tickers or new_low_tickers) else ""}
+5. One-line tactical takeaway for a swing trader on where leadership is concentrated (and where weakness is concentrated, if New Lows data was given).
 
 Be direct, name industries explicitly, no fluff, no repeating the prompt.
 """
@@ -3219,7 +3251,11 @@ if all_data:
     table_html += "</tbody></table>"
 
     # ── Top 20 industries theme insight ──────────────────────────────────
-    top20_sig = str(df_main.head(20)["Industry"].tolist()) + str(round(df_main.head(20)["Group RS"].sum(), 1))
+    top20_sig = (
+        str(df_main.head(20)["Industry"].tolist())
+        + str(round(df_main.head(20)["Group RS"].sum(), 1))
+        + str(sorted(new_high_tickers)) + str(sorted(new_low_tickers))
+    )
     force_theme = st.button("🔄 Refresh Theme Insight", key="retry_top20_theme")
 
     if force_theme or st.session_state.get("top20_theme_key") != top20_sig:
@@ -3227,14 +3263,14 @@ if all_data:
             theme_result = timed(
                 "generate_top_industries_theme_insight",
                 generate_top_industries_theme_insight,
-                df_main, all_data, 20
+                df_main, all_data, 20,
+                new_high_tickers, new_low_tickers
             )
         if theme_result:
             st.session_state["top20_theme_result"] = theme_result
             st.session_state["top20_theme_key"] = top20_sig
 
     if "top20_theme_result" in st.session_state:
-        # Rebuild the same ticker/industry universe used to generate this insight
         top20_industries = df_main.head(20)["Industry"].tolist()
         top20_tickers = []
         for industry in top20_industries:
@@ -3243,9 +3279,11 @@ if all_data:
                 top5 = item["Tickers"].sort_values("RS Score", ascending=False).head(5)
                 top20_tickers.extend(top5["Ticker"].tolist())
 
+        combined_tickers = list(set(top20_tickers) | set(new_high_tickers) | set(new_low_tickers))
+
         formatted_theme = format_ai_analysis_text(
             st.session_state["top20_theme_result"],
-            tickers=top20_tickers,
+            tickers=combined_tickers,
             industries=top20_industries
         )
         st.markdown(formatted_theme, unsafe_allow_html=True)
