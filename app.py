@@ -2557,12 +2557,15 @@ def setup_badge(sym, is_new=False, is_removed=False, extra_prefix="", extra_suff
 def compute_industry_vol_flags(industries_dict, _ticker_dfs):
     """
     For each industry, count how many tickers meet highVolCount >= 6 OR volScore >= 3.5.
-    Returns set of industry names where at least 2 tickers meet the condition.
+    Returns:
+      - flagged_industries: set of industry names where at least 2 tickers meet the condition.
+      - industry_vol_tickers: dict of industry -> list of qualifying tickers (only for flagged industries).
     """
     flagged_industries = set()
+    industry_vol_tickers = {}
 
     for industry, tickers in industries_dict.items():
-        qualifying_count = 0
+        qualifying_tickers = []
 
         for ticker in tickers:
             try:
@@ -2592,19 +2595,19 @@ def compute_industry_vol_flags(industries_dict, _ticker_dfs):
                     continue
 
                 if high_vol_count >= 6 or vol_score >= 3.5:
-                    qualifying_count += 1
-
-                if qualifying_count >= 2:
-                    flagged_industries.add(industry)
-                    break
+                    qualifying_tickers.append(ticker)
 
             except Exception:
                 continue
 
-    return flagged_industries
+        if len(qualifying_tickers) >= 2:
+            flagged_industries.add(industry)
+            industry_vol_tickers[industry] = qualifying_tickers
+
+    return flagged_industries, industry_vol_tickers
 
 with st.spinner("Computing industry volatility flags..."):
-    vol_flagged_industries = timed(
+    vol_flagged_industries, industry_vol_tickers = timed(
         "compute_industry_vol_flags",
         compute_industry_vol_flags,
         INDUSTRIES, ticker_dfs_shared
@@ -3246,6 +3249,36 @@ if all_data:
             industries=top20_industries
         )
         st.markdown(formatted_theme, unsafe_allow_html=True)
+
+    if vol_flagged_industries:
+        dist_html = (
+            f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
+            f"📊 Distribution "
+            f"<span style='color:#FF4B4B;'>({len(vol_flagged_industries)})</span>"
+            f"</div>"
+        )
+        # Order by current table rank so it reads top-to-bottom like the main table
+        sorted_flagged = sorted(
+            vol_flagged_industries,
+            key=lambda ind: industry_rank_map.get(ind, 9999)
+        )
+        for industry in sorted_flagged:
+            rank = industry_rank_map.get(industry, "-")
+            tickers_for_ind = sorted(industry_vol_tickers.get(industry, []))
+            ticker_badges = "".join(
+                f'<span style="display:inline-block;margin:1px 3px;padding:1px 5px;'
+                f'border:1px solid #663333;border-radius:3px;font-size:11px;'
+                f'background-color:#2d1a1a;color:#FF9999;font-weight:600;">{t}</span>'
+                for t in tickers_for_ind
+            )
+            dist_html += (
+                f"<div style='margin-bottom:5px;'>"
+                f"<span style='color:#FF4B4B; font-weight:bold; font-size:12px; margin-right:6px;'>#{rank}</span>"
+                f"<span style='color:#FF4B4B; font-weight:bold; font-size:13px;'>{industry}</span>"
+                f"<span style='margin-left:6px;'>{ticker_badges}</span>"
+                f"</div>"
+            )
+        st.markdown(dist_html, unsafe_allow_html=True)
 
     st.markdown(
         f'<div style="text-align: right; font-size: 20px; color: #888888; margin-bottom: 4px; font-family: monospace;">'
