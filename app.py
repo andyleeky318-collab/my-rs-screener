@@ -5829,18 +5829,18 @@ if not powertrend_hist.empty:
 st.markdown("---")
 
 # --- 5. POWERTREND NOT EXTENDED (Full Horizontal Row Below PowerTrend) ---
-st.markdown(f"#### ⚡ PowerTrend ... Not Extended ({len(ptne_list)})")
-if ptne_list:
-    html_ptne = ""
-    ptne_yest_set = set(ptne_yest)
-    for item in ptne_list:
-        sym = item[0] if isinstance(item, tuple) else item
-        atr_value = item[1] if isinstance(item, tuple) else None
-        suffix = f"{atr_value:.1f}x" if atr_value is not None else ""
-        html_ptne += setup_badge(sym, is_new=(sym not in ptne_yest_set), extra_suffix=suffix)
-    st.markdown(html_ptne, unsafe_allow_html=True)
-else:
-    st.info("No active setups discovered.")
+# st.markdown(f"#### ⚡ PowerTrend ... Not Extended ({len(ptne_list)})")
+# if ptne_list:
+#     html_ptne = ""
+#     ptne_yest_set = set(ptne_yest)
+#     for item in ptne_list:
+#         sym = item[0] if isinstance(item, tuple) else item
+#         atr_value = item[1] if isinstance(item, tuple) else None
+#         suffix = f"{atr_value:.1f}x" if atr_value is not None else ""
+#         html_ptne += setup_badge(sym, is_new=(sym not in ptne_yest_set), extra_suffix=suffix)
+#     st.markdown(html_ptne, unsafe_allow_html=True)
+# else:
+#     st.info("No active setups discovered.")
 
 # ============================================================
 # VOLATILITY PICKUP — Z-Score of Daily Range >= 2
