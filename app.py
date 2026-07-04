@@ -5749,6 +5749,14 @@ if not engulf_hist.empty:
         use_container_width=True
     )
 
+engulf_combined_syms = list(dict.fromkeys(e2_list + e3_list))
+render_group_ai_insight(
+    engulf_combined_syms,
+    "Bullish Engulfing (2x/3x)",
+    "engulfing",
+    extra_note="2 or 3 recent bullish engulfing candles (open below prior low, close above prior high) with price closing above the prior engulfing candle closes"
+)
+
 # --- EXTRA TREND METRICS (Stacked Horizontally Below Patterns) ---
 #st.markdown("---")
 #st.markdown("### 📊 Extra Trend Metrics (PowerTrend Indicators)")
