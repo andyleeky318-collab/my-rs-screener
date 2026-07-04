@@ -2990,13 +2990,6 @@ if all_data:
     #         )
     # ─────────────────────────────────────────────────────────────────────
 
-    st.markdown(
-        f'<div style="text-align: right; font-size: 20px; color: #888888; margin-bottom: 4px; font-family: monospace;">'
-        f'Setup = <span style="color: #4ecdc4; font-weight: bold;">{global_setup_count}</span>'
-        f'<span style="color: #888888; font-size: 16px; margin-left: 6px;">{setup_rank_str}</span></div>',
-        unsafe_allow_html=True
-    )
-
     table_html = """<table>
     <thead><tr>
     <th style="text-align: center; width: 30px;">#</th>
@@ -3253,6 +3246,13 @@ if all_data:
             industries=top20_industries
         )
         st.markdown(formatted_theme, unsafe_allow_html=True)
+
+    st.markdown(
+        f'<div style="text-align: right; font-size: 20px; color: #888888; margin-bottom: 4px; font-family: monospace;">'
+        f'Setup = <span style="color: #4ecdc4; font-weight: bold;">{global_setup_count}</span>'
+        f'<span style="color: #888888; font-size: 16px; margin-left: 6px;">{setup_rank_str}</span></div>',
+        unsafe_allow_html=True
+    )
 
     st.markdown(table_html, unsafe_allow_html=True)
 
