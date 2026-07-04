@@ -3321,7 +3321,7 @@ if all_data:
     if vol_flagged_industries:
         dist_html = (
             f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-            f"📊 Distribution "
+            f"📊 Distribution / Stage 3"
             f"<span style='color:#FF4B4B;'>({len(vol_flagged_industries)})</span>"
             f"</div>"
         )
