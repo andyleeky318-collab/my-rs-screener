@@ -829,8 +829,8 @@ if lime_perf_rows:
         return html
 
     cols_html  = draw_col(rows_1d, "pct",    max_abs_1d, X0_1d, stripe_syms=two_month_high_syms)
-    cols_html += draw_col(rows_1w, "pct_1w", max_abs_1w, X0_1w)
-    cols_html += draw_col(rows_1m, "pct_1m", max_abs_1m, X0_1m)
+    cols_html += draw_col(rows_1w, "pct_1w", max_abs_1w, X0_1w, stripe_syms=two_month_high_syms)
+    cols_html += draw_col(rows_1m, "pct_1m", max_abs_1m, X0_1m, stripe_syms=two_month_high_syms)
 
     js = """
     <script>
