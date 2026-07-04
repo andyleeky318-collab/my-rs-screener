@@ -2986,7 +2986,8 @@ def render_ai_points_table(raw_text, tickers=None, industries=None):
 
     table_html = (
         f"{header_html}"
-        f"<table style='width:100%; border-collapse:collapse; margin-bottom:6px;'>"
+        f"<table style='width:100%; border-collapse:collapse; margin-bottom:6px; "
+        f"border:3px solid #cccccc; border-radius:6px; overflow:hidden;'>"
         f"<tbody>{rows_html}</tbody></table>"
     )
     st.markdown(table_html, unsafe_allow_html=True)
