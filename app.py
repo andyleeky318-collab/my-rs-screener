@@ -3299,10 +3299,22 @@ if all_data:
 
         combined_tickers = list(set(top20_tickers) | set(new_high_tickers) | set(new_low_tickers))
 
+        # ── NEW: also pull in industries that New High / New Low tickers belong to ──
+        def _local_industry_set(ticker_list, industries_dict):
+            found = set()
+            for t in ticker_list:
+                for industry, tickers in industries_dict.items():
+                    if t in tickers:
+                        found.add(industry)
+            return found
+
+        nh_nl_industries = _local_industry_set(new_high_tickers, INDUSTRIES) | _local_industry_set(new_low_tickers, INDUSTRIES)
+        combined_industries = list(set(top20_industries) | nh_nl_industries)
+
         formatted_theme = format_ai_analysis_text(
             st.session_state["top20_theme_result"],
             tickers=combined_tickers,
-            industries=top20_industries
+            industries=combined_industries
         )
         st.markdown(formatted_theme, unsafe_allow_html=True)
 
