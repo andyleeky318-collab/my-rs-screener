@@ -5895,7 +5895,7 @@ with st.spinner("Scanning volatility pickup..."):
         stocks_tuple, ticker_dfs_shared
     )
 
-st.markdown("---")
+#st.markdown("---")
 st.markdown(f"#### 〽️ Volatility ({len(volatility_hits)})")
 
 if volatility_hits:
@@ -6462,6 +6462,7 @@ def save_trending_list_github(date_obj, tickers):
     except Exception as e:
         st.warning(f"GitHub save error: {e}")
 
+@st.cache_data(ttl=3600)
 def load_trending_list_github(date_obj):
     """Load tickers for an exact date from GitHub. Returns None if not found."""
     repo   = st.secrets.get("GITHUB_REPO")
@@ -6483,6 +6484,7 @@ def load_trending_list_github(date_obj):
     except Exception:
         return None
 
+@st.cache_data(ttl=3600)
 def find_nearest_backward_trending_list_github(start_date, max_lookback_days=30):
     """
     Walk backward from start_date (exclusive) day by day until a saved
