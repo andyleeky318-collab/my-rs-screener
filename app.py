@@ -2955,7 +2955,6 @@ def parse_ai_points(raw_text):
 
     return header, points
 
-
 def render_ai_points_table(raw_text, tickers=None, industries=None):
     """Render an AI analysis response as a 2-column (topic | detail) table."""
     if not raw_text:
@@ -2974,16 +2973,16 @@ def render_ai_points_table(raw_text, tickers=None, industries=None):
         rows_html += (
             f"<tr style='background:{bg};'>"
             f"<td style='padding:8px 12px; border-bottom:1px solid #2a2d38; vertical-align:top; "
-            f"width:170px; font-weight:700; color:#4ecdc4; font-size:12.5px;'>{label}</td>"
+            f"width:170px; font-weight:700; color:#4ecdc4; font-size:14.5px;'>{label}</td>"
             f"<td style='padding:8px 12px; border-bottom:1px solid #2a2d38; vertical-align:top; "
-            f"color:#e0e0e0; font-size:12.5px; line-height:1.5;'>{formatted_content}</td>"
+            f"color:#e0e0e0; font-size:14.5px; line-height:1.5;'>{formatted_content}</td>"
             f"</tr>"
         )
 
     header_html = ""
     if header:
         header_clean = re.sub(r'\*\*(.+?)\*\*', r'\1', header)
-        header_html = f"<div style='font-size:11px; color:#888; margin-bottom:6px;'>{header_clean}</div>"
+        header_html = f"<div style='font-size:13px; color:#888; margin-bottom:6px;'>{header_clean}</div>"
 
     table_html = (
         f"{header_html}"
