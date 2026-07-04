@@ -3568,25 +3568,44 @@ def compute_leader_history(stocks_list, _ticker_dfs, benchmark_df_leader):
         all_series = []
 
         for ticker, df in _ticker_dfs.items():
-            if len(df) < 250:
+            if len(df) < 260:   # bumped from 250 → 260 to match pine7's lookback needs
                 continue
             try:
-                rs = df['Close'] / benchmark_df_leader['Close']
+                close = df['Close']
+                high  = df['High']
+                low   = df['Low']
+
+                rs = close / benchmark_df_leader['Close']
                 rsMA = rs.ewm(span=21, adjust=False).mean()
                 histNH = rs.rolling(250).max()
-                sma50 = df['Close'].rolling(50).mean()
-                sma200 = df['Close'].rolling(200).mean()
+                sma50 = close.rolling(50).mean()
+                sma150 = close.rolling(150).mean()
+                sma200 = close.rolling(200).mean()
 
                 circleCond = (rs == histNH)
                 circleCount30 = circleCond.rolling(30).sum()
                 twoCircles30 = circleCount30 >= 2
 
+                # Pine7 as a boolean Series (mirrors process_pattern_scanners)
+                c_sma200_22 = sma200.shift(22)
+                c_highest   = high.rolling(260).max()
+                c_lowest    = low.rolling(260).min()
+                pine7_s = (
+                    ((close > sma150) & (close > sma200)).astype(int)
+                    + (sma150 > sma200).astype(int)
+                    + (sma200 > c_sma200_22).astype(int)
+                    + (sma150 > sma200).astype(int)
+                    + (close > sma50).astype(int)
+                    + (((close / c_lowest) - 1) * 100 >= 25).astype(int)
+                    + ((1 - (close / c_highest)) * 100 <= 25).astype(int)
+                ) == 7
+
                 leader_series = (
                     (twoCircles30 | circleCond) &
-                    (rs > rsMA) &
-                    (df['Close'] > sma50) &
-                    (df['Close'] > sma200) &
-                    (df['Close'] >= 20)
+                    (close > sma50) &
+                    (close > sma200) &
+                    (close >= 20) &
+                    (pine7_s | (rs > rsMA))
                 ).astype(int)
 
                 all_series.append(leader_series)
