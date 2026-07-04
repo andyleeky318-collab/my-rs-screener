@@ -2746,7 +2746,7 @@ SECTOR_KEYWORDS = {
     "Financials": "#FF69B4", "Financial": "#FF69B4", "Banks": "#FF69B4", "Banking": "#FF69B4",
     "Industrials": "#FF69B4",
     "Materials": "#FF69B4", "Mining": "#FF69B4", "Chemicals": "#FF69B4",
-    "Utilities": "#FF69B4", "Electric": "#FF69B4", "Elec": "#FF69B4",
+    "Utilities": "#FF69B4", "Electric": "#FF69B4", "Elec": "#FF69B4", "tech": "#FF69B4",
     "Technology": "#FF69B4", "Software": "#FF69B4",
     "Semiconductor": "#FF69B4", "Semiconductors": "#FF69B4", "Semicon": "#FF69B4",
     "AI": "#FF69B4", "Artificial Intelligence": "#FF69B4",
