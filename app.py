@@ -2613,6 +2613,24 @@ with st.spinner("Computing industry volatility flags..."):
         INDUSTRIES, ticker_dfs_shared
     )
 
+# ==========================================
+# THEMATIC AI ANALYSIS - RS LEADERS
+# ==========================================
+def build_leader_industry_map(leader_list, industries_dict):
+    """Map each RS leader ticker to its industry group(s)."""
+    industry_counts = {}
+    ticker_industry = {}
+    
+    for ticker in leader_list:
+        found = []
+        for industry, tickers in industries_dict.items():
+            if ticker in tickers:
+                found.append(industry)
+                industry_counts[industry] = industry_counts.get(industry, 0) + 1
+        ticker_industry[ticker] = found if found else ["Uncategorized"]
+    
+    return industry_counts, ticker_industry
+
 def generate_top_industries_theme_insight(
     df_main_sorted, all_data_list, top_n_industries=20,
     new_high_tickers=None, new_low_tickers=None
@@ -4567,24 +4585,6 @@ if not leader_hist.empty:
         color="Bar_Color",  # Direct Streamlit to read colors line-by-line from this column
         use_container_width=True
     )
-
-# ==========================================
-# THEMATIC AI ANALYSIS - RS LEADERS
-# ==========================================
-def build_leader_industry_map(leader_list, industries_dict):
-    """Map each RS leader ticker to its industry group(s)."""
-    industry_counts = {}
-    ticker_industry = {}
-    
-    for ticker in leader_list:
-        found = []
-        for industry, tickers in industries_dict.items():
-            if ticker in tickers:
-                found.append(industry)
-                industry_counts[industry] = industry_counts.get(industry, 0) + 1
-        ticker_industry[ticker] = found if found else ["Uncategorized"]
-    
-    return industry_counts, ticker_industry
 
 def generate_leader_ai_analysis(leader_list, industry_counts, ticker_industry, rs_nh_list, quad_points=None):
     """
