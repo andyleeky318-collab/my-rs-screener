@@ -247,6 +247,7 @@ INDUSTRIES = {
     'CANNABIS': ['CNBS', 'GRWG', 'MSOS', 'IIPR', 'CRON', 'HITI', 'SNDL', 'ACB', 'VFF', 'CGC', 'TLRY', 'OGI'],
     'DRONES': ['RDW', 'JOBY', 'UMAC', 'GD', 'TXT', 'ONDS', 'ACHR', 'DPRO', 'LHX', 'ESLT', 'AVAV', 'EH', 'KTOS', 'PRZO', 'RCAT', 'ZENA'],
     'PRECIOUS METAL': ['GLD', 'SLV', 'PPLT', 'GDX', 'SIL', 'RGLD'],
+    'TRAVEL': ['ABNB', 'EXPE', 'BKNG'],
 }
 
 # Cleaned Known Stocks List Reference Array
