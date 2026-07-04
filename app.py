@@ -3221,7 +3221,6 @@ if all_data:
         <td>{ma50_bounce_html}</td></tr>"""
 
     table_html += "</tbody></table>"
-    st.markdown(table_html, unsafe_allow_html=True)
 
     # ── Top 20 industries theme insight ──────────────────────────────────
     top20_sig = str(df_main.head(20)["Industry"].tolist()) + str(round(df_main.head(20)["Group RS"].sum(), 1))
@@ -3254,6 +3253,8 @@ if all_data:
             industries=top20_industries
         )
         st.markdown(formatted_theme, unsafe_allow_html=True)
+
+    st.markdown(table_html, unsafe_allow_html=True)
 
 # 7. EXTRA SEPARATE PATTERNS SCANNING BLOCK
 #st.markdown("---")
