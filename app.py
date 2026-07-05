@@ -2974,7 +2974,7 @@ def render_ai_points_table(raw_text, tickers=None, industries=None):
         rows_html += (
             f"<tr style='background:{bg};'>"
             f"<td style='padding:8px 12px; border:2px solid #4a4f5a ; vertical-align:top; "
-            f"width:170px; font-weight:700; color:#4ecdc4; font-size:14.5px;'>{label}</td>"
+            f"width:170px; font-weight:700; color:#e0e0e0; font-size:14.5px;'>{label}</td>"
             f"<td style='padding:8px 12px; border:2px solid #4a4f5a ; vertical-align:top; "
             f"color:#e0e0e0; font-size:14.5px; line-height:1.5;'>{formatted_content}</td>"
             f"</tr>"
