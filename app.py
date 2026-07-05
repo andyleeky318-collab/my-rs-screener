@@ -3175,7 +3175,7 @@ if all_data:
     <th style="text-align: center; width: 40px;">RS</th>
     <th style="text-align: center; width: 40px;">1W</th>
     <th style="text-align: center; width: 40px;">1M</th>
-    <th style="text-align: center; width: 50px;">ROC</th>
+    <th style="text-align: center; width: 50px;">△T</th>
     <th style="text-align: left;">Tickers (RS > 80)</th>
     <th style="text-align: left; width: 250px;">21ema_Valid</th>
     <th style="text-align: left; width: 170px;">21ema_Cloud</th>
