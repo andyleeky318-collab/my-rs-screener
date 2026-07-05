@@ -1281,6 +1281,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, _bench
         stock_scores = {}
         stock_scores_prev = {}
         stock_scores_1m = {}
+        stock_scores_3d = {}
         cloud_tickers = []
         cloud_21ema_tickers = []
         cloud_wick_tickers = []
@@ -1320,6 +1321,11 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, _bench
             m1_rs = rs_ratio_series.iloc[-22]
             m1_hh = hh.iloc[-22]
             m1_ll = ll.iloc[-22]
+
+            # Get values from 3 trading days ago (for ROC acceleration adjustment)
+            d3_rs = rs_ratio_series.iloc[-4]
+            d3_hh = hh.iloc[-4]
+            d3_ll = ll.iloc[-4]
             
             # 3. Normalized logic: ((99 - 1) * (rsClose - ll) / (hh - ll)) + 1
             if pd.isna(current_hh) or pd.isna(current_ll) or current_hh == current_ll:
@@ -1338,6 +1344,11 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, _bench
             else:
                 total_score_1m = int(((99 - 1) * (m1_rs - m1_ll) / (m1_hh - m1_ll)) + 1)
 
+            if pd.isna(d3_hh) or pd.isna(d3_ll) or d3_hh == d3_ll:
+                total_score_3d = 0
+            else:
+                total_score_3d = int(((99 - 1) * (d3_rs - d3_ll) / (d3_hh - d3_ll)) + 1)
+
             # This will now store a clean whole number (e.g., 85 instead of 85.34)
             stock_scores[ticker] = total_score
 
@@ -1345,6 +1356,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, _bench
 
             stock_scores_prev[ticker] = total_score_prev
             stock_scores_1m[ticker] = total_score_1m
+            stock_scores_3d[ticker] = total_score_3d
 
             # EMA Cloud Calculation (21 EMA of High/Low) - Kept Unchanged
             ema_low = low_data[ticker].ewm(span=21, adjust=False).mean().iloc[-1]
@@ -1581,6 +1593,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, _bench
         rs_perf_raw = pd.Series(stock_scores).astype(int)
         rs_perf_prev_raw = pd.Series(stock_scores_prev).astype(int)
         rs_perf_1m_raw = pd.Series(stock_scores_1m).astype(int)
+        rs_perf_3d_raw = pd.Series(stock_scores_3d).astype(int)
         
         # Build a list of tickers that strictly have a price greater than 20
         valid_price_tickers = [ticker for ticker, price in price_lookup.items() if price > 20]
@@ -1594,11 +1607,12 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, _bench
         rs_perf = rs_perf_raw[rs_perf_raw.index.isin(valid_price_tickers)]
         rs_perf_prev = rs_perf_prev_raw[rs_perf_prev_raw.index.isin(valid_price_tickers)]
         rs_perf_1m = rs_perf_1m_raw[rs_perf_1m_raw.index.isin(valid_price_tickers)]
+        rs_perf_3d = rs_perf_3d_raw[rs_perf_3d_raw.index.isin(valid_price_tickers)]
         
-        return rs_perf, rs_perf, cloud_tickers, price_lookup, rs_perf_prev, rs_perf_1m, cloud_21ema_tickers, cloud_wick_tickers, ma50_bounce_tickers
+        return rs_perf, rs_perf, cloud_tickers, price_lookup, rs_perf_prev, rs_perf_1m, rs_perf_3d, cloud_21ema_tickers, cloud_wick_tickers, ma50_bounce_tickers
     except Exception as e:
         st.error(f"Error: {e}")
-        return None, None, None, {}, None, None, None, None, None
+        return None, None, None, {}, None, None, None, None, None, None
 
 with st.sidebar:
     if st.button("Refresh Table", use_container_width=True):
@@ -2466,7 +2480,7 @@ status_text = st.empty()
 industry_items = list(INDUSTRIES.items())
 for idx, (industry_name, tickers) in enumerate(industry_items):
     status_text.text(f"Processing {industry_name}...")
-    perf, rs_scores, cloud_list, price_lookup, rs_scores_prev, rs_scores_1m, cloud_21ema_list, cloud_wick_list, ma50_bounce_list = timed(
+    perf, rs_scores, cloud_list, price_lookup, rs_scores_prev, rs_scores_1m, rs_scores_3d, cloud_21ema_list, cloud_wick_list, ma50_bounce_list = timed(
         f"RS+Cloud [{industry_name}]",
         get_rs_and_cloud_data_cached,
         tuple(tickers), benchmark, 90, benchmark_df_shared   # ← added benchmark_df_shared
@@ -2488,12 +2502,19 @@ for idx, (industry_name, tickers) in enumerate(industry_items):
         else:
             group_avg_1m = group_avg
 
+        if rs_scores_3d is not None and not rs_scores_3d.empty:
+            top_n_scores_3d = rs_scores_3d.nlargest(int(top_n))
+            group_avg_3d = top_n_scores_3d.mean()
+        else:
+            group_avg_3d = group_avg
+
         df_tickers = pd.DataFrame({"Ticker": rs_scores.index, "RS Score": rs_scores.values}).sort_values(by="RS Score", ascending=False)
         all_data.append({
             "Industry": industry_name, 
             "Group RS": group_avg, 
             "Group RS Prev": group_avg_prev, 
             "Group RS 1M": group_avg_1m, 
+            "Group RS 3D": group_avg_3d,
             "Tickers": df_tickers, 
             "Cloud": cloud_list,
             "Cloud21EMA": cloud_21ema_list if cloud_21ema_list is not None else [],
@@ -2995,7 +3016,7 @@ def render_ai_points_table(raw_text, tickers=None, industries=None):
 
 # 6. Compact Display Logic
 if all_data:
-    df_main = pd.DataFrame([{"Industry": item["Industry"], "Group RS": item["Group RS"], "Group RS Prev": item["Group RS Prev"], "Group RS 1M": item["Group RS 1M"]} for item in all_data])
+    df_main = pd.DataFrame([{"Industry": item["Industry"], "Group RS": item["Group RS"], "Group RS Prev": item["Group RS Prev"], "Group RS 1M": item["Group RS 1M"], "Group RS 3D": item["Group RS 3D"]} for item in all_data])
 
     # col1, col2 = st.columns([1, 1])
     # with col1:
@@ -3029,6 +3050,15 @@ if all_data:
 
     rank_map_1m = dict(zip(df_1m_sorted['Industry'], df_1m_sorted['1M Rank']))
     df_main['1M Rank'] = df_main['Industry'].map(rank_map_1m)
+
+    # ── ROC (RS Thrust Rate %) ─────────────────────────────────────────────
+    # Calibrated blend: 60% weight on current ("1-week") RS + 40% on 1-Month RS,
+    # plus a small 0.1 acceleration adjustment vs the RS reading 3 trading days ago.
+    df_main['ROC'] = (
+        0.6 * df_main['Group RS']
+        + 0.4 * df_main['Group RS 1M']
+        + 0.1 * (df_main['Group RS'] - df_main['Group RS 3D'])
+    )
 
     st.markdown("""
     <style>
@@ -3094,7 +3124,7 @@ if all_data:
     table { width:100%; border-collapse: collapse; }
     th { padding: 4px 8px !important; background-color: #1f77b4; color: white; font-size: 12px; }
     td { padding: 2px 8px !important; border-bottom: 1px solid #333; font-size: 12px; }
-    th:nth-child(6), td:nth-child(6) {
+    th:nth-child(7), td:nth-child(7) {
         border-right: 3px solid #ffffff;
     }
     </style>
@@ -3145,11 +3175,12 @@ if all_data:
     <th style="text-align: center; width: 40px;">RS</th>
     <th style="text-align: center; width: 40px;">1W</th>
     <th style="text-align: center; width: 40px;">1M</th>
+    <th style="text-align: center; width: 50px;">ROC</th>
     <th style="text-align: left;">Tickers (RS > 80)</th>
-    <th style="text-align: left; width: 190px;">21ema_Valid</th>
-    <th style="text-align: left; width: 190px;">21ema_Cloud</th>
-    <th style="text-align: left; width: 190px;">21ema_Wick</th>
-    <th style="text-align: left; width: 190px;">50ma_Bounce</th>
+    <th style="text-align: left; width: 250px;">21ema_Valid</th>
+    <th style="text-align: left; width: 170px;">21ema_Cloud</th>
+    <th style="text-align: left; width: 170px;">21ema_Wick</th>
+    <th style="text-align: left; width: 170px;">50ma_Bounce</th>
     </tr></thead><tbody>"""
 
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
@@ -3166,6 +3197,11 @@ if all_data:
             rank_str = f'<span style="color: #FF7F7F; font-weight: bold;">{shift}</span>'
         else:
             rank_str = f'<span style="color: #aaaaaa;">0</span>'
+
+        # ROC cell
+        roc_val = row['ROC']
+        roc_color = "#00FF00" if roc_val >= 60 else "#FFA500" if roc_val >= 40 else "#FF4B4B"
+        roc_str = f'<span style="color: {roc_color}; font-weight: bold;">{roc_val:.1f}</span>'
         
         # Calculate 1M Rank Shift strings cleanly dynamically
         prv_r_1m = row['1M Rank']
@@ -3355,6 +3391,7 @@ if all_data:
         <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.1f}</td>
         <td style="text-align: center; vertical-align: middle;">{rank_str}</td>
         <td style="text-align: center; vertical-align: middle;">{rank_str_1m}</td>
+        <td style="text-align: center; vertical-align: middle;">{roc_str}</td>
         <td>{ticker_html}</td>
         <td>{cloud_html}</td>
         <td>{cloud_21ema_html}</td>
