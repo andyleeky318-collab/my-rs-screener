@@ -3198,9 +3198,10 @@ if all_data:
         else:
             rank_str = f'<span style="color: #aaaaaa;">0</span>'
 
+        # ROC cell
         roc_val = row['ROC']
         if roc_val > 90:
-            roc_str = f'<span style="background-color: #00FF00; padding: 1px 6px; border-radius: 3px;">{roc_val:.1f}</span>'
+            roc_str = f'<span style="background-color: #00FF00; color: #000000; font-weight: bold; padding: 1px 6px; border-radius: 3px;">{roc_val:.1f}</span>'
         else:
             roc_str = f'{roc_val:.1f}'
         
