@@ -29,7 +29,7 @@ def timed(label, fn, *args, **kwargs):
     return result
 
 # 1. Setup Streamlit Page
-st.set_page_config(page_title="Chrome Sector RS", layout="wide")
+st.set_page_config(page_title="Chrome Sector RS", page_icon="🐱", layout="wide")
 #st.title("🐱 Theme Tracker")
 
 # # ── AMD 1-Year OHLC Data Display ─────────────────────────────────────────────
