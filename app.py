@@ -3200,8 +3200,9 @@ if all_data:
 
         # ROC cell
         roc_val = row['ROC']
-        roc_color = "#00FF00" if roc_val >= 60 else "#FFA500" if roc_val >= 40 else "#FF4B4B"
-        roc_str = f'<span style="color: {roc_color}; font-weight: bold;">{roc_val:.1f}</span>'
+        #roc_color = "#00FF00" if roc_val >= 60 else "#FFA500" if roc_val >= 40 else "#FF4B4B"
+        #roc_str = f'<span style="color: {roc_color}; font-weight: bold;">{roc_val:.1f}</span>'
+        roc_str = f'{roc_val:.1f}'
         
         # Calculate 1M Rank Shift strings cleanly dynamically
         prv_r_1m = row['1M Rank']
