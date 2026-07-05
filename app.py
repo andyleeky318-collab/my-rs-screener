@@ -3413,10 +3413,15 @@ if all_data:
         )
 
     if vol_flagged_industries:
+        all_vol_tickers = set()
+        for tickers_list in industry_vol_tickers.values():
+            all_vol_tickers.update(tickers_list)
+        total_vol_ticker_count = len(all_vol_tickers)
+
         dist_html = (
             f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
             f"📊 Distribution / Stage 3 "
-            f"<span style='color:#FF4B4B;'>({len(vol_flagged_industries)})</span>"
+            f"<span style='color:#FF4B4B;'>({len(vol_flagged_industries)} industries, {total_vol_ticker_count} tickers)</span>"
             f"</div>"
         )
         # Order by current table rank so it reads top-to-bottom like the main table
