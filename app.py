@@ -5266,8 +5266,6 @@ st.markdown(f"#### 🔵 RS NH B4 Price = Opportunity ({len(rs_nh_b4_today)})")
 if rs_nh_b4_today or rs_nh_b4_yest:
     html_rsnh = ""
     for sym in rs_nh_b4_today:
-        #cls = "new-pattern-badge" if sym not in rs_nh_b4_yest else ""
-        #html_rsnh += f'<div class="ticker-badge {cls}">{sym}</div>'
         html_rsnh += setup_badge(sym, is_new=(sym not in rs_nh_b4_yest))
 
     removed_rsnh = [sym for sym in rs_nh_b4_yest if sym not in rs_nh_b4_today]
@@ -5275,6 +5273,13 @@ if rs_nh_b4_today or rs_nh_b4_yest:
         html_rsnh += f'<div class="ticker-badge removed-badge">{sym}</div>'
 
     st.markdown(html_rsnh, unsafe_allow_html=True)
+
+    render_group_ai_insight(
+        rs_nh_b4_today,
+        "RS New High Before Price (opportunity)",
+        "rs_nh_b4_price",
+        extra_note="the stock's relative strength vs the S&P 500 just hit a 20-day high, but the stock's own price high has not yet reached its 20-day high — RS is leading price, often an early breakout precursor"
+    )
 else:
     st.info("No active setups discovered.")
 
