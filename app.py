@@ -3171,16 +3171,16 @@ if all_data:
     table_html = """<table>
     <thead><tr>
     <th style="text-align: center; width: 30px;">#</th>
-    <th style="text-align: left;">Industry</th>
+    <th style="text-align: center;">Industry</th>
     <th style="text-align: center; width: 40px;">RS</th>
     <th style="text-align: center; width: 40px;">1W</th>
     <th style="text-align: center; width: 40px;">1M</th>
     <th style="text-align: center; width: 40px;">△T</th>
-    <th style="text-align: left;">Tickers (RS > 80)</th>
-    <th style="text-align: left; width: 250px;">21ema_Valid</th>
-    <th style="text-align: left; width: 170px;">21ema_Cloud</th>
-    <th style="text-align: left; width: 170px;">21ema_Wick</th>
-    <th style="text-align: left; width: 170px;">50ma_Bounce</th>
+    <th style="text-align: center;">Tickers (RS > 80)</th>
+    <th style="text-align: center; width: 250px;">21ema_Valid</th>
+    <th style="text-align: center; width: 170px;">21ema_Cloud</th>
+    <th style="text-align: center; width: 170px;">21ema_Wick</th>
+    <th style="text-align: center; width: 170px;">50ma_Bounce</th>
     </tr></thead><tbody>"""
 
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
