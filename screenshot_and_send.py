@@ -1,11 +1,17 @@
 """
-Opens a deployed Streamlit app, wakes it up if Streamlit Community Cloud
-shows a "this app is asleep" screen, waits for it to finish computing,
-scrolls through the ENTIRE page using real mouse-wheel events (more
-reliable than programmatic scrollTop, which some apps don't respond to),
-detects the bottom by comparing screenshots directly (stop once a scroll
-produces no visual change), stitches every step into one full image, and
-sends it to Telegram as a document.
+Opens the deployed Streamlit app, wakes it up if asleep, waits for the
+script to FINISH computing (detected by the top-right "running/stop"
+status widget disappearing), then walks through the page section-by-section
+and sends each section as its OWN Telegram photo (never combined/stitched).
+
+- Screenshot 1 is always the very top of the page.
+- Every screenshot excludes the sidebar (cropped, not scaled — full native
+  resolution of the main content column only).
+- Subsequent screenshots are triggered by scrolling to + locating each
+  keyword/heading in SECTION_KEYWORDS, in page order.
+- Hard cutoff: the ENTIRE run (load-wait + all captures) must finish within
+  MAX_RUNTIME_SECONDS (10 minutes). If the cutoff hits mid-way, whatever
+  hasn't been captured yet is simply skipped.
 
 Env vars required (set as GitHub Actions secrets):
   STREAMLIT_APP_URL   e.g. https://your-app-name.streamlit.app
@@ -14,27 +20,20 @@ Env vars required (set as GitHub Actions secrets):
 """
 
 import os
-import sys
-import io
 import time
 import requests
 from playwright.sync_api import sync_playwright
-from PIL import Image
 
-APP_URL = os.environ["STREAMLIT_APP_URL"]
+APP_URL   = os.environ["STREAMLIT_APP_URL"]
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+CHAT_ID   = os.environ["TELEGRAM_CHAT_ID"]
 
-VIEWPORT_WIDTH = 1600
+VIEWPORT_WIDTH  = 1600
 VIEWPORT_HEIGHT = 1200
 
-# How long to wait for the app to finish computing before scrolling/screenshotting.
-FIXED_WAIT_SECONDS = 600  # 10 minutes
-
-SCROLL_PAUSE_SECONDS = 2   # let charts/tables re-render after each scroll step
-MAX_SCROLL_STEPS = 45      # safety cap
-
-OUTPUT_PATH = "full_screenshot.png"
+MAX_RUNTIME_SECONDS   = 10 * 60   # hard cutoff for the ENTIRE run
+LOAD_WAIT_TIMEOUT_CAP = 9 * 60    # never let the "wait for load" step alone eat the whole budget
+SCROLL_SETTLE_SECONDS = 3         # let charts / custom HTML components re-render after a scroll
 
 WAKE_BUTTON_TEXTS = [
     "Yes, get this app back up!",
@@ -42,6 +41,66 @@ WAKE_BUTTON_TEXTS = [
     "Wake app up",
     "Wake up",
 ]
+
+# Order matters — should match the order these sections physically appear
+# top-to-bottom on the page. Each entry is matched against visible text
+# (substring, case-sensitive-ish via Playwright's text engine) anywhere on
+# the page, including SVG text (e.g. Plotly chart titles).
+SECTION_KEYWORDS = [
+    "New Highs vs New Lows",
+    "Refresh Theme Insight",
+    "Setup =",
+    "Weekly vs Monthly",
+    "Stage",
+    "Market Regime",
+    "Minervini (Positive Pct",
+    "RS Leader = Long term",
+    "Retry AI Analysis",
+    "RS NH B4 Price = Opportunity",
+    "PPP = Opportunity",
+    "Gapper Earning Drift = Opportunity",
+    "Two Botak = Short term Group burst",
+    "Engulfing = HL",
+    "3x Engulfing",
+    "PowerTrend = Thematic Extended",
+    "Volatility",
+    "Value Trap",
+    "Setup Quality",
+    "Quant Sentiment",
+]
+
+
+class Deadline:
+    """Simple global stopwatch enforcing the 10-minute hard cutoff."""
+
+    def __init__(self, seconds):
+        self.end = time.monotonic() + seconds
+
+    def remaining(self):
+        return self.end - time.monotonic()
+
+    def expired(self):
+        return self.remaining() <= 0
+
+
+deadline = Deadline(MAX_RUNTIME_SECONDS)
+
+
+def send_photo(image_bytes, caption):
+    """Send exactly ONE screenshot to Telegram. Never combine/stitch."""
+    if not image_bytes:
+        print(f"Skipping empty image for '{caption}'")
+        return
+    resp = requests.post(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto",
+        data={"chat_id": CHAT_ID, "caption": caption[:1024]},
+        files={"photo": ("screenshot.png", image_bytes, "image/png")},
+        timeout=60,
+    )
+    if resp.status_code != 200:
+        print(f"Telegram send FAILED for '{caption}': {resp.status_code} {resp.text}")
+    else:
+        print(f"Sent: {caption}")
 
 
 def try_wake_app(page):
@@ -60,81 +119,105 @@ def try_wake_app(page):
 
 
 def hide_fixed_chrome(page):
-    """Hide fixed header/toolbar/deploy-badge elements so they don't repeat in every slice."""
+    """Hide fixed header/toolbar/deploy-badge elements so they don't appear in slices."""
     page.add_style_tag(content="""
         header[data-testid="stHeader"] { display: none !important; }
         [data-testid="stToolbar"] { display: none !important; }
-        [data-testid="stStatusWidget"] { display: none !important; }
         [data-testid="stDecoration"] { display: none !important; }
         [class*="viewerBadge"] { display: none !important; }
         [data-testid*="Badge"] { display: none !important; }
     """)
 
 
-def log_diagnostics(page):
-    info = page.evaluate("""
-        () => {
-            const doc = document.scrollingElement || document.documentElement;
-            const main = document.querySelector('[data-testid="stAppViewContainer"]');
-            return {
-                docScrollHeight: doc.scrollHeight,
-                docClientHeight: doc.clientHeight,
-                mainExists: !!main,
-                mainScrollHeight: main ? main.scrollHeight : null,
-                mainClientHeight: main ? main.clientHeight : null,
-                bodyTextLength: document.body.innerText.length,
-                title: document.title,
-            };
-        }
-    """)
-    print(f"Diagnostics: {info}")
-    return info
+def is_app_running(page):
+    """
+    Streamlit shows a status widget (spinner + Stop button) in the top-right
+    corner while the script is actively executing. It disappears once the
+    run fully completes. We treat it being absent/invisible as "done".
+    """
+    try:
+        widget = page.locator('[data-testid="stStatusWidget"]')
+        if widget.count() == 0:
+            return False
+        return widget.first.is_visible()
+    except Exception:
+        return False
 
 
-def capture_full_scroll(page):
-    hide_fixed_chrome(page)
-
-    # Position the mouse over the main content column (not the sidebar)
-    # so wheel events target the actual scrollable dashboard area.
-    page.mouse.move(VIEWPORT_WIDTH * 0.7, VIEWPORT_HEIGHT / 2)
-    time.sleep(0.3)
-
-    screenshots = []
-    prev_bytes = page.screenshot()
-    screenshots.append(Image.open(io.BytesIO(prev_bytes)))
-    print("  captured step 1")
-
-    for i in range(MAX_SCROLL_STEPS):
-        page.mouse.wheel(0, VIEWPORT_HEIGHT)
-        time.sleep(SCROLL_PAUSE_SECONDS)
-
-        new_bytes = page.screenshot()
-        if new_bytes == prev_bytes:
-            print(f"  no visual change after step {i+1} — reached bottom")
-            break
-
-        screenshots.append(Image.open(io.BytesIO(new_bytes)))
-        prev_bytes = new_bytes
-        print(f"  captured step {i+2}")
-
-    print(f"Captured {len(screenshots)} viewport screenshots")
-    return screenshots
+def wait_for_app_to_finish(page, timeout_seconds):
+    """Poll until the running/stop indicator disappears (script finished), or timeout."""
+    start = time.monotonic()
+    time.sleep(3)  # give Streamlit a moment to actually start the run
+    while time.monotonic() - start < timeout_seconds:
+        if not is_app_running(page):
+            # Confirm it's really finished and not just a brief gap between reruns
+            time.sleep(2)
+            if not is_app_running(page):
+                print(f"App finished computing after {time.monotonic() - start:.0f}s")
+                return True
+        time.sleep(3)
+    print("Timed out waiting for the app to finish computing — proceeding anyway.")
+    return False
 
 
-def stitch(screenshots):
-    """Simple vertical stack — each wheel scroll moves roughly one viewport height,
-    so slices are concatenated in order. Minor seam overlap/gap is possible but
-    all content will be present."""
-    width = screenshots[0].width
-    total_height = sum(im.height for im in screenshots)
-    stitched = Image.new("RGB", (width, total_height), "white")
+def get_sidebar_right_edge(page):
+    """
+    Return the x-coordinate (px) where the main content area begins,
+    i.e. the right edge of the sidebar (which starts with 'Settings').
+    Falls back to 0 (no crop) if the sidebar can't be found.
+    """
+    try:
+        sidebar = page.locator('[data-testid="stSidebar"]')
+        if sidebar.count() > 0 and sidebar.first.is_visible():
+            box = sidebar.first.bounding_box()
+            if box:
+                return int(box["x"] + box["width"])
+    except Exception:
+        pass
+    return 0
 
-    y = 0
-    for im in screenshots:
-        stitched.paste(im, (0, y))
-        y += im.height
 
-    return stitched
+def screenshot_main_content(page, sidebar_right):
+    """
+    Screenshot the current viewport, clipped to exclude the sidebar.
+    This is a native-resolution crop (via Playwright's clip option) —
+    no resizing, scaling, or stitching involved.
+    """
+    clip = {
+        "x": sidebar_right,
+        "y": 0,
+        "width": max(VIEWPORT_WIDTH - sidebar_right, 1),
+        "height": VIEWPORT_HEIGHT,
+    }
+    try:
+        return page.screenshot(clip=clip)
+    except Exception as e:
+        print(f"Screenshot failed: {e}")
+        return None
+
+
+def capture_and_send_top(page, sidebar_right):
+    page.evaluate("window.scrollTo(0, 0)")
+    time.sleep(SCROLL_SETTLE_SECONDS)
+    img_bytes = screenshot_main_content(page, sidebar_right)
+    send_photo(img_bytes, "Top of page")
+
+
+def capture_and_send_section(page, sidebar_right, keyword):
+    try:
+        locator = page.get_by_text(keyword, exact=False)
+        if locator.count() == 0:
+            print(f"Section not found: '{keyword}' — skipping.")
+            return
+        target = locator.first
+        target.scroll_into_view_if_needed(timeout=15000)
+    except Exception as e:
+        print(f"Could not locate/scroll to '{keyword}': {e} — skipping.")
+        return
+
+    time.sleep(SCROLL_SETTLE_SECONDS)
+    img_bytes = screenshot_main_content(page, sidebar_right)
+    send_photo(img_bytes, keyword)
 
 
 def main():
@@ -146,38 +229,40 @@ def main():
         page.goto(APP_URL, wait_until="domcontentloaded", timeout=60000)
         time.sleep(5)
 
-        woke = try_wake_app(page)
-        if woke:
+        if try_wake_app(page):
             print("Clicked wake-up prompt, app should now start booting...")
         else:
             print("No wake-up prompt detected, app was likely already awake.")
 
-        print(f"Waiting {FIXED_WAIT_SECONDS}s for the app to finish computing...")
-        time.sleep(FIXED_WAIT_SECONDS)
+        hide_fixed_chrome(page)
 
-        log_diagnostics(page)
+        # Wait for Streamlit to finish its full run (running/stop indicator gone),
+        # but never let this step alone consume the whole 10-minute budget.
+        wait_budget = min(LOAD_WAIT_TIMEOUT_CAP, max(30, deadline.remaining() - 60))
+        wait_for_app_to_finish(page, wait_budget)
 
-        screenshots = capture_full_scroll(page)
+        hide_fixed_chrome(page)  # re-apply in case a rerun reset it
+        sidebar_right = get_sidebar_right_edge(page)
+        print(f"Sidebar right edge detected at x={sidebar_right}px")
+
+        # 1. Always capture the very top of the page first
+        if not deadline.expired():
+            capture_and_send_top(page, sidebar_right)
+        else:
+            print("Deadline already reached before first capture — aborting.")
+            browser.close()
+            return
+
+        # 2. Walk through each section keyword in order, screenshot + send individually
+        for keyword in SECTION_KEYWORDS:
+            if deadline.expired():
+                print("Global 10-minute cutoff reached — stopping further captures.")
+                break
+            capture_and_send_section(page, sidebar_right, keyword)
+
         browser.close()
 
-    stitched = stitch(screenshots)
-    stitched.save(OUTPUT_PATH)
-    print(f"Saved stitched screenshot: {stitched.width}x{stitched.height}")
-
-    print("Sending to Telegram as document...")
-    with open(OUTPUT_PATH, "rb") as f:
-        resp = requests.post(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument",
-            data={"chat_id": CHAT_ID, "caption": "Daily RS Screener (full page)"},
-            files={"document": f},
-            timeout=120,
-        )
-
-    if resp.status_code != 200:
-        print(f"Telegram send failed: {resp.status_code} {resp.text}")
-        sys.exit(1)
-
-    print("Sent successfully.")
+    print("Done.")
 
 
 if __name__ == "__main__":
