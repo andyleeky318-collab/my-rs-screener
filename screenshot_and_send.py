@@ -1,8 +1,11 @@
 """
-Opens a deployed Streamlit app, waits for it to fully render, scrolls
-through the entire page (detecting whichever element actually scrolls —
-window or an inner Streamlit container), stitches every viewport-sized
-screenshot into one full image, and sends it to Telegram as a document.
+Opens a deployed Streamlit app, wakes it up if Streamlit Community Cloud
+shows a "this app is asleep" screen, waits for it to finish computing,
+scrolls through the ENTIRE page using real mouse-wheel events (more
+reliable than programmatic scrollTop, which some apps don't respond to),
+detects the bottom by comparing screenshots directly (stop once a scroll
+produces no visual change), stitches every step into one full image, and
+sends it to Telegram as a document.
 
 Env vars required (set as GitHub Actions secrets):
   STREAMLIT_APP_URL   e.g. https://your-app-name.streamlit.app
@@ -28,79 +31,108 @@ VIEWPORT_HEIGHT = 1200
 # How long to wait for the app to finish computing before scrolling/screenshotting.
 FIXED_WAIT_SECONDS = 600  # 10 minutes
 
-SCROLL_PAUSE_SECONDS = 1.5  # let charts/tables re-render after each scroll step
-MAX_SCROLL_STEPS = 45       # safety cap — comfortably above your observed ~22-30 needed
+SCROLL_PAUSE_SECONDS = 2   # let charts/tables re-render after each scroll step
+MAX_SCROLL_STEPS = 45      # safety cap
 
 OUTPUT_PATH = "full_screenshot.png"
 
+WAKE_BUTTON_TEXTS = [
+    "Yes, get this app back up!",
+    "Get this app back up",
+    "Wake app up",
+    "Wake up",
+]
 
-def get_current_scroll_position(page):
-    """
-    Read whichever scroll position is actually nonzero — the window's or
-    an inner Streamlit container's — after a Page Down press.
-    """
-    return page.evaluate("""
-        () => {
-            const doc = document.scrollingElement || document.documentElement;
-            if (doc.scrollTop > 0) return doc.scrollTop;
-            const main = document.querySelector('[data-testid="stAppViewContainer"]') ||
-                         document.querySelector('section.main') ||
-                         document.querySelector('.main');
-            return main ? main.scrollTop : doc.scrollTop;
-        }
-    """)
+
+def try_wake_app(page):
+    """Click through Streamlit Community Cloud's sleep-screen prompt if present."""
+    for text in WAKE_BUTTON_TEXTS:
+        try:
+            btn = page.get_by_text(text, exact=False)
+            if btn.count() > 0 and btn.first.is_visible():
+                print(f"Found wake-up prompt ('{text}'), clicking it...")
+                btn.first.click()
+                time.sleep(10)
+                return True
+        except Exception:
+            continue
+    return False
 
 
 def hide_fixed_chrome(page):
-    """Hide Streamlit's fixed top header/toolbar so it doesn't repeat in every slice."""
+    """Hide fixed header/toolbar/deploy-badge elements so they don't repeat in every slice."""
     page.add_style_tag(content="""
         header[data-testid="stHeader"] { display: none !important; }
         [data-testid="stToolbar"] { display: none !important; }
         [data-testid="stStatusWidget"] { display: none !important; }
+        [data-testid="stDecoration"] { display: none !important; }
+        [class*="viewerBadge"] { display: none !important; }
+        [data-testid*="Badge"] { display: none !important; }
     """)
+
+
+def log_diagnostics(page):
+    info = page.evaluate("""
+        () => {
+            const doc = document.scrollingElement || document.documentElement;
+            const main = document.querySelector('[data-testid="stAppViewContainer"]');
+            return {
+                docScrollHeight: doc.scrollHeight,
+                docClientHeight: doc.clientHeight,
+                mainExists: !!main,
+                mainScrollHeight: main ? main.scrollHeight : null,
+                mainClientHeight: main ? main.clientHeight : null,
+                bodyTextLength: document.body.innerText.length,
+                title: document.title,
+            };
+        }
+    """)
+    print(f"Diagnostics: {info}")
+    return info
 
 
 def capture_full_scroll(page):
     hide_fixed_chrome(page)
 
-    # Click into the page body first so keyboard events actually target it
-    page.mouse.click(VIEWPORT_WIDTH // 2, VIEWPORT_HEIGHT // 2)
-    time.sleep(0.5)
+    # Position the mouse over the main content column (not the sidebar)
+    # so wheel events target the actual scrollable dashboard area.
+    page.mouse.move(VIEWPORT_WIDTH * 0.7, VIEWPORT_HEIGHT / 2)
+    time.sleep(0.3)
 
-    screenshots = []   # list of (position, PIL.Image)
-    pos = get_current_scroll_position(page)
-    img_bytes = page.screenshot()
-    screenshots.append((pos, Image.open(io.BytesIO(img_bytes))))
-    print(f"  captured step 1: pos={pos}")
+    screenshots = []
+    prev_bytes = page.screenshot()
+    screenshots.append(Image.open(io.BytesIO(prev_bytes)))
+    print("  captured step 1")
 
     for i in range(MAX_SCROLL_STEPS):
-        page.keyboard.press("PageDown")
+        page.mouse.wheel(0, VIEWPORT_HEIGHT)
         time.sleep(SCROLL_PAUSE_SECONDS)
 
-        new_pos = get_current_scroll_position(page)
-        if new_pos == pos:
-            print(f"  no further scroll movement after step {i+1} — reached bottom")
+        new_bytes = page.screenshot()
+        if new_bytes == prev_bytes:
+            print(f"  no visual change after step {i+1} — reached bottom")
             break
 
-        pos = new_pos
-        img_bytes = page.screenshot()
-        screenshots.append((pos, Image.open(io.BytesIO(img_bytes))))
-        print(f"  captured step {i+2}: pos={pos}")
+        screenshots.append(Image.open(io.BytesIO(new_bytes)))
+        prev_bytes = new_bytes
+        print(f"  captured step {i+2}")
 
-    total_height = pos + VIEWPORT_HEIGHT
-    print(f"Captured {len(screenshots)} viewport screenshots, total height ~{total_height}px")
-    return screenshots, total_height
+    print(f"Captured {len(screenshots)} viewport screenshots")
+    return screenshots
 
 
-def stitch(screenshots, total_height):
-    width = screenshots[0][1].width
+def stitch(screenshots):
+    """Simple vertical stack — each wheel scroll moves roughly one viewport height,
+    so slices are concatenated in order. Minor seam overlap/gap is possible but
+    all content will be present."""
+    width = screenshots[0].width
+    total_height = sum(im.height for im in screenshots)
     stitched = Image.new("RGB", (width, total_height), "white")
 
-    # Paste in capture order at each screenshot's real recorded position.
-    # Later screenshots simply overwrite the overlapping region with the
-    # same content and extend further down — no manual crop math needed.
-    for pos, img in screenshots:
-        stitched.paste(img, (0, pos))
+    y = 0
+    for im in screenshots:
+        stitched.paste(im, (0, y))
+        y += im.height
 
     return stitched
 
@@ -112,19 +144,26 @@ def main():
 
         print(f"Opening {APP_URL} ...")
         page.goto(APP_URL, wait_until="domcontentloaded", timeout=60000)
+        time.sleep(5)
+
+        woke = try_wake_app(page)
+        if woke:
+            print("Clicked wake-up prompt, app should now start booting...")
+        else:
+            print("No wake-up prompt detected, app was likely already awake.")
 
         print(f"Waiting {FIXED_WAIT_SECONDS}s for the app to finish computing...")
         time.sleep(FIXED_WAIT_SECONDS)
 
-        screenshots, total_height = capture_full_scroll(page)
+        log_diagnostics(page)
+
+        screenshots = capture_full_scroll(page)
         browser.close()
 
-    stitched = stitch(screenshots, total_height)
+    stitched = stitch(screenshots)
     stitched.save(OUTPUT_PATH)
     print(f"Saved stitched screenshot: {stitched.width}x{stitched.height}")
 
-    # Sent as a document (not sendPhoto) — Telegram photos have a strict
-    # dimension/aspect-ratio limit that a very tall stitched image will exceed.
     print("Sending to Telegram as document...")
     with open(OUTPUT_PATH, "rb") as f:
         resp = requests.post(
