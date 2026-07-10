@@ -1,17 +1,24 @@
 """
 Opens the deployed Streamlit app, wakes it up if asleep, waits for the
 script to FINISH computing (detected by the top-right "running/stop"
-status widget disappearing), then walks through the page section-by-section
-and sends each section as its OWN Telegram photo (never combined/stitched).
+status widget appearing then disappearing), then walks through the page
+section-by-section and sends each section as its OWN Telegram photo
+(never combined/stitched).
 
 - Screenshot 1 is always the very top of the page.
 - Every screenshot excludes the sidebar (cropped, not scaled — full native
   resolution of the main content column only).
 - Subsequent screenshots are triggered by scrolling to + locating each
-  keyword/heading in SECTION_KEYWORDS, in page order.
+  keyword/heading in SECTION_KEYWORDS, in page order. Each keyword is
+  RETRIED for a few seconds in case the section hasn't rendered yet
+  (fixes the old bug where a still-loading page caused every section to
+  be silently skipped in under a second).
 - Hard cutoff: the ENTIRE run (load-wait + all captures) must finish within
   MAX_RUNTIME_SECONDS (10 minutes). If the cutoff hits mid-way, whatever
   hasn't been captured yet is simply skipped.
+- The whole run is wrapped in try/except with full traceback logging so a
+  single unexpected error can no longer silently kill the script after
+  only the first screenshot.
 
 Env vars required (set as GitHub Actions secrets):
   STREAMLIT_APP_URL   e.g. https://your-app-name.streamlit.app
@@ -21,6 +28,7 @@ Env vars required (set as GitHub Actions secrets):
 
 import os
 import time
+import traceback
 import requests
 from playwright.sync_api import sync_playwright
 
@@ -32,8 +40,20 @@ VIEWPORT_WIDTH  = 1600
 VIEWPORT_HEIGHT = 1200
 
 MAX_RUNTIME_SECONDS   = 10 * 60   # hard cutoff for the ENTIRE run
-LOAD_WAIT_TIMEOUT_CAP = 9 * 60    # never let the "wait for load" step alone eat the whole budget
+LOAD_WAIT_TIMEOUT_CAP = 8 * 60    # never let the "wait for load" step alone eat the whole budget
 SCROLL_SETTLE_SECONDS = 3         # let charts / custom HTML components re-render after a scroll
+
+# How long (seconds) to keep retrying to find a single section keyword
+# before giving up on it. Content can still be streaming in even after
+# the top-level "running" indicator has cleared.
+SECTION_SEARCH_TIMEOUT = 20
+SECTION_SEARCH_POLL    = 2
+
+# How long to wait, at the very start, for the "running" status widget to
+# actually appear at least once. If it never appears within this window we
+# assume the app was already idle/awake and move on (rather than treating
+# "widget not found yet" as "already finished").
+RUNNING_WIDGET_APPEAR_TIMEOUT = 45
 
 WAKE_BUTTON_TEXTS = [
     "Yes, get this app back up!",
@@ -91,16 +111,19 @@ def send_photo(image_bytes, caption):
     if not image_bytes:
         print(f"Skipping empty image for '{caption}'")
         return
-    resp = requests.post(
-        f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto",
-        data={"chat_id": CHAT_ID, "caption": caption[:1024]},
-        files={"photo": ("screenshot.png", image_bytes, "image/png")},
-        timeout=60,
-    )
-    if resp.status_code != 200:
-        print(f"Telegram send FAILED for '{caption}': {resp.status_code} {resp.text}")
-    else:
-        print(f"Sent: {caption}")
+    try:
+        resp = requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto",
+            data={"chat_id": CHAT_ID, "caption": caption[:1024]},
+            files={"photo": ("screenshot.png", image_bytes, "image/png")},
+            timeout=60,
+        )
+        if resp.status_code != 200:
+            print(f"Telegram send FAILED for '{caption}': {resp.status_code} {resp.text}")
+        else:
+            print(f"Sent: {caption}")
+    except Exception as e:
+        print(f"Telegram send raised an exception for '{caption}': {e}")
 
 
 def try_wake_app(page):
@@ -120,20 +143,23 @@ def try_wake_app(page):
 
 def hide_fixed_chrome(page):
     """Hide fixed header/toolbar/deploy-badge elements so they don't appear in slices."""
-    page.add_style_tag(content="""
-        header[data-testid="stHeader"] { display: none !important; }
-        [data-testid="stToolbar"] { display: none !important; }
-        [data-testid="stDecoration"] { display: none !important; }
-        [class*="viewerBadge"] { display: none !important; }
-        [data-testid*="Badge"] { display: none !important; }
-    """)
+    try:
+        page.add_style_tag(content="""
+            header[data-testid="stHeader"] { display: none !important; }
+            [data-testid="stToolbar"] { display: none !important; }
+            [data-testid="stDecoration"] { display: none !important; }
+            [class*="viewerBadge"] { display: none !important; }
+            [data-testid*="Badge"] { display: none !important; }
+        """)
+    except Exception as e:
+        print(f"hide_fixed_chrome failed (non-fatal): {e}")
 
 
 def is_app_running(page):
     """
     Streamlit shows a status widget (spinner + Stop button) in the top-right
     corner while the script is actively executing. It disappears once the
-    run fully completes. We treat it being absent/invisible as "done".
+    run fully completes. We treat it being absent/invisible as "not running".
     """
     try:
         widget = page.locator('[data-testid="stStatusWidget"]')
@@ -144,16 +170,43 @@ def is_app_running(page):
         return False
 
 
-def wait_for_app_to_finish(page, timeout_seconds):
-    """Poll until the running/stop indicator disappears (script finished), or timeout."""
+def wait_for_running_widget_to_appear(page, timeout_seconds):
+    """
+    Wait for the running/stop indicator to show up at least once. This
+    prevents the old bug where "widget not found yet" (because the page is
+    still booting) was mistaken for "the run already finished".
+    Returns True if it appeared, False if it never showed up within the
+    timeout (in which case the app was probably already idle/awake).
+    """
     start = time.monotonic()
-    time.sleep(3)  # give Streamlit a moment to actually start the run
     while time.monotonic() - start < timeout_seconds:
+        if is_app_running(page):
+            print(f"Detected app actively running after {time.monotonic() - start:.0f}s")
+            return True
+        time.sleep(2)
+    print("Running indicator never appeared — assuming app was already idle.")
+    return False
+
+
+def wait_for_app_to_finish(page, timeout_seconds):
+    """
+    First wait (bounded) for the running indicator to appear at all, then
+    poll until it disappears (script finished), or timeout.
+    """
+    appear_budget = min(RUNNING_WIDGET_APPEAR_TIMEOUT, max(10, timeout_seconds // 3))
+    was_running = wait_for_running_widget_to_appear(page, appear_budget)
+
+    remaining_budget = timeout_seconds - appear_budget
+    if remaining_budget <= 0:
+        remaining_budget = 30
+
+    start = time.monotonic()
+    while time.monotonic() - start < remaining_budget:
         if not is_app_running(page):
             # Confirm it's really finished and not just a brief gap between reruns
             time.sleep(2)
             if not is_app_running(page):
-                print(f"App finished computing after {time.monotonic() - start:.0f}s")
+                print(f"App finished computing after {time.monotonic() - start:.0f}s (was_running={was_running})")
                 return True
         time.sleep(3)
     print("Timed out waiting for the app to finish computing — proceeding anyway.")
@@ -197,22 +250,41 @@ def screenshot_main_content(page, sidebar_right):
 
 
 def capture_and_send_top(page, sidebar_right):
-    page.evaluate("window.scrollTo(0, 0)")
+    try:
+        page.evaluate("window.scrollTo(0, 0)")
+    except Exception as e:
+        print(f"scrollTo(0,0) failed (non-fatal): {e}")
     time.sleep(SCROLL_SETTLE_SECONDS)
     img_bytes = screenshot_main_content(page, sidebar_right)
     send_photo(img_bytes, "Top of page")
 
 
 def capture_and_send_section(page, sidebar_right, keyword):
+    """
+    Poll for up to SECTION_SEARCH_TIMEOUT seconds looking for the keyword,
+    rather than checking once. Streamlit can still be streaming content in
+    even after the top-level running indicator has cleared.
+    """
+    start = time.monotonic()
+    target = None
+    while time.monotonic() - start < SECTION_SEARCH_TIMEOUT:
+        try:
+            locator = page.get_by_text(keyword, exact=False)
+            if locator.count() > 0:
+                target = locator.first
+                break
+        except Exception as e:
+            print(f"Lookup error for '{keyword}': {e}")
+        time.sleep(SECTION_SEARCH_POLL)
+
+    if target is None:
+        print(f"Section not found after {SECTION_SEARCH_TIMEOUT}s: '{keyword}' — skipping.")
+        return
+
     try:
-        locator = page.get_by_text(keyword, exact=False)
-        if locator.count() == 0:
-            print(f"Section not found: '{keyword}' — skipping.")
-            return
-        target = locator.first
         target.scroll_into_view_if_needed(timeout=15000)
     except Exception as e:
-        print(f"Could not locate/scroll to '{keyword}': {e} — skipping.")
+        print(f"Could not scroll to '{keyword}': {e} — skipping.")
         return
 
     time.sleep(SCROLL_SETTLE_SECONDS)
@@ -220,7 +292,7 @@ def capture_and_send_section(page, sidebar_right, keyword):
     send_photo(img_bytes, keyword)
 
 
-def main():
+def run():
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page(viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT})
@@ -231,14 +303,18 @@ def main():
 
         if try_wake_app(page):
             print("Clicked wake-up prompt, app should now start booting...")
+            # Give the rerun a few seconds to actually kick off before we
+            # start polling for the running indicator.
+            time.sleep(5)
         else:
             print("No wake-up prompt detected, app was likely already awake.")
 
         hide_fixed_chrome(page)
 
-        # Wait for Streamlit to finish its full run (running/stop indicator gone),
-        # but never let this step alone consume the whole 10-minute budget.
-        wait_budget = min(LOAD_WAIT_TIMEOUT_CAP, max(30, deadline.remaining() - 60))
+        # Wait for Streamlit to finish its full run (running/stop indicator
+        # appears then disappears), but never let this step alone consume
+        # the whole 10-minute budget.
+        wait_budget = min(LOAD_WAIT_TIMEOUT_CAP, max(30, deadline.remaining() - 90))
         wait_for_app_to_finish(page, wait_budget)
 
         hide_fixed_chrome(page)  # re-apply in case a rerun reset it
@@ -263,6 +339,14 @@ def main():
         browser.close()
 
     print("Done.")
+
+
+def main():
+    try:
+        run()
+    except Exception:
+        print("FATAL ERROR — run() raised an exception. Full traceback below:")
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
