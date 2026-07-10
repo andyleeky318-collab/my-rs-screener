@@ -1,28 +1,28 @@
 name: Daily RS Screener Screenshot
- 
+
 on:
   schedule:
     # 23:00 UTC = 07:00 SGT (UTC+8) the next day
     - cron: "0 23 * * *"
   workflow_dispatch: {}   # lets you trigger it manually from the Actions tab
- 
+
 jobs:
   screenshot-and-send:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
- 
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
- 
+
       - name: Install dependencies
         run: |
-          pip install playwright requests
+          pip install playwright requests Pillow
           playwright install --with-deps chromium
- 
+
       - name: Run screenshot + Telegram send
         env:
           STREAMLIT_APP_URL: ${{ secrets.STREAMLIT_APP_URL }}
