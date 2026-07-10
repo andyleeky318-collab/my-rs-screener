@@ -3,9 +3,11 @@ Opens a deployed Streamlit app, wakes it up if Streamlit Community Cloud
 shows a "this app is asleep" screen, waits for it to finish computing,
 scrolls through the ENTIRE page using real mouse-wheel events (more
 reliable than programmatic scrollTop, which some apps don't respond to),
-detects the bottom by comparing screenshots directly (stop once a scroll
-produces no visual change), stitches every step into one full image, and
-sends it to Telegram as a document.
+detects the bottom by checking the page's actual scroll position (NOT by
+comparing screenshot bytes, since animated/live content like PowerTrend
+badges and the Volatility Pickup section can repaint on their own and
+falsely look like "the page moved"), stitches every step into one full
+image, and sends it to Telegram as a document.
 
 Env vars required (set as GitHub Actions secrets):
   STREAMLIT_APP_URL   e.g. https://your-app-name.streamlit.app
@@ -91,6 +93,27 @@ def log_diagnostics(page):
     return info
 
 
+def get_scroll_top(page):
+    """
+    Returns the current scroll offset of whatever element is actually
+    scrolling the page. Falls back to the Streamlit app-view container
+    if the document itself isn't the scrolling element (common in
+    Streamlit layouts where an inner div owns the scroll).
+    """
+    return page.evaluate("""
+        () => {
+            const doc = document.scrollingElement || document.documentElement;
+            const main = document.querySelector('[data-testid="stAppViewContainer"]');
+
+            // Prefer whichever element actually has scrollable overflow.
+            if (main && main.scrollHeight > main.clientHeight + 5) {
+                return main.scrollTop;
+            }
+            return doc.scrollTop;
+        }
+    """)
+
+
 def capture_full_scroll(page):
     hide_fixed_chrome(page)
 
@@ -100,22 +123,30 @@ def capture_full_scroll(page):
     time.sleep(0.3)
 
     screenshots = []
-    prev_bytes = page.screenshot()
-    screenshots.append(Image.open(io.BytesIO(prev_bytes)))
+    screenshots.append(Image.open(io.BytesIO(page.screenshot())))
     print("  captured step 1")
+
+    last_scroll_top = get_scroll_top(page)
+    print(f"  initial scrollTop={last_scroll_top}")
 
     for i in range(MAX_SCROLL_STEPS):
         page.mouse.wheel(0, VIEWPORT_HEIGHT)
         time.sleep(SCROLL_PAUSE_SECONDS)
 
-        new_bytes = page.screenshot()
-        if new_bytes == prev_bytes:
-            print(f"  no visual change after step {i+1} — reached bottom")
+        new_scroll_top = get_scroll_top(page)
+
+        # Use actual scroll position, not screenshot-byte-equality, to
+        # decide whether we moved. Animated content (PowerTrend badges,
+        # Volatility Pickup Z-score section, mesh-line hover states) can
+        # change pixels without the page having scrolled at all, which
+        # previously caused duplicated slices.
+        if new_scroll_top <= last_scroll_top:
+            print(f"  scrollTop unchanged ({new_scroll_top}) after step {i+1} — reached bottom")
             break
 
-        screenshots.append(Image.open(io.BytesIO(new_bytes)))
-        prev_bytes = new_bytes
-        print(f"  captured step {i+2}")
+        screenshots.append(Image.open(io.BytesIO(page.screenshot())))
+        last_scroll_top = new_scroll_top
+        print(f"  captured step {i+2} (scrollTop={new_scroll_top})")
 
     print(f"Captured {len(screenshots)} viewport screenshots")
     return screenshots
