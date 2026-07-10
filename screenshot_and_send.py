@@ -350,8 +350,17 @@ def capture_and_send_section(page, sidebar_right, keyword):
         # the viewport (not just "somewhere visible"), so the whole section
         # below it fits in the screenshot instead of being cut off.
         target.evaluate("el => el.scrollIntoView({block: 'start', behavior: 'instant'})")
-        if SECTION_TOP_OFFSET_PX:
-            page.evaluate(f"window.scrollBy(0, -{SECTION_TOP_OFFSET_PX})")
+        # Give some sections extra space above the heading
+        offset = 40 if keyword in (
+            "New Highs vs New Lows",
+            "Refresh Theme Insight",
+            "Setup =",
+            "Retry AI Analysis",
+            "3x Engulfing",
+        ) else SECTION_TOP_OFFSET_PX
+
+        if offset:
+            page.evaluate(f"window.scrollBy(0, -{offset})")
     except Exception as e:
         print(f"Could not scroll to '{keyword}': {e} — skipping.")
         return
