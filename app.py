@@ -214,7 +214,7 @@ INDUSTRIES = {
     'MEDIA-BOOKS': ['WLY', 'SCHL', 'NYT', 'NWS'],
     #'MEDIA-NEWSPAPERS': ['NWS', 'NYT'],
     'PAPER & PAPER PRODUC': ['IP', 'SLVM'],
-    'TRANSPORTATION-RAIL': ['UNP', 'CSX', 'NSC', 'GATX'],
+    'TRANSPORTATION-RAIL': ['IYT', 'UNP', 'CSX', 'NSC', 'GATX'],
     'REAL STATE DVLPMT/OPS': ['CBRE', 'JLL', 'HHH', 'HGV', 'JOE', 'CWK', 'NMRK'],
     'FINANCE-REIT': ['HASI', 'ESBA'],
     'RETAIL-MJR DSC CHNS': ['WMT', 'COST', 'TGT', 'BJ', 'PSMT'],
