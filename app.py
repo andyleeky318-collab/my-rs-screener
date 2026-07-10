@@ -1414,7 +1414,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, _bench
 
             adrPercent = 100 * (adr_sma - 1)
 
-            cond1 = (adrPercent.iloc[-1] >= 2.45) and (adrPercent.iloc[-1] <= 8)
+            cond1 = (adrPercent.iloc[-1] >= 2.45) and (adrPercent.iloc[-1] < 8.05)
 
             cond2 = -0.5 <= atr21_R <= 1
             cond3 = 0 <= atr50_R <= 3
@@ -2314,7 +2314,7 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                 if df_len >= 200 and sma50_series is not None and sma200_series is not None and atr_pct is not None:
                     hl_ratio_ppp = high_series / low_series
                     adr_ppp = 100 * (hl_ratio_ppp.rolling(20).mean() - 1)
-                    adr_ok = (adr_ppp.iloc[-1] >= 2.45) and (adr_ppp.iloc[-1] <= 8)
+                    adr_ok = (adr_ppp.iloc[-1] >= 2.45) and (adr_ppp.iloc[-1] < 8.05)
 
                     pine7_ok = False
                     if df_len >= 260 and sma150_series is not None and sma200_series is not None:
