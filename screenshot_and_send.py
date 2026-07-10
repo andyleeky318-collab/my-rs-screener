@@ -4,12 +4,8 @@ shows a "this app is asleep" screen, waits for it to finish computing,
 scrolls through the ENTIRE page using real mouse-wheel events (more
 reliable than programmatic scrollTop, which some apps don't respond to),
 detects the bottom by comparing screenshots directly (stop once a scroll
-produces no *significant* visual change — a percentage-of-pixels-changed
-threshold rather than exact byte equality, since animated/live content
-like PowerTrend badges and the Volatility Pickup section repaint a small
-part of the page on their own even when nothing actually scrolled, which
-previously caused those sections to be captured twice), stitches every
-step into one full image, and sends it to Telegram as a document.
+produces no visual change), stitches every step into one full image, and
+sends it to Telegram as a document.
 
 Env vars required (set as GitHub Actions secrets):
   STREAMLIT_APP_URL   e.g. https://your-app-name.streamlit.app
@@ -23,7 +19,7 @@ import io
 import time
 import requests
 from playwright.sync_api import sync_playwright
-from PIL import Image, ImageChops
+from PIL import Image
 
 APP_URL = os.environ["STREAMLIT_APP_URL"]
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
@@ -37,14 +33,6 @@ FIXED_WAIT_SECONDS = 600  # 10 minutes
 
 SCROLL_PAUSE_SECONDS = 2   # let charts/tables re-render after each scroll step
 MAX_SCROLL_STEPS = 45      # safety cap
-
-# A real scroll shifts almost the entire viewport, so most pixels change.
-# Live/animated widgets (PowerTrend badges, Volatility Pickup Z-scores,
-# mesh-line hover states) only repaint a small part of the page. This
-# threshold distinguishes "we actually scrolled" from "something on the
-# current view just animated" so we don't capture the same section twice.
-DIFF_PIXEL_FRACTION_THRESHOLD = 0.05   # >5% of pixels must change to count as "scrolled"
-CONSECUTIVE_NO_SCROLL_LIMIT = 2        # confirm bottom twice before stopping (animation-tolerant)
 
 OUTPUT_PATH = "full_screenshot.png"
 
@@ -103,21 +91,6 @@ def log_diagnostics(page):
     return info
 
 
-def images_differ_significantly(im1, im2, threshold_fraction=DIFF_PIXEL_FRACTION_THRESHOLD):
-    """
-    True if a meaningfully large portion of the viewport changed between
-    two screenshots (i.e. we actually scrolled), False if the difference
-    is small enough to just be animated content repainting in place.
-    """
-    diff = ImageChops.difference(im1.convert("L"), im2.convert("L"))
-    hist = diff.histogram()
-    # Ignore tiny per-pixel noise (anti-aliasing, JPEG-ish compression
-    # artifacts even in PNG re-renders); count pixels with a real change.
-    significant_pixels = sum(hist[25:])
-    total_pixels = im1.width * im1.height
-    return (significant_pixels / total_pixels) > threshold_fraction
-
-
 def capture_full_scroll(page):
     hide_fixed_chrome(page)
 
@@ -127,40 +100,21 @@ def capture_full_scroll(page):
     time.sleep(0.3)
 
     screenshots = []
-    prev_img = Image.open(io.BytesIO(page.screenshot()))
-    screenshots.append(prev_img)
+    prev_bytes = page.screenshot()
+    screenshots.append(Image.open(io.BytesIO(prev_bytes)))
     print("  captured step 1")
-
-    consecutive_no_scroll = 0
 
     for i in range(MAX_SCROLL_STEPS):
         page.mouse.wheel(0, VIEWPORT_HEIGHT)
         time.sleep(SCROLL_PAUSE_SECONDS)
 
-        new_img = Image.open(io.BytesIO(page.screenshot()))
+        new_bytes = page.screenshot()
+        if new_bytes == prev_bytes:
+            print(f"  no visual change after step {i+1} — reached bottom")
+            break
 
-        # A real scroll changes most of the viewport. Animated widgets
-        # (PowerTrend badges, Volatility Pickup Z-scores, mesh-line hover
-        # states) only repaint a small part of it. Using a percentage-of-
-        # pixels-changed threshold instead of exact byte equality means an
-        # animation tick no longer gets mistaken for "we scrolled," which
-        # was causing sections to be captured twice.
-        if not images_differ_significantly(prev_img, new_img):
-            consecutive_no_scroll += 1
-            print(f"  no significant change after step {i+1} "
-                  f"(likely animation only, not a real scroll) "
-                  f"[{consecutive_no_scroll}/{CONSECUTIVE_NO_SCROLL_LIMIT}]")
-            if consecutive_no_scroll >= CONSECUTIVE_NO_SCROLL_LIMIT:
-                print("  reached bottom")
-                break
-            # Don't append a duplicate slice, but keep scrolling — this
-            # frame may just have landed on an animation tick even though
-            # we did move down.
-            continue
-
-        consecutive_no_scroll = 0
-        screenshots.append(new_img)
-        prev_img = new_img
+        screenshots.append(Image.open(io.BytesIO(new_bytes)))
+        prev_bytes = new_bytes
         print(f"  captured step {i+2}")
 
     print(f"Captured {len(screenshots)} viewport screenshots")
