@@ -63,6 +63,7 @@ RUNNING_WIDGET_APPEAR_TIMEOUT = 45
 # <iframe>, which plain page.get_by_text() does NOT search by default).
 CONTENT_READY_TIMEOUT = 150
 CONTENT_READY_POLL    = 3
+SECTION_TOP_OFFSET_PX = 20
 
 WAKE_BUTTON_TEXTS = [
     "Yes, get this app back up!",
@@ -345,7 +346,12 @@ def capture_and_send_section(page, sidebar_right, keyword):
         return
 
     try:
-        target.scroll_into_view_if_needed(timeout=15000)
+        # scrollIntoView with block:'start' pins the element to the TOP of
+        # the viewport (not just "somewhere visible"), so the whole section
+        # below it fits in the screenshot instead of being cut off.
+        target.evaluate("el => el.scrollIntoView({block: 'start', behavior: 'instant'})")
+        if SECTION_TOP_OFFSET_PX:
+            page.evaluate(f"window.scrollBy(0, -{SECTION_TOP_OFFSET_PX})")
     except Exception as e:
         print(f"Could not scroll to '{keyword}': {e} — skipping.")
         return
