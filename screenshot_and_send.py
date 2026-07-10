@@ -46,7 +46,7 @@ SCROLL_SETTLE_SECONDS = 3         # let charts / custom HTML components re-rende
 # How long (seconds) to keep retrying to find a single section keyword
 # before giving up on it. Content can still be streaming in even after
 # the top-level "running" indicator has cleared.
-SECTION_SEARCH_TIMEOUT = 20
+SECTION_SEARCH_TIMEOUT = 25
 SECTION_SEARCH_POLL    = 2
 
 # How long to wait, at the very start, for the "running" status widget to
@@ -54,6 +54,15 @@ SECTION_SEARCH_POLL    = 2
 # assume the app was already idle/awake and move on (rather than treating
 # "widget not found yet" as "already finished").
 RUNNING_WIDGET_APPEAR_TIMEOUT = 45
+
+# The status widget alone proved unreliable (it can report "finished" after
+# only ~2s on a dashboard that actually takes much longer to compute). As a
+# second, authoritative gate we wait for real dashboard content — the first
+# few section keywords — to actually show up anywhere on the page,
+# including inside iframes (custom HTML/Plotly components often live in an
+# <iframe>, which plain page.get_by_text() does NOT search by default).
+CONTENT_READY_TIMEOUT = 150
+CONTENT_READY_POLL    = 3
 
 WAKE_BUTTON_TEXTS = [
     "Yes, get this app back up!",
@@ -88,6 +97,10 @@ SECTION_KEYWORDS = [
     "Setup Quality",
     "Quant Sentiment",
 ]
+
+# Used to confirm the dashboard has actually rendered before we trust
+# "the app is done computing". We only need ONE of these to show up.
+CONTENT_READY_ANCHORS = SECTION_KEYWORDS[:5]
 
 
 class Deadline:
@@ -153,6 +166,57 @@ def hide_fixed_chrome(page):
         """)
     except Exception as e:
         print(f"hide_fixed_chrome failed (non-fatal): {e}")
+
+
+def find_text_anywhere(page, keyword):
+    """
+    Search for `keyword` in the main page AND in every iframe on the page.
+    Custom HTML/Plotly components in Streamlit are often rendered inside an
+    <iframe>, and Playwright's page.get_by_text() only searches the main
+    frame by default — this is why every section was reported "not found"
+    even once the dashboard had actually rendered.
+    Returns a Locator you can scroll_into_view_if_needed() on, or None.
+    """
+    try:
+        locator = page.get_by_text(keyword, exact=False)
+        if locator.count() > 0:
+            return locator.first
+    except Exception as e:
+        print(f"Main-frame lookup error for '{keyword}': {e}")
+
+    try:
+        for frame in page.frames:
+            if frame == page.main_frame:
+                continue
+            try:
+                flocator = frame.get_by_text(keyword, exact=False)
+                if flocator.count() > 0:
+                    return flocator.first
+            except Exception:
+                continue
+    except Exception as e:
+        print(f"Frame enumeration error for '{keyword}': {e}")
+
+    return None
+
+
+def wait_for_dashboard_content(page, timeout_seconds):
+    """
+    Authoritative readiness gate: poll (main frame + all iframes) until any
+    of CONTENT_READY_ANCHORS actually appears, or timeout. This is what
+    decides whether the page is truly ready to screenshot — NOT the
+    stStatusWidget, which proved unreliable (it can report the app as
+    'finished' within ~2s on a dashboard that genuinely takes much longer).
+    """
+    start = time.monotonic()
+    while time.monotonic() - start < timeout_seconds:
+        for anchor in CONTENT_READY_ANCHORS:
+            if find_text_anywhere(page, anchor) is not None:
+                print(f"Dashboard content confirmed ready after {time.monotonic() - start:.0f}s (found '{anchor}')")
+                return True
+        time.sleep(CONTENT_READY_POLL)
+    print(f"Dashboard content never confirmed after {timeout_seconds}s — proceeding anyway (screenshots may be incomplete).")
+    return False
 
 
 def is_app_running(page):
@@ -261,20 +325,17 @@ def capture_and_send_top(page, sidebar_right):
 
 def capture_and_send_section(page, sidebar_right, keyword):
     """
-    Poll for up to SECTION_SEARCH_TIMEOUT seconds looking for the keyword,
-    rather than checking once. Streamlit can still be streaming content in
-    even after the top-level running indicator has cleared.
+    Poll for up to SECTION_SEARCH_TIMEOUT seconds looking for the keyword
+    (main frame + all iframes), rather than checking once. Streamlit can
+    still be streaming content in even after the top-level running
+    indicator has cleared.
     """
     start = time.monotonic()
     target = None
     while time.monotonic() - start < SECTION_SEARCH_TIMEOUT:
-        try:
-            locator = page.get_by_text(keyword, exact=False)
-            if locator.count() > 0:
-                target = locator.first
-                break
-        except Exception as e:
-            print(f"Lookup error for '{keyword}': {e}")
+        target = find_text_anywhere(page, keyword)
+        if target is not None:
+            break
         time.sleep(SECTION_SEARCH_POLL)
 
     if target is None:
@@ -311,11 +372,19 @@ def run():
 
         hide_fixed_chrome(page)
 
-        # Wait for Streamlit to finish its full run (running/stop indicator
-        # appears then disappears), but never let this step alone consume
-        # the whole 10-minute budget.
-        wait_budget = min(LOAD_WAIT_TIMEOUT_CAP, max(30, deadline.remaining() - 90))
-        wait_for_app_to_finish(page, wait_budget)
+        # Status widget is used only as an informational signal now — it
+        # proved unreliable as the sole gate (reported "finished" after
+        # only ~2s on a dashboard that genuinely takes much longer).
+        wait_for_running_widget_to_appear(page, min(RUNNING_WIDGET_APPEAR_TIMEOUT, max(10, deadline.remaining() // 4)))
+
+        # Authoritative gate: wait for real dashboard content to actually
+        # appear (checked across the main frame AND all iframes).
+        content_budget = min(CONTENT_READY_TIMEOUT, max(30, deadline.remaining() - 90))
+        wait_for_dashboard_content(page, content_budget)
+
+        # One more short settle so any final chart/JS rendering (Plotly,
+        # custom components) catches up after the text anchor appeared.
+        time.sleep(5)
 
         hide_fixed_chrome(page)  # re-apply in case a rerun reset it
         sidebar_right = get_sidebar_right_edge(page)
