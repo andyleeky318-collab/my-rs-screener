@@ -3,11 +3,13 @@ Opens a deployed Streamlit app, wakes it up if Streamlit Community Cloud
 shows a "this app is asleep" screen, waits for it to finish computing,
 scrolls through the ENTIRE page using real mouse-wheel events (more
 reliable than programmatic scrollTop, which some apps don't respond to),
-detects the bottom by checking the page's actual scroll position (NOT by
-comparing screenshot bytes, since animated/live content like PowerTrend
-badges and the Volatility Pickup section can repaint on their own and
-falsely look like "the page moved"), stitches every step into one full
-image, and sends it to Telegram as a document.
+detects the bottom by comparing screenshots directly (stop once a scroll
+produces no *significant* visual change — a percentage-of-pixels-changed
+threshold rather than exact byte equality, since animated/live content
+like PowerTrend badges and the Volatility Pickup section repaint a small
+part of the page on their own even when nothing actually scrolled, which
+previously caused those sections to be captured twice), stitches every
+step into one full image, and sends it to Telegram as a document.
 
 Env vars required (set as GitHub Actions secrets):
   STREAMLIT_APP_URL   e.g. https://your-app-name.streamlit.app
@@ -21,7 +23,7 @@ import io
 import time
 import requests
 from playwright.sync_api import sync_playwright
-from PIL import Image
+from PIL import Image, ImageChops
 
 APP_URL = os.environ["STREAMLIT_APP_URL"]
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
@@ -35,6 +37,14 @@ FIXED_WAIT_SECONDS = 600  # 10 minutes
 
 SCROLL_PAUSE_SECONDS = 2   # let charts/tables re-render after each scroll step
 MAX_SCROLL_STEPS = 45      # safety cap
+
+# A real scroll shifts almost the entire viewport, so most pixels change.
+# Live/animated widgets (PowerTrend badges, Volatility Pickup Z-scores,
+# mesh-line hover states) only repaint a small part of the page. This
+# threshold distinguishes "we actually scrolled" from "something on the
+# current view just animated" so we don't capture the same section twice.
+DIFF_PIXEL_FRACTION_THRESHOLD = 0.05   # >5% of pixels must change to count as "scrolled"
+CONSECUTIVE_NO_SCROLL_LIMIT = 2        # confirm bottom twice before stopping (animation-tolerant)
 
 OUTPUT_PATH = "full_screenshot.png"
 
@@ -93,25 +103,19 @@ def log_diagnostics(page):
     return info
 
 
-def get_scroll_top(page):
+def images_differ_significantly(im1, im2, threshold_fraction=DIFF_PIXEL_FRACTION_THRESHOLD):
     """
-    Returns the current scroll offset of whatever element is actually
-    scrolling the page. Falls back to the Streamlit app-view container
-    if the document itself isn't the scrolling element (common in
-    Streamlit layouts where an inner div owns the scroll).
+    True if a meaningfully large portion of the viewport changed between
+    two screenshots (i.e. we actually scrolled), False if the difference
+    is small enough to just be animated content repainting in place.
     """
-    return page.evaluate("""
-        () => {
-            const doc = document.scrollingElement || document.documentElement;
-            const main = document.querySelector('[data-testid="stAppViewContainer"]');
-
-            // Prefer whichever element actually has scrollable overflow.
-            if (main && main.scrollHeight > main.clientHeight + 5) {
-                return main.scrollTop;
-            }
-            return doc.scrollTop;
-        }
-    """)
+    diff = ImageChops.difference(im1.convert("L"), im2.convert("L"))
+    hist = diff.histogram()
+    # Ignore tiny per-pixel noise (anti-aliasing, JPEG-ish compression
+    # artifacts even in PNG re-renders); count pixels with a real change.
+    significant_pixels = sum(hist[25:])
+    total_pixels = im1.width * im1.height
+    return (significant_pixels / total_pixels) > threshold_fraction
 
 
 def capture_full_scroll(page):
@@ -123,30 +127,41 @@ def capture_full_scroll(page):
     time.sleep(0.3)
 
     screenshots = []
-    screenshots.append(Image.open(io.BytesIO(page.screenshot())))
+    prev_img = Image.open(io.BytesIO(page.screenshot()))
+    screenshots.append(prev_img)
     print("  captured step 1")
 
-    last_scroll_top = get_scroll_top(page)
-    print(f"  initial scrollTop={last_scroll_top}")
+    consecutive_no_scroll = 0
 
     for i in range(MAX_SCROLL_STEPS):
         page.mouse.wheel(0, VIEWPORT_HEIGHT)
         time.sleep(SCROLL_PAUSE_SECONDS)
 
-        new_scroll_top = get_scroll_top(page)
+        new_img = Image.open(io.BytesIO(page.screenshot()))
 
-        # Use actual scroll position, not screenshot-byte-equality, to
-        # decide whether we moved. Animated content (PowerTrend badges,
-        # Volatility Pickup Z-score section, mesh-line hover states) can
-        # change pixels without the page having scrolled at all, which
-        # previously caused duplicated slices.
-        if new_scroll_top <= last_scroll_top:
-            print(f"  scrollTop unchanged ({new_scroll_top}) after step {i+1} — reached bottom")
-            break
+        # A real scroll changes most of the viewport. Animated widgets
+        # (PowerTrend badges, Volatility Pickup Z-scores, mesh-line hover
+        # states) only repaint a small part of it. Using a percentage-of-
+        # pixels-changed threshold instead of exact byte equality means an
+        # animation tick no longer gets mistaken for "we scrolled," which
+        # was causing sections to be captured twice.
+        if not images_differ_significantly(prev_img, new_img):
+            consecutive_no_scroll += 1
+            print(f"  no significant change after step {i+1} "
+                  f"(likely animation only, not a real scroll) "
+                  f"[{consecutive_no_scroll}/{CONSECUTIVE_NO_SCROLL_LIMIT}]")
+            if consecutive_no_scroll >= CONSECUTIVE_NO_SCROLL_LIMIT:
+                print("  reached bottom")
+                break
+            # Don't append a duplicate slice, but keep scrolling — this
+            # frame may just have landed on an animation tick even though
+            # we did move down.
+            continue
 
-        screenshots.append(Image.open(io.BytesIO(page.screenshot())))
-        last_scroll_top = new_scroll_top
-        print(f"  captured step {i+2} (scrollTop={new_scroll_top})")
+        consecutive_no_scroll = 0
+        screenshots.append(new_img)
+        prev_img = new_img
+        print(f"  captured step {i+2}")
 
     print(f"Captured {len(screenshots)} viewport screenshots")
     return screenshots
