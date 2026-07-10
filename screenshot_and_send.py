@@ -29,42 +29,26 @@ VIEWPORT_HEIGHT = 1200
 FIXED_WAIT_SECONDS = 600  # 10 minutes
 
 SCROLL_PAUSE_SECONDS = 1.5  # let charts/tables re-render after each scroll step
-MAX_SCROLL_STEPS = 60       # safety cap
+MAX_SCROLL_STEPS = 45       # safety cap — comfortably above your observed ~22-30 needed
 
 OUTPUT_PATH = "full_screenshot.png"
 
 
-def get_scroll_metrics(page):
-    """Detect whether the window or an inner Streamlit container is the real scroller."""
+def get_current_scroll_position(page):
+    """
+    Read whichever scroll position is actually nonzero — the window's or
+    an inner Streamlit container's — after a Page Down press.
+    """
     return page.evaluate("""
         () => {
             const doc = document.scrollingElement || document.documentElement;
-            if (doc.scrollHeight - doc.clientHeight > 5) {
-                return { mode: 'window', scrollHeight: doc.scrollHeight, clientHeight: doc.clientHeight };
-            }
+            if (doc.scrollTop > 0) return doc.scrollTop;
             const main = document.querySelector('[data-testid="stAppViewContainer"]') ||
                          document.querySelector('section.main') ||
                          document.querySelector('.main');
-            if (main) {
-                return { mode: 'container', scrollHeight: main.scrollHeight, clientHeight: main.clientHeight };
-            }
-            return { mode: 'window', scrollHeight: doc.scrollHeight, clientHeight: doc.clientHeight };
+            return main ? main.scrollTop : doc.scrollTop;
         }
     """)
-
-
-def scroll_to(page, mode, y):
-    if mode == "window":
-        page.evaluate(f"window.scrollTo(0, {y})")
-    else:
-        page.evaluate(f"""
-            () => {{
-                const main = document.querySelector('[data-testid="stAppViewContainer"]') ||
-                             document.querySelector('section.main') ||
-                             document.querySelector('.main');
-                if (main) main.scrollTop = {y};
-            }}
-        """)
 
 
 def hide_fixed_chrome(page):
@@ -77,53 +61,46 @@ def hide_fixed_chrome(page):
 
 
 def capture_full_scroll(page):
-    metrics = get_scroll_metrics(page)
-    mode = metrics["mode"]
-    total_height = metrics["scrollHeight"]
-    view_height = metrics["clientHeight"]
-
-    print(f"Scroll mode: {mode} | total height: {total_height}px | viewport height: {view_height}px")
-
     hide_fixed_chrome(page)
 
-    screenshots = []
-    y = 0
+    # Click into the page body first so keyboard events actually target it
+    page.mouse.click(VIEWPORT_WIDTH // 2, VIEWPORT_HEIGHT // 2)
+    time.sleep(0.5)
+
+    screenshots = []   # list of (position, PIL.Image)
+    pos = get_current_scroll_position(page)
+    img_bytes = page.screenshot()
+    screenshots.append((pos, Image.open(io.BytesIO(img_bytes))))
+    print(f"  captured step 1: pos={pos}")
 
     for i in range(MAX_SCROLL_STEPS):
-        scroll_to(page, mode, y)
+        page.keyboard.press("PageDown")
         time.sleep(SCROLL_PAUSE_SECONDS)
 
-        img_bytes = page.screenshot()
-        screenshots.append(Image.open(io.BytesIO(img_bytes)))
-        print(f"  captured step {i+1}: y={y}")
-
-        # re-check in case content grows as more of it scrolls into view
-        metrics = get_scroll_metrics(page)
-        total_height = max(total_height, metrics["scrollHeight"])
-
-        if y + view_height >= total_height:
+        new_pos = get_current_scroll_position(page)
+        if new_pos == pos:
+            print(f"  no further scroll movement after step {i+1} — reached bottom")
             break
-        y += view_height
 
+        pos = new_pos
+        img_bytes = page.screenshot()
+        screenshots.append((pos, Image.open(io.BytesIO(img_bytes))))
+        print(f"  captured step {i+2}: pos={pos}")
+
+    total_height = pos + VIEWPORT_HEIGHT
     print(f"Captured {len(screenshots)} viewport screenshots, total height ~{total_height}px")
     return screenshots, total_height
 
 
 def stitch(screenshots, total_height):
-    width = screenshots[0].width
+    width = screenshots[0][1].width
     stitched = Image.new("RGB", (width, total_height), "white")
 
-    y_offset = 0
-    for idx, img in enumerate(screenshots):
-        is_last = idx == len(screenshots) - 1
-        if is_last:
-            remaining = total_height - y_offset
-            if 0 < remaining < img.height:
-                # crop overlap so the last slice doesn't duplicate already-pasted content
-                crop_top = img.height - remaining
-                img = img.crop((0, crop_top, img.width, img.height))
-        stitched.paste(img, (0, y_offset))
-        y_offset += img.height
+    # Paste in capture order at each screenshot's real recorded position.
+    # Later screenshots simply overwrite the overlapping region with the
+    # same content and extend further down — no manual crop math needed.
+    for pos, img in screenshots:
+        stitched.paste(img, (0, pos))
 
     return stitched
 
