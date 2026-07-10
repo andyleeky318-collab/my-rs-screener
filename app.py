@@ -80,7 +80,7 @@ st.markdown(
 # 2. Cleaned Industry Database (Preserved as requested)
 INDUSTRIES = {
     '3D Printing': ['XMTR', 'VELO', 'DDD', 'PRLB', 'MTLS', 'SSYS', 'NNDM'],
-    'Crypto': ['MSTR', 'CRCL', 'COIN', 'IBIT', 'RIOT'],
+    'Crypto': ['BLOK', 'MSTR', 'CRCL', 'COIN', 'IBIT', 'RIOT'],
     'Nuclear': ['URA', 'NLR', 'CEG', 'CCJ', 'OKLO', 'UUUU', 'SMR', 'LEU'],
     'MAG7': ['MAGS', 'AAPL', 'GOOGL', 'NVDA', 'META', 'MSFT', 'AMZN', 'TSLA'],
     'ETF': ['XLK', 'XLF', 'XLV', 'XLE', 'XLU', 'XLP', 'XLY', 'XLC', 'XLI', 'XLB'],
@@ -302,7 +302,9 @@ LIME_STOCKS1 = [
     'IPAY', 'ITB', 'JETS', 'KRE', 'KWEB', 'LIT', 'MAGS',
     'PBW', 'REMX', 'SHLD', 'SIL', 'SLX', 'SMH', 'TAN',
     'UFO', 'URA', 'USO', 'VTV', 'VUG', 'WGMI', 'XBI',
-    'XME', 'XRT', 'XTL', 'SPY', 'QQQ', 'FOTO', 'KBE', 'NLR', 'CLOU', 'XHB', 'BUG', 'HACK', 'ITA', 'IAT', 'XOP', 'NASA', 'RSP', 'XTN', 'IYT', 'BOAT', 'MOO'
+    'XME', 'XRT', 'XTL', 'SPY', 'QQQ', 'FOTO', 'KBE', 'NLR', 
+    'CLOU', 'XHB', 'BUG', 'HACK', 'ITA', 'IAT', 'XOP', 'NASA', 
+    'RSP', 'XTN', 'IYT', 'BOAT', 'MOO', 'BLOK', 'PICK'
 ]
 
 # ============================================================
