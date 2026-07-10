@@ -6143,6 +6143,7 @@ else:
     st.info("Insufficient data to compute Setup Avg Rank history.")
 
 st.markdown("---")
+st.markdown(f"#### Pie Chart")
 
 # ETF daily direction pie chart at the bottom of the page
 def _etf_pie_chart():
@@ -6218,6 +6219,7 @@ def _etf_pie_chart():
 timed("ETF Pie Chart", _etf_pie_chart)
 
 st.markdown("---")
+st.markdown(f"#### ETF Ratio")
 
 def _relative_etf_ratios():
     ratio_pairs = (

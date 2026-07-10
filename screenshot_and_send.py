@@ -95,6 +95,8 @@ SECTION_KEYWORDS = [
     "Volatility",
     "Value Trap",
     "Setup Quality",
+    "Pie Chart",
+    "ETF Ratio",
     "Quant Sentiment",
 ]
 
