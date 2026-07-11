@@ -6283,7 +6283,7 @@ if not setup_avgrank_hist.empty:
         plot_bgcolor="rgba(20,22,30,1)",
         paper_bgcolor="rgba(13,17,23,0)",
         font=dict(color="#cccccc"),
-        #legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="center", x=0.5),
+        legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="center", x=0.5),
         xaxis=dict(showgrid=False, tickfont=dict(size=9, color="#888888")),
         yaxis=dict(title="Avg Rank", showgrid=True, gridcolor="rgba(120,120,120,0.15)", tickfont=dict(color="#888888")),
         yaxis2=dict(title="Setup Count", overlaying="y", side="right", showgrid=False, tickfont=dict(color="#FF4B4B")),
