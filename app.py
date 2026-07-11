@@ -14,6 +14,21 @@ import base64
 
 GITHUB_API = "https://api.github.com"
 
+def format_unavailable_reasons(failures):
+    if not failures:
+        return "previous provider unavailable"
+    parts = []
+    for provider, reason in failures.items():
+        clue = (reason or "unknown reason").strip()
+        if not clue:
+            clue = "unknown reason"
+        elif not clue.startswith("No "):
+            clue = clue.split("\n", 1)[0].strip()
+            if len(clue) > 60:
+                clue = clue[:60].rstrip() + "..."
+        parts.append(f"{provider} unavailable ({clue})")
+    return "; ".join(parts)
+
 _timing_log = {}  # module-level dict, accumulates across all call sites
 _latest_bar_dropped = False
 _latest_nan_report_log = {}
@@ -2758,8 +2773,8 @@ Be direct, name industries explicitly, no fluff, no repeating the prompt.
                           {"role": "user", "content": prompt}],
                 max_tokens=400, temperature=0.4,
             )
-            prior = ", ".join(failures.keys())
-            return f"🟧 **Groq / Llama-3.3-70b** *({prior} unavailable)*\n\n{completion.choices[0].message.content}"
+            summary = format_unavailable_reasons(failures)
+            return f"🟧 **Groq / Llama-3.3-70b** *({summary})*\n\n{completion.choices[0].message.content}"
         except Exception as e:
             err = str(e)
             if not is_transient(err):
@@ -2779,8 +2794,8 @@ Be direct, name industries explicitly, no fluff, no repeating the prompt.
                           {"role": "user", "content": prompt}],
                 max_tokens=400, temperature=0.4,
             )
-            prior = ", ".join(failures.keys())
-            return f"⬜ **GitHub Models / gpt-4o-mini** *({prior} unavailable)*\n\n{completion.choices[0].message.content}"
+            summary = format_unavailable_reasons(failures)
+            return f"⬜ **GitHub Models / gpt-4o-mini** *({summary})*\n\n{completion.choices[0].message.content}"
         except Exception as e:
             err = str(e)
             if not is_transient(err):
@@ -2803,8 +2818,8 @@ Be direct, name industries explicitly, no fluff, no repeating the prompt.
                           {"role": "user", "content": prompt}],
                 max_tokens=400, temperature=0.4,
             )
-            prior = ", ".join(failures.keys())
-            return f"🟣 **OpenRouter / Llama-3.1-8b** *({prior} unavailable)*\n\n{completion.choices[0].message.content}"
+            summary = format_unavailable_reasons(failures)
+            return f"🟣 **OpenRouter / Llama-3.1-8b** *({summary})*\n\n{completion.choices[0].message.content}"
         except Exception as e:
             err = str(e)
             if not is_transient(err):
@@ -5005,8 +5020,8 @@ Be direct, use industry names, no fluff.
                 temperature=0.4,
             )
             result = completion.choices[0].message.content
-            prior = ", ".join(failures.keys())
-            return f"🟧 **Groq / Llama-3.3-70b** *({prior} unavailable)*\n\n{result}"
+            summary = format_unavailable_reasons(failures)
+            return f"🟧 **Groq / Llama-3.3-70b** *({summary})*\n\n{result}"
         except Exception as e:
             err = str(e)
             if not is_transient(err):
@@ -5037,8 +5052,8 @@ Be direct, use industry names, no fluff.
                 temperature=0.4,
             )
             result = completion.choices[0].message.content
-            prior = ", ".join(failures.keys())
-            return f"⬜ **GitHub Models / gpt-4o-mini** *({prior} unavailable)*\n\n{result}"
+            summary = format_unavailable_reasons(failures)
+            return f"⬜ **GitHub Models / gpt-4o-mini** *({summary})*\n\n{result}"
         except Exception as e:
             err = str(e)
             if not is_transient(err):
@@ -5074,8 +5089,8 @@ Be direct, use industry names, no fluff.
                 temperature=0.4,
             )
             result = completion.choices[0].message.content
-            prior = ", ".join(failures.keys())
-            return f"🟣 **OpenRouter / Llama-3.1-8b** *({prior} unavailable)*\n\n{result}"
+            summary = format_unavailable_reasons(failures)
+            return f"🟣 **OpenRouter / Llama-3.1-8b** *({summary})*\n\n{result}"
         except Exception as e:
             err = str(e)
             if not is_transient(err):
@@ -5162,8 +5177,8 @@ Be direct, name industries/tickers explicitly, no fluff, no repeating the prompt
                           {"role": "user", "content": prompt}],
                 max_tokens=350, temperature=0.4,
             )
-            prior = ", ".join(failures.keys())
-            return f"🟧 **Groq / Llama-3.3-70b** *({prior} unavailable)*\n\n{completion.choices[0].message.content}"
+            summary = format_unavailable_reasons(failures)
+            return f"🟧 **Groq / Llama-3.3-70b** *({summary})*\n\n{completion.choices[0].message.content}"
         except Exception as e:
             err = str(e)
             if not is_transient(err):
@@ -5184,8 +5199,8 @@ Be direct, name industries/tickers explicitly, no fluff, no repeating the prompt
                           {"role": "user", "content": prompt}],
                 max_tokens=350, temperature=0.4,
             )
-            prior = ", ".join(failures.keys())
-            return f"⬜ **GitHub Models / gpt-4o-mini** *({prior} unavailable)*\n\n{completion.choices[0].message.content}"
+            summary = format_unavailable_reasons(failures)
+            return f"⬜ **GitHub Models / gpt-4o-mini** *({summary})*\n\n{completion.choices[0].message.content}"
         except Exception as e:
             err = str(e)
             if not is_transient(err):
@@ -5209,8 +5224,8 @@ Be direct, name industries/tickers explicitly, no fluff, no repeating the prompt
                           {"role": "user", "content": prompt}],
                 max_tokens=350, temperature=0.4,
             )
-            prior = ", ".join(failures.keys())
-            return f"🟣 **OpenRouter / Llama-3.1-8b** *({prior} unavailable)*\n\n{completion.choices[0].message.content}"
+            summary = format_unavailable_reasons(failures)
+            return f"🟣 **OpenRouter / Llama-3.1-8b** *({summary})*\n\n{completion.choices[0].message.content}"
         except Exception as e:
             err = str(e)
             if not is_transient(err):
