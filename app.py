@@ -4522,12 +4522,14 @@ st.dataframe(
 
 st.markdown("---")
 
+pct_color = "#00FF00" if know_pos_pct >= 50 else "#FF4B4B"
 st.markdown(
     f"#### ⭐ Minervini ("
-    f"Positive Pct = {know_pos_pct:.1f}% ... "
+    f"Positive Pct = <span style='color:{pct_color};'>{know_pos_pct:.1f}%</span> ... "
     #f"+ve Count: {know_positive_count} ... "
     f"Total = {know_total_count} ... "
-    f"ATH = {len(ath_list)})"
+    f"ATH = {len(ath_list)})",
+    unsafe_allow_html=True,
 )
 
 if email_content_stocks or email_content_removed:
