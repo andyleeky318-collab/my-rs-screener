@@ -6274,7 +6274,7 @@ if not setup_avgrank_hist.empty:
     ))
     fig_setup.add_trace(go.Scatter(
         x=chart_df_rank["Date"], y=chart_df_rank["Setup Count"],
-        name="Setup Count", mode="lines", line=dict(color="#FFD700", width=2),
+        name="Setup Count", mode="lines", line=dict(color="#FF4B4B", width=2),
         yaxis="y2",
     ))
     fig_setup.update_layout(
