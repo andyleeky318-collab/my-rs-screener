@@ -63,19 +63,34 @@ SECTION_TOP_OFFSET_PX = 20
 # the page (landing view, full width -- no sidebar to crop here), sent as
 # its own separate Telegram photo. Heavier JS-rendered sites get a longer
 # settle time since they keep rendering well after domcontentloaded.
+# Tuple: (url, caption, settle_seconds, use_stealth)
+# use_stealth applies the realistic-UA / webdriver-hiding mitigation below
+# -- only turned on for sites running bot-verification checks (Finviz),
+# everything else keeps Playwright's plain default page behavior.
 EXTRA_SCREENSHOTS = [
     ("https://stockbee.blogspot.com/p/mm.html",
-     "Stockbee MM", 3),
+     "Stockbee MM", 3, False),
     ("https://docs.google.com/spreadsheets/d/1ZkNk5A5nPQGGSK00eAOlroGmJi2wVHPwdz3LAYAVb7U/edit?gid=0#gid=0",
-     "Market Monitor Traffic Light", 8),
+     "Market Monitor Traffic Light", 8, False),
     ("https://stockcharts.com/sc3/ui/?s=%24USHL5",
-     "$USHL5 SharpCharts", 8),
+     "$USHL5 SharpCharts", 8, False),
     ("https://fullstackinvestor.co/dashboard",
-     "Market Dashboard", 8),
+     "Market Dashboard", 8, False),
     ("https://finviz.com/map",
-     "S&P 500 Map", 6),
+     "S&P 500 Map", 12, True),
 ]
 EXTRA_PAGE_LOAD_TIMEOUT  = 30000  # ms
+
+# Realistic desktop Chrome UA + a small init script that hides the
+# "navigator.webdriver" flag Playwright's headless Chromium exposes by
+# default. Some sites (e.g. Finviz) run Cloudflare-style bot-verification
+# challenges that key off exactly this kind of automation fingerprint --
+# this doesn't guarantee a pass, but it's the standard mitigation.
+STEALTH_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+STEALTH_INIT_SCRIPT = "Object.defineProperty(navigator, 'webdriver', { get: () => undefined });"
 
 WAKE_BUTTON_TEXTS = [
     "Yes, get this app back up!",
@@ -384,7 +399,7 @@ def capture_and_send_section(page, sidebar_right, keyword):
     send_photo(img_bytes, keyword)
 
 
-def capture_and_send_external_top(browser, url, caption, settle_seconds=SCROLL_SETTLE_SECONDS):
+def capture_and_send_external_top(browser, url, caption, settle_seconds=SCROLL_SETTLE_SECONDS, use_stealth=False):
     """
     Open a FRESH page for an external (non-Streamlit) site, wait for it to
     load, screenshot just the initial viewport (top/landing view, full
@@ -392,9 +407,23 @@ def capture_and_send_external_top(browser, url, caption, settle_seconds=SCROLL_S
     Telegram as its own photo. Runs on its own page each time so it never
     disturbs the Streamlit page/session used for everything above, and so
     one site's tabs/cookies/state can't leak into the next site.
+
+    use_stealth=True applies a realistic desktop UA + hides the
+    "navigator.webdriver" flag, for sites running bot-verification checks
+    (e.g. Finviz). Left False (default/plain Playwright page) for every
+    other site so their behavior is unchanged.
     """
     try:
-        ext_page = browser.new_page(viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT})
+        if use_stealth:
+            ext_page = browser.new_page(
+                viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
+                user_agent=STEALTH_USER_AGENT,
+                locale="en-US",
+            )
+            ext_page.add_init_script(STEALTH_INIT_SCRIPT)
+        else:
+            ext_page = browser.new_page(viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT})
+
         ext_page.goto(url, wait_until="domcontentloaded", timeout=EXTRA_PAGE_LOAD_TIMEOUT)
         time.sleep(settle_seconds)
         img_bytes = ext_page.screenshot()
@@ -465,11 +494,11 @@ def run():
         # 3. After all Streamlit sections are done, walk through each extra
         #    external site IN ORDER, screenshotting its landing view and
         #    sending it as its own photo.
-        for url, caption, settle_seconds in EXTRA_SCREENSHOTS:
+        for url, caption, settle_seconds, use_stealth in EXTRA_SCREENSHOTS:
             if deadline.expired():
                 print("Global cutoff reached -- stopping further external site captures.")
                 break
-            capture_and_send_external_top(browser, url, caption, settle_seconds)
+            capture_and_send_external_top(browser, url, caption, settle_seconds, use_stealth)
 
         browser.close()
 
