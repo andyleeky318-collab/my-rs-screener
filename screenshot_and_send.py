@@ -37,7 +37,7 @@ CHAT_ID   = os.environ["TELEGRAM_CHAT_ID"]
 VIEWPORT_WIDTH  = 1600
 VIEWPORT_HEIGHT = 1200
 
-MAX_RUNTIME_SECONDS   = 20 * 60   # hard cutoff for the ENTIRE run
+MAX_RUNTIME_SECONDS   = 22 * 60   # hard cutoff for the ENTIRE run
 SCROLL_SETTLE_SECONDS = 3         # let charts / custom HTML components re-render after a scroll
 
 # How long (seconds) to keep retrying to find a single section keyword
@@ -58,11 +58,23 @@ FINISH_TIMEOUT_SECONDS = 8 * 60
 
 SECTION_TOP_OFFSET_PX = 20
 
-# Extra external (non-Streamlit) site to screenshot AFTER all Streamlit
-# sections above are done -- just the top of the page, full width (no
-# sidebar to crop here), sent as its own separate Telegram photo.
-EXTRA_SCREENSHOT_URL     = "https://stockbee.blogspot.com/p/mm.html"
-EXTRA_SCREENSHOT_CAPTION = "Stockbee MM"
+# Extra external (non-Streamlit) sites to screenshot AFTER all Streamlit
+# sections above are done -- walked through IN ORDER, each just the top of
+# the page (landing view, full width -- no sidebar to crop here), sent as
+# its own separate Telegram photo. Heavier JS-rendered sites get a longer
+# settle time since they keep rendering well after domcontentloaded.
+EXTRA_SCREENSHOTS = [
+    ("https://stockbee.blogspot.com/p/mm.html",
+     "Stockbee MM", 3),
+    ("https://docs.google.com/spreadsheets/d/1ZkNk5A5nPQGGSK00eAOlroGmJi2wVHPwdz3LAYAVb7U/edit?gid=0#gid=0",
+     "Market Monitor Traffic Light", 8),
+    ("https://stockcharts.com/sc3/ui/?s=%24USHL5",
+     "$USHL5 SharpCharts", 8),
+    ("https://fullstackinvestor.co/dashboard",
+     "Market Dashboard", 8),
+    ("https://finviz.com/map",
+     "S&P 500 Map", 6),
+]
 EXTRA_PAGE_LOAD_TIMEOUT  = 30000  # ms
 
 WAKE_BUTTON_TEXTS = [
@@ -372,18 +384,19 @@ def capture_and_send_section(page, sidebar_right, keyword):
     send_photo(img_bytes, keyword)
 
 
-def capture_and_send_external_top(browser, url, caption):
+def capture_and_send_external_top(browser, url, caption, settle_seconds=SCROLL_SETTLE_SECONDS):
     """
     Open a FRESH page for an external (non-Streamlit) site, wait for it to
-    load, screenshot just the initial viewport (top of page, full width --
-    there's no sidebar here so no clip needed), and send it to Telegram as
-    its own photo. Runs on its own page so it never disturbs the Streamlit
-    page/session used for everything above.
+    load, screenshot just the initial viewport (top/landing view, full
+    width -- there's no sidebar here so no clip needed), and send it to
+    Telegram as its own photo. Runs on its own page each time so it never
+    disturbs the Streamlit page/session used for everything above, and so
+    one site's tabs/cookies/state can't leak into the next site.
     """
     try:
         ext_page = browser.new_page(viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT})
         ext_page.goto(url, wait_until="domcontentloaded", timeout=EXTRA_PAGE_LOAD_TIMEOUT)
-        time.sleep(SCROLL_SETTLE_SECONDS)
+        time.sleep(settle_seconds)
         img_bytes = ext_page.screenshot()
         send_photo(img_bytes, caption)
         ext_page.close()
@@ -449,12 +462,14 @@ def run():
                 break
             capture_and_send_section(page, sidebar_right, keyword)
 
-        # 3. After all Streamlit sections are done, screenshot the top of the
-        #    external Stockbee MM page and send it as its own photo too.
-        if not deadline.expired():
-            capture_and_send_external_top(browser, EXTRA_SCREENSHOT_URL, EXTRA_SCREENSHOT_CAPTION)
-        else:
-            print("Global cutoff reached -- skipping external site screenshot.")
+        # 3. After all Streamlit sections are done, walk through each extra
+        #    external site IN ORDER, screenshotting its landing view and
+        #    sending it as its own photo.
+        for url, caption, settle_seconds in EXTRA_SCREENSHOTS:
+            if deadline.expired():
+                print("Global cutoff reached -- stopping further external site captures.")
+                break
+            capture_and_send_external_top(browser, url, caption, settle_seconds)
 
         browser.close()
 
