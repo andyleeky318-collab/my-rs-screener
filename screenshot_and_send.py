@@ -58,6 +58,13 @@ FINISH_TIMEOUT_SECONDS = 8 * 60
 
 SECTION_TOP_OFFSET_PX = 20
 
+# Extra external (non-Streamlit) site to screenshot AFTER all Streamlit
+# sections above are done -- just the top of the page, full width (no
+# sidebar to crop here), sent as its own separate Telegram photo.
+EXTRA_SCREENSHOT_URL     = "https://stockbee.blogspot.com/p/mm.html"
+EXTRA_SCREENSHOT_CAPTION = "Stockbee MM"
+EXTRA_PAGE_LOAD_TIMEOUT  = 30000  # ms
+
 WAKE_BUTTON_TEXTS = [
     "Yes, get this app back up!",
     "Get this app back up",
@@ -365,6 +372,25 @@ def capture_and_send_section(page, sidebar_right, keyword):
     send_photo(img_bytes, keyword)
 
 
+def capture_and_send_external_top(browser, url, caption):
+    """
+    Open a FRESH page for an external (non-Streamlit) site, wait for it to
+    load, screenshot just the initial viewport (top of page, full width --
+    there's no sidebar here so no clip needed), and send it to Telegram as
+    its own photo. Runs on its own page so it never disturbs the Streamlit
+    page/session used for everything above.
+    """
+    try:
+        ext_page = browser.new_page(viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT})
+        ext_page.goto(url, wait_until="domcontentloaded", timeout=EXTRA_PAGE_LOAD_TIMEOUT)
+        time.sleep(SCROLL_SETTLE_SECONDS)
+        img_bytes = ext_page.screenshot()
+        send_photo(img_bytes, caption)
+        ext_page.close()
+    except Exception as e:
+        print(f"External screenshot failed for '{url}': {e} -- skipping.")
+
+
 def run():
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -422,6 +448,13 @@ def run():
                 print("Global 10-minute cutoff reached -- stopping further captures.")
                 break
             capture_and_send_section(page, sidebar_right, keyword)
+
+        # 3. After all Streamlit sections are done, screenshot the top of the
+        #    external Stockbee MM page and send it as its own photo too.
+        if not deadline.expired():
+            capture_and_send_external_top(browser, EXTRA_SCREENSHOT_URL, EXTRA_SCREENSHOT_CAPTION)
+        else:
+            print("Global cutoff reached -- skipping external site screenshot.")
 
         browser.close()
 
