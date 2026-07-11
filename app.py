@@ -3080,6 +3080,15 @@ if all_data:
         background-color: #2e4a3e;
         border: 1px solid #4ecdc4;
     }
+    .volatility-badge {
+        padding: 2px 6px;
+        border-radius: 4px;
+        line-height: 1.2;
+    }
+    .volatility-badge .ticker-name,
+    .volatility-badge .ticker-rs {
+        font-size: 12px;
+    }
     .pattern-badge {
         background-color: #1f3a52;
         border: 1px solid #3a86c8;
@@ -3122,11 +3131,11 @@ if all_data:
         color: #000000;            /* Black text */
         font-weight: bold;
     }
-    .ticker-name { font-weight: bold; color: #ffffff; margin-right: 4px; }
-    .ticker-rs { color: #4ecdc4; font-weight: normal; }
+    .ticker-name { font-weight: bold; color: #ffffff; margin-right: 4px; font-size: 12px; }
+    .ticker-rs { color: #4ecdc4; font-weight: normal; font-size: 12px; }
     table { width:100%; border-collapse: collapse; }
-    th { padding: 4px 8px !important; background-color: #1f77b4; color: white; font-size: 12px; }
-    td { padding: 2px 8px !important; border-bottom: 1px solid #333; font-size: 12px; }
+    th { padding: 4px 8px !important; background-color: #1f77b4; color: white; font-size: 13px; }
+    td { padding: 2px 8px !important; border-bottom: 1px solid #333; font-size: 13px; }
     th:nth-child(7), td:nth-child(7) {
         border-right: 3px solid #ffffff;
     }
@@ -6101,12 +6110,10 @@ if volatility_hits:
             z_col    = "#6B0000"
         pct_sign = f"+{pct:.1f}%" if pct >= 0 else f"{pct:.1f}%"
         vol_html += (
-            f'<div style="display:inline-block; margin:1px 3px; padding:1px 5px; '
-            f'border:1px solid {border}; border-radius:3px; font-size:11px; '
-            f'background:{bg}; white-space:nowrap;">'
-            f'<span style="font-weight:bold; color:{txt_col};">{sym}</span>'
-            f'<span style="color:{z_col}; font-size:10px; margin-left:4px;">· {z:.1f}z</span>'
-            f'<span style="color:{txt_col}; font-size:10px; margin-left:4px;">· {pct_sign}</span>'
+            f'<div class="ticker-badge volatility-badge" style="background:{bg}; border:1px solid {border};">'
+            f'<span class="ticker-name" style="color:{txt_col};">{sym}</span>'
+            f'<span class="ticker-rs" style="color:{z_col}; margin-left:4px;">· {z:.1f}z</span>'
+            f'<span class="ticker-rs" style="color:{txt_col}; margin-left:4px;">· {pct_sign}</span>'
             f'</div>'
         )
     vol_html += "</div>"
