@@ -3231,8 +3231,9 @@ if all_data:
             ticker_sym = r["Ticker"]
             rs_score = r["RS Score"]
             ticker_price = item["Prices"].get(ticker_sym, 0)
+            rs_threshold = 70 if ticker_sym in LIME_STOCKS1 else 80
             
-            if (show_all_rs or rs_score >= 80) and ticker_price > 20:
+            if (show_all_rs or rs_score >= rs_threshold) and ticker_price > 20:
                 # If the ticker is inside KNOWN_STOCKS, apply high-contrast dark text rules
                 if ticker_sym in LIME_STOCKS1:
                     ticker_html += (
