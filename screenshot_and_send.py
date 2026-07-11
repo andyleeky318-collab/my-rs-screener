@@ -37,7 +37,7 @@ CHAT_ID   = os.environ["TELEGRAM_CHAT_ID"]
 VIEWPORT_WIDTH  = 1600
 VIEWPORT_HEIGHT = 1200
 
-MAX_RUNTIME_SECONDS   = 15 * 60   # hard cutoff for the ENTIRE run
+MAX_RUNTIME_SECONDS   = 20 * 60   # hard cutoff for the ENTIRE run
 SCROLL_SETTLE_SECONDS = 3         # let charts / custom HTML components re-render after a scroll
 
 # How long (seconds) to keep retrying to find a single section keyword
@@ -93,6 +93,19 @@ SECTION_KEYWORDS = [
     "ETF Ratio",
     "Quant Sentiment",
 ]
+
+# The very last section to appear on the page. Its presence anywhere in the
+# DOM (main frame or iframes) is used as the "whole page has fully loaded"
+# signal -- we hold off on ALL screenshots (including the top-of-page one)
+# until this is found, so we never capture a section that's still streaming in.
+FINAL_SECTION_KEYWORD = SECTION_KEYWORDS[-1]
+
+# How long to wait for FINAL_SECTION_KEYWORD to show up before giving up and
+# capturing anyway (falls back gracefully rather than blocking forever).
+# Quant Sentiment has been observed to take up to ~8 minutes to appear, so
+# this is set with some buffer above that.
+FULL_LOAD_TIMEOUT_SECONDS = 9 * 60
+FULL_LOAD_POLL_SECONDS    = 3
 
 
 class Deadline:
@@ -242,6 +255,27 @@ def wait_for_app_to_finish(page, timeout_seconds):
     return False
 
 
+def wait_for_full_content_loaded(page, timeout_seconds):
+    """
+    Wait until the LAST section keyword (FINAL_SECTION_KEYWORD, e.g.
+    "Quant Sentiment") is found anywhere on the page (main frame or any
+    iframe). Since sections render top-to-bottom, this being present means
+    everything above it has also finished streaming in -- so it's safe to
+    start taking screenshots from the top of the page onward.
+    Falls back to proceeding anyway if it never appears within the timeout.
+    """
+    start = time.monotonic()
+    while time.monotonic() - start < timeout_seconds:
+        if find_text_anywhere(page, FINAL_SECTION_KEYWORD) is not None:
+            print(f"Final section '{FINAL_SECTION_KEYWORD}' detected after "
+                  f"{time.monotonic() - start:.0f}s -- page fully loaded.")
+            return True
+        time.sleep(FULL_LOAD_POLL_SECONDS)
+    print(f"Timed out after {timeout_seconds:.0f}s waiting for final section "
+          f"'{FINAL_SECTION_KEYWORD}' -- proceeding with captures anyway.")
+    return False
+
+
 def get_sidebar_right_edge(page):
     """
     Return the x-coordinate (px) where the main content area begins,
@@ -362,6 +396,13 @@ def run():
         # One more short settle so any final chart/JS rendering (Plotly,
         # custom components) catches up right after the widget clears.
         time.sleep(5)
+
+        # Extra safety net: the "stop" widget clearing doesn't guarantee every
+        # section has actually streamed into the DOM yet. Wait until the last
+        # section keyword (Quant Sentiment) is found anywhere on the page --
+        # ONLY then do we consider the page fully loaded and start capturing.
+        full_load_budget = min(FULL_LOAD_TIMEOUT_SECONDS, max(30, deadline.remaining() - 60))
+        wait_for_full_content_loaded(page, full_load_budget)
 
         hide_fixed_chrome(page)  # re-apply in case a rerun reset it
         sidebar_right = get_sidebar_right_edge(page)
