@@ -2560,7 +2560,7 @@ for item in all_data:
 def setup_badge(sym, is_new=False, is_removed=False, extra_prefix="", extra_suffix="", extra_suffix_color="#888888"):
     """Render a ticker badge, colored by setup-category precedence:
     50ma_bounce (orange) > 21ema_wick (aqua) > 21ema_cloud (purple) > new (gold) > default."""
-    suffix_html = f'<span style="margin-left:4px; color:{extra_suffix_color}; font-weight:bold;">· {extra_suffix}</span>' if extra_suffix else ""
+    suffix_html = f'<span style="margin-left:4px; color:{extra_suffix_color}; font-weight:bold;"> {extra_suffix}</span>' if extra_suffix else ""
     if is_removed:
         return f'<div class="ticker-badge removed-badge">{extra_prefix}{sym}{suffix_html}</div>'
     if sym in ma50bounce_all:
@@ -4814,7 +4814,7 @@ if leader_list or leader_yest:
         streak = leader_streaks.get(sym, 0)
         streak_color = "#FF4B4B" if streak >= 10 else "#333333" if sym in (ma50bounce_all | cloudwick_all | cloud21ema_all) else "#888888"
         streak_html = (
-            f'<span style="color:{streak_color}; font-size:10px; margin-left:5px;">· {streak}</span>'
+            f'<span style="color:{streak_color}; font-size:11px; margin-left:5px;"> {streak}</span>'
             if streak > 0 else ""
         )
 
@@ -6114,8 +6114,8 @@ if volatility_hits:
         vol_html += (
             f'<div class="ticker-badge volatility-badge" style="background:{bg}; border:1px solid {border};">'
             f'<span class="ticker-name" style="color:{txt_col};">{sym}</span>'
-            f'<span class="ticker-rs" style="color:{z_col}; margin-left:4px;">· {z:.1f}z</span>'
-            f'<span class="ticker-rs" style="color:{txt_col}; margin-left:4px;">· {pct_sign}</span>'
+            f'<span class="ticker-rs" style="color:{z_col}; margin-left:4px;"> {z:.1f}z</span>'
+            f'<span class="ticker-rs" style="color:{txt_col}; margin-left:4px;"> {pct_sign}</span>'
             f'</div>'
         )
     vol_html += "</div>"
