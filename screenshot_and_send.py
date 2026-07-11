@@ -1,23 +1,19 @@
 """
 Opens the deployed Streamlit app, wakes it up if asleep, waits for the
-script to FINISH computing (the top-right "running/stop" status widget --
-the one next to the "Fork" button -- appearing then disappearing), THEN
-waits until every single section keyword/heading has actually been located
-on the page (main frame + all iframes) -- i.e. everything has fully
-rendered. Only after BOTH of those conditions are met does it start
-walking through the page section-by-section and sending each section as
-its OWN Telegram photo (never combined/stitched). No screenshots are taken
-before the run finishes and all content is confirmed loaded.
+script to FINISH computing (detected purely by the top-right "running/stop"
+status widget -- the one next to the "Fork" button -- appearing then
+disappearing), then walks through the page section-by-section and sends
+each section as its OWN Telegram photo (never combined/stitched).
 
 - Screenshot 1 is always the very top of the page.
 - Every screenshot excludes the sidebar (cropped, not scaled -- full native
   resolution of the main content column only).
 - Subsequent screenshots are triggered by scrolling to + locating each
-  keyword/heading in SECTION_KEYWORDS, in page order.
+  keyword/heading in SECTION_KEYWORDS, in page order. Each keyword is
+  RETRIED for a few seconds in case the section hasn't rendered yet.
 - Hard cutoff: the ENTIRE run (load-wait + all captures) must finish within
-  MAX_RUNTIME_SECONDS (15 minutes, to allow for sections that take up to
-  100-120s to render). If the cutoff hits mid-way, whatever hasn't been
-  captured yet is simply skipped.
+  MAX_RUNTIME_SECONDS (10 minutes). If the cutoff hits mid-way, whatever
+  hasn't been captured yet is simply skipped.
 - The whole run is wrapped in try/except with full traceback logging so a
   single unexpected error can no longer silently kill the script after
   only the first screenshot.
@@ -41,13 +37,12 @@ CHAT_ID   = os.environ["TELEGRAM_CHAT_ID"]
 VIEWPORT_WIDTH  = 1600
 VIEWPORT_HEIGHT = 1200
 
-MAX_RUNTIME_SECONDS   = 15 * 60   # hard cutoff for the ENTIRE run (raised: some sections take 100-120s to load)
+MAX_RUNTIME_SECONDS   = 15 * 60   # hard cutoff for the ENTIRE run
 SCROLL_SETTLE_SECONDS = 3         # let charts / custom HTML components re-render after a scroll
 
 # How long (seconds) to keep retrying to find a single section keyword
-# before giving up on it. Some sections are known to take 100-120s to
-# finish rendering/streaming in even after the "stop" widget has cleared,
-# so this needs real headroom above that, not just a quick poll.
+# before giving up on it. Content can still be streaming in even after
+# the "stop" widget has cleared.
 SECTION_SEARCH_TIMEOUT = 150
 SECTION_SEARCH_POLL    = 3
 
@@ -60,15 +55,6 @@ RUNNING_WIDGET_APPEAR_TIMEOUT = 45
 # Once the widget has appeared, how long to wait for it to disappear again
 # (i.e. the run to actually finish) before giving up and proceeding anyway.
 FINISH_TIMEOUT_SECONDS = 8 * 60
-
-# After the "stop" widget disappears, how long to keep polling for EVERY
-# single section keyword to actually be present on the page (main frame +
-# all iframes) before we allow any screenshot to be taken. Some individual
-# sections are known to take 100-120s to render/stream in, so this needs to
-# comfortably exceed that even if a couple of slow sections happen to load
-# one after another rather than concurrently.
-ALL_CONTENT_READY_TIMEOUT = 7 * 60
-ALL_CONTENT_READY_POLL    = 3
 
 SECTION_TOP_OFFSET_PX = 20
 
@@ -256,40 +242,7 @@ def wait_for_app_to_finish(page, timeout_seconds):
     return False
 
 
-def wait_for_all_sections_ready(page, timeout_seconds):
-    """
-    "All content loaded" gate. Poll (main frame + all iframes) until EVERY
-    keyword in SECTION_KEYWORDS has been located at least once, or until
-    timeout. No screenshots are taken until this returns (or times out).
-    Returns the set of keywords that were still missing when we stopped
-    waiting (empty set = everything loaded successfully).
-    """
-    start = time.monotonic()
-    found = set()
-    while time.monotonic() - start < timeout_seconds:
-        for keyword in SECTION_KEYWORDS:
-            if keyword in found:
-                continue
-            if find_text_anywhere(page, keyword) is not None:
-                found.add(keyword)
-                print(f"  content ready: '{keyword}' ({len(found)}/{len(SECTION_KEYWORDS)})")
-
-        missing = [k for k in SECTION_KEYWORDS if k not in found]
-        if not missing:
-            print(f"All {len(SECTION_KEYWORDS)} section keywords confirmed loaded after {time.monotonic() - start:.0f}s")
-            return set()
-
-        time.sleep(ALL_CONTENT_READY_POLL)
-
-    missing = [k for k in SECTION_KEYWORDS if k not in found]
-    print(
-        f"Timed out after {timeout_seconds}s waiting for all content to load. "
-        f"Still missing ({len(missing)}): {missing}"
-    )
-    return set(missing)
-
-
-
+def get_sidebar_right_edge(page):
     """
     Return the x-coordinate (px) where the main content area begins,
     i.e. the right edge of the sidebar (which starts with 'Settings').
@@ -403,24 +356,11 @@ def run():
 
         # ...then wait for it to disappear again -- that's what confirms the
         # app has fully finished computing/rendering.
-        finish_budget = min(FINISH_TIMEOUT_SECONDS, max(30, deadline.remaining() - 180))
+        finish_budget = min(FINISH_TIMEOUT_SECONDS, max(30, deadline.remaining() - 60))
         wait_for_app_to_finish(page, finish_budget)
 
-        # Even after the "stop" widget clears, Streamlit can still be
-        # streaming content in (charts, AI insight text, etc). Do NOT take
-        # any screenshots until every single section keyword has actually
-        # been located on the page at least once. Reserve ~150s off the
-        # remaining budget for the actual capture loop that follows.
-        content_budget = min(ALL_CONTENT_READY_TIMEOUT, max(30, deadline.remaining() - 150))
-        still_missing = wait_for_all_sections_ready(page, content_budget)
-        if still_missing:
-            print(
-                f"Proceeding to capture anyway -- {len(still_missing)} section(s) never "
-                f"confirmed loaded and may be skipped or incomplete: {sorted(still_missing)}"
-            )
-
         # One more short settle so any final chart/JS rendering (Plotly,
-        # custom components) catches up right after everything is confirmed.
+        # custom components) catches up right after the widget clears.
         time.sleep(5)
 
         hide_fixed_chrome(page)  # re-apply in case a rerun reset it
@@ -438,7 +378,7 @@ def run():
         # 2. Walk through each section keyword in order, screenshot + send individually
         for keyword in SECTION_KEYWORDS:
             if deadline.expired():
-                print("Global runtime cutoff reached -- stopping further captures.")
+                print("Global 10-minute cutoff reached -- stopping further captures.")
                 break
             capture_and_send_section(page, sidebar_right, keyword)
 
