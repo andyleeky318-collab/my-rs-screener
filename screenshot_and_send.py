@@ -1,18 +1,16 @@
 """
 Opens the deployed Streamlit app, wakes it up if asleep, waits for the
-script to FINISH computing (detected by the top-right "running/stop"
-status widget appearing then disappearing), then walks through the page
-section-by-section and sends each section as its OWN Telegram photo
-(never combined/stitched).
+script to FINISH computing (detected purely by the top-right "running/stop"
+status widget -- the one next to the "Fork" button -- appearing then
+disappearing), then walks through the page section-by-section and sends
+each section as its OWN Telegram photo (never combined/stitched).
 
 - Screenshot 1 is always the very top of the page.
-- Every screenshot excludes the sidebar (cropped, not scaled — full native
+- Every screenshot excludes the sidebar (cropped, not scaled -- full native
   resolution of the main content column only).
 - Subsequent screenshots are triggered by scrolling to + locating each
   keyword/heading in SECTION_KEYWORDS, in page order. Each keyword is
-  RETRIED for a few seconds in case the section hasn't rendered yet
-  (fixes the old bug where a still-loading page caused every section to
-  be silently skipped in under a second).
+  RETRIED for a few seconds in case the section hasn't rendered yet.
 - Hard cutoff: the ENTIRE run (load-wait + all captures) must finish within
   MAX_RUNTIME_SECONDS (10 minutes). If the cutoff hits mid-way, whatever
   hasn't been captured yet is simply skipped.
@@ -40,29 +38,24 @@ VIEWPORT_WIDTH  = 1600
 VIEWPORT_HEIGHT = 1200
 
 MAX_RUNTIME_SECONDS   = 10 * 60   # hard cutoff for the ENTIRE run
-LOAD_WAIT_TIMEOUT_CAP = 8 * 60    # never let the "wait for load" step alone eat the whole budget
 SCROLL_SETTLE_SECONDS = 3         # let charts / custom HTML components re-render after a scroll
 
 # How long (seconds) to keep retrying to find a single section keyword
 # before giving up on it. Content can still be streaming in even after
-# the top-level "running" indicator has cleared.
+# the "stop" widget has cleared.
 SECTION_SEARCH_TIMEOUT = 25
 SECTION_SEARCH_POLL    = 2
 
-# How long to wait, at the very start, for the "running" status widget to
-# actually appear at least once. If it never appears within this window we
-# assume the app was already idle/awake and move on (rather than treating
-# "widget not found yet" as "already finished").
+# How long to wait, at the very start, for the "running/stop" status widget
+# to actually appear at least once. If it never appears within this window
+# we assume the app was already idle/awake and move on (rather than
+# treating "widget not found yet" as "already finished").
 RUNNING_WIDGET_APPEAR_TIMEOUT = 45
 
-# The status widget alone proved unreliable (it can report "finished" after
-# only ~2s on a dashboard that actually takes much longer to compute). As a
-# second, authoritative gate we wait for real dashboard content — the first
-# few section keywords — to actually show up anywhere on the page,
-# including inside iframes (custom HTML/Plotly components often live in an
-# <iframe>, which plain page.get_by_text() does NOT search by default).
-CONTENT_READY_TIMEOUT = 150
-CONTENT_READY_POLL    = 3
+# Once the widget has appeared, how long to wait for it to disappear again
+# (i.e. the run to actually finish) before giving up and proceeding anyway.
+FINISH_TIMEOUT_SECONDS = 8 * 60
+
 SECTION_TOP_OFFSET_PX = 20
 
 WAKE_BUTTON_TEXTS = [
@@ -72,7 +65,7 @@ WAKE_BUTTON_TEXTS = [
     "Wake up",
 ]
 
-# Order matters — should match the order these sections physically appear
+# Order matters -- should match the order these sections physically appear
 # top-to-bottom on the page. Each entry is matched against visible text
 # (substring, case-sensitive-ish via Playwright's text engine) anywhere on
 # the page, including SVG text (e.g. Plotly chart titles).
@@ -100,10 +93,6 @@ SECTION_KEYWORDS = [
     "ETF Ratio",
     "Quant Sentiment",
 ]
-
-# Used to confirm the dashboard has actually rendered before we trust
-# "the app is done computing". We only need ONE of these to show up.
-CONTENT_READY_ANCHORS = SECTION_KEYWORDS[:5]
 
 
 class Deadline:
@@ -176,8 +165,7 @@ def find_text_anywhere(page, keyword):
     Search for `keyword` in the main page AND in every iframe on the page.
     Custom HTML/Plotly components in Streamlit are often rendered inside an
     <iframe>, and Playwright's page.get_by_text() only searches the main
-    frame by default — this is why every section was reported "not found"
-    even once the dashboard had actually rendered.
+    frame by default.
     Returns a Locator you can scroll_into_view_if_needed() on, or None.
     """
     try:
@@ -203,30 +191,12 @@ def find_text_anywhere(page, keyword):
     return None
 
 
-def wait_for_dashboard_content(page, timeout_seconds):
-    """
-    Authoritative readiness gate: poll (main frame + all iframes) until any
-    of CONTENT_READY_ANCHORS actually appears, or timeout. This is what
-    decides whether the page is truly ready to screenshot — NOT the
-    stStatusWidget, which proved unreliable (it can report the app as
-    'finished' within ~2s on a dashboard that genuinely takes much longer).
-    """
-    start = time.monotonic()
-    while time.monotonic() - start < timeout_seconds:
-        for anchor in CONTENT_READY_ANCHORS:
-            if find_text_anywhere(page, anchor) is not None:
-                print(f"Dashboard content confirmed ready after {time.monotonic() - start:.0f}s (found '{anchor}')")
-                return True
-        time.sleep(CONTENT_READY_POLL)
-    print(f"Dashboard content never confirmed after {timeout_seconds}s — proceeding anyway (screenshots may be incomplete).")
-    return False
-
-
 def is_app_running(page):
     """
-    Streamlit shows a status widget (spinner + Stop button) in the top-right
-    corner while the script is actively executing. It disappears once the
-    run fully completes. We treat it being absent/invisible as "not running".
+    Streamlit shows a status widget (spinner + "Stop" button, next to the
+    "Fork" button) in the top-right corner while the script is actively
+    executing. It disappears once the run fully completes. This is the
+    ONLY signal we use to decide the app has finished rendering.
     """
     try:
         widget = page.locator('[data-testid="stStatusWidget"]')
@@ -239,11 +209,10 @@ def is_app_running(page):
 
 def wait_for_running_widget_to_appear(page, timeout_seconds):
     """
-    Wait for the running/stop indicator to show up at least once. This
-    prevents the old bug where "widget not found yet" (because the page is
-    still booting) was mistaken for "the run already finished".
-    Returns True if it appeared, False if it never showed up within the
-    timeout (in which case the app was probably already idle/awake).
+    Wait for the "stop" indicator to show up at least once. Prevents
+    mistaking "hasn't started yet" for "already finished".
+    Returns True if it appeared, False if it never showed (app was
+    probably already idle/awake).
     """
     start = time.monotonic()
     while time.monotonic() - start < timeout_seconds:
@@ -251,32 +220,25 @@ def wait_for_running_widget_to_appear(page, timeout_seconds):
             print(f"Detected app actively running after {time.monotonic() - start:.0f}s")
             return True
         time.sleep(2)
-    print("Running indicator never appeared — assuming app was already idle.")
+    print("Running indicator never appeared -- assuming app was already idle.")
     return False
 
 
 def wait_for_app_to_finish(page, timeout_seconds):
     """
-    First wait (bounded) for the running indicator to appear at all, then
-    poll until it disappears (script finished), or timeout.
+    Poll until the "stop" widget disappears (script finished), confirming
+    twice in a row to avoid a brief gap between reruns being mistaken for
+    "done", or until timeout.
     """
-    appear_budget = min(RUNNING_WIDGET_APPEAR_TIMEOUT, max(10, timeout_seconds // 3))
-    was_running = wait_for_running_widget_to_appear(page, appear_budget)
-
-    remaining_budget = timeout_seconds - appear_budget
-    if remaining_budget <= 0:
-        remaining_budget = 30
-
     start = time.monotonic()
-    while time.monotonic() - start < remaining_budget:
+    while time.monotonic() - start < timeout_seconds:
         if not is_app_running(page):
-            # Confirm it's really finished and not just a brief gap between reruns
             time.sleep(2)
             if not is_app_running(page):
-                print(f"App finished computing after {time.monotonic() - start:.0f}s (was_running={was_running})")
+                print(f"App finished computing after {time.monotonic() - start:.0f}s")
                 return True
         time.sleep(3)
-    print("Timed out waiting for the app to finish computing — proceeding anyway.")
+    print("Timed out waiting for the app to finish computing -- proceeding anyway.")
     return False
 
 
@@ -300,7 +262,7 @@ def get_sidebar_right_edge(page):
 def screenshot_main_content(page, sidebar_right):
     """
     Screenshot the current viewport, clipped to exclude the sidebar.
-    This is a native-resolution crop (via Playwright's clip option) —
+    This is a native-resolution crop (via Playwright's clip option) --
     no resizing, scaling, or stitching involved.
     """
     clip = {
@@ -330,8 +292,7 @@ def capture_and_send_section(page, sidebar_right, keyword):
     """
     Poll for up to SECTION_SEARCH_TIMEOUT seconds looking for the keyword
     (main frame + all iframes), rather than checking once. Streamlit can
-    still be streaming content in even after the top-level running
-    indicator has cleared.
+    still be streaming content in even after the "stop" widget has cleared.
     """
     start = time.monotonic()
     target = None
@@ -342,7 +303,7 @@ def capture_and_send_section(page, sidebar_right, keyword):
         time.sleep(SECTION_SEARCH_POLL)
 
     if target is None:
-        print(f"Section not found after {SECTION_SEARCH_TIMEOUT}s: '{keyword}' — skipping.")
+        print(f"Section not found after {SECTION_SEARCH_TIMEOUT}s: '{keyword}' -- skipping.")
         return
 
     try:
@@ -362,7 +323,7 @@ def capture_and_send_section(page, sidebar_right, keyword):
         if offset:
             page.evaluate(f"window.scrollBy(0, -{offset})")
     except Exception as e:
-        print(f"Could not scroll to '{keyword}': {e} — skipping.")
+        print(f"Could not scroll to '{keyword}': {e} -- skipping.")
         return
 
     time.sleep(SCROLL_SETTLE_SECONDS)
@@ -381,26 +342,25 @@ def run():
 
         if try_wake_app(page):
             print("Clicked wake-up prompt, app should now start booting...")
-            # Give the rerun a few seconds to actually kick off before we
-            # start polling for the running indicator.
             time.sleep(5)
         else:
             print("No wake-up prompt detected, app was likely already awake.")
 
         hide_fixed_chrome(page)
 
-        # Status widget is used only as an informational signal now — it
-        # proved unreliable as the sole gate (reported "finished" after
-        # only ~2s on a dashboard that genuinely takes much longer).
-        wait_for_running_widget_to_appear(page, min(RUNNING_WIDGET_APPEAR_TIMEOUT, max(10, deadline.remaining() // 4)))
+        # Wait for the "stop" widget (next to "Fork") to appear at least
+        # once -- this is the ONLY readiness signal we use now.
+        wait_for_running_widget_to_appear(
+            page, min(RUNNING_WIDGET_APPEAR_TIMEOUT, max(10, deadline.remaining() // 4))
+        )
 
-        # Authoritative gate: wait for real dashboard content to actually
-        # appear (checked across the main frame AND all iframes).
-        content_budget = min(CONTENT_READY_TIMEOUT, max(30, deadline.remaining() - 90))
-        wait_for_dashboard_content(page, content_budget)
+        # ...then wait for it to disappear again -- that's what confirms the
+        # app has fully finished computing/rendering.
+        finish_budget = min(FINISH_TIMEOUT_SECONDS, max(30, deadline.remaining() - 60))
+        wait_for_app_to_finish(page, finish_budget)
 
         # One more short settle so any final chart/JS rendering (Plotly,
-        # custom components) catches up after the text anchor appeared.
+        # custom components) catches up right after the widget clears.
         time.sleep(5)
 
         hide_fixed_chrome(page)  # re-apply in case a rerun reset it
@@ -411,14 +371,14 @@ def run():
         if not deadline.expired():
             capture_and_send_top(page, sidebar_right)
         else:
-            print("Deadline already reached before first capture — aborting.")
+            print("Deadline already reached before first capture -- aborting.")
             browser.close()
             return
 
         # 2. Walk through each section keyword in order, screenshot + send individually
         for keyword in SECTION_KEYWORDS:
             if deadline.expired():
-                print("Global 10-minute cutoff reached — stopping further captures.")
+                print("Global 10-minute cutoff reached -- stopping further captures.")
                 break
             capture_and_send_section(page, sidebar_right, keyword)
 
@@ -431,7 +391,7 @@ def main():
     try:
         run()
     except Exception:
-        print("FATAL ERROR — run() raised an exception. Full traceback below:")
+        print("FATAL ERROR -- run() raised an exception. Full traceback below:")
         traceback.print_exc()
 
 
