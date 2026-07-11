@@ -256,7 +256,7 @@ def get_sidebar_right_edge(page):
                 return int(box["x"] + box["width"])
     except Exception:
         pass
-    return 0
+    return 240
 
 
 def screenshot_main_content(page, sidebar_right):
