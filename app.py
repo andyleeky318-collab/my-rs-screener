@@ -302,9 +302,9 @@ LIME_STOCKS1 = [
     'IPAY', 'ITB', 'JETS', 'KRE', 'KWEB', 'LIT', 'MAGS',
     'PBW', 'REMX', 'SHLD', 'SIL', 'SLX', 'SMH', 'TAN',
     'UFO', 'URA', 'USO', 'VTV', 'VUG', 'WGMI', 'XBI',
-    'XME', 'XRT', 'XTL', 'SPY', 'QQQ', 'FOTO', 'KBE', 'NLR', 
+    'XME', 'XRT', 'XTL', 'SPY', 'QQQ', 'RSP', 'FOTO', 'KBE', 'NLR', 
     'CLOU', 'XHB', 'BUG', 'HACK', 'ITA', 'IAT', 'XOP', 'NASA', 
-    'RSP', 'XTN', 'IYT', 'BOAT', 'MOO', 'BLOK', 'PICK'
+    'XTN', 'IYT', 'BOAT', 'MOO', 'BLOK', 'PICK'
 ]
 
 # ============================================================
@@ -3453,18 +3453,18 @@ if all_data:
             industries=combined_industries
         )
 
-    if vol_flagged_industries:
-        all_vol_tickers = set()
-        for tickers_list in industry_vol_tickers.values():
-            all_vol_tickers.update(tickers_list)
-        total_vol_ticker_count = len(all_vol_tickers)
+    all_vol_tickers = set()
+    for tickers_list in industry_vol_tickers.values():
+        all_vol_tickers.update(tickers_list)
+    total_vol_ticker_count = len(all_vol_tickers)
 
-        dist_html = (
-            f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-            f"📊 Distribution / Stage 3 "
-            f"<span style='color:#FF4B4B;'>({len(vol_flagged_industries)} industries, {total_vol_ticker_count} tickers)</span>"
-            f"</div>"
-        )
+    dist_html = (
+        f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
+        f"📊 Distribution / Stage 3 "
+        f"<span style='color:#FF4B4B;'>({len(vol_flagged_industries)} industries, {total_vol_ticker_count} tickers)</span>"
+        f"</div>"
+    )
+    if vol_flagged_industries:
         # Order by current table rank so it reads top-to-bottom like the main table
         sorted_flagged = sorted(
             vol_flagged_industries,
@@ -3486,7 +3486,7 @@ if all_data:
                 f"<span style='margin-left:6px;'>{ticker_badges}</span>"
                 f"</div>"
             )
-        st.markdown(dist_html, unsafe_allow_html=True)
+    st.markdown(dist_html, unsafe_allow_html=True)
 
     st.markdown(
         f'<div style="text-align: right; font-size: 20px; color: #888888; margin-bottom: 4px; font-family: monospace;">'
