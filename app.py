@@ -3067,10 +3067,11 @@ if all_data:
     .ticker-badge { 
         display: inline-block; 
         margin: 1px 3px; 
-        padding: 1px 5px; 
+        padding: 2px 6px; 
         border: 1px solid #444; 
-        border-radius: 3px; 
-        font-size: 11px; 
+        border-radius: 4px; 
+        font-size: 12px; 
+        line-height: 1.2; 
         background-color: #1e1e1e; 
         color: #eee; 
         white-space: nowrap;
