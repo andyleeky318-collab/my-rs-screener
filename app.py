@@ -4029,6 +4029,7 @@ def compute_setup_avgrank_history(all_data_snapshot, ticker_dfs_all, benchmark_d
             records.append({
                 "Date": target_date.strftime("%Y-%m-%d"),
                 "Avg Rank": avg_rank,
+                "Setup Count": setup_count,
             })
 
         return pd.DataFrame(records)
@@ -6127,19 +6128,33 @@ if not setup_avgrank_hist.empty:
     min_rank = chart_df_rank["Avg Rank"].min()
     min_idx = chart_df_rank["Avg Rank"].idxmin()
 
-    chart_df_rank["Bar_Color"] = "#29B5E8"
-    chart_df_rank.loc[min_idx, "Bar_Color"] = "#90EE90"  # overall lowest bar (best rank)
-
+    bar_colors = ["#29B5E8"] * len(chart_df_rank)
+    bar_colors[chart_df_rank.index.get_loc(min_idx)] = "#90EE90"  # overall lowest bar (best rank)
     if today_rank == min_rank:
-        chart_df_rank.iloc[-1, chart_df_rank.columns.get_loc("Bar_Color")] = "#FF4B4B"  # today is also the lowest
+        bar_colors[-1] = "#FF4B4B"  # today is also the lowest
 
-    st.bar_chart(
-        data=chart_df_rank,
-        x="Date",
-        y="Avg Rank",
-        color="Bar_Color",
-        use_container_width=True
+    fig_setup = go.Figure()
+    fig_setup.add_trace(go.Bar(
+        x=chart_df_rank["Date"], y=chart_df_rank["Avg Rank"],
+        name="Avg Rank", marker_color=bar_colors, yaxis="y1",
+    ))
+    fig_setup.add_trace(go.Scatter(
+        x=chart_df_rank["Date"], y=chart_df_rank["Setup Count"],
+        name="Setup Count", mode="lines", line=dict(color="#FFD700", width=2),
+        yaxis="y2",
+    ))
+    fig_setup.update_layout(
+        height=320,
+        margin=dict(l=20, r=20, t=10, b=20),
+        plot_bgcolor="rgba(20,22,30,1)",
+        paper_bgcolor="rgba(13,17,23,0)",
+        font=dict(color="#cccccc"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="center", x=0.5),
+        xaxis=dict(showgrid=False, tickfont=dict(size=9, color="#888888")),
+        yaxis=dict(title="Avg Rank", showgrid=True, gridcolor="rgba(120,120,120,0.15)", tickfont=dict(color="#888888")),
+        yaxis2=dict(title="Setup Count", overlaying="y", side="right", showgrid=False, tickfont=dict(color="#FFD700")),
     )
+    st.plotly_chart(fig_setup, use_container_width=True)
 else:
     st.info("Insufficient data to compute Setup Avg Rank history.")
 
