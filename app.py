@@ -3929,6 +3929,133 @@ def compute_historical_know_counts(stocks_list, _ticker_dfs):
         return pd.DataFrame()
 
 @st.cache_data(ttl=3600)
+def compute_global_setup_count_history(stocks_list, _ticker_dfs):
+    """
+    Vectorized daily count of tickers meeting ANY of the three setup
+    conditions (21ema_cloud, 21ema_wick, 50ma_bounce) — mirrors the scalar
+    per-ticker logic inside get_rs_and_cloud_data_cached, but evaluated
+    across the FULL time series so we get a real day-by-day Setup Count
+    history (not just today's frozen ticker list re-ranked historically).
+    """
+    try:
+        if not _ticker_dfs:
+            return pd.DataFrame()
+
+        all_setup_series = []
+
+        for ticker in stocks_list:
+            df = _ticker_dfs.get(ticker)
+            if df is None or len(df) < 260:
+                continue
+            try:
+                close = df['Close']; high = df['High']; low = df['Low']; open_ = df['Open']
+
+                ema21_close  = close.ewm(span=21, adjust=False).mean()
+                ema21_low_s  = low.ewm(span=21, adjust=False).mean()
+                ema21_high_s = high.ewm(span=21, adjust=False).mean()
+                sma50  = close.rolling(50).mean()
+                sma150 = close.rolling(150).mean()
+                sma200 = close.rolling(200).mean()
+
+                ma50Rising = (sma50 > sma50.shift(1)) & (sma50.shift(1) > sma50.shift(2))
+
+                powerma  = close.ewm(span=50, adjust=False).mean()
+                gradient = powerma.diff()
+
+                tr = pd.concat([
+                    high - low,
+                    (high - close.shift(1)).abs(),
+                    (low - close.shift(1)).abs()
+                ], axis=1).max(axis=1)
+                atr = tr.rolling(14).mean()
+                atrPercent = (atr / close) * 100
+
+                atr21_R = (((close - ema21_close) / close) * 100) / (atrPercent + 1e-6)
+                atr50_R = (((close - sma50) / close) * 100) / (atrPercent + 1e-6)
+                emaDistPercent = ((close - ema21_low_s) / close) * 100
+
+                hl_ratio   = high / low
+                adrPercent = 100 * (hl_ratio.rolling(20).mean() - 1)
+
+                cond1 = (adrPercent >= 2.45) & (adrPercent < 8.05)
+                cond2 = (atr21_R >= -0.5) & (atr21_R <= 1)
+                cond3 = (atr50_R >= 0) & (atr50_R <= 3)
+                cond4 = (emaDistPercent > 0) & (emaDistPercent <= 8)
+                pbb_cond2 = gradient >= 0
+
+                c_sma200_22 = sma200.shift(22)
+                c_highest   = high.rolling(260).max()
+                c_lowest    = low.rolling(260).min()
+                pine7_s = (
+                    ((close > sma150) & (close > sma200)).astype(int)
+                    + (sma150 > sma200).astype(int)
+                    + (sma200 > c_sma200_22).astype(int)
+                    + (sma150 > sma200).astype(int)
+                    + (close > sma50).astype(int)
+                    + (((close / c_lowest) - 1) * 100 >= 25).astype(int)
+                    + ((1 - (close / c_highest)) * 100 <= 25).astype(int)
+                ) == 7
+
+                buyable = (
+                    cond1 & cond2 & cond3 & cond4 & pbb_cond2 &
+                    ma50Rising & (close >= 20) & pine7_s
+                )
+
+                # 21 EMA Cloud finalCondition (mirrors scalar block)
+                insideCloud = (ema21_low_s <= close) & (close <= ema21_high_s)
+                insideCloud3Days = insideCloud & insideCloud.shift(1) & insideCloud.shift(2)
+                insideCloud2DaysPositive = (
+                    insideCloud & insideCloud.shift(1) &
+                    (close > close.shift(1)) & (close > open_)
+                )
+                bodyTop    = pd.concat([open_, close], axis=1).max(axis=1)
+                bodyBottom = pd.concat([open_, close], axis=1).min(axis=1)
+                bodySize   = bodyTop - bodyBottom
+                insideBody = (
+                    pd.concat([bodyTop, ema21_high_s], axis=1).min(axis=1)
+                    - pd.concat([bodyBottom, ema21_low_s], axis=1).max(axis=1)
+                ).clip(lower=0)
+                insidePct = (insideBody / bodySize.replace(0, np.nan)).fillna(0)
+                bodyCloud3Days = (insidePct >= 0.70) & (insidePct.shift(1) >= 0.70) & (insidePct.shift(2) >= 0.70)
+                finalCondition = bodyCloud3Days | insideCloud3Days | insideCloud2DaysPositive
+
+                cloud21ema_cond = buyable & finalCondition & (close >= 20)
+
+                # 21 EMA Wick condition
+                rangeToday = high - low
+                lowerWick  = pd.concat([open_, close], axis=1).min(axis=1) - low
+                longWick   = (lowerWick / rangeToday.replace(0, np.nan) > 0.5).fillna(False)
+                cloud_wick_cond = buyable & longWick & (close >= 20)
+
+                # 50MA Bounce condition
+                fiftyday_percent  = (close - sma50) / sma50 * 100
+                fiftyday_percent2 = (fiftyday_percent * 10).fillna(0).astype(int) / 10
+                touchMA50_yest    = low.shift(1) <= sma50.shift(1)
+                recover1          = touchMA50_yest & (close > sma50)
+                ma50_bounce_cond = (
+                    recover1 & cond1 & (fiftyday_percent2 <= 8) &
+                    ma50Rising & (close >= 20) & pine7_s
+                )
+
+                setup_today = (cloud21ema_cond | cloud_wick_cond | ma50_bounce_cond).astype(int)
+                all_setup_series.append(setup_today)
+            except Exception:
+                continue
+
+        if not all_setup_series:
+            return pd.DataFrame()
+
+        combined = pd.concat(all_setup_series, axis=1).fillna(0)
+        daily_counts = combined.sum(axis=1)
+
+        result = daily_counts.tail(60).reset_index()
+        result.columns = ["Date", "Setup Count"]
+        result["Date"] = result["Date"].dt.strftime("%Y-%m-%d")
+        return result
+    except Exception:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=3600)
 def compute_setup_avgrank_history(all_data_snapshot, ticker_dfs_all, benchmark_df_all, rs_length, setup_tickers, ticker_industry_groups):
     try:
         if not ticker_dfs_all or not all_data_snapshot or not setup_tickers:
@@ -4029,7 +4156,6 @@ def compute_setup_avgrank_history(all_data_snapshot, ticker_dfs_all, benchmark_d
             records.append({
                 "Date": target_date.strftime("%Y-%m-%d"),
                 "Avg Rank": avg_rank,
-                "Setup Count": setup_count,
             })
 
         return pd.DataFrame(records)
@@ -6120,10 +6246,18 @@ with st.spinner("Computing Setup Rank history..."):
         tuple(sorted(global_setup_tickers)), global_setup_ticker_groups
     )
 
+with st.spinner("Computing Setup Count history..."):
+    setup_count_hist = timed(
+        "compute_global_setup_count_history",
+        compute_global_setup_count_history,
+        stocks_tuple, ticker_dfs_shared
+    )
+
 st.markdown(f"#### 📐 Setup Quality")
 
 if not setup_avgrank_hist.empty:
-    chart_df_rank = setup_avgrank_hist.copy()
+    chart_df_rank = setup_avgrank_hist.merge(setup_count_hist, on="Date", how="left")
+    chart_df_rank["Setup Count"] = chart_df_rank["Setup Count"].ffill().fillna(0)
     today_rank = chart_df_rank["Avg Rank"].iloc[-1]
     min_rank = chart_df_rank["Avg Rank"].min()
     min_idx = chart_df_rank["Avg Rank"].idxmin()
