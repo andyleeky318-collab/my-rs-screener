@@ -2783,27 +2783,6 @@ Be direct, name industries explicitly, no fluff, no repeating the prompt.
     else:
         failures["Groq"] = "No GROQ_API_KEY"
 
-    github_token = st.secrets.get("GITHUB_MODELS_TOKEN")
-    if github_token:
-        try:
-            from openai import OpenAI as OpenAIClient
-            github_client = OpenAIClient(api_key=github_token, base_url="https://models.inference.ai.azure.com")
-            completion = github_client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
-                          {"role": "user", "content": prompt}],
-                max_tokens=400, temperature=0.4,
-            )
-            summary = format_unavailable_reasons(failures)
-            return f"⬜ **GitHub Models / gpt-4o-mini** *({summary})*\n\n{completion.choices[0].message.content}"
-        except Exception as e:
-            err = str(e)
-            if not is_transient(err):
-                return f"🔴 **GitHub Models error (non-transient)**\n\n{err}"
-            failures["GitHub Models"] = err[:120]
-    else:
-        failures["GitHub Models"] = "No GITHUB_MODELS_TOKEN"
-
     openrouter_key = st.secrets.get("OPENROUTER_API_KEY")
     if openrouter_key:
         try:
@@ -2827,6 +2806,27 @@ Be direct, name industries explicitly, no fluff, no repeating the prompt.
             failures["OpenRouter"] = err[:120]
     else:
         failures["OpenRouter"] = "No OPENROUTER_API_KEY"
+
+    github_token = st.secrets.get("GITHUB_MODELS_TOKEN")
+    if github_token:
+        try:
+            from openai import OpenAI as OpenAIClient
+            github_client = OpenAIClient(api_key=github_token, base_url="https://models.inference.ai.azure.com")
+            completion = github_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
+                          {"role": "user", "content": prompt}],
+                max_tokens=400, temperature=0.4,
+            )
+            summary = format_unavailable_reasons(failures)
+            return f"⬜ **GitHub Models / gpt-4o-mini** *({summary})*\n\n{completion.choices[0].message.content}"
+        except Exception as e:
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **GitHub Models error (non-transient)**\n\n{err}"
+            failures["GitHub Models"] = err[:120]
+    else:
+        failures["GitHub Models"] = "No GITHUB_MODELS_TOKEN"
 
     failure_lines = "\n".join(f"- {p}: {r}" for p, r in failures.items())
     return f"🔴 **All AI providers failed**\n\n{failure_lines}"
@@ -5030,39 +5030,7 @@ Be direct, use industry names, no fluff.
     else:
         failures["Groq"] = "No GROQ_API_KEY in secrets"
 
-    # ── Provider 3: GitHub Models ─────────────────────────────────────────
-    # Free while in preview (as of 2025). Uses OpenAI SDK + Azure endpoint.
-    # Available models: gpt-4o, gpt-4o-mini, Phi-3, Mistral-large, Llama etc.
-    # Full list: github.com/marketplace/models
-    github_token = st.secrets.get("GITHUB_MODELS_TOKEN")
-    if github_token:
-        try:
-            from openai import OpenAI as OpenAIClient
-            github_client = OpenAIClient(
-                api_key=github_token,
-                base_url="https://models.inference.ai.azure.com",
-            )
-            completion = github_client.chat.completions.create(
-                model="gpt-4o-mini",           # or "Meta-Llama-3.1-70B-Instruct"
-                messages=[
-                    {"role": "system", "content": "You are a concise IBD-style market analyst."},
-                    {"role": "user",   "content": prompt},
-                ],
-                max_tokens=600,
-                temperature=0.4,
-            )
-            result = completion.choices[0].message.content
-            summary = format_unavailable_reasons(failures)
-            return f"⬜ **GitHub Models / gpt-4o-mini** *({summary})*\n\n{result}"
-        except Exception as e:
-            err = str(e)
-            if not is_transient(err):
-                return f"🔴 **GitHub Models error (non-transient)**\n\n{err}"
-            failures["GitHub Models"] = err[:120]
-    else:
-        failures["GitHub Models"] = "No GITHUB_MODELS_TOKEN in secrets"
-
-    # ── Provider 4: OpenRouter ────────────────────────────────────────────
+    # ── Provider 3: OpenRouter ────────────────────────────────────────────
     # Pay-per-token but has generous free models (look for ":free" suffix).
     # Free models as of 2025: meta-llama/llama-3.1-8b-instruct:free,
     #   mistralai/mistral-7b-instruct:free, google/gemma-3-27b-it:free
@@ -5098,6 +5066,38 @@ Be direct, use industry names, no fluff.
             failures["OpenRouter"] = err[:120]
     else:
         failures["OpenRouter"] = "No OPENROUTER_API_KEY in secrets"
+
+    # ── Provider 4: GitHub Models ─────────────────────────────────────────
+    # Free while in preview (as of 2025). Uses OpenAI SDK + Azure endpoint.
+    # Available models: gpt-4o, gpt-4o-mini, Phi-3, Mistral-large, Llama etc.
+    # Full list: github.com/marketplace/models
+    github_token = st.secrets.get("GITHUB_MODELS_TOKEN")
+    if github_token:
+        try:
+            from openai import OpenAI as OpenAIClient
+            github_client = OpenAIClient(
+                api_key=github_token,
+                base_url="https://models.inference.ai.azure.com",
+            )
+            completion = github_client.chat.completions.create(
+                model="gpt-4o-mini",           # or "Meta-Llama-3.1-70B-Instruct"
+                messages=[
+                    {"role": "system", "content": "You are a concise IBD-style market analyst."},
+                    {"role": "user",   "content": prompt},
+                ],
+                max_tokens=600,
+                temperature=0.4,
+            )
+            result = completion.choices[0].message.content
+            summary = format_unavailable_reasons(failures)
+            return f"⬜ **GitHub Models / gpt-4o-mini** *({summary})*\n\n{result}"
+        except Exception as e:
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **GitHub Models error (non-transient)**\n\n{err}"
+            failures["GitHub Models"] = err[:120]
+    else:
+        failures["GitHub Models"] = "No GITHUB_MODELS_TOKEN in secrets"
 
     # ── All providers failed ──────────────────────────────────────────────
     failure_lines = "\n".join(f"- {p}: {r}" for p, r in failures.items())
@@ -5187,28 +5187,6 @@ Be direct, name industries/tickers explicitly, no fluff, no repeating the prompt
     else:
         failures["Groq"] = "No GROQ_API_KEY"
 
-    # ── GitHub Models ──
-    github_token = st.secrets.get("GITHUB_MODELS_TOKEN")
-    if github_token:
-        try:
-            from openai import OpenAI as OpenAIClient
-            github_client = OpenAIClient(api_key=github_token, base_url="https://models.inference.ai.azure.com")
-            completion = github_client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
-                          {"role": "user", "content": prompt}],
-                max_tokens=350, temperature=0.4,
-            )
-            summary = format_unavailable_reasons(failures)
-            return f"⬜ **GitHub Models / gpt-4o-mini** *({summary})*\n\n{completion.choices[0].message.content}"
-        except Exception as e:
-            err = str(e)
-            if not is_transient(err):
-                return f"🔴 **GitHub Models error (non-transient)**\n\n{err}"
-            failures["GitHub Models"] = err[:120]
-    else:
-        failures["GitHub Models"] = "No GITHUB_MODELS_TOKEN"
-
     # ── OpenRouter ──
     openrouter_key = st.secrets.get("OPENROUTER_API_KEY")
     if openrouter_key:
@@ -5233,6 +5211,28 @@ Be direct, name industries/tickers explicitly, no fluff, no repeating the prompt
             failures["OpenRouter"] = err[:120]
     else:
         failures["OpenRouter"] = "No OPENROUTER_API_KEY"
+
+    # ── GitHub Models ──
+    github_token = st.secrets.get("GITHUB_MODELS_TOKEN")
+    if github_token:
+        try:
+            from openai import OpenAI as OpenAIClient
+            github_client = OpenAIClient(api_key=github_token, base_url="https://models.inference.ai.azure.com")
+            completion = github_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
+                          {"role": "user", "content": prompt}],
+                max_tokens=350, temperature=0.4,
+            )
+            summary = format_unavailable_reasons(failures)
+            return f"⬜ **GitHub Models / gpt-4o-mini** *({summary})*\n\n{completion.choices[0].message.content}"
+        except Exception as e:
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **GitHub Models error (non-transient)**\n\n{err}"
+            failures["GitHub Models"] = err[:120]
+    else:
+        failures["GitHub Models"] = "No GITHUB_MODELS_TOKEN"
 
     failure_lines = "\n".join(f"- {p}: {r}" for p, r in failures.items())
     return f"🔴 **All AI providers failed**\n\n{failure_lines}"
