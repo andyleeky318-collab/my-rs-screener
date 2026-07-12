@@ -11,6 +11,7 @@ import requests
 from bs4 import BeautifulSoup
 import datetime
 import base64
+from zoneinfo import ZoneInfo
 
 GITHUB_API = "https://api.github.com"
 
@@ -215,7 +216,7 @@ INDUSTRIES = {
     'AUTO MANUFACTURERS': ['TSLA', 'GM', 'F', 'RIVN'],
     'TRNSPRT-EQP MFG': ['OSK', 'HOG', 'WAB', 'TEX', 'TRN', 'ALG'],
     'LEISRE-MVIES & REL': ['DIS', 'LYV', 'FWONA', 'TKO', 'MSGS', 'FUN', 'CNK', 'PRKS', 'MANU', 'BATRA'],
-    'INSRNCE-DIVRSIFIED': ['PGR', 'AFL', 'MET', 'ACGL', 'HIG', 'CINF', 'RGA', 'CNA', 'UNM', 'KNSL', 'GL', 'RLI', 'AXS', 'BWIN', 'ACT', 'FG', 'WTM', 'CNO'],
+    'INSRNCE-DIVRSIFIED': ['KIE', 'PGR', 'AFL', 'MET', 'ACGL', 'HIG', 'CINF', 'RGA', 'CNA', 'UNM', 'KNSL', 'GL', 'RLI', 'AXS', 'BWIN', 'ACT', 'FG', 'WTM', 'CNO'],
     'OFFICE SUPPLIES MFG': ['HNI', 'MLKN', 'ACCO'],
     'OIL&GAS-TRNSPRT/PIP': ['EPD', 'WMB', 'ET', 'OKE', 'KMI', 'MPLX', 'LNG', 'WES', 'PAA', 'DTM', 'KNTK', 'AM', 'SOBO', 'PAGP', 'DKL'],
     'OIL&GAS-RFING/MKT': ['PSX', 'MPC', 'VLO', 'DINO', 'IEP', 'PBF', 'CVI', 'SUN'],
@@ -6953,3 +6954,121 @@ if early_bull_list:
     st.markdown(html_eb, unsafe_allow_html=True)
 else:
     st.info("No active setups discovered.")
+
+# ==============================================================================
+# 13. SEND SETUP SUMMARY TEXT DIRECTLY TO TELEGRAM
+# ==============================================================================
+def send_telegram_text(text, bot_token, chat_id, parse_mode="HTML"):
+    """Send a plain text message to Telegram, chunked under the 4096-char limit."""
+    if not text:
+        return
+    MAX_LEN = 4000  # leave headroom below Telegram's 4096 hard limit
+
+    chunks = []
+    current = ""
+    for line in text.split("\n"):
+        if len(current) + len(line) + 1 > MAX_LEN:
+            chunks.append(current)
+            current = line
+        else:
+            current = f"{current}\n{line}" if current else line
+    if current:
+        chunks.append(current)
+
+    for chunk in chunks:
+        try:
+            resp = requests.post(
+                f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                data={
+                    "chat_id": chat_id,
+                    "text": chunk,
+                    "parse_mode": parse_mode,
+                    "disable_web_page_preview": True,
+                },
+                timeout=20,
+            )
+            if resp.status_code != 200:
+                print(f"Telegram sendMessage failed: {resp.status_code} {resp.text}")
+        except Exception as e:
+            print(f"Telegram sendMessage error: {e}")
+
+
+def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
+                               industry_rank_map, all_data,
+                               cloud21ema_all, cloudwick_all, ma50bounce_all,
+                               ticker_dfs_shared):
+    if not global_setup_tickers:
+        return None
+
+    # Global RS lookup
+    global_rs_lookup = {}
+    for item in all_data:
+        for t, s in zip(item["Tickers"]["Ticker"], item["Tickers"]["RS Score"]):
+            global_rs_lookup[t] = s
+
+    # Risk % to 21ema low
+    risk_map = {}
+    for sym in global_setup_tickers:
+        try:
+            df = ticker_dfs_shared.get(sym)
+            if df is None or len(df) < 21:
+                continue
+            close = df['Close']
+            low   = df['Low']
+            ema21_low = low.ewm(span=21, adjust=False).mean().iloc[-1]
+            c = close.iloc[-1]
+            risk_map[sym] = round(float(((c - ema21_low) / c) * 100), 1)
+        except Exception:
+            continue
+
+    rows = []
+    for sym in global_setup_tickers:
+        industries = global_setup_ticker_groups.get(sym, [])
+        ranks = [(ind, industry_rank_map[ind]) for ind in industries if ind in industry_rank_map]
+        best_industry, best_rank = min(ranks, key=lambda x: x[1]) if ranks else ("-", 9999)
+
+        setup_types = []
+        if sym in cloud21ema_all: setup_types.append("21ema_cloud")
+        if sym in cloudwick_all:  setup_types.append("21ema_wick")
+        if sym in ma50bounce_all: setup_types.append("50ma_bounce")
+
+        rows.append({
+            "rank": best_rank,
+            "ticker": sym,
+            "rs": global_rs_lookup.get(sym, 0),
+            "setups": setup_types,
+            "risk": risk_map.get(sym),
+        })
+
+    rows.sort(key=lambda r: r["rank"])
+
+    lines = [f"<b>📋 Setup Summary ({len(rows)})</b>", ""]
+    for r in rows:
+        setup_str = "/".join(r["setups"])
+        risk_str  = f'{r["risk"]:.1f}%' if r["risk"] is not None else "n/a"
+        lines.append(
+            f'#{r["rank"]} | {r["ticker"]} ({r["rs"]:.0f}) | '
+            f'setup: {setup_str}, risk {risk_str} to 21ema low'
+        )
+
+    return "\n".join(lines)
+
+sgt_now = datetime.now(ZoneInfo("Asia/Singapore"))
+in_send_window = (sgt_now.hour == 17)  # 17:00–17:59 SGT
+
+today_str = sgt_now.strftime("%Y-%m-%d")
+setup_summary_sig = f"{today_str}_{sorted(global_setup_tickers)}"
+
+if in_send_window and st.session_state.get("telegram_setup_summary_sig") != setup_summary_sig:
+    summary_text = build_setup_summary_text(
+        global_setup_tickers, global_setup_ticker_groups, industry_rank_map,
+        all_data, cloud21ema_all, cloudwick_all, ma50bounce_all, ticker_dfs_shared
+    )
+    tg_token = st.secrets.get("TELEGRAM_BOT_TOKEN")
+    tg_chat  = st.secrets.get("TELEGRAM_CHAT_ID")
+
+    if summary_text and tg_token and tg_chat:
+        send_telegram_text(summary_text, tg_token, tg_chat)
+        st.session_state["telegram_setup_summary_sig"] = setup_summary_sig
+    elif not (tg_token and tg_chat):
+        st.sidebar.warning("Telegram secrets missing — Setup Summary not sent.")
