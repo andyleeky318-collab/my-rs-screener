@@ -7054,7 +7054,7 @@ def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
     return "\n".join(lines)
 
 sgt_now = datetime.datetime.now(ZoneInfo("Asia/Singapore"))
-in_send_window = (sgt_now.hour == 7)  # 17:00–17:59 SGT
+in_send_window = (7 <= sgt_now.hour <= 8)  # 17:00–17:59 SGT
 
 today_str = sgt_now.strftime("%Y-%m-%d")
 setup_summary_sig = f"{today_str}_{sorted(global_setup_tickers)}"
