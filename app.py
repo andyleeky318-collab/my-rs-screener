@@ -11,7 +11,6 @@ import requests
 from bs4 import BeautifulSoup
 import datetime
 import base64
-from datetime import datetime
 from zoneinfo import ZoneInfo
 
 GITHUB_API = "https://api.github.com"
@@ -7054,7 +7053,7 @@ def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
 
     return "\n".join(lines)
 
-sgt_now = datetime.now(ZoneInfo("Asia/Singapore"))
+sgt_now = datetime.datetime.now(ZoneInfo("Asia/Singapore"))
 in_send_window = (sgt_now.hour == 17)  # 17:00–17:59 SGT
 
 today_str = sgt_now.strftime("%Y-%m-%d")
