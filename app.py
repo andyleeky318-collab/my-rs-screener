@@ -2747,23 +2747,24 @@ Be direct, name industries explicitly, no fluff, no repeating the prompt.
 
     failures = {}
 
-    gemini_keys = [
-        ("Gemini", st.secrets.get("GEMINI_API_KEY")),
-        ("Gemini (backup)", st.secrets.get("GEMINI_API_KEY_2")),
+    gemini_attempts = [
+        ("Gemini 2.5 Flash", st.secrets.get("GEMINI_API_KEY"),   "gemini-2.5-flash"),
+        ("Gemini 3.5 Flash", st.secrets.get("GEMINI_API_KEY_2"), "gemini-3.5-flash"),
     ]
-    for gemini_label, gemini_key in gemini_keys:
+    for gemini_label, gemini_key, gemini_model in gemini_attempts:
         if not gemini_key:
             failures[gemini_label] = "No key in secrets"
             continue
         try:
             from google import genai as google_genai
             client = google_genai.Client(api_key=gemini_key)
-            response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-            return f"🟦 **{gemini_label} 2.5 Flash**\n\n{response.text}"
+            response = client.models.generate_content(model=gemini_model, contents=prompt)
+            return f"🟦 **{gemini_label}**\n\n{response.text}"
         except Exception as e:
             err = str(e)
             if not is_transient(err):
-                return f"🔴 **{gemini_label} error (non-transient)**\n\n{err}"
+                failures[gemini_label] = err[:120]
+                continue
             failures[gemini_label] = err[:120]
 
     groq_key = st.secrets.get("GROQ_API_KEY")
@@ -4985,23 +4986,24 @@ Be direct, use industry names, no fluff.
     failures = {}
 
     # ── Provider 1: Gemini ────────────────────────────────────────────────
-    gemini_keys = [
-        ("Gemini", st.secrets.get("GEMINI_API_KEY")),
-        ("Gemini (backup)", st.secrets.get("GEMINI_API_KEY_2")),
+    gemini_attempts = [
+        ("Gemini 2.5 Flash", st.secrets.get("GEMINI_API_KEY"),   "gemini-2.5-flash"),
+        ("Gemini 3.5 Flash", st.secrets.get("GEMINI_API_KEY_2"), "gemini-3.5-flash"),
     ]
-    for gemini_label, gemini_key in gemini_keys:
+    for gemini_label, gemini_key, gemini_model in gemini_attempts:
         if not gemini_key:
             failures[gemini_label] = "No key in secrets"
             continue
         try:
             from google import genai as google_genai
             client = google_genai.Client(api_key=gemini_key)
-            response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-            return f"🟦 **{gemini_label} 2.5 Flash**\n\n{response.text}"
+            response = client.models.generate_content(model=gemini_model, contents=prompt)
+            return f"🟦 **{gemini_label}**\n\n{response.text}"
         except Exception as e:
             err = str(e)
             if not is_transient(err):
-                return f"🔴 **{gemini_label} error (non-transient)**\n\n{err}"
+                failures[gemini_label] = err[:120]
+                continue
             failures[gemini_label] = err[:120]
 
     # ── Provider 2: Groq ──────────────────────────────────────────────────
@@ -5155,23 +5157,24 @@ Be direct, name industries/tickers explicitly, no fluff, no repeating the prompt
     failures = {}
 
     # ── Gemini ──
-    gemini_keys = [
-        ("Gemini", st.secrets.get("GEMINI_API_KEY")),
-        ("Gemini (backup)", st.secrets.get("GEMINI_API_KEY_2")),
+    gemini_attempts = [
+        ("Gemini 2.5 Flash", st.secrets.get("GEMINI_API_KEY"),   "gemini-2.5-flash"),
+        ("Gemini 3.5 Flash", st.secrets.get("GEMINI_API_KEY_2"), "gemini-3.5-flash"),
     ]
-    for gemini_label, gemini_key in gemini_keys:
+    for gemini_label, gemini_key, gemini_model in gemini_attempts:
         if not gemini_key:
             failures[gemini_label] = "No key in secrets"
             continue
         try:
             from google import genai as google_genai
             client = google_genai.Client(api_key=gemini_key)
-            response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-            return f"🟦 **{gemini_label} 2.5 Flash**\n\n{response.text}"
+            response = client.models.generate_content(model=gemini_model, contents=prompt)
+            return f"🟦 **{gemini_label}**\n\n{response.text}"
         except Exception as e:
             err = str(e)
             if not is_transient(err):
-                return f"🔴 **{gemini_label} error (non-transient)**\n\n{err}"
+                failures[gemini_label] = err[:120]
+                continue
             failures[gemini_label] = err[:120]
 
     # ── Groq ──
