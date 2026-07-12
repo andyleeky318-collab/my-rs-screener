@@ -7042,13 +7042,13 @@ def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
 
     rows.sort(key=lambda r: r["rank"])
 
-    lines = [f"<b>📋 Setup Summary ({len(rows)})</b>", ""]
+    lines = [f"<b>🔥 Setup Summary ({len(rows)})</b>", ""]
     for r in rows:
         setup_str = "/".join(r["setups"])
         risk_str  = f'{r["risk"]:.1f}%' if r["risk"] is not None else "n/a"
         lines.append(
             f'#{r["rank"]} | {r["ticker"]} ({r["rs"]:.0f}) | '
-            f'setup: {setup_str}, risk {risk_str} to 21ema low'
+            f'setup: {setup_str} | risk {risk_str}'
         )
 
     return "\n".join(lines)
