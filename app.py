@@ -268,7 +268,7 @@ INDUSTRIES = {
 
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
-    'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
+    'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
     'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EWY', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'NTAP', 'OR', 
     'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
@@ -6948,9 +6948,28 @@ with st.spinner("Scanning Early Bull setups..."):
 st.markdown(f"#### 🐂 Early Bull ({len(early_bull_list)})")
 
 if early_bull_list:
+    # Map each Early Bull ticker to its industry group(s), reusing the same
+    # helper used for the RS Leader section.
+    eb_industry_counts, eb_ticker_industry = build_leader_industry_map(early_bull_list, INDUSTRIES)
+
     html_eb = ""
     for sym in early_bull_list:
-        html_eb += setup_badge(sym)
+        industries = eb_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+
+        dot = (
+            '<span style="'
+            'display:inline-block;width:7px;height:7px;'
+            'border-radius:50%;background:#FF4B4B;'
+            'box-shadow:0 0 5px 2px #FF4B4B;'
+            'margin-right:4px;vertical-align:middle;'
+            '"></span>'
+            if is_top20_industry else ""
+        )
+
+        html_eb += setup_badge(sym, extra_prefix=dot)
+
     st.markdown(html_eb, unsafe_allow_html=True)
 else:
     st.info("No active setups discovered.")
