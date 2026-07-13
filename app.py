@@ -7048,7 +7048,7 @@ def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
         risk_str  = f'{r["risk"]:.1f}%' if r["risk"] is not None else "n/a"
         lines.append(
             f'#{r["rank"]} | {r["ticker"]} ({r["rs"]:.0f}) | '
-            f'setup: {setup_str} | risk {risk_str}'
+            f'{setup_str} | {risk_str}'
         )
 
     return "\n".join(lines)
