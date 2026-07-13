@@ -6936,6 +6936,104 @@ def compute_early_bull(stocks_list, ticker_dfs, benchmark_df_input):
 
     return sorted(matches)
 
+@st.cache_data(ttl=3600)
+def compute_early_bull_history(stocks_list, ticker_dfs, benchmark_df_input):
+    """
+    Vectorized version of the Stage 1->2 / Stage 4->2 transition logic from
+    compute_early_bull, evaluated across the FULL time series (not just the
+    latest bar) so we get a daily Early Bull count history, mirroring how
+    compute_two_botak_history / compute_stage_history work.
+    Note: unlike compute_early_bull, this does NOT apply the cond1-cond4
+    (ADR%/ATR%/EMA-distance) filters — it only tracks the stage transition condition.
+    """
+    try:
+        if benchmark_df_input is None or benchmark_df_input.empty:
+            return pd.DataFrame()
+
+        bm_idx = benchmark_df_input.index.tz_localize(None) if benchmark_df_input.index.tz is not None else benchmark_df_input.index
+        bm_aligned = benchmark_df_input.copy()
+        bm_aligned.index = bm_idx
+
+        all_series = []
+
+        for ticker in stocks_list:
+            try:
+                df = ticker_dfs.get(ticker)
+                if df is None or len(df) < 260:
+                    continue
+
+                df_idx = df.index.tz_localize(None) if df.index.tz is not None else df.index
+                df_aligned = df.copy()
+                df_aligned.index = df_idx
+
+                combined = pd.merge(
+                    df_aligned[['Close', 'Open', 'High', 'Low']],
+                    bm_aligned[['Close']].rename(columns={'Close': 'Close_bench'}),
+                    left_index=True, right_index=True, how='inner'
+                )
+                if len(combined) < 260:
+                    continue
+
+                close = combined['Close']
+                high  = combined['High']
+
+                ema126 = df_aligned['Close'].ewm(span=126, adjust=False).mean().reindex(combined.index, method='ffill')
+                rs = close / combined['Close_bench']
+
+                ema_spans = [21, 42, 63, 72, 84, 126, 147, 168]
+                r = {s: rs.ewm(span=s, adjust=False).mean() for s in ema_spans}
+
+                stage1_cond = (rs >= r[84]) & (rs < r[126])
+                stage3_cond = (
+                    (rs < r[42]) & (rs >= r[72]) & (rs >= r[84]) & (rs >= r[126])
+                    & ((r[42] > r[63]) | (rs < r[63])) & (r[63] > r[126]) & (close >= ema126)
+                )
+                stage2a_cond = (
+                    (rs >= r[168]) & (rs >= r[147]) & (rs >= r[126])
+                    & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+                )
+                stage2b_cond = (rs >= r[126]) & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+                stage4_cond = ((rs < r[63]) & (rs < r[126])) | ((r[63] < r[126]) & (rs < r[126]))
+
+                stage_num = pd.Series(0, index=combined.index)
+                stage_num[stage1_cond] = 1
+                remaining = ~stage1_cond
+                stage_num[remaining & stage3_cond] = 3
+                remaining = remaining & ~stage3_cond
+                stage_num[remaining & (stage2a_cond | stage2b_cond)] = 2
+                remaining = remaining & ~(stage2a_cond | stage2b_cond)
+                stage_num[remaining & stage4_cond] = 4
+
+                stage_prev = stage_num.shift(1)
+                stage1to2Transition = (stage_num == 2) & ((stage_prev == 1) | (stage_prev == 4))
+
+                transition_price = high.where(stage1to2Transition)
+                stage1to2Price = transition_price.ffill()
+
+                stage1to2Count30 = stage1to2Transition.astype(int).rolling(30).sum()
+                stage1to2Recent30 = stage1to2Count30 >= 1
+                stage1to2PriceAbove = stage1to2Price.notna() & (close > stage1to2Price)
+
+                stage1to2AlertCond = stage1to2Recent30 & stage1to2PriceAbove & (stage_num == 2) & (close >= 20)
+
+                all_series.append(stage1to2AlertCond.astype(int))
+            except Exception:
+                continue
+
+        if not all_series:
+            return pd.DataFrame()
+
+        combined_all = pd.concat(all_series, axis=1).fillna(0)
+        daily_counts = combined_all.sum(axis=1)
+
+        result = daily_counts.tail(60).reset_index()
+        result.columns = ["Date", "Early Bull Count"]
+        result["Date"] = result["Date"].dt.strftime("%Y-%m-%d")
+        return result
+    except Exception:
+        return pd.DataFrame()
+
+
 st.markdown("---")
 
 with st.spinner("Scanning Early Bull setups..."):
@@ -6973,6 +7071,34 @@ if early_bull_list:
     st.markdown(html_eb, unsafe_allow_html=True)
 else:
     st.info("No active setups discovered.")
+
+st.write("")
+
+with st.spinner("Scanning for Early Bull History..."):
+    early_bull_hist = timed(
+        "compute_early_bull_history",
+        compute_early_bull_history,
+        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
+    )
+
+if not early_bull_hist.empty:
+    chart_df_eb = early_bull_hist.copy()
+    today_value_eb = chart_df_eb["Early Bull Count"].iloc[-1]
+    max_value_eb = chart_df_eb["Early Bull Count"].max()
+
+    if today_value_eb == max_value_eb:
+        chart_df_eb["Bar_Color"] = "#29B5E8"
+        chart_df_eb.iloc[-1, chart_df_eb.columns.get_loc("Bar_Color")] = "#FF4B4B"
+    else:
+        chart_df_eb["Bar_Color"] = "#29B5E8"
+
+    st.bar_chart(
+        data=chart_df_eb,
+        x="Date",
+        y="Early Bull Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
 
 # ==============================================================================
 # 13. SEND SETUP SUMMARY TEXT DIRECTLY TO TELEGRAM
