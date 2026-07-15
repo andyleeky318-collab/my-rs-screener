@@ -198,7 +198,7 @@ INDUSTRIES = {
     'FNCE-INVSMNT MGT': ['BX', 'MS', 'KKR', 'BN', 'APO', 'ARES', 'OWL', 'RJF', 'TROW', 'TPG', 'PFG', 'BAM', 'NTRS', 'CRBG', 'CG', 'MORN', 'ARCC', 'BEN', 'SF', 'HLNE', 'SEIC', 'IVZ', 'STEP', 'FSK', 'AMG', 'CNS', 'MAIN', 'GBDC', 'AB', 'VCTR', 'APAM', 'HTGC', 'IFS', 'FHI', 'GCMG', 'AMP'],
     'FINANC-PBL INV FDEQT': ['TPL', 'BXSL'],
     'INSURANCE-LIFE': ['PRU', 'EQH', 'PRI', 'VOYA', 'JXN', 'LNC', 'BHF', 'PRVA'],
-    'BANKS-MONEY CNTR': ['JPM', 'BAC', 'WFC', 'C', 'COF'],
+    'BANKS-MONEY CNTR': ['JPM', 'BAC', 'WFC', 'C', 'COF', 'HSBC'],
     'BANKS-FOREIGN': ['UBS', 'BAP'],
     'BANKS-SUPR RGIONAL': ['PNC', 'HBAN', 'RF', 'CFG', 'KEY', 'ZION', 'FITB', 'TFC', 'MTB', 'ALLY', 'WAL'],
     'BANKS-WST/STHWST': ['KBE', 'BOKF', 'ONB', 'TCBI', 'WAFD', 'PRK', 'BKU', 'IBOC', 'BANF', 'UCB', 'AUB', 'FIBK', 'CATY', 'FHB', 'BOH', 'CVBF'],
@@ -268,7 +268,7 @@ INDUSTRIES = {
 
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
-    'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
+    'HSBC', 'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
     'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EWY', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'NTAP', 'OR', 
     'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
@@ -7127,7 +7127,7 @@ with st.spinner("Scanning Early Bull setups..."):
         stocks_tuple, ticker_dfs_shared, benchmark_df_shared
     )
 
-st.markdown(f"#### 🐂 Early Bull ({len(early_bull_list)})")
+st.markdown(f"#### 🐂 Early Bull = buyable ({len(early_bull_list)})")
 
 if early_bull_list:
     # Map each Early Bull ticker to its industry group(s), reusing the same
@@ -7140,15 +7140,7 @@ if early_bull_list:
         ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
         is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
 
-        dot = (
-            '<span style="'
-            'display:inline-block;width:7px;height:7px;'
-            'border-radius:50%;background:#FF4B4B;'
-            'box-shadow:0 0 5px 2px #FF4B4B;'
-            'margin-right:4px;vertical-align:middle;'
-            '"></span>'
-            if is_top20_industry else ""
-        )
+        dot = '🏭 ' if is_top20_industry else ""
 
         html_eb += setup_badge(sym, extra_prefix=dot)
 
@@ -7165,7 +7157,7 @@ with st.spinner("Scanning Early Bull (unfiltered) setups..."):
         stocks_tuple, ticker_dfs_shared, benchmark_df_shared
     )
 
-st.markdown(f"#### 🐂 Early Bull (No ADR/ATR Filter) ({len(early_bull_no_filter_list)})")
+st.markdown(f"#### 🐂 Early Bull = Opportunity ({len(early_bull_no_filter_list)})")
 
 if early_bull_no_filter_list:
     eb_nf_industry_counts, eb_nf_ticker_industry = build_leader_industry_map(early_bull_no_filter_list, INDUSTRIES)
@@ -7176,15 +7168,7 @@ if early_bull_no_filter_list:
         ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
         is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
 
-        dot = (
-            '<span style="'
-            'display:inline-block;width:7px;height:7px;'
-            'border-radius:50%;background:#FF4B4B;'
-            'box-shadow:0 0 5px 2px #FF4B4B;'
-            'margin-right:4px;vertical-align:middle;'
-            '"></span>'
-            if is_top20_industry else ""
-        )
+        dot = '🏭 ' if is_top20_industry else ""
 
         html_eb_nf += setup_badge(sym, extra_prefix=dot)
 
@@ -7268,9 +7252,11 @@ def send_telegram_text(text, bot_token, chat_id, parse_mode="HTML"):
 def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
                                industry_rank_map, all_data,
                                cloud21ema_all, cloudwick_all, ma50bounce_all,
-                               ticker_dfs_shared):
+                               ticker_dfs_shared, leader_list=None):
     if not global_setup_tickers:
         return None
+
+    leader_set = set(leader_list or [])
 
     # Global RS lookup
     global_rs_lookup = {}
@@ -7310,6 +7296,7 @@ def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
             "rs": global_rs_lookup.get(sym, 0),
             "setups": setup_types,
             "risk": risk_map.get(sym),
+            "is_leader": sym in leader_set,
         })
 
     rows.sort(key=lambda r: r["rank"])
@@ -7318,8 +7305,9 @@ def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
     for r in rows:
         setup_str = "/".join(r["setups"])
         risk_str  = f'{r["risk"]:.1f}%' if r["risk"] is not None else "n/a"
+        ticker_str = f'<b>{r["ticker"]}</b>' if r["is_leader"] else r["ticker"]
         lines.append(
-            f'#{r["rank"]} | {r["ticker"]} ({r["rs"]:.0f}) | '
+            f'#{r["rank"]} | {ticker_str} ({r["rs"]:.0f}) | '
             f'{setup_str} | {risk_str}'
         )
 
@@ -7334,7 +7322,8 @@ setup_summary_sig = f"{today_str}_{sorted(global_setup_tickers)}"
 if in_send_window and st.session_state.get("telegram_setup_summary_sig") != setup_summary_sig:
     summary_text = build_setup_summary_text(
         global_setup_tickers, global_setup_ticker_groups, industry_rank_map,
-        all_data, cloud21ema_all, cloudwick_all, ma50bounce_all, ticker_dfs_shared
+        all_data, cloud21ema_all, cloudwick_all, ma50bounce_all, ticker_dfs_shared,
+        leader_list=leader_list
     )
     tg_token = st.secrets.get("TELEGRAM_BOT_TOKEN")
     tg_chat  = st.secrets.get("TELEGRAM_CHAT_ID")

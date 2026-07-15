@@ -69,15 +69,15 @@ SECTION_TOP_OFFSET_PX = 20
 # everything else keeps Playwright's plain default page behavior.
 EXTRA_SCREENSHOTS = [
     ("https://stockbee.blogspot.com/p/mm.html",
-     "Stockbee MM", 3, False),
+     "Stockbee MM", 3, False, "Primary Breadth Indicators"),
     ("https://docs.google.com/spreadsheets/d/1ZkNk5A5nPQGGSK00eAOlroGmJi2wVHPwdz3LAYAVb7U/edit?gid=0#gid=0",
-     "Market Monitor Traffic Light", 8, False),
+     "Market Monitor Traffic Light", 8, False, None),
     ("https://stockcharts.com/sc3/ui/?s=%24USHL5",
-     "$USHL5 SharpCharts", 8, False),
+     "$USHL5 SharpCharts", 8, False, None),
     ("https://fullstackinvestor.co/dashboard",
-     "Market Dashboard", 8, False),
+     "Market Dashboard", 8, False, None),
     ("https://finviz.com/map",
-     "S&P 500 Map", 12, True),
+     "S&P 500 Map", 12, True, None),
 ]
 EXTRA_PAGE_LOAD_TIMEOUT  = 30000  # ms
 
@@ -302,7 +302,9 @@ def wait_for_full_content_loaded(page, timeout_seconds):
     while time.monotonic() - start < timeout_seconds:
         if find_text_anywhere(page, FINAL_SECTION_KEYWORD) is not None:
             print(f"Final section '{FINAL_SECTION_KEYWORD}' detected after "
-                  f"{time.monotonic() - start:.0f}s -- page fully loaded.")
+                  f"{time.monotonic() - start:.0f}s -- page fully loaded. "
+                  f"Waiting 30s for it to fully settle...")
+            time.sleep(30)
             return True
         time.sleep(FULL_LOAD_POLL_SECONDS)
     print(f"Timed out after {timeout_seconds:.0f}s waiting for final section "
@@ -399,20 +401,8 @@ def capture_and_send_section(page, sidebar_right, keyword):
     send_photo(img_bytes, keyword)
 
 
-def capture_and_send_external_top(browser, url, caption, settle_seconds=SCROLL_SETTLE_SECONDS, use_stealth=False):
-    """
-    Open a FRESH page for an external (non-Streamlit) site, wait for it to
-    load, screenshot just the initial viewport (top/landing view, full
-    width -- there's no sidebar here so no clip needed), and send it to
-    Telegram as its own photo. Runs on its own page each time so it never
-    disturbs the Streamlit page/session used for everything above, and so
-    one site's tabs/cookies/state can't leak into the next site.
-
-    use_stealth=True applies a realistic desktop UA + hides the
-    "navigator.webdriver" flag, for sites running bot-verification checks
-    (e.g. Finviz). Left False (default/plain Playwright page) for every
-    other site so their behavior is unchanged.
-    """
+def capture_and_send_external_top(browser, url, caption, settle_seconds=SCROLL_SETTLE_SECONDS,
+                                    use_stealth=False, wait_text=None, max_attempts=2):
     try:
         if use_stealth:
             ext_page = browser.new_page(
@@ -425,6 +415,24 @@ def capture_and_send_external_top(browser, url, caption, settle_seconds=SCROLL_S
             ext_page = browser.new_page(viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT})
 
         ext_page.goto(url, wait_until="domcontentloaded", timeout=EXTRA_PAGE_LOAD_TIMEOUT)
+
+        for attempt in range(1, max_attempts + 1):
+            found = True
+            if wait_text:
+                found = False
+                wait_start = time.monotonic()
+                while time.monotonic() - wait_start < 20:
+                    if find_text_anywhere(ext_page, wait_text) is not None:
+                        found = True
+                        break
+                    time.sleep(1)
+
+            if found or attempt == max_attempts:
+                break
+
+            print(f"'{wait_text}' not found on attempt {attempt} for '{caption}' -- reloading...")
+            ext_page.reload(wait_until="domcontentloaded", timeout=EXTRA_PAGE_LOAD_TIMEOUT)
+
         time.sleep(settle_seconds)
         img_bytes = ext_page.screenshot()
         send_photo(img_bytes, caption)
@@ -494,11 +502,11 @@ def run():
         # 3. After all Streamlit sections are done, walk through each extra
         #    external site IN ORDER, screenshotting its landing view and
         #    sending it as its own photo.
-        for url, caption, settle_seconds, use_stealth in EXTRA_SCREENSHOTS:
+        for url, caption, settle_seconds, use_stealth, wait_text in EXTRA_SCREENSHOTS:
             if deadline.expired():
                 print("Global cutoff reached -- stopping further external site captures.")
                 break
-            capture_and_send_external_top(browser, url, caption, settle_seconds, use_stealth)
+            capture_and_send_external_top(browser, url, caption, settle_seconds, use_stealth, wait_text)
 
         browser.close()
 
