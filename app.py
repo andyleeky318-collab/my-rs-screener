@@ -194,7 +194,7 @@ INDUSTRIES = {
     'OIL&GAS-U S EXPL PRO': ['XOP', 'COP', 'EOG', 'FANG', 'DVN', 'EQT', 'EXE', 'PR', 'OVV', 'APA', 'CHRD', 'MTDR', 'NFG', 'CNX', 'CRC', 'CRGY', 'AR', 'RRC', 'MUR', 'MGY', 'SM', 'NOG', 'CRK', 'GPOR', 'XPRO'],
     'OIL&GAS-ROYALTY TRUST': ['VNOM', 'HESM', 'BSM'],
     'RETAIL-INTERNET': ['XRT', 'SE', 'AMZN', 'MELI', 'CPNG', 'LULU', 'EBAY', 'CHWY', 'GLBE', 'ETSY', 'ACVA'],
-    'FIN-INVEST BNK/BKRS': ['GS', 'SCHW', 'ICE', 'CME', 'IBKR', 'NDAQ', 'TW', 'STT', 'CBOE', 'HOOD', 'LPLA', 'JEF', 'HLI', 'MKTX', 'XP', 'EVR', 'FRHC', 'PJT', 'MC', 'PIPR', 'VIRT', 'LAZ', 'SNEX'],
+    'FIN-INVEST BNK/BKRS': ['IAI', 'GS', 'SCHW', 'ICE', 'CME', 'IBKR', 'NDAQ', 'TW', 'STT', 'CBOE', 'HOOD', 'LPLA', 'JEF', 'HLI', 'MKTX', 'XP', 'EVR', 'FRHC', 'PJT', 'MC', 'PIPR', 'VIRT', 'LAZ', 'SNEX'],
     'FNCE-INVSMNT MGT': ['BX', 'MS', 'KKR', 'BN', 'APO', 'ARES', 'OWL', 'RJF', 'TROW', 'TPG', 'PFG', 'BAM', 'NTRS', 'CRBG', 'CG', 'MORN', 'ARCC', 'BEN', 'SF', 'HLNE', 'SEIC', 'IVZ', 'STEP', 'FSK', 'AMG', 'CNS', 'MAIN', 'GBDC', 'AB', 'VCTR', 'APAM', 'HTGC', 'IFS', 'FHI', 'GCMG', 'AMP'],
     'FINANC-PBL INV FDEQT': ['TPL', 'BXSL'],
     'INSURANCE-LIFE': ['PRU', 'EQH', 'PRI', 'VOYA', 'JXN', 'LNC', 'BHF', 'PRVA'],
@@ -7128,7 +7128,7 @@ with st.spinner("Scanning Early Bull setups..."):
         stocks_tuple, ticker_dfs_shared, benchmark_df_shared
     )
 
-st.markdown(f"#### 🐂 Early Bull = buyable ({len(early_bull_list)})")
+st.markdown(f"#### 🐂 Early Bull = buyable Sector ({len(early_bull_list)})")
 
 if early_bull_list:
     # Map each Early Bull ticker to its industry group(s), reusing the same
@@ -7161,7 +7161,7 @@ with st.spinner("Scanning Early Bull (unfiltered) setups..."):
         stocks_tuple, ticker_dfs_shared, benchmark_df_shared
     )
 
-st.markdown(f"#### 🐂 Early Bull = Opportunity ({len(early_bull_no_filter_list)})")
+st.markdown(f"#### 🐂 Early Bull = opportunity Sector ({len(early_bull_no_filter_list)})")
 
 if early_bull_no_filter_list:
     eb_nf_industry_counts, eb_nf_ticker_industry = build_leader_industry_map(early_bull_no_filter_list, INDUSTRIES)
