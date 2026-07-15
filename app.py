@@ -7271,18 +7271,29 @@ def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
         for t, s in zip(item["Tickers"]["Ticker"], item["Tickers"]["RS Score"]):
             global_rs_lookup[t] = s
 
-    # Risk % to 21ema low
+    # Risk %: distance to 21ema-low by default, but distance to SMA50
+    # if the ticker's ONLY setup type is 50ma_bounce.
     risk_map = {}
     for sym in global_setup_tickers:
         try:
             df = ticker_dfs_shared.get(sym)
-            if df is None or len(df) < 21:
+            if df is None or len(df) < 50:
                 continue
             close = df['Close']
             low   = df['Low']
-            ema21_low = low.ewm(span=21, adjust=False).mean().iloc[-1]
             c = close.iloc[-1]
-            risk_map[sym] = round(float(((c - ema21_low) / c) * 100), 1)
+
+            setup_types_for_risk = []
+            if sym in cloud21ema_all: setup_types_for_risk.append("21ema_cloud")
+            if sym in cloudwick_all:  setup_types_for_risk.append("21ema_wick")
+            if sym in ma50bounce_all: setup_types_for_risk.append("50ma_bounce")
+
+            if setup_types_for_risk == ["50ma_bounce"]:
+                sma50 = close.rolling(50).mean().iloc[-1]
+                risk_map[sym] = round(float(((c - sma50) / c) * 100), 1)
+            else:
+                ema21_low = low.ewm(span=21, adjust=False).mean().iloc[-1]
+                risk_map[sym] = round(float(((c - ema21_low) / c) * 100), 1)
         except Exception:
             continue
 
