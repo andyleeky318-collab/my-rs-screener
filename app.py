@@ -2573,25 +2573,26 @@ for item in all_data:
     cloudwick_all.update(item.get("CloudWick",   []))
     ma50bounce_all.update(item.get("MA50Bounce",  []))
 
-def setup_badge(sym, is_new=False, is_removed=False, extra_prefix="", extra_suffix="", extra_suffix_color="#888888"):
+def setup_badge(sym, is_new=False, is_removed=False, extra_prefix="", extra_suffix="", extra_suffix_color="#888888", extra_style=""):
     """Render a ticker badge, colored by setup-category precedence:
-    50ma_bounce (orange) > 21ema_wick (aqua) > 21ema_cloud (purple) > new (gold) > default."""
+    50ma_bounce (orange) > 21ema_wick (aqua) > 21ema_cloud (purple) > new (gold) > default.
+    extra_style: additional inline CSS injected into the outer div (e.g. a glow)."""
     suffix_html = f'<span style="margin-left:4px; color:{extra_suffix_color}; font-weight:bold;"> {extra_suffix}</span>' if extra_suffix else ""
     if is_removed:
-        return f'<div class="ticker-badge removed-badge">{extra_prefix}{sym}{suffix_html}</div>'
+        return f'<div class="ticker-badge removed-badge" style="{extra_style}">{extra_prefix}{sym}{suffix_html}</div>'
     if sym in ma50bounce_all:
-        return (f'<div class="ticker-badge orange-badge">{extra_prefix}'
+        return (f'<div class="ticker-badge orange-badge" style="{extra_style}">{extra_prefix}'
                 f'<span style="color:#111111;font-weight:bold;">{sym}</span>{suffix_html}</div>')
     if sym in cloudwick_all:
-        return (f'<div class="ticker-badge aqua-badge">{extra_prefix}'
+        return (f'<div class="ticker-badge aqua-badge" style="{extra_style}">{extra_prefix}'
                 f'<span style="color:#000000;font-weight:bold;">{sym}</span>{suffix_html}</div>')
     if sym in cloud21ema_all:
-        return (f'<div class="ticker-badge purple-badge">{extra_prefix}'
+        return (f'<div class="ticker-badge purple-badge" style="{extra_style}">{extra_prefix}'
                 f'<span style="color:#000000;font-weight:bold;">{sym}</span>{suffix_html}</div>')
     if is_new:
-        return (f'<div class="ticker-badge new-pattern-badge">{extra_prefix}'
+        return (f'<div class="ticker-badge new-pattern-badge" style="{extra_style}">{extra_prefix}'
                 f'<span style="color:#111111;font-weight:bold;">{sym}</span>{suffix_html}</div>')
-    return f'<div class="ticker-badge">{extra_prefix}{sym}{suffix_html}</div>'
+    return f'<div class="ticker-badge" style="{extra_style}">{extra_prefix}{sym}{suffix_html}</div>'
 
 @st.cache_data(ttl=3600)
 def compute_industry_vol_flags(industries_dict, _ticker_dfs):
@@ -7140,9 +7141,12 @@ if early_bull_list:
         ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
         is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
 
-        dot = '🏭 ' if is_top20_industry else ""
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
+            if is_top20_industry else ""
+        )
 
-        html_eb += setup_badge(sym, extra_prefix=dot)
+        html_eb += setup_badge(sym, extra_style=glow_style)
 
     st.markdown(html_eb, unsafe_allow_html=True)
 else:
@@ -7168,9 +7172,12 @@ if early_bull_no_filter_list:
         ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
         is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
 
-        dot = '🏭 ' if is_top20_industry else ""
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
+            if is_top20_industry else ""
+        )
 
-        html_eb_nf += setup_badge(sym, extra_prefix=dot)
+        html_eb_nf += setup_badge(sym, extra_style=glow_style)
 
     st.markdown(html_eb_nf, unsafe_allow_html=True)
 
