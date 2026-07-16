@@ -2573,10 +2573,10 @@ for item in all_data:
     cloudwick_all.update(item.get("CloudWick",   []))
     ma50bounce_all.update(item.get("MA50Bounce",  []))
 
-def setup_badge(sym, is_new=False, is_removed=False, extra_prefix="", extra_suffix="", extra_suffix_color="#888888", extra_style=""):
+def setup_badge(sym, is_new=False, is_removed=False, extra_prefix="", extra_suffix="", extra_suffix_color="#888888", extra_style="", extra_text_color=None):
     """Render a ticker badge, colored by setup-category precedence:
     50ma_bounce (orange) > 21ema_wick (aqua) > 21ema_cloud (purple) > new (gold) > default.
-    extra_style: additional inline CSS injected into the outer div (e.g. a glow)."""
+    extra_text_color: if given, overrides just the ticker-name text color."""
     suffix_html = f'<span style="margin-left:4px; color:{extra_suffix_color}; font-weight:bold;"> {extra_suffix}</span>' if extra_suffix else ""
     if is_removed:
         return f'<div class="ticker-badge removed-badge" style="{extra_style}">{extra_prefix}{sym}{suffix_html}</div>'
@@ -2590,9 +2590,12 @@ def setup_badge(sym, is_new=False, is_removed=False, extra_prefix="", extra_suff
         return (f'<div class="ticker-badge purple-badge" style="{extra_style}">{extra_prefix}'
                 f'<span style="color:#000000;font-weight:bold;">{sym}</span>{suffix_html}</div>')
     if is_new:
+        text_color = extra_text_color or "#111111"
         return (f'<div class="ticker-badge new-pattern-badge" style="{extra_style}">{extra_prefix}'
-                f'<span style="color:#111111;font-weight:bold;">{sym}</span>{suffix_html}</div>')
-    return f'<div class="ticker-badge" style="{extra_style}">{extra_prefix}{sym}{suffix_html}</div>'
+                f'<span style="color:{text_color};font-weight:bold;">{sym}</span>{suffix_html}</div>')
+    text_color = extra_text_color or "#eeeeee"
+    return (f'<div class="ticker-badge" style="{extra_style}">{extra_prefix}'
+            f'<span style="color:{text_color};font-weight:bold;">{sym}</span>{suffix_html}</div>')
 
 @st.cache_data(ttl=3600)
 def compute_industry_vol_flags(industries_dict, _ticker_dfs):
@@ -7165,6 +7168,7 @@ st.markdown(f"#### 🐂 Early Bull = opportunity Sector ({len(early_bull_no_filt
 
 if early_bull_no_filter_list:
     eb_nf_industry_counts, eb_nf_ticker_industry = build_leader_industry_map(early_bull_no_filter_list, INDUSTRIES)
+    early_bull_set = set(early_bull_list)   # NEW — for O(1) membership check
 
     html_eb_nf = ""
     for sym in early_bull_no_filter_list:
@@ -7176,8 +7180,9 @@ if early_bull_no_filter_list:
             "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
             if is_top20_industry else ""
         )
+        text_color = "#378ADD" if sym in early_bull_set else None   # NEW
 
-        html_eb_nf += setup_badge(sym, extra_style=glow_style)
+        html_eb_nf += setup_badge(sym, extra_style=glow_style, extra_text_color=text_color)
 
     st.markdown(html_eb_nf, unsafe_allow_html=True)
 
