@@ -7131,31 +7131,31 @@ with st.spinner("Scanning Early Bull setups..."):
         stocks_tuple, ticker_dfs_shared, benchmark_df_shared
     )
 
-st.markdown(f"#### 🐂 Early Bull = buyable Sector ({len(early_bull_list)})")
+# st.markdown(f"#### 🐂 Early Bull = buyable Sector ({len(early_bull_list)})")
 
-if early_bull_list:
-    # Map each Early Bull ticker to its industry group(s), reusing the same
-    # helper used for the RS Leader section.
-    eb_industry_counts, eb_ticker_industry = build_leader_industry_map(early_bull_list, INDUSTRIES)
+# if early_bull_list:
+#     # Map each Early Bull ticker to its industry group(s), reusing the same
+#     # helper used for the RS Leader section.
+#     eb_industry_counts, eb_ticker_industry = build_leader_industry_map(early_bull_list, INDUSTRIES)
 
-    html_eb = ""
-    for sym in early_bull_list:
-        industries = eb_ticker_industry.get(sym, [])
-        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
-        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+#     html_eb = ""
+#     for sym in early_bull_list:
+#         industries = eb_ticker_industry.get(sym, [])
+#         ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+#         is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
 
-        glow_style = (
-            "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
-            if is_top20_industry else ""
-        )
+#         glow_style = (
+#             "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
+#             if is_top20_industry else ""
+#         )
 
-        html_eb += setup_badge(sym, extra_style=glow_style)
+#         html_eb += setup_badge(sym, extra_style=glow_style)
 
-    st.markdown(html_eb, unsafe_allow_html=True)
-else:
-    st.info("No active setups discovered.")
+#     st.markdown(html_eb, unsafe_allow_html=True)
+# else:
+#     st.info("No active setups discovered.")
 
-st.write("")
+# st.write("")
 
 with st.spinner("Scanning Early Bull (unfiltered) setups..."):
     early_bull_no_filter_list = timed(
@@ -7164,7 +7164,7 @@ with st.spinner("Scanning Early Bull (unfiltered) setups..."):
         stocks_tuple, ticker_dfs_shared, benchmark_df_shared
     )
 
-st.markdown(f"#### 🐂 Early Bull = opportunity Sector ({len(early_bull_no_filter_list)})")
+st.markdown(f"#### 🐂 Early Bull = buyable + Sector ({len(early_bull_no_filter_list)})")
 
 if early_bull_no_filter_list:
     eb_nf_industry_counts, eb_nf_ticker_industry = build_leader_industry_map(early_bull_no_filter_list, INDUSTRIES)
