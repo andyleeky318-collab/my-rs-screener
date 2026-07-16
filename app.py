@@ -7323,7 +7323,7 @@ def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
     for r in rows:
         setup_str = "/".join(r["setups"])
         risk_str  = f'{r["risk"]:.1f}%' if r["risk"] is not None else "n/a"
-        ticker_str = f'<b>{r["ticker"]}</b>' if r["is_leader"] else r["ticker"]
+        ticker_str = f'<b><i>{r["ticker"]}</i></b>' if r["is_leader"] else r["ticker"]
         lines.append(
             f'#{r["rank"]} | {ticker_str} ({r["rs"]:.0f}) | '
             f'{setup_str} | {risk_str}'
