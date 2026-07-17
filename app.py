@@ -3029,7 +3029,8 @@ def parse_ai_points(raw_text):
     return header, points
 
 def render_ai_points_table(raw_text, tickers=None, industries=None):
-    """Render an AI analysis response as a 2-column (topic | detail) table."""
+    """Render an AI analysis response as a 2-column (topic | detail) table.
+    Rows with no content (section headings like 'Outliers') span the full width."""
     if not raw_text:
         return
 
@@ -3046,6 +3047,18 @@ def render_ai_points_table(raw_text, tickers=None, industries=None):
         # or a leftover "### " header prefix defaulting to "Point N").
         label_clean = re.sub(r'\*\*(.+?)\*\*', r'\1', label)
         label_clean = re.sub(r'^\s*#{1,6}\s*', '', label_clean).strip()
+
+        if not content.strip():
+            # Section-heading-only row (e.g. "Outliers") — merge into one
+            # full-width cell instead of leaving column 2 blank.
+            rows_html += (
+                f"<tr style='background:{bg};'>"
+                f"<td colspan='2' style='padding:8px 12px; border:2px solid #4a4f5a; "
+                f"font-weight:700; color:#e0e0e0; font-size:14.5px;'>{label_clean}</td>"
+                f"</tr>"
+            )
+            continue
+
         formatted_content = format_ai_analysis_text(content, tickers=tickers, industries=industries)
         rows_html += (
             f"<tr style='background:{bg};'>"
