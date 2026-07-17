@@ -3921,7 +3921,183 @@ def compute_stage_history(stocks_list, ticker_dfs, benchmark_df_input):
         return result.reset_index(drop=True)
     except Exception:
         return pd.DataFrame()
-    
+
+@st.cache_data(ttl=3600)
+def compute_gapper_history(stocks_list, _ticker_dfs):
+    """
+    Vectorized-per-ticker daily count of tickers meeting the Gapper Earning
+    Drift condition (unfilled gap-up, still within 30 bars of the gap) —
+    mirrors the scan logic inside process_pattern_scanners, evaluated
+    across the FULL time series for a 60-day breadth history.
+    """
+    try:
+        if not _ticker_dfs:
+            return pd.DataFrame()
+
+        all_series = []
+        for ticker, df in _ticker_dfs.items():
+            if not all(col in df.columns for col in ['Open', 'High', 'Low', 'Close']):
+                continue
+            if len(df) < 22:
+                continue
+            try:
+                df_g = df.copy().reset_index(drop=True)
+                strict_gap = df_g['Low'] > df_g['High'].shift(1)
+                gap_pct = (df_g['Close'] / df_g['Close'].shift(1)) - 1
+                max_gap_200 = gap_pct.shift(1).rolling(200, min_periods=1).max()
+
+                gapUp10 = strict_gap & (
+                    (gap_pct >= 0.10) |
+                    (gap_pct >= max_gap_200 * 0.99)
+                )
+
+                bars_since_g        = pd.Series(np.inf, index=df_g.index)
+                gap_floor_g         = pd.Series(np.nan, index=df_g.index)
+                gap_ceiling_g       = pd.Series(np.nan, index=df_g.index)
+                min_low_since_gap_g = pd.Series(np.nan, index=df_g.index)
+
+                ctr_g = np.inf; fl_g = np.nan; ceil_g = np.nan; run_min_g = np.nan
+
+                for i in range(1, len(df_g)):
+                    if gapUp10.iloc[i]:
+                        ctr_g     = 0
+                        fl_g      = df_g['High'].iloc[i - 1]
+                        ceil_g    = df_g['Low'].iloc[i]
+                        run_min_g = df_g['Low'].iloc[i]
+                    else:
+                        ctr_g += 1
+                        if not np.isnan(run_min_g):
+                            run_min_g = min(run_min_g, df_g['Low'].iloc[i])
+                            if run_min_g <= fl_g:
+                                ctr_g     = np.inf
+                                fl_g      = np.nan
+                                ceil_g    = np.nan
+                                run_min_g = np.nan
+                    bars_since_g.iloc[i]        = ctr_g
+                    gap_floor_g.iloc[i]         = fl_g
+                    gap_ceiling_g.iloc[i]       = ceil_g
+                    min_low_since_gap_g.iloc[i] = run_min_g
+
+                gapIn20_g      = bars_since_g        <= 30
+                validGap_g     = gap_floor_g         <  gap_ceiling_g
+                strictUnfill_g = min_low_since_gap_g >  gap_floor_g
+                result_g = (gapIn20_g & strictUnfill_g & validGap_g & (df_g['Close'] >= 20)).astype(int)
+                result_g.index = df.index  # restore original datetime index
+
+                all_series.append(result_g)
+            except Exception:
+                continue
+
+        if not all_series:
+            return pd.DataFrame()
+
+        combined = pd.concat(all_series, axis=1).fillna(0)
+        daily_counts = combined.sum(axis=1)
+
+        result = daily_counts.tail(60).reset_index()
+        result.columns = ["Date", "Gapper Count"]
+        result["Date"] = pd.to_datetime(result["Date"]).dt.strftime("%Y-%m-%d")
+        return result
+    except Exception:
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=3600)
+def compute_volatility_history(stocks_list, _ticker_dfs):
+    """
+    Vectorized daily count of tickers with a daily-range Z-score >= 2
+    (vs its own 20-day mean/stdev) — mirrors compute_volatility_pickup,
+    evaluated across the full time series for a 60-day breadth history.
+    """
+    try:
+        if not _ticker_dfs:
+            return pd.DataFrame()
+
+        all_series = []
+        for ticker, df in _ticker_dfs.items():
+            if not all(col in df.columns for col in ['High', 'Low', 'Close']):
+                continue
+            if len(df) < 22:
+                continue
+            try:
+                high, low, close = df['High'], df['Low'], df['Close']
+                daily_range = 100 * (high / low - 1)
+                avg_range   = daily_range.rolling(20).mean()
+                std_range   = daily_range.rolling(20).std(ddof=1)
+                z_series    = (daily_range - avg_range) / std_range.replace(0, np.nan)
+
+                cond = (z_series >= 2) & (close >= 20)
+                all_series.append(cond.astype(int))
+            except Exception:
+                continue
+
+        if not all_series:
+            return pd.DataFrame()
+
+        combined = pd.concat(all_series, axis=1).fillna(0)
+        daily_counts = combined.sum(axis=1)
+
+        result = daily_counts.tail(60).reset_index()
+        result.columns = ["Date", "Volatility Count"]
+        result["Date"] = pd.to_datetime(result["Date"]).dt.strftime("%Y-%m-%d")
+        return result
+    except Exception:
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=3600)
+def compute_value_trap_history(stocks_list, _ticker_dfs):
+    """
+    Vectorized daily count of tickers meeting the Value Trap condition
+    (price roughly -4x ATR below its 50-day MA) — mirrors the scan logic
+    inside process_pattern_scanners, evaluated across the full time series
+    for a 60-day breadth history.
+    """
+    try:
+        if not _ticker_dfs:
+            return pd.DataFrame()
+
+        all_series = []
+        for ticker, df in _ticker_dfs.items():
+            if not all(col in df.columns for col in ['High', 'Low', 'Close']):
+                continue
+            if len(df) < 50:
+                continue
+            try:
+                high, low, close = df['High'], df['Low'], df['Close']
+
+                high_low   = high - low
+                high_close = (high - close.shift(1)).abs()
+                low_close  = (low  - close.shift(1)).abs()
+                tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+                atr14   = tr.rolling(14).mean()
+                atr_pct = (atr14 / close) * 100
+
+                sma50    = close.rolling(50).mean()
+                pct_gain = ((close - sma50) / sma50) * 100
+
+                atr_mult2 = pct_gain / atr_pct.replace(0, 0.001)
+                atr_mult2 = atr_mult2.replace([np.inf, -np.inf], np.nan)
+                atr_mult  = (atr_mult2.fillna(0) * 10).astype(int) / 10
+
+                cond = (atr_mult < -4) & (close >= 20)
+                all_series.append(cond.astype(int))
+            except Exception:
+                continue
+
+        if not all_series:
+            return pd.DataFrame()
+
+        combined = pd.concat(all_series, axis=1).fillna(0)
+        daily_counts = combined.sum(axis=1)
+
+        result = daily_counts.tail(60).reset_index()
+        result.columns = ["Date", "Value Trap Count"]
+        result["Date"] = pd.to_datetime(result["Date"]).dt.strftime("%Y-%m-%d")
+        return result
+    except Exception:
+        return pd.DataFrame()
+
 # ==============================================================================
 # 8. HISTORICAL KNOW_TOTAL_COUNT 30-DAY CHART (Completely New Logic at Bottom)
 # ==============================================================================
@@ -5818,6 +5994,26 @@ if (gapBottom !== null && gapTop !== null && {gap_date_js} !== null) {{
 else:
     st.info("No active setups discovered.")
 
+st.write("")
+if not gapper_hist.empty:
+    chart_df_g = gapper_hist.copy()
+    today_g = chart_df_g["Gapper Count"].iloc[-1]
+    max_g = chart_df_g["Gapper Count"].max()
+
+    if today_g == max_g:
+        chart_df_g["Bar_Color"] = "#29B5E8"
+        chart_df_g.iloc[-1, chart_df_g.columns.get_loc("Bar_Color")] = "#FF4B4B"
+    else:
+        chart_df_g["Bar_Color"] = "#29B5E8"
+
+    st.bar_chart(
+        data=chart_df_g,
+        x="Date",
+        y="Gapper Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
+
 st.markdown("---")
 #st.write(f"inside check: {len(ticker_dfs_shared)}")
 
@@ -6204,6 +6400,27 @@ if volatility_hits:
 else:
     st.info("No tickers with volatility Z-score ≥ 2 today.")
 
+st.write("")
+if not volatility_hist.empty:
+    chart_df_v = volatility_hist.copy()
+    today_v = chart_df_v["Volatility Count"].iloc[-1]
+    max_v = chart_df_v["Volatility Count"].max()
+
+    if today_v == max_v:
+        chart_df_v["Bar_Color"] = "#29B5E8"
+        chart_df_v.iloc[-1, chart_df_v.columns.get_loc("Bar_Color")] = "#FF4B4B"
+    else:
+        chart_df_v["Bar_Color"] = "#29B5E8"
+
+    st.bar_chart(
+        data=chart_df_v,
+        x="Date",
+        y="Volatility Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
+
+
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
 
@@ -6236,7 +6453,26 @@ if vt_list or vt_yest:
 else:
     st.info("No active setups discovered.")
 
+st.write("")
+if not value_trap_hist.empty:
+    chart_df_vt = value_trap_hist.copy()
+    today_vt = chart_df_vt["Value Trap Count"].iloc[-1]
+    max_vt = chart_df_vt["Value Trap Count"].max()
 
+    if today_vt == max_vt:
+        chart_df_vt["Bar_Color"] = "#29B5E8"
+        chart_df_vt.iloc[-1, chart_df_vt.columns.get_loc("Bar_Color")] = "#FF4B4B"
+    else:
+        chart_df_vt["Bar_Color"] = "#29B5E8"
+
+    st.bar_chart(
+        data=chart_df_vt,
+        x="Date",
+        y="Value Trap Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
+    
 #st.markdown(html_e2, unsafe_allow_html=True)
 
 # # DEBUG ENGULFING
