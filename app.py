@@ -2861,12 +2861,13 @@ SECTOR_KEYWORDS = {
     "Insurance": "#FF69B4",
     "Transportation": "#FF69B4", "Shipping": "#FF69B4", "Airlines": "#FF69B4",
     "Housing": "#FF69B4", "Homebuilders": "#FF69B4",
-    "Crypto": "#FF69B4", "Gold": "#FF69B4",
+    "Crypto": "#FF69B4", "Gold": "#FF69B4", "Broker": "#FF69B4", "Brokerage": "#FF69B4", "Rails": "#FF69B4", 
 }
 
 def format_ai_analysis_text(text, tickers=None, industries=None):
     """
     Post-process AI markdown output to highlight key terms:
+    - markdown **bold** / *italic* converted to real HTML tags
     - numbers/percentages (light color)
     - quadrant keywords: Strong/Improving/Weakening/Weak (color-coded)
     - BLUE DOT (red, bold)
@@ -2876,6 +2877,13 @@ def format_ai_analysis_text(text, tickers=None, industries=None):
     """
     if not text:
         return text
+
+    # 0. Convert markdown **bold** into real HTML tags FIRST — otherwise the
+    #    literal asterisks get dumped straight into the table cell, since
+    #    st.markdown here is rendering raw HTML, not markdown.
+    text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+    # Just in case any single-asterisk emphasis (*like this*) slips through too
+    text = re.sub(r'(?<!\*)\*([^\*\n]+?)\*(?!\*)', r'<em>\1</em>', text)
 
     # 1. Numbers/percentages FIRST — before any HTML is injected,
     #    so we don't accidentally bold digits inside hex color codes.
@@ -3018,11 +3026,14 @@ def render_ai_points_table(raw_text, tickers=None, industries=None):
     rows_html = ""
     for i, (label, content) in enumerate(points):
         bg = "#1a1c23" if i % 2 == 0 else "#12141a"
+        # Strip any stray ** markdown left in the label (e.g. when a whole
+        # bullet is "**Sub-Themes / Clusters:**" and defaults to "Point N").
+        label_clean = re.sub(r'\*\*(.+?)\*\*', r'\1', label).strip()
         formatted_content = format_ai_analysis_text(content, tickers=tickers, industries=industries)
         rows_html += (
             f"<tr style='background:{bg};'>"
             f"<td style='padding:8px 12px; border:2px solid #4a4f5a ; vertical-align:top; "
-            f"width:170px; font-weight:700; color:#e0e0e0; font-size:14.5px;'>{label}</td>"
+            f"width:170px; font-weight:700; color:#e0e0e0; font-size:14.5px;'>{label_clean}</td>"
             f"<td style='padding:8px 12px; border:2px solid #4a4f5a ; vertical-align:top; "
             f"color:#e0e0e0; font-size:14.5px; line-height:1.5;'>{formatted_content}</td>"
             f"</tr>"
