@@ -2972,11 +2972,23 @@ def parse_ai_points(raw_text):
     else:
         body = text
 
-    bullet_pattern = re.compile(r'^\s*(?:[-•*]|\d+[\.\)])\s+')
+    bullet_pattern  = re.compile(r'^\s*(?:[-•*]|\d+[\.\)])\s+')
+    # Markdown headings: "### 2. Title", "## Title", "# Title", with or
+    # without a leading number — each one becomes its own labeled row.
+    heading_pattern = re.compile(r'^\s*#{1,6}\s*(?:\d+[\.\)]\s*)?(.+?)\s*#*\s*$')
+
     bullets = []
     current = ""
     for line in body.split("\n"):
-        if bullet_pattern.match(line):
+        heading_match = heading_pattern.match(line)
+        if heading_match:
+            if current:
+                bullets.append(current.strip())
+            # Wrap as "**Title**" so the label-extraction step below picks
+            # it up as its own row; any text that follows on subsequent
+            # non-bullet lines gets appended as that row's content.
+            current = f"**{heading_match.group(1).strip()}** "
+        elif bullet_pattern.match(line):
             if current:
                 bullets.append(current.strip())
             current = bullet_pattern.sub("", line, count=1)
@@ -2998,6 +3010,11 @@ def parse_ai_points(raw_text):
         if m and m.group(2).strip():
             label = m.group(1).strip()
             content = m.group(2).strip()
+        elif m:
+            # Heading matched but had no content glued onto the same line —
+            # the content will simply arrive as the next row instead.
+            label = m.group(1).strip()
+            content = ""
         else:
             m2 = re.match(r"^([A-Za-z][A-Za-z0-9 /&'\-]{2,45}):\s+(.+)$", b)
             if m2:
