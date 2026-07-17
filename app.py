@@ -2888,7 +2888,7 @@ def format_ai_analysis_text(text, tickers=None, industries=None):
     #    so we don't accidentally bold digits inside hex color codes.
     text = re.sub(
         r'\b(\d+(?:\.\d+)?%?)\b',
-        r'<span style="color:#cccccc; font-weight:bold;">\1</span>',
+        r'<span style="color:#FFE5CC; font-weight:bold;">\1</span>',
         text
     )
 
