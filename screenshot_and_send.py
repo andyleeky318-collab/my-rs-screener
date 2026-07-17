@@ -37,13 +37,13 @@ CHAT_ID   = os.environ["TELEGRAM_CHAT_ID"]
 VIEWPORT_WIDTH  = 1600
 VIEWPORT_HEIGHT = 1200
 
-MAX_RUNTIME_SECONDS   = 22 * 60   # hard cutoff for the ENTIRE run
+MAX_RUNTIME_SECONDS   = 25 * 60   # hard cutoff for the ENTIRE run
 SCROLL_SETTLE_SECONDS = 3         # let charts / custom HTML components re-render after a scroll
 
 # How long (seconds) to keep retrying to find a single section keyword
 # before giving up on it. Content can still be streaming in even after
 # the "stop" widget has cleared.
-SECTION_SEARCH_TIMEOUT = 150
+SECTION_SEARCH_TIMEOUT = 160
 SECTION_SEARCH_POLL    = 3
 
 # How long to wait, at the very start, for the "running/stop" status widget
@@ -122,10 +122,11 @@ SECTION_KEYWORDS = [
     "PowerTrend = Thematic Extended",
     "Volatility",
     "Value Trap",
-    "Setup Quality",
     "Pie Chart",
     "ETF Ratio",
     "Quant Sentiment",
+    "Early Bull",
+    "Setup Quality",    
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the
@@ -138,7 +139,7 @@ FINAL_SECTION_KEYWORD = SECTION_KEYWORDS[-1]
 # capturing anyway (falls back gracefully rather than blocking forever).
 # Quant Sentiment has been observed to take up to ~8 minutes to appear, so
 # this is set with some buffer above that.
-FULL_LOAD_TIMEOUT_SECONDS = 9 * 60
+FULL_LOAD_TIMEOUT_SECONDS = 10 * 60
 FULL_LOAD_POLL_SECONDS    = 3
 
 

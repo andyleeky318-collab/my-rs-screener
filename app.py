@@ -6232,7 +6232,7 @@ else:
 #         st.dataframe(debug_df, use_container_width=True)
 # # END DEBUG ENGULFING
 
-st.markdown("---")
+
 
 stocks_tuple = tuple(KNOWN_STOCKS)
 
@@ -6274,65 +6274,6 @@ def download_all_industry_stocks_data(stocks_tuple, known_ticker_dfs):
 
     return ticker_dfs, benchmark_df
 
-ticker_dfs_all_industries, benchmark_df_all_industries = timed(
-    "download_all_industry_stocks_data",
-    download_all_industry_stocks_data,
-    all_industry_tickers_tuple, ticker_dfs_shared
-)
-
-with st.spinner("Computing Setup Rank history..."):
-    setup_avgrank_hist = timed(
-        "compute_setup_avgrank_history",
-        compute_setup_avgrank_history,
-        all_data, ticker_dfs_all_industries, benchmark_df_all_industries, 90,
-        tuple(sorted(global_setup_tickers)), global_setup_ticker_groups
-    )
-
-with st.spinner("Computing Setup Count history..."):
-    setup_count_hist = timed(
-        "compute_global_setup_count_history",
-        compute_global_setup_count_history,
-        stocks_tuple, ticker_dfs_shared
-    )
-
-st.markdown(f"#### 📐 Setup Quality")
-
-if not setup_avgrank_hist.empty:
-    chart_df_rank = setup_avgrank_hist.merge(setup_count_hist, on="Date", how="left")
-    chart_df_rank["Setup Count"] = chart_df_rank["Setup Count"].ffill().fillna(0)
-    today_rank = chart_df_rank["Avg Rank"].iloc[-1]
-    min_rank = chart_df_rank["Avg Rank"].min()
-    min_idx = chart_df_rank["Avg Rank"].idxmin()
-
-    bar_colors = ["#29B5E8"] * len(chart_df_rank)
-    bar_colors[chart_df_rank.index.get_loc(min_idx)] = "#90EE90"  # overall lowest bar (best rank)
-    if today_rank == min_rank:
-        bar_colors[-1] = "#FF4B4B"  # today is also the lowest
-
-    fig_setup = go.Figure()
-    fig_setup.add_trace(go.Bar(
-        x=chart_df_rank["Date"], y=chart_df_rank["Avg Rank"],
-        name="Avg Rank", marker_color=bar_colors, yaxis="y1",
-    ))
-    fig_setup.add_trace(go.Scatter(
-        x=chart_df_rank["Date"], y=chart_df_rank["Setup Count"],
-        name="Setup Count", mode="lines", line=dict(color="#FF4B4B", width=2),
-        yaxis="y2",
-    ))
-    fig_setup.update_layout(
-        height=320,
-        margin=dict(l=20, r=20, t=10, b=20),
-        plot_bgcolor="rgba(20,22,30,1)",
-        paper_bgcolor="rgba(13,17,23,0)",
-        font=dict(color="#cccccc"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="center", x=0.5),
-        xaxis=dict(showgrid=False, tickfont=dict(size=9, color="#888888")),
-        yaxis=dict(title="Avg Rank", showgrid=True, gridcolor="rgba(120,120,120,0.15)", tickfont=dict(color="#888888")),
-        yaxis2=dict(title="Setup Count", overlaying="y", side="right", showgrid=False, tickfont=dict(color="#888888")),
-    )
-    st.plotly_chart(fig_setup, use_container_width=True)
-else:
-    st.info("Insufficient data to compute Setup Avg Rank history.")
 
 st.markdown("---")
 st.markdown(f"#### Pie Chart")
@@ -7222,6 +7163,68 @@ if not early_bull_hist.empty:
         color="Bar_Color",
         use_container_width=True
     )
+
+st.markdown("---")
+
+ticker_dfs_all_industries, benchmark_df_all_industries = timed(
+    "download_all_industry_stocks_data",
+    download_all_industry_stocks_data,
+    all_industry_tickers_tuple, ticker_dfs_shared
+)
+
+with st.spinner("Computing Setup Rank history..."):
+    setup_avgrank_hist = timed(
+        "compute_setup_avgrank_history",
+        compute_setup_avgrank_history,
+        all_data, ticker_dfs_all_industries, benchmark_df_all_industries, 90,
+        tuple(sorted(global_setup_tickers)), global_setup_ticker_groups
+    )
+
+with st.spinner("Computing Setup Count history..."):
+    setup_count_hist = timed(
+        "compute_global_setup_count_history",
+        compute_global_setup_count_history,
+        stocks_tuple, ticker_dfs_shared
+    )
+
+st.markdown(f"#### 📐 Setup Quality")
+
+if not setup_avgrank_hist.empty:
+    chart_df_rank = setup_avgrank_hist.merge(setup_count_hist, on="Date", how="left")
+    chart_df_rank["Setup Count"] = chart_df_rank["Setup Count"].ffill().fillna(0)
+    today_rank = chart_df_rank["Avg Rank"].iloc[-1]
+    min_rank = chart_df_rank["Avg Rank"].min()
+    min_idx = chart_df_rank["Avg Rank"].idxmin()
+
+    bar_colors = ["#29B5E8"] * len(chart_df_rank)
+    bar_colors[chart_df_rank.index.get_loc(min_idx)] = "#90EE90"  # overall lowest bar (best rank)
+    if today_rank == min_rank:
+        bar_colors[-1] = "#FF4B4B"  # today is also the lowest
+
+    fig_setup = go.Figure()
+    fig_setup.add_trace(go.Bar(
+        x=chart_df_rank["Date"], y=chart_df_rank["Avg Rank"],
+        name="Avg Rank", marker_color=bar_colors, yaxis="y1",
+    ))
+    fig_setup.add_trace(go.Scatter(
+        x=chart_df_rank["Date"], y=chart_df_rank["Setup Count"],
+        name="Setup Count", mode="lines", line=dict(color="#FF4B4B", width=2),
+        yaxis="y2",
+    ))
+    fig_setup.update_layout(
+        height=320,
+        margin=dict(l=20, r=20, t=10, b=20),
+        plot_bgcolor="rgba(20,22,30,1)",
+        paper_bgcolor="rgba(13,17,23,0)",
+        font=dict(color="#cccccc"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="center", x=0.5),
+        xaxis=dict(showgrid=False, tickfont=dict(size=9, color="#888888")),
+        yaxis=dict(title="Avg Rank", showgrid=True, gridcolor="rgba(120,120,120,0.15)", tickfont=dict(color="#888888")),
+        yaxis2=dict(title="Setup Count", overlaying="y", side="right", showgrid=False, tickfont=dict(color="#888888")),
+    )
+    st.plotly_chart(fig_setup, use_container_width=True)
+else:
+    st.info("Insufficient data to compute Setup Avg Rank history.")
 
 # ==============================================================================
 # 13. SEND SETUP SUMMARY TEXT DIRECTLY TO TELEGRAM
