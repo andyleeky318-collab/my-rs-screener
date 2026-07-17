@@ -254,7 +254,7 @@ INDUSTRIES = {
     'ELEC-SEMICON FNDRY': ['SOXX', 'TSM', 'TXN', 'INTC', 'GFS', 'AMKR', 'TSEM', 'FORM', 'STM', 'UMC'],
     'ROBOTIC': ['BOTZ', 'AMBA', 'ARBE', 'MBLY', 'NOVT', 'HLX', 'JOBY', 'CGNX', 'ZBRA', 'CRNC', 'RR', 'PRCT', 'PTC', 'NDSN', 'HSAI', 'EMR', 'SERV', 'TER', 'IPGP', 'TRMB', 'SYM', 'OUST'],
     'RARE EARTH': ['REMX', 'USAR', 'METC', 'TMC', 'MP', 'MOS', 'CRML', 'NB', 'PPTA', 'UAMY'],
-    'QUANTUM': ['QNT', 'QTUM', 'QMCO', 'IONQ', 'QUBT', 'QBTS', 'RGTI', 'BTQ', 'ARQQ', 'INFQ', 'XNDU'],
+    'QUANTUM': ['WQTM', 'QNT', 'QMCO', 'IONQ', 'QUBT', 'QBTS', 'RGTI', 'BTQ', 'ARQQ', 'INFQ', 'XNDU'],
     'FUEL CELL': ['FCEL', 'BLDP', 'HYDR', 'BE', 'PLUG'],
     'LITHIUM': ['LIT', 'LAC', 'SLI', 'SQM', 'ALB', 'ATLX'],
     'EUROPE': ['ENOR', 'EFNL', 'EWN', 'EWI', 'EWL', 'EDEN', 'EWO', 'EIRL', 'EWK', 'EWG', 'IEUR', 'EPOL', 'IEV', 'EWU', 'EWP', 'EWQ', 'EWD'],
@@ -320,7 +320,7 @@ LIME_STOCKS1 = [
     'UFO', 'URA', 'USO', 'VTV', 'VUG', 'WGMI', 'XBI',
     'XME', 'XRT', 'XTL', 'SPY', 'QQQ', 'RSP', 'FOTO', 'KBE', 'NLR', 
     'CLOU', 'XHB', 'BUG', 'HACK', 'ITA', 'IAT', 'XOP', 'NASA', 
-    'XTN', 'IYT', 'BOAT', 'MOO', 'BLOK', 'PICK', 'BOTZ', 'MJ'
+    'XTN', 'IYT', 'BOAT', 'MOO', 'BLOK', 'PICK', 'BOTZ', 'MJ', 'WQTM'
 ]
 
 # ============================================================
