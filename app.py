@@ -5994,6 +5994,9 @@ if (gapBottom !== null && gapTop !== null && {gap_date_js} !== null) {{
 else:
     st.info("No active setups discovered.")
 
+with st.spinner("Scanning for Gapper History..."):
+    gapper_hist = timed("compute_gapper_history", compute_gapper_history, stocks_tuple, ticker_dfs_shared)
+
 st.write("")
 if not gapper_hist.empty:
     chart_df_g = gapper_hist.copy()
@@ -6400,6 +6403,9 @@ if volatility_hits:
 else:
     st.info("No tickers with volatility Z-score ≥ 2 today.")
 
+with st.spinner("Scanning for Volatility History..."):
+    volatility_hist = timed("compute_volatility_history", compute_volatility_history, stocks_tuple, ticker_dfs_shared)
+
 st.write("")
 if not volatility_hist.empty:
     chart_df_v = volatility_hist.copy()
@@ -6453,6 +6459,9 @@ if vt_list or vt_yest:
 else:
     st.info("No active setups discovered.")
 
+with st.spinner("Scanning for Value Trap History..."):
+    value_trap_hist = timed("compute_value_trap_history", compute_value_trap_history, stocks_tuple, ticker_dfs_shared)
+
 st.write("")
 if not value_trap_hist.empty:
     chart_df_vt = value_trap_hist.copy()
@@ -6472,7 +6481,7 @@ if not value_trap_hist.empty:
         color="Bar_Color",
         use_container_width=True
     )
-    
+
 #st.markdown(html_e2, unsafe_allow_html=True)
 
 # # DEBUG ENGULFING
