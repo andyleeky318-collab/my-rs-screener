@@ -311,7 +311,7 @@ LIME_STOCKS = [
     'PBW', 'REMX', 'SHLD', 'SIL', 'SLX', 'SMH', 'TAN',
     'UFO', 'URA', 'USO', 'VTV', 'VUG', 'WGMI', 'XBI',
     'XME', 'XRT', 'XTL', 'SPY', 'QQQ', 'RSP'
-]
+]#FOTO
 
 LIME_STOCKS1 = [
     'CIBR', 'COPX', 'DRAM', 'GDX', 'IBIT', 'IGV', 'IHI', 'EWY',
@@ -6000,14 +6000,18 @@ with st.spinner("Scanning for Gapper History..."):
 st.write("")
 if not gapper_hist.empty:
     chart_df_g = gapper_hist.copy()
-    today_g = chart_df_g["Gapper Count"].iloc[-1]
-    max_g = chart_df_g["Gapper Count"].max()
 
-    if today_g == max_g:
-        chart_df_g["Bar_Color"] = "#29B5E8"
+    today_g = chart_df_g["Gapper Count"].iloc[-1]
+    max_g   = chart_df_g["Gapper Count"].max()
+    min_g   = chart_df_g["Gapper Count"].min()
+
+    # Default: every bar blue
+    chart_df_g["Bar_Color"] = "#29B5E8"
+
+    # Latest bar turns red if today is either the highest OR the lowest
+    # value across the whole 60-day window
+    if today_g == max_g or today_g == min_g:
         chart_df_g.iloc[-1, chart_df_g.columns.get_loc("Bar_Color")] = "#FF4B4B"
-    else:
-        chart_df_g["Bar_Color"] = "#29B5E8"
 
     st.bar_chart(
         data=chart_df_g,
@@ -6409,14 +6413,17 @@ with st.spinner("Scanning for Volatility History..."):
 st.write("")
 if not volatility_hist.empty:
     chart_df_v = volatility_hist.copy()
-    today_v = chart_df_v["Volatility Count"].iloc[-1]
-    max_v = chart_df_v["Volatility Count"].max()
 
+    today_v = chart_df_v["Volatility Count"].iloc[-1]
+    max_v   = chart_df_v["Volatility Count"].max()
+
+    # Default: every bar blue
+    chart_df_v["Bar_Color"] = "#29B5E8"
+
+    # Only the LATEST bar turns red, and only if it's also the highest
+    # value across the whole 60-day window (ties count as "highest" too)
     if today_v == max_v:
-        chart_df_v["Bar_Color"] = "#29B5E8"
         chart_df_v.iloc[-1, chart_df_v.columns.get_loc("Bar_Color")] = "#FF4B4B"
-    else:
-        chart_df_v["Bar_Color"] = "#29B5E8"
 
     st.bar_chart(
         data=chart_df_v,
@@ -6465,14 +6472,17 @@ with st.spinner("Scanning for Value Trap History..."):
 st.write("")
 if not value_trap_hist.empty:
     chart_df_vt = value_trap_hist.copy()
-    today_vt = chart_df_vt["Value Trap Count"].iloc[-1]
-    max_vt = chart_df_vt["Value Trap Count"].max()
 
+    today_vt = chart_df_vt["Value Trap Count"].iloc[-1]
+    max_vt   = chart_df_vt["Value Trap Count"].max()
+
+    # Default: every bar blue
+    chart_df_vt["Bar_Color"] = "#29B5E8"
+
+    # Only the LATEST bar turns red, and only if it's also the highest
+    # value across the whole 60-day window (ties count as "highest" too)
     if today_vt == max_vt:
-        chart_df_vt["Bar_Color"] = "#29B5E8"
         chart_df_vt.iloc[-1, chart_df_vt.columns.get_loc("Bar_Color")] = "#FF4B4B"
-    else:
-        chart_df_vt["Bar_Color"] = "#29B5E8"
 
     st.bar_chart(
         data=chart_df_vt,
