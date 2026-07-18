@@ -78,6 +78,8 @@ EXTRA_SCREENSHOTS = [
      "Market Dashboard", 8, False, None),
     ("https://finviz.com/map",
      "S&P 500 Map", 12, True, None),
+    ("https://stockcharts.com/freecharts/candleglance.html?SPY,XLY,XLC,XLK,XLI,XLB,XLE,XLP,XLV,XLU,XLF|C|B14|1",
+     "Sector CandleGlance", 8, False, None),
 ]
 EXTRA_PAGE_LOAD_TIMEOUT  = 30000  # ms
 
