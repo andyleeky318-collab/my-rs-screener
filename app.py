@@ -7978,9 +7978,17 @@ def fetch_known_stocks_upcoming_earnings(stocks_tuple, days_ahead=7):
         return pd.DataFrame()
 
     hour_labels = {"bmo": "Pre-Market", "amc": "Post-Market", "dmh": "During Market"}
+
+    def format_date_with_day(date_str):
+        try:
+            d = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+            return f"{date_str} ({d.strftime('%a')})"
+        except (TypeError, ValueError):
+            return date_str
+
     df = pd.DataFrame([{
         "Ticker": r.get("symbol"),
-        "Date": r.get("date"),
+        "Date": format_date_with_day(r.get("date")),
         "Time": hour_labels.get(r.get("hour"), r.get("hour", "?")),
     } for r in filtered])
 
