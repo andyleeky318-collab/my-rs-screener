@@ -7951,3 +7951,63 @@ else:
 
             if not (news_items or filings or form4s or earnings):
                 st.info("No catalysts found in Massive data for this ticker.")
+
+@st.cache_data(ttl=21600)
+def fetch_known_stocks_upcoming_earnings(stocks_tuple, days_ahead=7):
+    finnhub_key = st.secrets.get("FINNHUB_API_KEY")
+    if not finnhub_key:
+        return pd.DataFrame()
+
+    today = datetime.date.today()
+    end = today + datetime.timedelta(days=days_ahead)
+    known_set = set(stocks_tuple)
+
+    try:
+        resp = requests.get(
+            "https://finnhub.io/api/v1/calendar/earnings",
+            params={"from": str(today), "to": str(end), "token": finnhub_key},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        rows = data.get("earningsCalendar", []) or []
+    except Exception as e:
+        st.warning(f"Finnhub earnings fetch error: {e}")
+        return pd.DataFrame()
+
+    filtered = [r for r in rows if r.get("symbol") in known_set]
+    if not filtered:
+        return pd.DataFrame()
+
+    hour_labels = {"bmo": "Before Open", "amc": "After Close", "dmh": "During Market"}
+    df = pd.DataFrame([{
+        "Ticker": r.get("symbol"),
+        "Date": r.get("date"),
+        "Time": hour_labels.get(r.get("hour"), r.get("hour", "?")),
+        "EPS Est": r.get("epsEstimate"),
+    } for r in filtered])
+
+    return df.sort_values("Date").reset_index(drop=True)
+
+st.markdown("---")
+st.markdown("#### 📅 Upcoming Earnings (Known Stocks)")
+
+if not st.secrets.get("FINNHUB_API_KEY"):
+    st.info("Add FINNHUB_API_KEY to secrets.toml to enable this.")
+else:
+    with st.spinner("Fetching upcoming earnings..."):
+        earnings_df = timed(
+            "fetch_known_stocks_upcoming_earnings",
+            fetch_known_stocks_upcoming_earnings,
+            stocks_tuple  # your existing tuple(KNOWN_STOCKS)
+        )
+
+    if earnings_df.empty:
+        st.info("No known-stock earnings in the next 7 days.")
+    else:
+        st.dataframe(
+            earnings_df,
+            use_container_width=False,
+            width=400,
+            hide_index=True
+        )
