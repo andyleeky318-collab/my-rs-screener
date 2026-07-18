@@ -7982,10 +7982,9 @@ def fetch_known_stocks_upcoming_earnings(stocks_tuple, days_ahead=7):
         "Ticker": r.get("symbol"),
         "Date": r.get("date"),
         "Time": hour_labels.get(r.get("hour"), r.get("hour", "?")),
-        "EPS Est": r.get("epsEstimate"),
     } for r in filtered])
 
-    return df.sort_values("Ticker").reset_index(drop=True)   # ← changed from "Date" to "Ticker"
+    return df.sort_values("Ticker").reset_index(drop=True)
 
 st.markdown("---")
 
