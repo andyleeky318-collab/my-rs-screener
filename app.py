@@ -8018,6 +8018,12 @@ def fetch_reddit_mentions_apewisdom(stocks_tuple, filter_type="wallstreetbets"):
     filter_type options: 'all-stocks', 'wallstreetbets', 'stocks', 'investing', 'options', etc.
     Returns top 100 most-mentioned tickers from the last 24h, filtered to KNOWN_STOCKS.
     """
+    def safe_int(v, default=0):
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return default
+
     known_set = set(stocks_tuple)
     rows = []
     page = 1
@@ -8039,13 +8045,13 @@ def fetch_reddit_mentions_apewisdom(stocks_tuple, filter_type="wallstreetbets"):
                 if ticker in known_set:
                     rows.append({
                         "Ticker": ticker,
-                        "Rank": int(r.get("rank", 0)),
-                        "Mentions": int(r.get("mentions", 0)),
-                        "Mentions 24h Ago": int(r.get("mentions_24h_ago", 0)),
-                        "Upvotes": int(r.get("upvotes", 0)),
+                        "Rank": safe_int(r.get("rank")),
+                        "Mentions": safe_int(r.get("mentions")),
+                        "Mentions 24h Ago": safe_int(r.get("mentions_24h_ago")),
+                        "Upvotes": safe_int(r.get("upvotes")),
                     })
 
-            if page >= data.get("pages", 1):
+            if page >= safe_int(data.get("pages"), 1):
                 break
             page += 1
 
