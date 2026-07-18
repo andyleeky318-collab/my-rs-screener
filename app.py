@@ -7990,24 +7990,24 @@ def fetch_known_stocks_upcoming_earnings(stocks_tuple, days_ahead=7):
     return df.sort_values("Ticker").reset_index(drop=True)   # ← changed from "Date" to "Ticker"
 
 st.markdown("---")
-st.markdown("#### 📅 Upcoming Earnings (Known Stocks)")
+
+with st.spinner("Fetching upcoming earnings..."):
+    earnings_df = timed(
+        "fetch_known_stocks_upcoming_earnings",
+        fetch_known_stocks_upcoming_earnings,
+        stocks_tuple  # your existing tuple(KNOWN_STOCKS)
+    )
+
+st.markdown(f"#### 📅 Upcoming Earnings ({len(earnings_df)})")
 
 if not st.secrets.get("FINNHUB_API_KEY"):
     st.info("Add FINNHUB_API_KEY to secrets.toml to enable this.")
+elif earnings_df.empty:
+    st.info("No known-stock earnings in the next 7 days.")
 else:
-    with st.spinner("Fetching upcoming earnings..."):
-        earnings_df = timed(
-            "fetch_known_stocks_upcoming_earnings",
-            fetch_known_stocks_upcoming_earnings,
-            stocks_tuple  # your existing tuple(KNOWN_STOCKS)
-        )
-
-    if earnings_df.empty:
-        st.info("No known-stock earnings in the next 7 days.")
-    else:
-        st.dataframe(
-            earnings_df,
-            use_container_width=False,
-            width=400,
-            hide_index=True
-        )
+    st.dataframe(
+        earnings_df,
+        use_container_width=False,
+        width=400,
+        hide_index=True
+    )
