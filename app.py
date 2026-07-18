@@ -2869,7 +2869,7 @@ SECTOR_KEYWORDS = {
     "Insurance": "#FF69B4",
     "Transportation": "#FF69B4", "Shipping": "#FF69B4", "Airlines": "#FF69B4",
     "Housing": "#FF69B4", "Homebuilders": "#FF69B4",
-    "Crypto": "#FF69B4", "Gold": "#FF69B4", "Broker": "#FF69B4", "Brokerage": "#FF69B4", "Rails": "#FF69B4", 
+    "Crypto": "#FF69B4", "Gold": "#FF69B4", "Broker": "#FF69B4", "Brokerage": "#FF69B4", "Rails": "#FF69B4", "finance": "#FF69B4", 
 }
 
 def format_ai_analysis_text(text, tickers=None, industries=None):
@@ -7797,3 +7797,136 @@ if in_send_window and st.session_state.get("telegram_setup_summary_sig") != setu
         st.session_state["telegram_setup_summary_sig"] = setup_summary_sig
     elif not (tg_token and tg_chat):
         st.sidebar.warning("Telegram secrets missing — Setup Summary not sent.")
+
+def massive_get(endpoint, params=None, timeout=15):
+    massive_key = st.secrets.get("MASSIVE_API_KEY")
+    if not massive_key:
+        return None
+    params = dict(params or {})
+    params["apiKey"] = massive_key
+    try:
+        r = requests.get(f"https://api.massive.com{endpoint}", params=params, timeout=timeout)
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        return None
+    
+def get_stock_news(ticker, limit=3):
+    data = massive_get("/v2/reference/news", {"ticker": ticker, "limit": limit})
+    return data.get("results", []) if data else []
+
+def get_recent_sec_filings(ticker, limit=3):
+    data = massive_get("/v3/reference/sec/filings", {"ticker": ticker, "limit": limit})
+    return data.get("results", []) if data else []
+
+def get_form4_insider(ticker, limit=5):
+    data = massive_get("/v3/reference/sec/form4", {"ticker": ticker, "limit": limit})
+    return data.get("results", []) if data else []
+
+def get_upcoming_earnings(ticker, days_ahead=7):
+    today = datetime.date.today()
+    end = today + datetime.timedelta(days=days_ahead)
+    data = massive_get("/benzinga/v1/earnings",
+                        {"ticker": ticker, "date.gte": str(today), "date.lte": str(end)})
+    return data.get("results", []) if data else []
+
+@st.cache_data(ttl=900)
+def fetch_news_for_volatility_hits(tickers_tuple):
+    return {t: get_stock_news(t) for t in tickers_tuple}
+
+@st.cache_data(ttl=3600)
+def fetch_sec_filings_for_volatility_hits(tickers_tuple):
+    return {t: get_recent_sec_filings(t) for t in tickers_tuple}
+
+@st.cache_data(ttl=3600)
+def fetch_form4_for_volatility_hits(tickers_tuple):
+    return {t: get_form4_insider(t) for t in tickers_tuple}
+
+@st.cache_data(ttl=21600)
+def fetch_earnings_for_volatility_hits(tickers_tuple):
+    return {t: get_upcoming_earnings(t) for t in tickers_tuple}
+
+def explain_volatility_hits(tickers_tuple):
+    news_map     = fetch_news_for_volatility_hits(tickers_tuple)
+    sec_map      = fetch_sec_filings_for_volatility_hits(tickers_tuple)
+    form4_map    = fetch_form4_for_volatility_hits(tickers_tuple)
+    earnings_map = fetch_earnings_for_volatility_hits(tickers_tuple)
+
+    reasons = {}
+    for t in tickers_tuple:
+        tags = []
+        if news_map.get(t):
+            tags.append("📰 News")
+        if any(str(f.get("form_type", "")).upper() == "8-K" for f in sec_map.get(t, [])):
+            tags.append("📝 8-K Filed")
+        if any("buy" in str(f.get("transaction_type", "")).lower() for f in form4_map.get(t, [])):
+            tags.append("👤 Insider Buy")
+        if earnings_map.get(t):
+            tags.append("📅 Earnings Soon")
+        reasons[t] = tags
+
+    return reasons, news_map, sec_map, form4_map, earnings_map
+
+st.markdown("---")
+st.markdown("#### 🔎 Volatility Explanation Panel (Massive.com)")
+
+vol_hit_tickers = tuple(sym for sym, z, pct in volatility_hits)
+
+if not st.secrets.get("MASSIVE_API_KEY"):
+    st.info("Add MASSIVE_API_KEY to secrets.toml to enable this panel.")
+elif not vol_hit_tickers:
+    st.info("No volatility hits today.")
+else:
+    with st.spinner("Fetching news, SEC filings, insider trades & earnings via Massive..."):
+        reasons, news_map, sec_map, form4_map, earnings_map = timed(
+            "explain_volatility_hits", explain_volatility_hits, vol_hit_tickers
+        )
+
+    # Compact badge row (reuses your .ticker-badge CSS)
+    badge_html = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+    for sym in vol_hit_tickers:
+        tag_str = " ".join(reasons.get(sym, [])) or "No catalyst"
+        badge_html += (
+            f'<div class="ticker-badge"><span class="ticker-name">{sym}</span>'
+            f'<span class="ticker-rs" style="margin-left:6px;">{tag_str}</span></div>'
+        )
+    badge_html += "</div>"
+    st.markdown(badge_html, unsafe_allow_html=True)
+
+    # Per-ticker detail
+    for sym in vol_hit_tickers:
+        tag_str = " ".join(reasons.get(sym, [])) or "No catalyst found"
+        with st.expander(f"{sym} — {tag_str}"):
+            news_items = news_map.get(sym, [])
+            if news_items:
+                st.markdown("**📰 News**")
+                for n in news_items[:3]:
+                    title = n.get("title", "Untitled")
+                    url = n.get("article_url") or n.get("url", "")
+                    st.markdown(f"- [{title}]({url})" if url else f"- {title}")
+
+            filings = sec_map.get(sym, [])
+            if filings:
+                st.markdown("**📝 Recent SEC Filings**")
+                for f in filings[:3]:
+                    st.markdown(f"- {f.get('form_type','?')} filed {f.get('filing_date','?')}")
+
+            form4s = form4_map.get(sym, [])
+            if form4s:
+                st.markdown("**👤 Insider Activity (Form 4)**")
+                for f in form4s[:5]:
+                    st.markdown(
+                        f"- {f.get('owner_name','Unknown')}: "
+                        f"{f.get('transaction_type','?')} {f.get('shares','?')} shares "
+                        f"({f.get('filing_date','?')})"
+                    )
+
+            earnings = earnings_map.get(sym, [])
+            if earnings:
+                st.markdown("**📅 Upcoming Earnings**")
+                for e in earnings[:2]:
+                    when = {"bmo": "Before Open", "amc": "After Close"}.get(e.get("time"), e.get("time", ""))
+                    st.markdown(f"- {e.get('date','?')} ({when})")
+
+            if not (news_items or filings or form4s or earnings):
+                st.info("No catalysts found in Massive data for this ticker.")
