@@ -8011,3 +8011,83 @@ else:
         width=400,
         hide_index=True
     )
+
+@st.cache_data(ttl=1800)
+def fetch_reddit_mentions_apewisdom(stocks_tuple, filter_type="wallstreetbets"):
+    """
+    filter_type options: 'all-stocks', 'wallstreetbets', 'stocks', 'investing', 'options', etc.
+    Returns top 100 most-mentioned tickers from the last 24h, filtered to KNOWN_STOCKS.
+    """
+    known_set = set(stocks_tuple)
+    rows = []
+    page = 1
+
+    try:
+        while True:
+            resp = requests.get(
+                f"https://apewisdom.io/api/v1.0/filter/{filter_type}/page/{page}",
+                timeout=15,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            results = data.get("results", [])
+            if not results:
+                break
+
+            for r in results:
+                ticker = r.get("ticker")
+                if ticker in known_set:
+                    rows.append({
+                        "Ticker": ticker,
+                        "Rank": int(r.get("rank", 0)),
+                        "Mentions": int(r.get("mentions", 0)),
+                        "Mentions 24h Ago": int(r.get("mentions_24h_ago", 0)),
+                        "Upvotes": int(r.get("upvotes", 0)),
+                    })
+
+            if page >= data.get("pages", 1):
+                break
+            page += 1
+
+    except Exception as e:
+        st.warning(f"ApeWisdom fetch error: {e}")
+        return pd.DataFrame()
+
+    if not rows:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(rows)
+    df["Δ Mentions"] = df["Mentions"] - df["Mentions 24h Ago"]
+    return df.sort_values("Mentions", ascending=False).reset_index(drop=True)
+
+st.markdown("---")
+
+with st.spinner("Fetching Reddit sentiment..."):
+    reddit_df = timed(
+        "fetch_reddit_mentions_apewisdom",
+        fetch_reddit_mentions_apewisdom,
+        stocks_tuple, "wallstreetbets"
+    )
+
+st.markdown(f"#### 🧵 Reddit Buzz — WallStreetBets ({len(reddit_df)})")
+
+if reddit_df.empty:
+    st.info("No known-stock mentions found on Reddit right now.")
+else:
+    html_reddit = ""
+    for _, row in reddit_df.head(30).iterrows():
+        sym = row["Ticker"]
+        delta = row["Δ Mentions"]
+        delta_color = "#00FF00" if delta > 0 else "#FF4B4B" if delta < 0 else "#888888"
+        delta_str = f"+{delta}" if delta > 0 else str(delta)
+        html_reddit += (
+            f'<div class="ticker-badge">'
+            f'<span class="ticker-name">{sym}</span>'
+            f'<span class="ticker-rs">{row["Mentions"]} mentions</span>'
+            f'<span style="color:{delta_color}; margin-left:5px; font-size:11px;">({delta_str})</span>'
+            f'</div>'
+        )
+    st.markdown(html_reddit, unsafe_allow_html=True)
+
+    with st.expander("Full table"):
+        st.dataframe(reddit_df, use_container_width=False, width=500, hide_index=True)
