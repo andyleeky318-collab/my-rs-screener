@@ -2730,19 +2730,27 @@ New 52-Week Lows ({len(new_low_tickers)} tickers): {nl_tickers_str}
 New Low industry concentration: {nl_str}
 """
 
+    nh_nl_label_block = ""
+    if new_high_tickers or new_low_tickers:
+        nh_nl_label_block = (
+            '**New High/Low Concentration**: Is there a common industry, theme, or subgroup '
+            'dominating the New Highs list? Same question for New Lows — is there a clear '
+            'industry cluster showing weakness? Note any overlap or contrast between the two.\n'
+        )
+
     prompt = f"""
 You are a concise IBD-style market analyst. Below are the top {len(top_rows)} industries right now, ranked by Group Relative Strength, with their strongest tickers.
 
 {industries_block}
 {nh_nl_block}
-In SHORT bullet points:
-1. What is the dominant market theme or macro narrative connecting these top industries right now (e.g. AI/semis, defense, gold/metals, crypto, industrials, etc)?
-2. Are there 2-3 distinct sub-themes or clusters visible, rather than one single theme?
-3. Any industry here that looks like an outlier / doesn't fit the dominant theme?
-{"4. Is there a common industry, theme, or subgroup dominating the New Highs list? Same question for New Lows — is there a clear industry cluster showing weakness? Note any overlap or contrast between the two." if (new_high_tickers or new_low_tickers) else ""}
-5. One-line tactical takeaway for a swing trader on where leadership is concentrated (and where weakness is concentrated, if New Lows data was given).
+Respond with EXACTLY these lines, each starting with the bolded label below followed by a colon, then the content on the SAME line. Do not add extra bullets, headers, or commentary outside these lines. Do not rename, reorder, or skip a label{"" if nh_nl_label_block else " (omit the New High/Low Concentration line entirely since no data was given)"}.
 
-Be direct, name industries explicitly, no fluff, no repeating the prompt.
+**Dominant Theme**: What is the dominant market theme or macro narrative connecting these top industries right now (e.g. AI/semis, defense, gold/metals, crypto, industrials, etc)?
+**Sub-Themes**: Are there 2-3 distinct sub-themes or clusters visible, rather than one single theme?
+**Outliers**: Any industry here that looks like an outlier / doesn't fit the dominant theme?
+{nh_nl_label_block}**Tactical Takeaway**: One-line tactical takeaway for a swing trader on where leadership is concentrated (and where weakness is concentrated, if New Lows data was given).
+
+Be direct, name industries explicitly, no fluff, no repeating the prompt. Each line's content should be 1-2 sentences max.
 """
 
     TRANSIENT_CODES = ["503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "quota",
@@ -5186,14 +5194,15 @@ Industry concentration (by leader count):
 
 Note: [BLUE DOT] = stock hitting a 250-day RS high right now (strongest near-term momentum).
 
-In 4-5 SHORT bullet points:
-1. Which 2-3 industries dominate the RS leader list and what does that signal?
-2. Are the BLUE DOT stocks concentrated in any particular theme?
-3. Any notable divergence or rotation worth flagging?
-4. One sentence of insight from the quadrant map — which quadrant has the most concentration, and what does the Strong vs Improving vs Weakening split suggest about market rotation right now?
-5. One-line tactical takeaway for a swing trader.
+Respond with EXACTLY these 5 lines, each starting with the bolded label below followed by a colon, then the content on the SAME line. Do not add extra bullets, headers, or commentary outside these 5 lines. Do not rename or reorder the labels.
 
-Be direct, use industry names, no fluff.
+**Sector Leadership**: Which 2-3 industries dominate the RS leader list and what does that signal?
+**Blue Dot Themes**: Are the BLUE DOT stocks concentrated in any particular theme?
+**Divergence & Rotation**: Any notable divergence or rotation worth flagging?
+**Quadrant Map Insight**: Which quadrant has the most concentration, and what does the Strong vs Improving vs Weakening split suggest about market rotation right now?
+**Tactical Takeaway**: One-line tactical takeaway for a swing trader.
+
+Be direct, use industry names, no fluff. Each line's content should be 1-2 sentences max.
 """
 
     TRANSIENT_CODES = [
@@ -5363,12 +5372,13 @@ Tickers ({len(tickers)} total) with industry group:
 Industry concentration:
 {top_industries_str}
 
-In 2-3 SHORT bullet points:
-1. Is there a common theme, sector, or sub-industry driving this list right now?
-2. Which 1-2 industries/sub-groups stand out, and what might that imply?
-3. One-line tactical takeaway for a swing trader watching this screen.
+Respond with EXACTLY these 3 lines, each starting with the bolded label below followed by a colon, then the content on the SAME line. Do not add extra bullets, headers, or commentary outside these 3 lines. Do not rename or reorder the labels.
 
-Be direct, name industries/tickers explicitly, no fluff, no repeating the prompt.
+**Common Theme**: Is there a common theme, sector, or sub-industry driving this list right now?
+**Standout Industries**: Which 1-2 industries/sub-groups stand out, and what might that imply?
+**Tactical Takeaway**: One-line tactical takeaway for a swing trader watching this screen.
+
+Be direct, name industries/tickers explicitly, no fluff, no repeating the prompt. Each line's content should be 1-2 sentences max.
 """
 
     TRANSIENT_CODES = ["503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "quota",
