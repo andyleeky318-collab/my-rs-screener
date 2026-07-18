@@ -34,6 +34,13 @@ APP_URL   = os.environ["STREAMLIT_APP_URL"]
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 CHAT_ID   = os.environ["TELEGRAM_CHAT_ID"]
 
+TV_EMAIL     = os.environ.get("TRADINGVIEW_EMAIL")
+TV_PASSWORD  = os.environ.get("TRADINGVIEW_PASSWORD")
+TV_CHART_URL = os.environ.get("TRADINGVIEW_CHART_URL") 
+
+TV_LOGIN_TIMEOUT_MS = 30000
+TV_CHART_SETTLE_SECONDS = 10
+
 VIEWPORT_WIDTH  = 1600
 VIEWPORT_HEIGHT = 1200
 
@@ -443,6 +450,63 @@ def capture_and_send_external_top(browser, url, caption, settle_seconds=SCROLL_S
     except Exception as e:
         print(f"External screenshot failed for '{url}': {e} -- skipping.")
 
+def tradingview_login(browser):
+    """
+    Logs into TradingView via email/password and returns an authenticated
+    Playwright page. Returns None on any failure (never raises) so a login
+    problem just results in this one screenshot being skipped.
+    """
+    if not (TV_EMAIL and TV_PASSWORD):
+        print("TradingView credentials not set -- skipping TradingView screenshot.")
+        return None
+
+    try:
+        page = browser.new_page(viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT})
+        page.goto("https://www.tradingview.com/accounts/signin/",
+                   wait_until="domcontentloaded", timeout=TV_LOGIN_TIMEOUT_MS)
+
+        # The signin page shows social-login buttons first; click "Email" to
+        # reveal the email/password form.
+        email_toggle = page.get_by_text("Email", exact=False)
+        if email_toggle.count() > 0:
+            email_toggle.first.click()
+            time.sleep(1)
+
+        page.fill('input[name="username"]', TV_EMAIL)
+        page.fill('input[name="password"]', TV_PASSWORD)
+        page.click('button[type="submit"]')
+
+        # Wait for login to complete -- signin form disappears once redirected.
+        page.wait_for_selector('input[name="password"]', state="detached", timeout=TV_LOGIN_TIMEOUT_MS)
+        time.sleep(3)
+        print("TradingView login succeeded.")
+        return page
+    except Exception as e:
+        print(f"TradingView login failed: {e} -- skipping TradingView screenshot.")
+        return None
+
+
+def capture_and_send_tradingview(browser):
+    """
+    Logs into TradingView, opens TV_CHART_URL, and sends one screenshot.
+    Fully self-contained and non-fatal -- any failure just skips this photo.
+    """
+    if not TV_CHART_URL:
+        print("TRADINGVIEW_CHART_URL not set -- skipping TradingView screenshot.")
+        return
+
+    page = tradingview_login(browser)
+    if page is None:
+        return
+
+    try:
+        page.goto(TV_CHART_URL, wait_until="domcontentloaded", timeout=EXTRA_PAGE_LOAD_TIMEOUT)
+        time.sleep(TV_CHART_SETTLE_SECONDS)
+        img_bytes = page.screenshot()
+        send_photo(img_bytes, "TradingView Chart")
+        page.close()
+    except Exception as e:
+        print(f"TradingView chart screenshot failed: {e} -- skipping.")
 
 def run():
     with sync_playwright() as p:
@@ -510,6 +574,11 @@ def run():
                 print("Global cutoff reached -- stopping further external site captures.")
                 break
             capture_and_send_external_top(browser, url, caption, settle_seconds, use_stealth, wait_text)
+
+        if not deadline.expired():
+            capture_and_send_tradingview(browser)
+        else:
+            print("Global cutoff reached -- skipping TradingView screenshot.")
 
         browser.close()
 
