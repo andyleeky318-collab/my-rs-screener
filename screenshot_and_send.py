@@ -69,11 +69,11 @@ SECTION_TOP_OFFSET_PX = 20
 # everything else keeps Playwright's plain default page behavior.
 EXTRA_SCREENSHOTS = [
     ("https://stockbee.blogspot.com/p/mm.html",
-     "Stockbee MM", 3, False, "Primary Breadth Indicators"),
+     "Stockbee", 3, False, "Primary Breadth Indicators"),
     ("https://docs.google.com/spreadsheets/d/1ZkNk5A5nPQGGSK00eAOlroGmJi2wVHPwdz3LAYAVb7U/edit?gid=0#gid=0",
      "Market Monitor Traffic Light", 8, False, None),
     ("https://stockcharts.com/sc3/ui/?s=%24USHL5",
-     "$USHL5 SharpCharts", 8, False, None),
+     "$USHL5", 8, False, None),
     ("https://fullstackinvestor.co/dashboard",
      "Market Dashboard", 8, False, None),
     ("https://finviz.com/map",
