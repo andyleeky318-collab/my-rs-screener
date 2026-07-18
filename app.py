@@ -7911,11 +7911,18 @@ else:
     badge_html += "</div>"
     st.markdown(badge_html, unsafe_allow_html=True)
 
-    # Per-ticker detail
+    # Per-ticker detail — only render an expander if a catalyst was actually found
     for sym in vol_hit_tickers:
+        news_items = news_map.get(sym, [])
+        filings    = sec_map.get(sym, [])
+        form4s     = form4_map.get(sym, [])
+        earnings   = earnings_map.get(sym, [])
+
+        if not (news_items or filings or form4s or earnings):
+            continue
+
         tag_str = " ".join(reasons.get(sym, [])) or "No catalyst found"
         with st.expander(f"{sym} — {tag_str}"):
-            news_items = news_map.get(sym, [])
             if news_items:
                 st.markdown("**📰 News**")
                 for n in news_items[:3]:
@@ -7923,13 +7930,11 @@ else:
                     url = n.get("article_url") or n.get("url", "")
                     st.markdown(f"- [{title}]({url})" if url else f"- {title}")
 
-            filings = sec_map.get(sym, [])
             if filings:
                 st.markdown("**📝 Recent SEC Filings**")
                 for f in filings[:3]:
                     st.markdown(f"- {f.get('form_type','?')} filed {f.get('filing_date','?')}")
 
-            form4s = form4_map.get(sym, [])
             if form4s:
                 st.markdown("**👤 Insider Activity (Form 4)**")
                 for f in form4s[:5]:
@@ -7939,18 +7944,11 @@ else:
                         f"({f.get('filing_date','?')})"
                     )
 
-            earnings = earnings_map.get(sym, [])
             if earnings:
-                st.markdown("**📅 Upcoming Earnings (Finnhub)**")
-                hour_labels = {"bmo": "Before Open", "amc": "After Close", "dmh": "During Market"}
+                st.markdown("**📅 Upcoming Earnings**")
                 for e in earnings[:2]:
-                    when = hour_labels.get(e.get("hour"), e.get("hour", "?"))
-                    eps_est = e.get("epsEstimate")
-                    eps_str = f", EPS est {eps_est:.2f}" if isinstance(eps_est, (int, float)) else ""
-                    st.markdown(f"- {e.get('date','?')} ({when}){eps_str}")
-
-            if not (news_items or filings or form4s or earnings):
-                st.info("No catalysts found in Massive data for this ticker.")
+                    when = {"bmo": "Before Open", "amc": "After Close"}.get(e.get("time"), e.get("time", ""))
+                    st.markdown(f"- {e.get('date','?')} ({when})")
 
 @st.cache_data(ttl=21600)
 def fetch_known_stocks_upcoming_earnings(stocks_tuple, days_ahead=7):
@@ -8094,6 +8092,7 @@ else:
             f'</div>'
         )
     st.markdown(html_reddit, unsafe_allow_html=True)
+    st.write("")
 
     with st.expander("Full table"):
         st.dataframe(reddit_df, use_container_width=False, width=500, hide_index=True)
