@@ -7977,7 +7977,7 @@ def fetch_known_stocks_upcoming_earnings(stocks_tuple, days_ahead=7):
     if not filtered:
         return pd.DataFrame()
 
-    hour_labels = {"bmo": "Before Open", "amc": "After Close", "dmh": "During Market"}
+    hour_labels = {"bmo": "Pre-Market", "amc": "Post-Market", "dmh": "During Market"}
     df = pd.DataFrame([{
         "Ticker": r.get("symbol"),
         "Date": r.get("date"),
