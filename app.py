@@ -7823,12 +7823,30 @@ def get_form4_insider(ticker, limit=5):
     data = massive_get("/v3/reference/sec/form4", {"ticker": ticker, "limit": limit})
     return data.get("results", []) if data else []
 
-def get_upcoming_earnings(ticker, days_ahead=7):
+def get_upcoming_earnings_finnhub(ticker, days_ahead=7):
+    finnhub_key = st.secrets.get("FINNHUB_API_KEY")
+    if not finnhub_key:
+        return []
+
     today = datetime.date.today()
     end = today + datetime.timedelta(days=days_ahead)
-    data = massive_get("/benzinga/v1/earnings",
-                        {"ticker": ticker, "date.gte": str(today), "date.lte": str(end)})
-    return data.get("results", []) if data else []
+
+    try:
+        resp = requests.get(
+            "https://finnhub.io/api/v1/calendar/earnings",
+            params={
+                "from": str(today),
+                "to": str(end),
+                "symbol": ticker,
+                "token": finnhub_key,
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("earningsCalendar", []) or []
+    except Exception:
+        return []
 
 @st.cache_data(ttl=900)
 def fetch_news_for_volatility_hits(tickers_tuple):
@@ -7844,7 +7862,7 @@ def fetch_form4_for_volatility_hits(tickers_tuple):
 
 @st.cache_data(ttl=21600)
 def fetch_earnings_for_volatility_hits(tickers_tuple):
-    return {t: get_upcoming_earnings(t) for t in tickers_tuple}
+    return {t: get_upcoming_earnings_finnhub(t) for t in tickers_tuple}
 
 def explain_volatility_hits(tickers_tuple):
     news_map     = fetch_news_for_volatility_hits(tickers_tuple)
@@ -7923,10 +7941,13 @@ else:
 
             earnings = earnings_map.get(sym, [])
             if earnings:
-                st.markdown("**📅 Upcoming Earnings**")
+                st.markdown("**📅 Upcoming Earnings (Finnhub)**")
+                hour_labels = {"bmo": "Before Open", "amc": "After Close", "dmh": "During Market"}
                 for e in earnings[:2]:
-                    when = {"bmo": "Before Open", "amc": "After Close"}.get(e.get("time"), e.get("time", ""))
-                    st.markdown(f"- {e.get('date','?')} ({when})")
+                    when = hour_labels.get(e.get("hour"), e.get("hour", "?"))
+                    eps_est = e.get("epsEstimate")
+                    eps_str = f", EPS est {eps_est:.2f}" if isinstance(eps_est, (int, float)) else ""
+                    st.markdown(f"- {e.get('date','?')} ({when}){eps_str}")
 
             if not (news_items or filings or form4s or earnings):
                 st.info("No catalysts found in Massive data for this ticker.")
