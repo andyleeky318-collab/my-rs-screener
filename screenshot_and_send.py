@@ -488,19 +488,34 @@ def tradingview_login(browser):
 
 def capture_and_send_tradingview(browser):
     """
-    Logs into TradingView, opens TV_CHART_URL, and sends one screenshot.
-    Fully self-contained and non-fatal -- any failure just skips this photo.
+    Logs into TradingView and sends one screenshot of a chart. If
+    TV_CHART_URL is set, goes straight there. If not, falls back to
+    clicking the 'Products' tab in the top nav (which lands directly on
+    a chart). Fully self-contained and non-fatal -- any failure just
+    skips this photo.
     """
-    if not TV_CHART_URL:
-        print("TRADINGVIEW_CHART_URL not set -- skipping TradingView screenshot.")
-        return
-
     page = tradingview_login(browser)
     if page is None:
         return
 
     try:
-        page.goto(TV_CHART_URL, wait_until="domcontentloaded", timeout=EXTRA_PAGE_LOAD_TIMEOUT)
+        if TV_CHART_URL:
+            page.goto(TV_CHART_URL, wait_until="domcontentloaded", timeout=EXTRA_PAGE_LOAD_TIMEOUT)
+        else:
+            print("TRADINGVIEW_CHART_URL not set -- trying 'Products' nav click instead...")
+            try:
+                products = page.get_by_text("Products", exact=False)
+                if products.count() == 0 or not products.first.is_visible():
+                    print("Could not find 'Products' tab -- skipping TradingView screenshot.")
+                    page.close()
+                    return
+                products.first.click()
+                page.wait_for_load_state("domcontentloaded", timeout=EXTRA_PAGE_LOAD_TIMEOUT)
+            except Exception as e:
+                print(f"Could not click 'Products': {e} -- skipping TradingView screenshot.")
+                page.close()
+                return
+
         time.sleep(TV_CHART_SETTLE_SECONDS)
         img_bytes = page.screenshot()
         send_photo(img_bytes, "TradingView Chart")
