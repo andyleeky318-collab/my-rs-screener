@@ -7886,6 +7886,39 @@ def explain_volatility_hits(tickers_tuple):
     return reasons, news_map, sec_map, form4_map, earnings_map
 
 st.markdown("---")
+
+with st.spinner("Fetching Reddit sentiment..."):
+    reddit_df = timed(
+        "fetch_reddit_mentions_apewisdom",
+        fetch_reddit_mentions_apewisdom,
+        stocks_tuple, "wallstreetbets"
+    )
+
+st.markdown(f"#### 🧵 Reddit Buzz — WallStreetBets ({len(reddit_df)})")
+
+if reddit_df.empty:
+    st.info("No known-stock mentions found on Reddit right now.")
+else:
+    html_reddit = ""
+    for _, row in reddit_df.head(30).iterrows():
+        sym = row["Ticker"]
+        delta = row["Δ Mentions"]
+        delta_color = "#00FF00" if delta > 0 else "#FF4B4B" if delta < 0 else "#888888"
+        delta_str = f"+{delta}" if delta > 0 else str(delta)
+        html_reddit += (
+            f'<div class="ticker-badge">'
+            f'<span class="ticker-name">{sym}</span>'
+            f'<span class="ticker-rs">{row["Mentions"]} mentions</span>'
+            f'<span style="color:{delta_color}; margin-left:5px; font-size:11px;">({delta_str})</span>'
+            f'</div>'
+        )
+    st.markdown(html_reddit, unsafe_allow_html=True)
+    st.write("")
+
+    with st.expander("Full table"):
+        st.dataframe(reddit_df, use_container_width=False, width=500, hide_index=True)
+
+st.markdown("---")
 st.markdown("#### 🔎 Volatility Explanation Panel (Massive.com)")
 
 vol_hit_tickers = tuple(sym for sym, z, pct in volatility_hits)
@@ -8071,35 +8104,3 @@ def fetch_reddit_mentions_apewisdom(stocks_tuple, filter_type="wallstreetbets"):
     df["Δ Mentions"] = df["Mentions"] - df["Mentions 24h Ago"]
     return df.sort_values("Mentions", ascending=False).reset_index(drop=True)
 
-st.markdown("---")
-
-with st.spinner("Fetching Reddit sentiment..."):
-    reddit_df = timed(
-        "fetch_reddit_mentions_apewisdom",
-        fetch_reddit_mentions_apewisdom,
-        stocks_tuple, "wallstreetbets"
-    )
-
-st.markdown(f"#### 🧵 Reddit Buzz — WallStreetBets ({len(reddit_df)})")
-
-if reddit_df.empty:
-    st.info("No known-stock mentions found on Reddit right now.")
-else:
-    html_reddit = ""
-    for _, row in reddit_df.head(30).iterrows():
-        sym = row["Ticker"]
-        delta = row["Δ Mentions"]
-        delta_color = "#00FF00" if delta > 0 else "#FF4B4B" if delta < 0 else "#888888"
-        delta_str = f"+{delta}" if delta > 0 else str(delta)
-        html_reddit += (
-            f'<div class="ticker-badge">'
-            f'<span class="ticker-name">{sym}</span>'
-            f'<span class="ticker-rs">{row["Mentions"]} mentions</span>'
-            f'<span style="color:{delta_color}; margin-left:5px; font-size:11px;">({delta_str})</span>'
-            f'</div>'
-        )
-    st.markdown(html_reddit, unsafe_allow_html=True)
-    st.write("")
-
-    with st.expander("Full table"):
-        st.dataframe(reddit_df, use_container_width=False, width=500, hide_index=True)
