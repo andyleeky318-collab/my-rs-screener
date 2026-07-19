@@ -2896,7 +2896,7 @@ def format_ai_analysis_text(text, tickers=None, industries=None):
     #    so we don't accidentally bold digits inside hex color codes.
     text = re.sub(
         r'\b(\d+(?:\.\d+)?%?)\b',
-        r'<span style="color:#FFD966; font-weight:bold;">\1</span>',
+        r'<span style="color:#FFE5CC; font-weight:bold;">\1</span>',
         text
     )
 
@@ -3214,6 +3214,9 @@ if all_data:
     th:nth-child(6), td:nth-child(6),
     th:nth-child(7), td:nth-child(7) {
         border-right: 3px solid #ffffff;
+    }
+    tbody tr:nth-child(21) td {
+        border-top: 3px solid #ffffff;
     }
     </style>
     """, unsafe_allow_html=True)
