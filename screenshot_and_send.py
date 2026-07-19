@@ -83,10 +83,12 @@ EXTRA_SCREENSHOTS = [
      "$USHL5", 8, False, None),
     ("https://fullstackinvestor.co/dashboard",
      "Market Dashboard", 8, False, None),
+    ("https://stockcharts.com/freecharts/candleglance.html?SPY,XLY,XLC,XLK,XLI,XLB,XLE,XLP,XLV,XLU,XLF|C|B14|1",
+     "Sector RS", 8, False, None),
+    ("https://aistockbubbleindex.com/",
+     "AI Bubble", 8, False, None),
     ("https://finviz.com/map",
      "S&P 500 Map", 12, True, None),
-    ("https://stockcharts.com/freecharts/candleglance.html?SPY,XLY,XLC,XLK,XLI,XLB,XLE,XLP,XLV,XLU,XLF|C|B14|1",
-     "Sector CandleGlance", 8, False, None),
 ]
 EXTRA_PAGE_LOAD_TIMEOUT  = 30000  # ms
 
