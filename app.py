@@ -2869,7 +2869,7 @@ SECTOR_KEYWORDS = {
     "Insurance": "#FF69B4",
     "Transportation": "#FF69B4", "Shipping": "#FF69B4", "Airlines": "#FF69B4",
     "Housing": "#FF69B4", "Homebuilders": "#FF69B4",
-    "Crypto": "#FF69B4", "Gold": "#FF69B4", "Broker": "#FF69B4", "Brokerage": "#FF69B4", "Rail": "#FF69B4", "Rails": "#FF69B4", "finance": "#FF69B4", 
+    "Crypto": "#FF69B4", "Gold": "#FF69B4", "Broker": "#FF69B4", "Brokerage": "#FF69B4", "Rail": "#FF69B4", "Rails": "#FF69B4", "finance": "#FF69B4", "metals": "#FF69B4", "Payment Processing": "#FF69B4", 
 }
 
 def format_ai_analysis_text(text, tickers=None, industries=None):
@@ -5536,8 +5536,17 @@ else:
     
     col_tbl, col_metrics, col_spacer = st.columns([2, 1, 6])
     with col_tbl:
+        df_leaders_summary = pd.DataFrame(summary_rows)
+
+        def highlight_top3_lime(row):
+            if row.name < 3:
+                return ["background-color: #00FF00; color: #000000; font-weight: bold;"] * len(row)
+            return [""] * len(row)
+
+        styled_leaders_df = df_leaders_summary.style.apply(highlight_top3_lime, axis=1)
+
         st.dataframe(
-            pd.DataFrame(summary_rows),
+            styled_leaders_df,
             use_container_width=False,
             width=300,
             hide_index=True,
@@ -6432,11 +6441,21 @@ if not volatility_hist.empty:
     today_v = chart_df_v["Volatility Count"].iloc[-1]
     max_v   = chart_df_v["Volatility Count"].max()
 
+    mean_v = chart_df_v["Volatility Count"].mean()
+    std_v  = chart_df_v["Volatility Count"].std(ddof=1)
+
+    if std_v and std_v > 0:
+        z_scores = (chart_df_v["Volatility Count"] - mean_v) / std_v
+    else:
+        z_scores = pd.Series(0, index=chart_df_v.index)
+
     # Default: every bar blue
     chart_df_v["Bar_Color"] = "#29B5E8"
 
-    # Only the LATEST bar turns red, and only if it's also the highest
-    # value across the whole 60-day window (ties count as "highest" too)
+    # Statistical outliers (>=2 std dev above mean) turn red
+    chart_df_v.loc[z_scores >= 2, "Bar_Color"] = "#FF4B4B"
+
+    # Latest bar also turns red if it's the highest in the window (ties count)
     if today_v == max_v:
         chart_df_v.iloc[-1, chart_df_v.columns.get_loc("Bar_Color")] = "#FF4B4B"
 
@@ -7988,71 +8007,6 @@ else:
     with st.expander("Full table"):
         st.dataframe(reddit_df, use_container_width=False, width=500, hide_index=True)
 
-st.markdown("---")
-st.markdown("#### 🔎 Volatility Explanation Panel (Massive.com)")
-
-vol_hit_tickers = tuple(sym for sym, z, pct in volatility_hits)
-
-if not st.secrets.get("MASSIVE_API_KEY"):
-    st.info("Add MASSIVE_API_KEY to secrets.toml to enable this panel.")
-elif not vol_hit_tickers:
-    st.info("No volatility hits today.")
-else:
-    with st.spinner("Fetching news, SEC filings, insider trades & earnings via Massive..."):
-        reasons, news_map, sec_map, form4_map, earnings_map = timed(
-            "explain_volatility_hits", explain_volatility_hits, vol_hit_tickers
-        )
-
-    # Compact badge row (reuses your .ticker-badge CSS)
-    badge_html = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
-    for sym in vol_hit_tickers:
-        tag_str = " ".join(reasons.get(sym, [])) or "No catalyst"
-        badge_html += (
-            f'<div class="ticker-badge"><span class="ticker-name">{sym}</span>'
-            f'<span class="ticker-rs" style="margin-left:6px;">{tag_str}</span></div>'
-        )
-    badge_html += "</div>"
-    st.markdown(badge_html, unsafe_allow_html=True)
-
-    # Per-ticker detail — only render an expander if a catalyst was actually found
-    for sym in vol_hit_tickers:
-        news_items = news_map.get(sym, [])
-        filings    = sec_map.get(sym, [])
-        form4s     = form4_map.get(sym, [])
-        #earnings   = earnings_map.get(sym, [])
-
-        if not (news_items or filings or form4s):
-            continue
-
-        tag_str = " ".join(reasons.get(sym, [])) or "No catalyst found"
-        with st.expander(f"{sym} — {tag_str}"):
-            if news_items:
-                st.markdown("**📰 News**")
-                for n in news_items[:3]:
-                    title = n.get("title", "Untitled")
-                    url = n.get("article_url") or n.get("url", "")
-                    st.markdown(f"- [{title}]({url})" if url else f"- {title}")
-
-            if filings:
-                st.markdown("**📝 Recent SEC Filings**")
-                for f in filings[:3]:
-                    st.markdown(f"- {f.get('form_type','?')} filed {f.get('filing_date','?')}")
-
-            if form4s:
-                st.markdown("**👤 Insider Activity (Form 4)**")
-                for f in form4s[:5]:
-                    st.markdown(
-                        f"- {f.get('owner_name','Unknown')}: "
-                        f"{f.get('transaction_type','?')} {f.get('shares','?')} shares "
-                        f"({f.get('filing_date','?')})"
-                    )
-
-            # if earnings:
-            #     st.markdown("**📅 Upcoming Earnings**")
-            #     for e in earnings[:2]:
-            #         when = {"bmo": "Before Open", "amc": "After Close"}.get(e.get("time"), e.get("time", ""))
-            #         st.markdown(f"- {e.get('date','?')} ({when})")
-
 @st.cache_data(ttl=21600)
 def fetch_known_stocks_upcoming_earnings(stocks_tuple, days_ahead=7):
     finnhub_key = st.secrets.get("FINNHUB_API_KEY")
@@ -8120,5 +8074,68 @@ else:
         hide_index=True
     )
 
+st.markdown("---")
+st.markdown("#### 🔎 Volatility Explanation Panel (Massive.com)")
 
+vol_hit_tickers = tuple(sym for sym, z, pct in volatility_hits)
+
+if not st.secrets.get("MASSIVE_API_KEY"):
+    st.info("Add MASSIVE_API_KEY to secrets.toml to enable this panel.")
+elif not vol_hit_tickers:
+    st.info("No volatility hits today.")
+else:
+    with st.spinner("Fetching news, SEC filings, insider trades & earnings via Massive..."):
+        reasons, news_map, sec_map, form4_map, earnings_map = timed(
+            "explain_volatility_hits", explain_volatility_hits, vol_hit_tickers
+        )
+
+    # Compact badge row (reuses your .ticker-badge CSS)
+    badge_html = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+    for sym in vol_hit_tickers:
+        tag_str = " ".join(reasons.get(sym, [])) or "No catalyst"
+        badge_html += (
+            f'<div class="ticker-badge"><span class="ticker-name">{sym}</span>'
+            f'<span class="ticker-rs" style="margin-left:6px;">{tag_str}</span></div>'
+        )
+    badge_html += "</div>"
+    st.markdown(badge_html, unsafe_allow_html=True)
+
+    # Per-ticker detail — only render an expander if a catalyst was actually found
+    for sym in vol_hit_tickers:
+        news_items = news_map.get(sym, [])
+        filings    = sec_map.get(sym, [])
+        form4s     = form4_map.get(sym, [])
+        #earnings   = earnings_map.get(sym, [])
+
+        if not (news_items or filings or form4s):
+            continue
+
+        tag_str = " ".join(reasons.get(sym, [])) or "No catalyst found"
+        with st.expander(f"{sym} — {tag_str}"):
+            if news_items:
+                st.markdown("**📰 News**")
+                for n in news_items[:3]:
+                    title = n.get("title", "Untitled")
+                    url = n.get("article_url") or n.get("url", "")
+                    st.markdown(f"- [{title}]({url})" if url else f"- {title}")
+
+            if filings:
+                st.markdown("**📝 Recent SEC Filings**")
+                for f in filings[:3]:
+                    st.markdown(f"- {f.get('form_type','?')} filed {f.get('filing_date','?')}")
+
+            if form4s:
+                st.markdown("**👤 Insider Activity (Form 4)**")
+                for f in form4s[:5]:
+                    st.markdown(
+                        f"- {f.get('owner_name','Unknown')}: "
+                        f"{f.get('transaction_type','?')} {f.get('shares','?')} shares "
+                        f"({f.get('filing_date','?')})"
+                    )
+
+            # if earnings:
+            #     st.markdown("**📅 Upcoming Earnings**")
+            #     for e in earnings[:2]:
+            #         when = {"bmo": "Before Open", "amc": "After Close"}.get(e.get("time"), e.get("time", ""))
+            #         st.markdown(f"- {e.get('date','?')} ({when})")
 
