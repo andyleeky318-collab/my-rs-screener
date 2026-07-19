@@ -5540,7 +5540,7 @@ else:
 
         def highlight_top3_lime(row):
             if row.name < 3:
-                return ["background-color: #00FF00; color: #000000; font-weight: bold;"] * len(row)
+                return ["background-color: #90EE90; color: #000000; font-weight: bold;"] * len(row)
             return [""] * len(row)
 
         styled_leaders_df = df_leaders_summary.style.apply(highlight_top3_lime, axis=1)
@@ -6099,21 +6099,31 @@ st.write("")
 if not two_botak_hist.empty:
     # 1. Create a temporary copy to prevent altering your original dataframe
     chart_df = two_botak_hist.copy()
-    
+
     # 2. Determine if the most recent row (today) holds the absolute maximum value
     today_value = chart_df["Two Botak Count"].iloc[-1]
     max_value = chart_df["Two Botak Count"].max()
-    
-    # 3. Add an explicit 'Bar_Color' column to your dataframe
-    if today_value == max_value:
-        # Define base color, then override the last row (today) with your accent color
-        chart_df["Bar_Color"] = "#29B5E8"
-        chart_df.iloc[-1, chart_df.columns.get_loc("Bar_Color")] = "#FF4B4B"
-    else:
-        # Standard uniform blue color if today isn't the highest
-        chart_df["Bar_Color"] = "#29B5E8"
 
-    # 4. Render chart mapping color directly to the new dataframe column
+    # 3. Compute z-scores vs the window's mean/std
+    mean_val = chart_df["Two Botak Count"].mean()
+    std_val  = chart_df["Two Botak Count"].std(ddof=1)
+
+    if std_val and std_val > 0:
+        z_scores = (chart_df["Two Botak Count"] - mean_val) / std_val
+    else:
+        z_scores = pd.Series(0, index=chart_df.index)
+
+    # 4. Default: every bar blue
+    chart_df["Bar_Color"] = "#29B5E8"
+
+    # Statistical outliers (>=2 std dev above mean) turn red
+    chart_df.loc[z_scores >= 2, "Bar_Color"] = "#FF4B4B"
+
+    # Latest bar also turns red if it's the highest in the window (ties count)
+    if today_value == max_value:
+        chart_df.iloc[-1, chart_df.columns.get_loc("Bar_Color")] = "#FF4B4B"
+
+    # 5. Render chart mapping color directly to the new dataframe column
     st.bar_chart(
         data=chart_df,
         x="Date",
