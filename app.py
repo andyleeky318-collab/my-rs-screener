@@ -7879,8 +7879,7 @@ def explain_volatility_hits(tickers_tuple):
             tags.append("📝 8-K Filed")
         if any("buy" in str(f.get("transaction_type", "")).lower() for f in form4_map.get(t, [])):
             tags.append("👤 Insider Buy")
-        if earnings_map.get(t):
-            tags.append("📅 Earnings Soon")
+        # 📅 Earnings Soon tag removed
         reasons[t] = tags
 
     return reasons, news_map, sec_map, form4_map, earnings_map
@@ -8031,11 +8030,11 @@ else:
                         f"({f.get('filing_date','?')})"
                     )
 
-            if earnings:
-                st.markdown("**📅 Upcoming Earnings**")
-                for e in earnings[:2]:
-                    when = {"bmo": "Before Open", "amc": "After Close"}.get(e.get("time"), e.get("time", ""))
-                    st.markdown(f"- {e.get('date','?')} ({when})")
+            # if earnings:
+            #     st.markdown("**📅 Upcoming Earnings**")
+            #     for e in earnings[:2]:
+            #         when = {"bmo": "Before Open", "amc": "After Close"}.get(e.get("time"), e.get("time", ""))
+            #         st.markdown(f"- {e.get('date','?')} ({when})")
 
 @st.cache_data(ttl=21600)
 def fetch_known_stocks_upcoming_earnings(stocks_tuple, days_ahead=7):
