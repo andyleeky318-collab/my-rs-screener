@@ -151,7 +151,7 @@ INDUSTRIES = {
     'RETAIL-CNSMR ELEC': ['BBY', 'GME'],
     'CONSUMER PROD-ELEC': ['SN', 'ROKU', 'WHR', 'SPB', 'SONY'],
     'BLDG-HEAVY CONSTR': ['PWR', 'IESC', 'EME', 'FIX', 'ACM', 'TTEK', 'MTZ', 'APG', 'FLR', 'DY', 'STRL', 'ROAD', 'GVA', 'PRIM'],
-    'BLDG-RSIDNT/COMML': ['ITB', 'BLD', 'IBP', 'EXPO', 'DHI', 'LEN', 'NVR', 'PHM', 'TOL', 'MTH', 'TMHC', 'KBH', 'SKY', 'MHO', 'FTDR', 'GRBK', 'DFH', 'CCS', 'LGIH'],
+    'BLDG-RSIDNT/COMML': ['ITB', 'IBP', 'EXPO', 'DHI', 'LEN', 'NVR', 'PHM', 'TOL', 'MTH', 'TMHC', 'KBH', 'SKY', 'MHO', 'FTDR', 'GRBK', 'DFH', 'CCS', 'LGIH'],
     'BLDG-MBILE/MFG & RV': ['CVCO', 'PATK'],
     'POLLUTION CONTROL': ['WM', 'RSG', 'CLH', 'CWST'],
     'COMML SVCS-LEASING': ['URI', 'AER', 'UHAL', 'WSC', 'R', 'HRI', 'WD', 'CAR', 'MGRC', 'PRG'],
@@ -177,7 +177,7 @@ INDUSTRIES = {
     'COSMETICS/PERSNL CRE': ['PG', 'CL', 'KMB', 'KVUE', 'EL', 'CHD', 'CLX', 'ELF', 'IPAR'],
     'SOAP & CLNG PREPARAT': ['REYN', 'ENR'],
     'DVRSIFIED OPRTIONS': ['MMM', 'RLX', 'WMS', 'AWI', 'BRC', 'YETI', 'LCII'],
-    'MCHNRY-GEN INDSTRL': ['GE', 'TT', 'CARR', 'JCI', 'IR', 'XYL', 'DOV', 'LII', 'PNR', 'IEX', 'GGG', 'NDSN', 'LECO', 'WWD', 'AAON', 'FLS', 'MIDD', 'MOD', 'WTS', 'BMI', 'ZWS', 'ESAB', 'TKR', 'GTLS', 'GTES', 'FELE', 'KAI', 'MWA', 'NPO', 'CXT', 'OII', 'SYM'],
+    'MCHNRY-GEN INDSTRL': ['GE', 'TT', 'CARR', 'JCI', 'IR', 'XYL', 'DOV', 'LII', 'PNR', 'IEX', 'GGG', 'NDSN', 'LECO', 'WWD', 'AAON', 'FLS', 'MIDD', 'MOD', 'WTS', 'BMI', 'ZWS', 'ESAB', 'TKR', 'GTES', 'FELE', 'KAI', 'MWA', 'NPO', 'CXT', 'OII', 'SYM'],
     'CHEMICALS-PAINTS': ['SHW', 'PPG', 'RPM', 'AXTA'],
     'COMPTER SFTWR-SCRITY': ['CIBR', 'FTNT', 'PANW', 'CRWD', 'CHKP', 'RBRK', 'RPD', 'OKTA', 'ZS', 'TENB', 'S', 'QLYS'],
     'COMPTER SFTWR-ENTR': ['IGV', 'FROG', 'TWLO', 'MSFT', 'ORCL', 'CRM', 'IBM', 'NOW', 'ADP', 'DOCN', 'PLTR', 'ADSK', 'ROP', 'TEAM', 'SNOW', 'VEEV', 'HUBS', 'PTC', 'MANH', 'TOST', 'MNDY', 'WDAY', 'SSNC', 'GWRE', 'BSY', 'PEGA', 'QTWO', 'APPF', 'BOX', 'WK', 'U', 'RNG'],
@@ -278,7 +278,7 @@ KNOWN_STOCKS = [
     'NBIS', 'NVT', 'OXY', 'FORM', 'IBIT', 'QTUM', 'IAI', 'KWEB', 'IHI', 'UFO', 'ITA', 'IYT', 'CVS', 'HUM', 'NEE', 
     'HPE', 'PLAB', 'INOD', 'TTMI', 'CCJ', 'BE', 'SLV', 'PICK', 'COPX', 'MAR', 'XAR', 'VSXY', 'GLW', 'ANF', 'AEO', 
     'AEP', 'GH', 'SANM', 'ROK', 'PSN', 'IAT', 'HROW', 'PL', 'AVAV', 'CIEN', 'COHR', 'NU', 'WULF', 'IREN', 'CIFR', 
-    'RDW', 'PH', 'LITE', 'ACHR', 'CACI', 'CRS', 'URA', 'NVO', 'NLR', 'ITB', 'MVST', 'EOSE', 'APP', 'RKLB', 'ASTS', 
+    'RDW', 'PH', 'LITE', 'ACHR', 'CACI', 'CRS', 'URA', 'NVO', 'NLR', 'ITB', 'EOSE', 'APP', 'RKLB', 'ASTS', 
     'IONQ', 'RMBS', 'RTX', 'NOC', 'LMT', 'HON', 'ONDS', 'CLS', 'LEU', 'VRT', 'VST', 'NRG', 'CEG', 'SMCI', 'CRDO', 
     'SOFI', 'XLP', 'XLE', 'HIMS', 'HOOD', 'GEV', 'XLV', 'HACK', 'XOP', 'CIBR', 'ICLN', 'XLB', 'XLU', 'XLRE', 'IGV', 
     'XLF', 'IPAY', 'XLC', 'XLI', 'KRE', 'XLK', 'CLOU', 'KBE', 'XME', 'XTL', 'JETS', 'SMH', 'XLY', 'XHB', 
@@ -290,7 +290,7 @@ KNOWN_STOCKS = [
     'Z', 'OPEN', 'CHWY', 'CVNA', 'BARK', 'GM', 'BLNK', 'QS', 'F', 'RIVN', 'FCEL', 'CHPT', 'LCID', 
     'UPST', 'PYPL', 'AFRM', 'V', 'MA', 'AXP', 'BITO', 'COIN', 'RIOT', 'MARA', 'MSTR',
     'DKNG', 'PENN', 'BETZ', 'REGN', 'VRTX', 'MRK', 'UNH', 'TMO', 'ISRG', 'ABT', 'IDXX', 'TDOC', 'CRSP', 
-    'BRK-B', 'ETN', 'CAT', 'BLD', 'U', 'RBLX', 'SKLZ', 'FSLY', 'TRIP', 'EXPE', 'BKNG', 'ABNB', 'DIS', 'WMT', 
+    'BRK-B', 'ETN', 'CAT', 'U', 'RBLX', 'SKLZ', 'FSLY', 'TRIP', 'EXPE', 'BKNG', 'ABNB', 'DIS', 'WMT', 
     'COST', 'TGT', 'LOW', 'HD', 'DT', 'SNPS', 'CDNS', 'MDB', 'ORCL', 'NOW', 'ADP', 'SNOW', 'DDOG', 
     'FROG', 'ADSK', 'INTU', 'TEAM', 'WDAY', 'CRM', 'PAYC', 'ANET', 'ADBE', 'ACN', 'EPAM', 'ZM', 'TTD', 'TWLO', 
     'DASH', 'APPS', 'DOCU', 'AI', 'AKAM', 'QLYS', 'PANW', 'FTNT', 'CRWD', 'TENB', 'OKTA', 'ZS', 
@@ -2869,7 +2869,7 @@ SECTOR_KEYWORDS = {
     "Insurance": "#FF69B4",
     "Transportation": "#FF69B4", "Shipping": "#FF69B4", "Airlines": "#FF69B4",
     "Housing": "#FF69B4", "Homebuilders": "#FF69B4",
-    "Crypto": "#FF69B4", "Gold": "#FF69B4", "Broker": "#FF69B4", "Brokerage": "#FF69B4", "Rails": "#FF69B4", "finance": "#FF69B4", 
+    "Crypto": "#FF69B4", "Gold": "#FF69B4", "Broker": "#FF69B4", "Brokerage": "#FF69B4", "Rail": "#FF69B4", "Rails": "#FF69B4", "finance": "#FF69B4", 
 }
 
 def format_ai_analysis_text(text, tickers=None, industries=None):
@@ -2896,7 +2896,7 @@ def format_ai_analysis_text(text, tickers=None, industries=None):
     #    so we don't accidentally bold digits inside hex color codes.
     text = re.sub(
         r'\b(\d+(?:\.\d+)?%?)\b',
-        r'<span style="color:#FFE5CC; font-weight:bold;">\1</span>',
+        r'<span style="color:#FFD966; font-weight:bold;">\1</span>',
         text
     )
 
@@ -3210,6 +3210,8 @@ if all_data:
     table { width:100%; border-collapse: collapse; }
     th { padding: 4px 8px !important; background-color: #1f77b4; color: white; font-size: 13px; }
     td { padding: 2px 8px !important; border-bottom: 1px solid #333; font-size: 13px; }
+    th:nth-child(3), td:nth-child(3),
+    th:nth-child(6), td:nth-child(6),
     th:nth-child(7), td:nth-child(7) {
         border-right: 3px solid #ffffff;
     }
@@ -3287,7 +3289,7 @@ if all_data:
         # ROC cell
         roc_val = row['ROC']
         if roc_val > 90:
-            roc_str = f'<span style="background-color: #00FF00; color: #000000; font-weight: bold; padding: 1px 6px; border-radius: 3px;">{roc_val:.1f}</span>'
+            roc_str = f'<span style="background-color: #FF69B4; color: #000000; font-weight: bold; padding: 1px 6px; border-radius: 3px;">{roc_val:.1f}</span>'
         else:
             roc_str = f'{roc_val:.1f}'
         
