@@ -7947,7 +7947,19 @@ with st.spinner("Fetching Reddit sentiment..."):
         stocks_tuple, "wallstreetbets"
     )
 
-st.markdown(f"#### 🧵 Reddit Buzz — WallStreetBets ({len(reddit_df)})")
+#st.markdown(f"#### 🧵 Reddit ({len(reddit_df)})")
+st.markdown(
+    f"""
+    <div style="display:flex; align-items:center; gap:8px; margin-top:22px; margin-bottom:6px;">
+        <img src="https://www.redditstatic.com/desktop2x/img/favicon/android-icon-192x192.png"
+             style="width:24px; height:24px; vertical-align:middle;">
+        <span style="font-size:1.5em; font-weight:600; color:#ffffff;">
+            Reddit ({len(reddit_df)})
+        </span>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 if reddit_df.empty:
     st.info("No known-stock mentions found on Reddit right now.")
