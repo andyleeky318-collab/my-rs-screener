@@ -8002,9 +8002,9 @@ else:
         news_items = news_map.get(sym, [])
         filings    = sec_map.get(sym, [])
         form4s     = form4_map.get(sym, [])
-        earnings   = earnings_map.get(sym, [])
+        #earnings   = earnings_map.get(sym, [])
 
-        if not (news_items or filings or form4s or earnings):
+        if not (news_items or filings or form4s):
             continue
 
         tag_str = " ".join(reasons.get(sym, [])) or "No catalyst found"
