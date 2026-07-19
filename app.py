@@ -7887,6 +7887,60 @@ def explain_volatility_hits(tickers_tuple):
 
 st.markdown("---")
 
+@st.cache_data(ttl=1800)
+def fetch_reddit_mentions_apewisdom(stocks_tuple, filter_type="wallstreetbets"):
+    """
+    filter_type options: 'all-stocks', 'wallstreetbets', 'stocks', 'investing', 'options', etc.
+    Returns top 100 most-mentioned tickers from the last 24h, filtered to KNOWN_STOCKS.
+    """
+    def safe_int(v, default=0):
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return default
+
+    known_set = set(stocks_tuple)
+    rows = []
+    page = 1
+
+    try:
+        while True:
+            resp = requests.get(
+                f"https://apewisdom.io/api/v1.0/filter/{filter_type}/page/{page}",
+                timeout=15,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            results = data.get("results", [])
+            if not results:
+                break
+
+            for r in results:
+                ticker = r.get("ticker")
+                if ticker in known_set:
+                    rows.append({
+                        "Ticker": ticker,
+                        "Rank": safe_int(r.get("rank")),
+                        "Mentions": safe_int(r.get("mentions")),
+                        "Mentions 24h Ago": safe_int(r.get("mentions_24h_ago")),
+                        "Upvotes": safe_int(r.get("upvotes")),
+                    })
+
+            if page >= safe_int(data.get("pages"), 1):
+                break
+            page += 1
+
+    except Exception as e:
+        st.warning(f"ApeWisdom fetch error: {e}")
+        return pd.DataFrame()
+
+    if not rows:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(rows)
+    df["Δ Mentions"] = df["Mentions"] - df["Mentions 24h Ago"]
+    return df.sort_values("Mentions", ascending=False).reset_index(drop=True)
+
 with st.spinner("Fetching Reddit sentiment..."):
     reddit_df = timed(
         "fetch_reddit_mentions_apewisdom",
@@ -8050,57 +8104,5 @@ else:
         hide_index=True
     )
 
-@st.cache_data(ttl=1800)
-def fetch_reddit_mentions_apewisdom(stocks_tuple, filter_type="wallstreetbets"):
-    """
-    filter_type options: 'all-stocks', 'wallstreetbets', 'stocks', 'investing', 'options', etc.
-    Returns top 100 most-mentioned tickers from the last 24h, filtered to KNOWN_STOCKS.
-    """
-    def safe_int(v, default=0):
-        try:
-            return int(v)
-        except (TypeError, ValueError):
-            return default
 
-    known_set = set(stocks_tuple)
-    rows = []
-    page = 1
-
-    try:
-        while True:
-            resp = requests.get(
-                f"https://apewisdom.io/api/v1.0/filter/{filter_type}/page/{page}",
-                timeout=15,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            results = data.get("results", [])
-            if not results:
-                break
-
-            for r in results:
-                ticker = r.get("ticker")
-                if ticker in known_set:
-                    rows.append({
-                        "Ticker": ticker,
-                        "Rank": safe_int(r.get("rank")),
-                        "Mentions": safe_int(r.get("mentions")),
-                        "Mentions 24h Ago": safe_int(r.get("mentions_24h_ago")),
-                        "Upvotes": safe_int(r.get("upvotes")),
-                    })
-
-            if page >= safe_int(data.get("pages"), 1):
-                break
-            page += 1
-
-    except Exception as e:
-        st.warning(f"ApeWisdom fetch error: {e}")
-        return pd.DataFrame()
-
-    if not rows:
-        return pd.DataFrame()
-
-    df = pd.DataFrame(rows)
-    df["Δ Mentions"] = df["Mentions"] - df["Mentions 24h Ago"]
-    return df.sort_values("Mentions", ascending=False).reset_index(drop=True)
 
