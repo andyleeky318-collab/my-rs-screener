@@ -4806,14 +4806,11 @@ st.markdown(
 if email_content_stocks or email_content_removed:
     minervini_html = ""
 
-    # ── NEW: map active Minervini symbols to industries for top-20 glow check ──
     minervini_syms = [sym for sym, _, _ in email_content_stocks]
     minervini_industry_counts, minervini_ticker_industry = build_leader_industry_map(minervini_syms, INDUSTRIES)
 
-    # 1. Active Symbols Layout (Sorted Alphabetically by the ticker name)
     for sym, is_new_addition, is_positive_today in sorted(email_content_stocks, key=lambda x: x[0]):
 
-        # Determine up logo priority: Red if in ath_list, Green if positive today, otherwise empty
         if sym in ath_list:
             up_logo = "<span style='color:#FF4B4B; margin-right:4px; font-weight:bold;'>▲</span>"
         elif is_positive_today:
@@ -4821,7 +4818,6 @@ if email_content_stocks or email_content_removed:
         else:
             up_logo = ""
 
-        # ── glow ONLY applies if the badge is orange/aqua/purple (setup match) ──
         has_setup_badge = sym in (ma50bounce_all | cloudwick_all | cloud21ema_all)
         glow_style = ""
         if has_setup_badge:
@@ -4833,12 +4829,11 @@ if email_content_stocks or email_content_removed:
 
         minervini_html += setup_badge(
             sym,
-            is_new=is_new_addition,
+            is_new=False,          #is_new_addition
             extra_prefix=up_logo,
             extra_style=glow_style,
         )
 
-    # 2. Dropped/Removed Symbols Layout (Sorted Alphabetically with line-through)
     for sym in sorted(email_content_removed):
         minervini_html += setup_badge(sym, is_removed=True)
 
@@ -5724,18 +5719,18 @@ with st.spinner("Scanning RS New High Before Price..."):
 st.markdown(f"#### 🔵 RS NH B4 Price = Opportunity ({len(rs_nh_b4_today)})")
 
 if rs_nh_b4_today or rs_nh_b4_yest:
-    # ── NEW: map to industries for top-20 glow check ──
     rsnh_industry_counts, rsnh_ticker_industry = build_leader_industry_map(rs_nh_b4_today, INDUSTRIES)
 
     html_rsnh = ""
     for sym in rs_nh_b4_today:
-        industries = rsnh_ticker_industry.get(sym, [])
-        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
-        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
-        glow_style = (
-            "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
-            if is_top20_industry else ""
-        )
+        has_setup_badge = sym in (ma50bounce_all | cloudwick_all | cloud21ema_all)
+        glow_style = ""
+        if has_setup_badge:
+            industries = rsnh_ticker_industry.get(sym, [])
+            ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+            is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+            if is_top20_industry:
+                glow_style = "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
         html_rsnh += setup_badge(sym, is_new=(sym not in rs_nh_b4_yest), extra_style=glow_style)
 
     removed_rsnh = [sym for sym in rs_nh_b4_yest if sym not in rs_nh_b4_today]
@@ -5759,19 +5754,18 @@ st.markdown("---")
 st.markdown(f"#### 📉 PPP = Opportunity ({len(ppp_list)})")
 
 if ppp_list or ppp_yest:
-    # ── NEW: map to industries for top-20 glow check ──
     ppp_industry_counts, ppp_ticker_industry = build_leader_industry_map(ppp_list, INDUSTRIES)
 
-    # ── Badge row ─────────────────────────────────────────────────────────
     html_p = ""
     for sym in ppp_list:
-        industries = ppp_ticker_industry.get(sym, [])
-        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
-        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
-        glow_style = (
-            "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
-            if is_top20_industry else ""
-        )
+        has_setup_badge = sym in (ma50bounce_all | cloudwick_all | cloud21ema_all)
+        glow_style = ""
+        if has_setup_badge:
+            industries = ppp_ticker_industry.get(sym, [])
+            ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+            is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+            if is_top20_industry:
+                glow_style = "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
         html_p += setup_badge(sym, is_new=(sym not in ppp_yest), extra_style=glow_style)
 
     removed_ppp = [sym for sym in ppp_yest if sym not in ppp_list]
@@ -5780,7 +5774,6 @@ if ppp_list or ppp_yest:
 
     st.markdown(html_p, unsafe_allow_html=True)
 
-    # ── All charts together, 3 per row ────────────────────────────────────
     if ppp_list and show_ppp_charts:
         st.write("")
         CHARTS_PER_ROW = 4
@@ -5906,19 +5899,18 @@ st.markdown("---")
 st.markdown(f"#### 🚀 Gapper Earning Drift = Opportunity ({len(gapper_list)})")
 
 if gapper_list or gapper_yest:
-    # ── NEW: map to industries for top-20 glow check ──
     gapper_industry_counts, gapper_ticker_industry = build_leader_industry_map(gapper_list, INDUSTRIES)
 
-    # ── Badge row ─────────────────────────────────────────────────────────
     html_g = ""
     for sym in gapper_list:
-        industries = gapper_ticker_industry.get(sym, [])
-        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
-        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
-        glow_style = (
-            "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
-            if is_top20_industry else ""
-        )
+        has_setup_badge = sym in (ma50bounce_all | cloudwick_all | cloud21ema_all)
+        glow_style = ""
+        if has_setup_badge:
+            industries = gapper_ticker_industry.get(sym, [])
+            ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+            is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+            if is_top20_industry:
+                glow_style = "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
         html_g += setup_badge(sym, is_new=(sym not in gapper_yest), extra_style=glow_style)
 
     removed_gapper = [sym for sym in gapper_yest if sym not in gapper_list]
@@ -5927,7 +5919,6 @@ if gapper_list or gapper_yest:
 
     st.markdown(html_g, unsafe_allow_html=True)
 
-    # ── All charts together, 5 per row ────────────────────────────────────
     if gapper_list and show_gap_charts:
         st.write("")
         GAPPER_CHARTS_PER_ROW = 4
