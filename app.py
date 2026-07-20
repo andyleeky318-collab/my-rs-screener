@@ -7249,7 +7249,7 @@ def _etf_pie_chart():
 
             if rsi_rows:
                 rsi_rows.sort(key=lambda x: -x[1])
-                rsi_html = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+                rsi_html = "<div style='display:flex;flex-wrap:wrap;justify-content:center;gap:4px;padding:6px 0;'>"
                 for sym, rsi_val in rsi_rows:
                     if rsi_val >= 70:
                         bg, border, txt = "#FFB3B3", "#CC0000", "#4B0000"
@@ -7260,7 +7260,7 @@ def _etf_pie_chart():
                     rsi_html += (
                         f'<div class="ticker-badge" style="background:{bg}; border:1px solid {border};">'
                         f'<span class="ticker-name" style="color:{txt};">{sym}</span>'
-                        f'<span class="ticker-rs" style="color:{txt}; margin-left:4px;">{rsi_val:.1f}</span>'
+                        #f'<span class="ticker-rs" style="color:{txt}; margin-left:4px;">{rsi_val:.1f}</span>'
                         f'</div>'
                     )
                 rsi_html += "</div>"
@@ -7798,7 +7798,7 @@ else:
         common_html = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
         for sym in common_syms:
             common_html += (
-                f'<div class="ticker-badge" style="background:#FFD700; border:1px solid #B8860B; color:#111111; font-weight:bold;">'
+                f'<div class="ticker-badge" style="background:#1E1E1E; border:1px solid #444; color:#FFFFFF; font-weight:bold;">'
                 f'<span>{sym}</span></div>'
             )
         common_html += "</div>"
