@@ -5055,6 +5055,9 @@ st.markdown(f"#### 🔺 Blue Dot = Short term ({len([s for s in leader_rs_nh_mat
 
 if leader_list or leader_yest:
 
+    # ── NEW: map leaders to industries so we can check top-20 rank ──
+    leader_industry_counts, leader_ticker_industry = build_leader_industry_map(leader_list, INDUSTRIES)
+
     html_leader = ""
 
     for sym in leader_list:
@@ -5075,10 +5078,20 @@ if leader_list or leader_yest:
             if streak > 0 else ""
         )
 
+        # ── NEW: glow if this leader's setup-industry is currently top 20 ──
+        industries = leader_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
+            if is_top20_industry and sym in (ma50bounce_all | cloudwick_all | cloud21ema_all)
+            else ""
+        )
+
         # Priority: orange (50ma_bounce) > aqua (21ema_wick) > purple (21ema_cloud) > default
         if sym in ma50bounce_all:
             html_leader += (
-                f'<div class="ticker-badge orange-badge">'
+                f'<div class="ticker-badge orange-badge" style="{glow_style}">'
                 f'{dot}'
                 f'<span style="color:#111111;font-weight:bold;">{sym}</span>'
                 f'<span style="color:#004d26;font-weight:bold;">{streak_html}</span>'
@@ -5086,7 +5099,7 @@ if leader_list or leader_yest:
             )
         elif sym in cloudwick_all:
             html_leader += (
-                f'<div class="ticker-badge aqua-badge">'
+                f'<div class="ticker-badge aqua-badge" style="{glow_style}">'
                 f'{dot}'
                 f'<span style="color:#000000;font-weight:bold;">{sym}</span>'
                 f'<span style="color:#0f766e;font-weight:bold;">{streak_html}</span>'
@@ -5094,7 +5107,7 @@ if leader_list or leader_yest:
             )
         elif sym in cloud21ema_all:
             html_leader += (
-                f'<div class="ticker-badge purple-badge">'
+                f'<div class="ticker-badge purple-badge" style="{glow_style}">'
                 f'{dot}'
                 f'<span style="color:#000000;font-weight:bold;">{sym}</span>'
                 f'<span style="color:#7e22ce;font-weight:bold;">{streak_html}</span>'
@@ -7779,7 +7792,7 @@ else:
         html_reddit += (
             f'<div class="ticker-badge">'
             f'<span class="ticker-name">{sym}</span>'
-            f'<span class="ticker-rs">{row["Mentions"]} </span>'
+            f'<span class="ticker-rs" style="color:#378ADD;">{row["Mentions"]} </span>'
             f'<span style="color:{delta_color}; margin-left:5px; font-size:11px;">({delta_str})</span>'
             f'</div>'
         )
@@ -7792,7 +7805,7 @@ else:
     # ── Common tickers between Quant Sentiment (trending) and Reddit ──
     common_syms = sorted(set(trending_today) & set(reddit_df_display["Ticker"]))
     st.markdown(
-        f"**🔗 In Common (Trending ∩ Reddit): {len(common_syms)}**"
+        f"**🔗 In Common: {len(common_syms)}**"
     )
     if common_syms:
         common_html = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
