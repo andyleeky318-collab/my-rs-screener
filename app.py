@@ -120,7 +120,7 @@ INDUSTRIES = {
     'AUTO/TRCK-RPLC PRTS': ['LKQ', 'DORM', 'AAP'],
     'BEVERAGES-ALCOHOLIC': ['STZ', 'TAP', 'SAM'],
     'BEV-NON-ALCOHOLIC': ['KO', 'MNST', 'CCEP', 'COKE', 'BRBR', 'CELH', 'FIZZ'],
-    'MEDICAL-BIOMED/BTH': ['BNTX', 'AMGN', 'GILD', 'MRNA', 'ILMN', 'SMMT', 'PCVX', 'BMRN', 'TECH', 'NUVL', 'ELAN', 'HALO', 'RNA', 'KRYS', 'ADMA', 'BBIO', 'IMVT', 'AXSM', 'CRSP', 'DNLI', 'ALVO', 'APGE', 'DYN', 'RYTM', 'KYMR', 'EWTX', 'PTGX', 'TWST', 'TXG', 'CGON', 'JANX', 'ARWR', 'VERA', 'NVAX', 'CLDX', 'Q'],
+    'MEDICAL-BIOMED/BTH': ['IBB', 'BNTX', 'AMGN', 'GILD', 'MRNA', 'ILMN', 'SMMT', 'PCVX', 'BMRN', 'TECH', 'NUVL', 'ELAN', 'HALO', 'RNA', 'KRYS', 'ADMA', 'BBIO', 'IMVT', 'AXSM', 'CRSP', 'DNLI', 'ALVO', 'APGE', 'DYN', 'RYTM', 'KYMR', 'EWTX', 'PTGX', 'TWST', 'TXG', 'CGON', 'JANX', 'ARWR', 'VERA', 'NVAX', 'CLDX', 'Q'],
     'MEDIA-RADIO/TV': ['FOX', 'SIRI', 'NXST'],
     'TELCOM-SVC-CBL/SAT': ['CMCSA', 'CHTR'],
     'LEISRE-GAMNG/EQUIP': ['BETZ', 'FLUT', 'LVS', 'MGM', 'WYNN', 'CZR', 'BYD', 'RSI', 'DKNG', 'CHDN', 'PENN'],
@@ -268,7 +268,7 @@ INDUSTRIES = {
 
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
-    'Q', 'OUST', 'VPG', 'WOLF', 'NOK', 'HSBC', 'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
+    'IBB', 'Q', 'OUST', 'VPG', 'WOLF', 'NOK', 'HSBC', 'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
     'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EWY', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'NTAP', 'OR', 
     'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
@@ -320,7 +320,7 @@ LIME_STOCKS1 = [
     'UFO', 'URA', 'USO', 'VTV', 'VUG', 'WGMI', 'XBI',
     'XME', 'XRT', 'XTL', 'SPY', 'QQQ', 'RSP', 'FOTO', 'KBE', 'NLR', 
     'CLOU', 'XHB', 'BUG', 'HACK', 'ITA', 'IAT', 'XOP', 'NASA', 
-    'XTN', 'IYT', 'BOAT', 'MOO', 'BLOK', 'PICK', 'BOTZ', 'MJ', 'WQTM'
+    'XTN', 'IYT', 'BOAT', 'MOO', 'BLOK', 'PICK', 'BOTZ', 'MJ', 'WQTM', 'IBB'
 ]
 
 # ============================================================
@@ -4494,6 +4494,8 @@ if quad_points:
     q_weakening = sum(1 for p in quad_points if p["weekly_rs"] <  50 and p["monthly_rs"] >= 50)
     q_weak      = sum(1 for p in quad_points if p["weekly_rs"] <  50 and p["monthly_rs"] <  50)
 
+    quad_title_color = "#90EE90" if (q_strong + q_improving) > (q_weak + q_weakening) else "#FF6B6B"
+
     fig.add_annotation(x=25,  y=96, text=f"<b>Weakening ({q_weakening})</b>",  **quad_label_cfg)
     fig.add_annotation(x=75,  y=96, text=f"<b>Strong ({q_strong})</b>",        **quad_label_cfg)
     fig.add_annotation(x=25,  y=4,  text=f"<b>Weak ({q_weak})</b>",            **quad_label_cfg)
@@ -4528,7 +4530,7 @@ if quad_points:
             text="Industry RS — Weekly vs Monthly",
             x=0.5,
             xanchor="center",
-            font=dict(size=16, color="#ffffff"),
+            font=dict(size=16, color=quad_title_color),   # ← changed from "#ffffff"
         ),
         xaxis=dict(
             title="Weekly RS",
@@ -7018,7 +7020,7 @@ if not volatility_hist.empty:
 st.markdown("---")
 
 # --- 6. VALUE TRAP (Full Horizontal Row Below PowerTrend Not Extended) ---
-st.markdown(f"#### ⚠️ Value Trap ({len(vt_list)})")
+st.markdown(f"#### ⚠️ Value Trap = MAG7 ({len(vt_list)})")
 if vt_list or vt_yest:
     html_vt = ""
     vt_yest_set = set(vt_yest)
@@ -7281,6 +7283,13 @@ def _relative_etf_ratios():
                     borderpad=2
                 )
             )
+
+        fig.add_hline(
+            y=100,
+            line_width=3,
+            line_color="white",
+            layer="above"
+        )
 
         fig.update_layout(
             height=420,
@@ -7716,8 +7725,9 @@ st.markdown(
 if reddit_df.empty:
     st.info("No known-stock mentions found on Reddit right now.")
 else:
+    reddit_df_display = reddit_df[~reddit_df["Ticker"].isin(["SPY", "QQQ"])]
     html_reddit = ""
-    for _, row in reddit_df.head(30).iterrows():
+    for _, row in reddit_df_display.head(30).iterrows():
         sym = row["Ticker"]
         delta = row["Δ Mentions"]
         delta_color = "#00FF00" if delta > 0 else "#FF4B4B" if delta < 0 else "#888888"

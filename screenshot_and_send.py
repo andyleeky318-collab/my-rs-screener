@@ -127,6 +127,7 @@ SECTION_KEYWORDS = [
     "RS NH B4 Price = Opportunity",
     "PPP = Opportunity",
     "Gapper Earning Drift = Opportunity",
+    "Early Bull = buyable",
     "Two Botak = Short term Group burst",
     "Engulfing = HL",
     "3x Engulfing",
@@ -136,7 +137,6 @@ SECTION_KEYWORDS = [
     "Pie Chart",
     "ETF Ratio",
     "Quant Sentiment",
-    "Early Bull",
     "Setup Quality",    
 ]
 
