@@ -6588,7 +6588,7 @@ with st.spinner("Scanning Early Bull setups..."):
         stocks_tuple, ticker_dfs_shared, benchmark_df_shared
     )
 
-st.markdown(f"#### 🐂 Early Bull = buyable + Sector ({len(early_bull_list)} + {len(early_bull_no_filter_list)})")
+st.markdown(f"#### 🐂 Early Bull = buyable + Sector + ALL ({len(early_bull_list)} + ... + {len(early_bull_no_filter_list)})")
 
 if early_bull_no_filter_list:
     eb_nf_industry_counts, eb_nf_ticker_industry = build_leader_industry_map(early_bull_no_filter_list, INDUSTRIES)
