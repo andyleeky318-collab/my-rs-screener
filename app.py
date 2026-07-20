@@ -2700,7 +2700,19 @@ def generate_top_industries_theme_insight(
         if item is not None:
             top5 = item["Tickers"].sort_values("RS Score", ascending=False).head(5)
             top_tickers = ", ".join(f"{t}({s:.0f})" for t, s in zip(top5["Ticker"], top5["RS Score"]))
-        lines.append(f"  {row['Current Rank']}. {industry} — RS {row['Group RS']:.1f} — top: {top_tickers}")
+
+        rs_1w  = row.get("Group RS Prev", None)
+        rs_1m  = row.get("Group RS 1M", None)
+        roc    = row.get("ROC", None)
+
+        rs_1w_str = f"{rs_1w:.1f}" if rs_1w is not None else "n/a"
+        rs_1m_str = f"{rs_1m:.1f}" if rs_1m is not None else "n/a"
+        roc_str   = f"{roc:.1f}"   if roc   is not None else "n/a"
+
+        lines.append(
+            f"  {row['Current Rank']}. {industry} — RS {row['Group RS']:.1f} "
+            f"(1W: {rs_1w_str}, 1M: {rs_1m_str}, △T: {roc_str}) — top: {top_tickers}"
+        )
 
     industries_block = "\n".join(lines)
 
@@ -2740,6 +2752,8 @@ New Low industry concentration: {nl_str}
 
     prompt = f"""
 You are a concise IBD-style market analyst. Below are the top {len(top_rows)} industries right now, ranked by Group Relative Strength, with their strongest tickers.
+
+Each row shows: current RS, RS from 1 week ago, RS from 1 month ago, and △T (a blended thrust/acceleration score combining recent RS momentum). Use these to judge whether an industry's strength is accelerating, decelerating, or newly emerging.
 
 {industries_block}
 {nh_nl_block}
@@ -8011,7 +8025,7 @@ def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
         setup_types = []
         if sym in cloud21ema_all: setup_types.append("21ema_cloud")
         if sym in cloudwick_all:  setup_types.append("21ema_wick")
-        if sym in ma50bounce_all: setup_types.append("50ma_bounce")
+        if sym in ma50bounce_all: setup_types.append("50ma_b")   # ← shortened here
 
         rows.append({
             "rank": best_rank,
@@ -8025,7 +8039,13 @@ def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
     rows.sort(key=lambda r: r["rank"])
 
     lines = [f"<b>🔥 Setup Summary ({len(rows)})</b>", ""]
+    separator_inserted = False
     for r in rows:
+        # ── NEW: insert a divider the first time rank crosses from <=20 to >20 ──
+        if not separator_inserted and r["rank"] > 20:
+            lines.append("-----------------")
+            separator_inserted = True
+
         setup_str = "/".join(r["setups"])
         risk_str  = f'{r["risk"]:.1f}%' if r["risk"] is not None else "n/a"
         ticker_str = f'<b><i>{r["ticker"]}</i></b>' if r["is_leader"] else r["ticker"]
