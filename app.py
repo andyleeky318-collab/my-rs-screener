@@ -4807,14 +4807,15 @@ if email_content_stocks or email_content_removed:
         else:
             up_logo = ""
 
-        # ── NEW: glow if this ticker's setup-industry is currently top 20 ──
-        industries = minervini_ticker_industry.get(sym, [])
-        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
-        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
-        glow_style = (
-            "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
-            if is_top20_industry else ""
-        )
+        # ── glow ONLY applies if the badge is orange/aqua/purple (setup match) ──
+        has_setup_badge = sym in (ma50bounce_all | cloudwick_all | cloud21ema_all)
+        glow_style = ""
+        if has_setup_badge:
+            industries = minervini_ticker_industry.get(sym, [])
+            ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+            is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+            if is_top20_industry:
+                glow_style = "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
 
         minervini_html += setup_badge(
             sym,
