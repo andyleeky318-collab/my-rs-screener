@@ -8020,7 +8020,7 @@ def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
         setup_types = []
         if sym in cloud21ema_all: setup_types.append("21ema_cloud")
         if sym in cloudwick_all:  setup_types.append("21ema_wick")
-        if sym in ma50bounce_all: setup_types.append("50ma_b")   # ← shortened here
+        if sym in ma50bounce_all: setup_types.append("50ma_b")
 
         rows.append({
             "rank": best_rank,
@@ -8033,12 +8033,14 @@ def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
 
     rows.sort(key=lambda r: r["rank"])
 
-    lines = [f"<b>🔥 Setup Summary ({len(rows)})</b>", ""]
+    # ── NEW: count how many setups are in a top-20 industry ──
+    strong_count = sum(1 for r in rows if r["rank"] <= 20)
+
+    lines = [f"<b>🔥 Setup Summary ({strong_count}/{len(rows)})</b>", ""]
     separator_inserted = False
     for r in rows:
-        # ── NEW: insert a divider the first time rank crosses from <=20 to >20 ──
         if not separator_inserted and r["rank"] > 20:
-            lines.append("-----------------")
+            lines.append("----------")
             separator_inserted = True
 
         setup_str = "/".join(r["setups"])
