@@ -6045,6 +6045,542 @@ if not gapper_hist.empty:
         use_container_width=True
     )
 
+@st.cache_data(ttl=3600)
+def compute_early_bull(stocks_list, ticker_dfs, benchmark_df_input):
+    """
+    Python port of the Pine Script stage1to2AlertCond block:
+      - Detect Stage 1->2 or Stage 4->2 transitions (vectorized across full history)
+      - Track the high price at the most recent transition bar (var float behavior)
+      - stage1to2Recent30: a transition occurred within the last 30 bars
+      - stage1to2PriceAbove: current close > that transition bar's high
+      - stage1to2AlertCond: recent30 AND priceAbove AND currently in Stage 2
+    Then combine with cond1..cond4 (ADR%, ATR21_R, ATR50_R, EMA21-low distance%)
+    to find "Early Bull" candidates.
+    """
+    matches = []
+    if benchmark_df_input is None or benchmark_df_input.empty:
+        return matches
+
+    bm_idx = benchmark_df_input.index.tz_localize(None) if benchmark_df_input.index.tz is not None else benchmark_df_input.index
+    bm_aligned = benchmark_df_input.copy()
+    bm_aligned.index = bm_idx
+
+    for ticker in stocks_list:
+        try:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < 260:
+                continue
+
+            df_idx = df.index.tz_localize(None) if df.index.tz is not None else df.index
+            df_aligned = df.copy()
+            df_aligned.index = df_idx
+
+            combined = pd.merge(
+                df_aligned[['Close', 'Open', 'High', 'Low']],
+                bm_aligned[['Close']].rename(columns={'Close': 'Close_bench'}),
+                left_index=True, right_index=True, how='inner'
+            )
+            if len(combined) < 260:
+                continue
+
+            close = combined['Close']; open_ = combined['Open']
+            high  = combined['High'];  low   = combined['Low']
+
+            ema126 = df_aligned['Close'].ewm(span=126, adjust=False).mean().reindex(combined.index, method='ffill')
+            rs = close / combined['Close_bench']
+
+            ema_spans = [21, 42, 63, 72, 84, 126, 147, 168]
+            r = {s: rs.ewm(span=s, adjust=False).mean() for s in ema_spans}
+
+            stage1_cond = (rs >= r[84]) & (rs < r[126])
+            stage3_cond = (
+                (rs < r[42]) & (rs >= r[72]) & (rs >= r[84]) & (rs >= r[126])
+                & ((r[42] > r[63]) | (rs < r[63])) & (r[63] > r[126]) & (close >= ema126)
+            )
+            stage2a_cond = (
+                (rs >= r[168]) & (rs >= r[147]) & (rs >= r[126])
+                & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+            )
+            stage2b_cond = (rs >= r[126]) & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+            stage4_cond = ((rs < r[63]) & (rs < r[126])) | ((r[63] < r[126]) & (rs < r[126]))
+
+            # Resolve final stage number per bar (mirrors Pine's if/elif priority order,
+            # same simplified mapping already used in compute_stage_history)
+            stage_num = pd.Series(0, index=combined.index)
+            stage_num[stage1_cond] = 1
+            remaining = ~stage1_cond
+            stage_num[remaining & stage3_cond] = 3
+            remaining = remaining & ~stage3_cond
+            stage_num[remaining & (stage2a_cond | stage2b_cond)] = 2
+            remaining = remaining & ~(stage2a_cond | stage2b_cond)
+            stage_num[remaining & stage4_cond] = 4
+
+            # === Stage 1->2 or Stage 4->2 Transition (mirrors Pine stage1to2Transition) ===
+            stage_prev = stage_num.shift(1)
+            stage1to2Transition = (stage_num == 2) & ((stage_prev == 1) | (stage_prev == 4))
+
+            # Price captured at transition bar (var float behavior -> forward-fill)
+            transition_price = high.where(stage1to2Transition)
+            stage1to2Price = transition_price.ffill()
+
+            # 30-bar recency + price-above-transition checks
+            stage1to2Count30 = stage1to2Transition.astype(int).rolling(30).sum()
+            stage1to2Recent30 = stage1to2Count30 >= 1
+            stage1to2PriceAbove = stage1to2Price.notna() & (close > stage1to2Price)
+
+            stage1to2AlertCond = stage1to2Recent30 & stage1to2PriceAbove & (stage_num == 2)
+
+            if not bool(stage1to2AlertCond.iloc[-1]):
+                continue
+
+            # === cond1..cond4 (ADR%, ATR21_R, ATR50_R, EMA21-low distance%) ===
+            sma50 = close.rolling(50).mean()
+            ema21_close = close.ewm(span=21, adjust=False).mean()
+            ema21_low   = low.ewm(span=21, adjust=False).mean()
+
+            tr = pd.concat([
+                high - low,
+                (high - close.shift(1)).abs(),
+                (low - close.shift(1)).abs()
+            ], axis=1).max(axis=1)
+            atr = tr.rolling(14).mean()
+            atrPercent = (atr / close) * 100
+
+            atr21_R = (((close - ema21_close) / close) * 100) / (atrPercent + 1e-6)
+            atr50_R = (((close - sma50) / close) * 100) / (atrPercent + 1e-6)
+            emaDistPercent = ((close - ema21_low) / close) * 100
+
+            hl_ratio = high / low
+            adrPercent = 100 * (hl_ratio.rolling(20).mean() - 1)
+
+            cond1 = (adrPercent.iloc[-1] >= 2.45) and (adrPercent.iloc[-1] < 8.05)
+            cond2 = -0.5 <= atr21_R.iloc[-1] <= 1
+            cond3 = 0 <= atr50_R.iloc[-1] <= 3
+            cond4 = 0 < emaDistPercent.iloc[-1] <= 8
+
+            if cond1 and cond2 and cond3 and cond4 and close.iloc[-1] >= 20:
+                matches.append(ticker)
+
+        except Exception:
+            continue
+
+    return sorted(matches)
+
+@st.cache_data(ttl=3600)
+def compute_early_bull_no_filter(stocks_list, ticker_dfs, benchmark_df_input):
+    """
+    Same Stage 1->2 / Stage 4->2 transition detection as compute_early_bull,
+    but WITHOUT the cond1-cond4 (ADR%, ATR21_R, ATR50_R, EMA21-low distance%)
+    quality filters — returns every ticker meeting the raw stage transition
+    condition (still requires close >= 20).
+    """
+    matches = []
+    if benchmark_df_input is None or benchmark_df_input.empty:
+        return matches
+
+    bm_idx = benchmark_df_input.index.tz_localize(None) if benchmark_df_input.index.tz is not None else benchmark_df_input.index
+    bm_aligned = benchmark_df_input.copy()
+    bm_aligned.index = bm_idx
+
+    for ticker in stocks_list:
+        try:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < 260:
+                continue
+
+            df_idx = df.index.tz_localize(None) if df.index.tz is not None else df.index
+            df_aligned = df.copy()
+            df_aligned.index = df_idx
+
+            combined = pd.merge(
+                df_aligned[['Close', 'Open', 'High', 'Low']],
+                bm_aligned[['Close']].rename(columns={'Close': 'Close_bench'}),
+                left_index=True, right_index=True, how='inner'
+            )
+            if len(combined) < 260:
+                continue
+
+            close = combined['Close']
+            high  = combined['High']
+
+            ema126 = df_aligned['Close'].ewm(span=126, adjust=False).mean().reindex(combined.index, method='ffill')
+            rs = close / combined['Close_bench']
+
+            ema_spans = [21, 42, 63, 72, 84, 126, 147, 168]
+            r = {s: rs.ewm(span=s, adjust=False).mean() for s in ema_spans}
+
+            stage1_cond = (rs >= r[84]) & (rs < r[126])
+            stage3_cond = (
+                (rs < r[42]) & (rs >= r[72]) & (rs >= r[84]) & (rs >= r[126])
+                & ((r[42] > r[63]) | (rs < r[63])) & (r[63] > r[126]) & (close >= ema126)
+            )
+            stage2a_cond = (
+                (rs >= r[168]) & (rs >= r[147]) & (rs >= r[126])
+                & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+            )
+            stage2b_cond = (rs >= r[126]) & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+            stage4_cond = ((rs < r[63]) & (rs < r[126])) | ((r[63] < r[126]) & (rs < r[126]))
+
+            stage_num = pd.Series(0, index=combined.index)
+            stage_num[stage1_cond] = 1
+            remaining = ~stage1_cond
+            stage_num[remaining & stage3_cond] = 3
+            remaining = remaining & ~stage3_cond
+            stage_num[remaining & (stage2a_cond | stage2b_cond)] = 2
+            remaining = remaining & ~(stage2a_cond | stage2b_cond)
+            stage_num[remaining & stage4_cond] = 4
+
+            stage_prev = stage_num.shift(1)
+            stage1to2Transition = (stage_num == 2) & ((stage_prev == 1) | (stage_prev == 4))
+
+            transition_price = high.where(stage1to2Transition)
+            stage1to2Price = transition_price.ffill()
+
+            stage1to2Count30 = stage1to2Transition.astype(int).rolling(30).sum()
+            stage1to2Recent30 = stage1to2Count30 >= 1
+            stage1to2PriceAbove = stage1to2Price.notna() & (close > stage1to2Price)
+
+            stage1to2AlertCond = stage1to2Recent30 & stage1to2PriceAbove & (stage_num == 2)
+
+            if bool(stage1to2AlertCond.iloc[-1]) and close.iloc[-1] >= 20:
+                matches.append(ticker)
+
+        except Exception:
+            continue
+
+    return sorted(matches)
+
+@st.cache_data(ttl=3600)
+def compute_early_bull_combined(stocks_list, ticker_dfs, benchmark_df_input):
+    """
+    Single-pass version of compute_early_bull + compute_early_bull_no_filter.
+    Both scan the same Stage 1->2 / Stage 4->2 transition condition; the only
+    difference is the "filtered" list additionally requires cond1-cond4
+    (ADR%, ATR21_R, ATR50_R, EMA21-low distance%). Computing the shared
+    stage-transition/EMA/RS work once and branching at the end avoids
+    doing that work twice per run.
+
+    Returns: (filtered_matches, unfiltered_matches) — both sorted lists.
+    """
+    filtered = []
+    unfiltered = []
+
+    if benchmark_df_input is None or benchmark_df_input.empty:
+        return filtered, unfiltered
+
+    bm_idx = benchmark_df_input.index.tz_localize(None) if benchmark_df_input.index.tz is not None else benchmark_df_input.index
+    bm_aligned = benchmark_df_input.copy()
+    bm_aligned.index = bm_idx
+
+    for ticker in stocks_list:
+        try:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < 260:
+                continue
+
+            df_idx = df.index.tz_localize(None) if df.index.tz is not None else df.index
+            df_aligned = df.copy()
+            df_aligned.index = df_idx
+
+            combined = pd.merge(
+                df_aligned[['Close', 'Open', 'High', 'Low']],
+                bm_aligned[['Close']].rename(columns={'Close': 'Close_bench'}),
+                left_index=True, right_index=True, how='inner'
+            )
+            if len(combined) < 260:
+                continue
+
+            close = combined['Close']; open_ = combined['Open']
+            high  = combined['High'];  low   = combined['Low']
+
+            ema126 = df_aligned['Close'].ewm(span=126, adjust=False).mean().reindex(combined.index, method='ffill')
+            rs = close / combined['Close_bench']
+
+            ema_spans = [21, 42, 63, 72, 84, 126, 147, 168]
+            r = {s: rs.ewm(span=s, adjust=False).mean() for s in ema_spans}
+
+            stage1_cond = (rs >= r[84]) & (rs < r[126])
+            stage3_cond = (
+                (rs < r[42]) & (rs >= r[72]) & (rs >= r[84]) & (rs >= r[126])
+                & ((r[42] > r[63]) | (rs < r[63])) & (r[63] > r[126]) & (close >= ema126)
+            )
+            stage2a_cond = (
+                (rs >= r[168]) & (rs >= r[147]) & (rs >= r[126])
+                & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+            )
+            stage2b_cond = (rs >= r[126]) & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+            stage4_cond = ((rs < r[63]) & (rs < r[126])) | ((r[63] < r[126]) & (rs < r[126]))
+
+            # Resolve final stage number per bar
+            stage_num = pd.Series(0, index=combined.index)
+            stage_num[stage1_cond] = 1
+            remaining = ~stage1_cond
+            stage_num[remaining & stage3_cond] = 3
+            remaining = remaining & ~stage3_cond
+            stage_num[remaining & (stage2a_cond | stage2b_cond)] = 2
+            remaining = remaining & ~(stage2a_cond | stage2b_cond)
+            stage_num[remaining & stage4_cond] = 4
+
+            # === Stage 1->2 or Stage 4->2 Transition ===
+            stage_prev = stage_num.shift(1)
+            stage1to2Transition = (stage_num == 2) & ((stage_prev == 1) | (stage_prev == 4))
+
+            transition_price = high.where(stage1to2Transition)
+            stage1to2Price = transition_price.ffill()
+
+            stage1to2Count30 = stage1to2Transition.astype(int).rolling(30).sum()
+            stage1to2Recent30 = stage1to2Count30 >= 1
+            stage1to2PriceAbove = stage1to2Price.notna() & (close > stage1to2Price)
+
+            stage1to2AlertCond = stage1to2Recent30 & stage1to2PriceAbove & (stage_num == 2)
+
+            if not bool(stage1to2AlertCond.iloc[-1]):
+                continue
+            if close.iloc[-1] < 20:
+                continue
+
+            # Unfiltered match confirmed
+            unfiltered.append(ticker)
+
+            # === cond1..cond4 (ADR%, ATR21_R, ATR50_R, EMA21-low distance%) ===
+            sma50 = close.rolling(50).mean()
+            ema21_close = close.ewm(span=21, adjust=False).mean()
+            ema21_low   = low.ewm(span=21, adjust=False).mean()
+
+            tr = pd.concat([
+                high - low,
+                (high - close.shift(1)).abs(),
+                (low - close.shift(1)).abs()
+            ], axis=1).max(axis=1)
+            atr = tr.rolling(14).mean()
+            atrPercent = (atr / close) * 100
+
+            atr21_R = (((close - ema21_close) / close) * 100) / (atrPercent + 1e-6)
+            atr50_R = (((close - sma50) / close) * 100) / (atrPercent + 1e-6)
+            emaDistPercent = ((close - ema21_low) / close) * 100
+
+            hl_ratio = high / low
+            adrPercent = 100 * (hl_ratio.rolling(20).mean() - 1)
+
+            cond1 = (adrPercent.iloc[-1] >= 2.45) and (adrPercent.iloc[-1] < 8.05)
+            cond2 = -0.5 <= atr21_R.iloc[-1] <= 1
+            cond3 = 0 <= atr50_R.iloc[-1] <= 3
+            cond4 = 0 < emaDistPercent.iloc[-1] <= 8
+
+            if cond1 and cond2 and cond3 and cond4:
+                filtered.append(ticker)
+
+        except Exception:
+            continue
+
+    return sorted(filtered), sorted(unfiltered)
+
+@st.cache_data(ttl=3600)
+def compute_early_bull_history(stocks_list, ticker_dfs, benchmark_df_input):
+    """
+    Vectorized version of the Stage 1->2 / Stage 4->2 transition logic from
+    compute_early_bull, evaluated across the FULL time series (not just the
+    latest bar) so we get a daily Early Bull count history, mirroring how
+    compute_two_botak_history / compute_stage_history work.
+    Note: unlike compute_early_bull, this does NOT apply the cond1-cond4
+    (ADR%/ATR%/EMA-distance) filters — it only tracks the stage transition condition.
+    """
+    try:
+        if benchmark_df_input is None or benchmark_df_input.empty:
+            return pd.DataFrame()
+
+        bm_idx = benchmark_df_input.index.tz_localize(None) if benchmark_df_input.index.tz is not None else benchmark_df_input.index
+        bm_aligned = benchmark_df_input.copy()
+        bm_aligned.index = bm_idx
+
+        all_series = []
+
+        for ticker in stocks_list:
+            try:
+                df = ticker_dfs.get(ticker)
+                if df is None or len(df) < 260:
+                    continue
+
+                df_idx = df.index.tz_localize(None) if df.index.tz is not None else df.index
+                df_aligned = df.copy()
+                df_aligned.index = df_idx
+
+                combined = pd.merge(
+                    df_aligned[['Close', 'Open', 'High', 'Low']],
+                    bm_aligned[['Close']].rename(columns={'Close': 'Close_bench'}),
+                    left_index=True, right_index=True, how='inner'
+                )
+                if len(combined) < 260:
+                    continue
+
+                close = combined['Close']
+                high  = combined['High']
+
+                ema126 = df_aligned['Close'].ewm(span=126, adjust=False).mean().reindex(combined.index, method='ffill')
+                rs = close / combined['Close_bench']
+
+                ema_spans = [21, 42, 63, 72, 84, 126, 147, 168]
+                r = {s: rs.ewm(span=s, adjust=False).mean() for s in ema_spans}
+
+                stage1_cond = (rs >= r[84]) & (rs < r[126])
+                stage3_cond = (
+                    (rs < r[42]) & (rs >= r[72]) & (rs >= r[84]) & (rs >= r[126])
+                    & ((r[42] > r[63]) | (rs < r[63])) & (r[63] > r[126]) & (close >= ema126)
+                )
+                stage2a_cond = (
+                    (rs >= r[168]) & (rs >= r[147]) & (rs >= r[126])
+                    & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+                )
+                stage2b_cond = (rs >= r[126]) & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+                stage4_cond = ((rs < r[63]) & (rs < r[126])) | ((r[63] < r[126]) & (rs < r[126]))
+
+                stage_num = pd.Series(0, index=combined.index)
+                stage_num[stage1_cond] = 1
+                remaining = ~stage1_cond
+                stage_num[remaining & stage3_cond] = 3
+                remaining = remaining & ~stage3_cond
+                stage_num[remaining & (stage2a_cond | stage2b_cond)] = 2
+                remaining = remaining & ~(stage2a_cond | stage2b_cond)
+                stage_num[remaining & stage4_cond] = 4
+
+                stage_prev = stage_num.shift(1)
+                stage1to2Transition = (stage_num == 2) & ((stage_prev == 1) | (stage_prev == 4))
+
+                transition_price = high.where(stage1to2Transition)
+                stage1to2Price = transition_price.ffill()
+
+                stage1to2Count30 = stage1to2Transition.astype(int).rolling(30).sum()
+                stage1to2Recent30 = stage1to2Count30 >= 1
+                stage1to2PriceAbove = stage1to2Price.notna() & (close > stage1to2Price)
+
+                stage1to2AlertCond = stage1to2Recent30 & stage1to2PriceAbove & (stage_num == 2) & (close >= 20)
+
+                all_series.append(stage1to2AlertCond.astype(int))
+            except Exception:
+                continue
+
+        if not all_series:
+            return pd.DataFrame()
+
+        combined_all = pd.concat(all_series, axis=1).fillna(0)
+        daily_counts = combined_all.sum(axis=1)
+
+        result = daily_counts.tail(60).reset_index()
+        result.columns = ["Date", "Early Bull Count"]
+        result["Date"] = result["Date"].dt.strftime("%Y-%m-%d")
+        return result
+    except Exception:
+        return pd.DataFrame()
+
+
+st.markdown("---")
+
+# with st.spinner("Scanning Early Bull setups..."):
+#     early_bull_list = timed(
+#         "compute_early_bull",
+#         compute_early_bull,
+#         stocks_tuple, ticker_dfs_shared, benchmark_df_shared
+#     )
+
+# st.markdown(f"#### 🐂 Early Bull = buyable Sector ({len(early_bull_list)})")
+
+# if early_bull_list:
+#     # Map each Early Bull ticker to its industry group(s), reusing the same
+#     # helper used for the RS Leader section.
+#     eb_industry_counts, eb_ticker_industry = build_leader_industry_map(early_bull_list, INDUSTRIES)
+
+#     html_eb = ""
+#     for sym in early_bull_list:
+#         industries = eb_ticker_industry.get(sym, [])
+#         ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+#         is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+
+#         glow_style = (
+#             "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
+#             if is_top20_industry else ""
+#         )
+
+#         html_eb += setup_badge(sym, extra_style=glow_style)
+
+#     st.markdown(html_eb, unsafe_allow_html=True)
+# else:
+#     st.info("No active setups discovered.")
+
+# st.write("")
+
+# with st.spinner("Scanning Early Bull (unfiltered) setups..."):
+#     early_bull_no_filter_list = timed(
+#         "compute_early_bull_no_filter",
+#         compute_early_bull_no_filter,
+#         stocks_tuple, ticker_dfs_shared, benchmark_df_shared
+#     )
+
+with st.spinner("Scanning Early Bull setups..."):
+    early_bull_list, early_bull_no_filter_list = timed(
+        "compute_early_bull_combined",
+        compute_early_bull_combined,
+        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
+    )
+
+st.markdown(f"#### 🐂 Early Bull = buyable + Sector ({len(early_bull_list)} + {len(early_bull_no_filter_list)})")
+
+if early_bull_no_filter_list:
+    eb_nf_industry_counts, eb_nf_ticker_industry = build_leader_industry_map(early_bull_no_filter_list, INDUSTRIES)
+    early_bull_set = set(early_bull_list)   # NEW — for O(1) membership check
+
+    html_eb_nf = ""
+    for sym in early_bull_no_filter_list:
+        industries = eb_nf_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
+            if is_top20_industry else ""
+        )
+        text_color = "#378ADD" if sym in early_bull_set else None   # NEW
+
+        html_eb_nf += setup_badge(sym, extra_style=glow_style, extra_text_color=text_color)
+
+    st.markdown(html_eb_nf, unsafe_allow_html=True)
+
+    render_group_ai_insight(
+        early_bull_no_filter_list,
+        "Early Bull (unfiltered stage transition)",
+        "early_bull_no_filter",
+        extra_note="stock just transitioned from Stage 1 or Stage 4 into Stage 2 within the last 30 bars and price is holding above the transition-bar high, WITHOUT the ADR%/ATR%/EMA-distance quality filters applied"
+    )
+else:
+    st.info("No active setups discovered.")
+
+st.write("")
+
+with st.spinner("Scanning for Early Bull History..."):
+    early_bull_hist = timed(
+        "compute_early_bull_history",
+        compute_early_bull_history,
+        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
+    )
+
+if not early_bull_hist.empty:
+    chart_df_eb = early_bull_hist.copy()
+    today_value_eb = chart_df_eb["Early Bull Count"].iloc[-1]
+    max_value_eb = chart_df_eb["Early Bull Count"].max()
+
+    if today_value_eb == max_value_eb:
+        chart_df_eb["Bar_Color"] = "#29B5E8"
+        chart_df_eb.iloc[-1, chart_df_eb.columns.get_loc("Bar_Color")] = "#FF4B4B"
+    else:
+        chart_df_eb["Bar_Color"] = "#29B5E8"
+
+    st.bar_chart(
+        data=chart_df_eb,
+        x="Date",
+        y="Early Bull Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
+
 st.markdown("---")
 #st.write(f"inside check: {len(ticker_dfs_shared)}")
 
@@ -7100,541 +7636,104 @@ if trending_today:
 else:
     st.info("Quant Sentiment: no trending data available right now.")
 
-@st.cache_data(ttl=3600)
-def compute_early_bull(stocks_list, ticker_dfs, benchmark_df_input):
-    """
-    Python port of the Pine Script stage1to2AlertCond block:
-      - Detect Stage 1->2 or Stage 4->2 transitions (vectorized across full history)
-      - Track the high price at the most recent transition bar (var float behavior)
-      - stage1to2Recent30: a transition occurred within the last 30 bars
-      - stage1to2PriceAbove: current close > that transition bar's high
-      - stage1to2AlertCond: recent30 AND priceAbove AND currently in Stage 2
-    Then combine with cond1..cond4 (ADR%, ATR21_R, ATR50_R, EMA21-low distance%)
-    to find "Early Bull" candidates.
-    """
-    matches = []
-    if benchmark_df_input is None or benchmark_df_input.empty:
-        return matches
-
-    bm_idx = benchmark_df_input.index.tz_localize(None) if benchmark_df_input.index.tz is not None else benchmark_df_input.index
-    bm_aligned = benchmark_df_input.copy()
-    bm_aligned.index = bm_idx
-
-    for ticker in stocks_list:
-        try:
-            df = ticker_dfs.get(ticker)
-            if df is None or len(df) < 260:
-                continue
-
-            df_idx = df.index.tz_localize(None) if df.index.tz is not None else df.index
-            df_aligned = df.copy()
-            df_aligned.index = df_idx
-
-            combined = pd.merge(
-                df_aligned[['Close', 'Open', 'High', 'Low']],
-                bm_aligned[['Close']].rename(columns={'Close': 'Close_bench'}),
-                left_index=True, right_index=True, how='inner'
-            )
-            if len(combined) < 260:
-                continue
-
-            close = combined['Close']; open_ = combined['Open']
-            high  = combined['High'];  low   = combined['Low']
-
-            ema126 = df_aligned['Close'].ewm(span=126, adjust=False).mean().reindex(combined.index, method='ffill')
-            rs = close / combined['Close_bench']
-
-            ema_spans = [21, 42, 63, 72, 84, 126, 147, 168]
-            r = {s: rs.ewm(span=s, adjust=False).mean() for s in ema_spans}
-
-            stage1_cond = (rs >= r[84]) & (rs < r[126])
-            stage3_cond = (
-                (rs < r[42]) & (rs >= r[72]) & (rs >= r[84]) & (rs >= r[126])
-                & ((r[42] > r[63]) | (rs < r[63])) & (r[63] > r[126]) & (close >= ema126)
-            )
-            stage2a_cond = (
-                (rs >= r[168]) & (rs >= r[147]) & (rs >= r[126])
-                & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
-            )
-            stage2b_cond = (rs >= r[126]) & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
-            stage4_cond = ((rs < r[63]) & (rs < r[126])) | ((r[63] < r[126]) & (rs < r[126]))
-
-            # Resolve final stage number per bar (mirrors Pine's if/elif priority order,
-            # same simplified mapping already used in compute_stage_history)
-            stage_num = pd.Series(0, index=combined.index)
-            stage_num[stage1_cond] = 1
-            remaining = ~stage1_cond
-            stage_num[remaining & stage3_cond] = 3
-            remaining = remaining & ~stage3_cond
-            stage_num[remaining & (stage2a_cond | stage2b_cond)] = 2
-            remaining = remaining & ~(stage2a_cond | stage2b_cond)
-            stage_num[remaining & stage4_cond] = 4
-
-            # === Stage 1->2 or Stage 4->2 Transition (mirrors Pine stage1to2Transition) ===
-            stage_prev = stage_num.shift(1)
-            stage1to2Transition = (stage_num == 2) & ((stage_prev == 1) | (stage_prev == 4))
-
-            # Price captured at transition bar (var float behavior -> forward-fill)
-            transition_price = high.where(stage1to2Transition)
-            stage1to2Price = transition_price.ffill()
-
-            # 30-bar recency + price-above-transition checks
-            stage1to2Count30 = stage1to2Transition.astype(int).rolling(30).sum()
-            stage1to2Recent30 = stage1to2Count30 >= 1
-            stage1to2PriceAbove = stage1to2Price.notna() & (close > stage1to2Price)
-
-            stage1to2AlertCond = stage1to2Recent30 & stage1to2PriceAbove & (stage_num == 2)
-
-            if not bool(stage1to2AlertCond.iloc[-1]):
-                continue
-
-            # === cond1..cond4 (ADR%, ATR21_R, ATR50_R, EMA21-low distance%) ===
-            sma50 = close.rolling(50).mean()
-            ema21_close = close.ewm(span=21, adjust=False).mean()
-            ema21_low   = low.ewm(span=21, adjust=False).mean()
-
-            tr = pd.concat([
-                high - low,
-                (high - close.shift(1)).abs(),
-                (low - close.shift(1)).abs()
-            ], axis=1).max(axis=1)
-            atr = tr.rolling(14).mean()
-            atrPercent = (atr / close) * 100
-
-            atr21_R = (((close - ema21_close) / close) * 100) / (atrPercent + 1e-6)
-            atr50_R = (((close - sma50) / close) * 100) / (atrPercent + 1e-6)
-            emaDistPercent = ((close - ema21_low) / close) * 100
-
-            hl_ratio = high / low
-            adrPercent = 100 * (hl_ratio.rolling(20).mean() - 1)
-
-            cond1 = (adrPercent.iloc[-1] >= 2.45) and (adrPercent.iloc[-1] < 8.05)
-            cond2 = -0.5 <= atr21_R.iloc[-1] <= 1
-            cond3 = 0 <= atr50_R.iloc[-1] <= 3
-            cond4 = 0 < emaDistPercent.iloc[-1] <= 8
-
-            if cond1 and cond2 and cond3 and cond4 and close.iloc[-1] >= 20:
-                matches.append(ticker)
-
-        except Exception:
-            continue
-
-    return sorted(matches)
-
-@st.cache_data(ttl=3600)
-def compute_early_bull_no_filter(stocks_list, ticker_dfs, benchmark_df_input):
-    """
-    Same Stage 1->2 / Stage 4->2 transition detection as compute_early_bull,
-    but WITHOUT the cond1-cond4 (ADR%, ATR21_R, ATR50_R, EMA21-low distance%)
-    quality filters — returns every ticker meeting the raw stage transition
-    condition (still requires close >= 20).
-    """
-    matches = []
-    if benchmark_df_input is None or benchmark_df_input.empty:
-        return matches
-
-    bm_idx = benchmark_df_input.index.tz_localize(None) if benchmark_df_input.index.tz is not None else benchmark_df_input.index
-    bm_aligned = benchmark_df_input.copy()
-    bm_aligned.index = bm_idx
-
-    for ticker in stocks_list:
-        try:
-            df = ticker_dfs.get(ticker)
-            if df is None or len(df) < 260:
-                continue
-
-            df_idx = df.index.tz_localize(None) if df.index.tz is not None else df.index
-            df_aligned = df.copy()
-            df_aligned.index = df_idx
-
-            combined = pd.merge(
-                df_aligned[['Close', 'Open', 'High', 'Low']],
-                bm_aligned[['Close']].rename(columns={'Close': 'Close_bench'}),
-                left_index=True, right_index=True, how='inner'
-            )
-            if len(combined) < 260:
-                continue
-
-            close = combined['Close']
-            high  = combined['High']
-
-            ema126 = df_aligned['Close'].ewm(span=126, adjust=False).mean().reindex(combined.index, method='ffill')
-            rs = close / combined['Close_bench']
-
-            ema_spans = [21, 42, 63, 72, 84, 126, 147, 168]
-            r = {s: rs.ewm(span=s, adjust=False).mean() for s in ema_spans}
-
-            stage1_cond = (rs >= r[84]) & (rs < r[126])
-            stage3_cond = (
-                (rs < r[42]) & (rs >= r[72]) & (rs >= r[84]) & (rs >= r[126])
-                & ((r[42] > r[63]) | (rs < r[63])) & (r[63] > r[126]) & (close >= ema126)
-            )
-            stage2a_cond = (
-                (rs >= r[168]) & (rs >= r[147]) & (rs >= r[126])
-                & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
-            )
-            stage2b_cond = (rs >= r[126]) & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
-            stage4_cond = ((rs < r[63]) & (rs < r[126])) | ((r[63] < r[126]) & (rs < r[126]))
-
-            stage_num = pd.Series(0, index=combined.index)
-            stage_num[stage1_cond] = 1
-            remaining = ~stage1_cond
-            stage_num[remaining & stage3_cond] = 3
-            remaining = remaining & ~stage3_cond
-            stage_num[remaining & (stage2a_cond | stage2b_cond)] = 2
-            remaining = remaining & ~(stage2a_cond | stage2b_cond)
-            stage_num[remaining & stage4_cond] = 4
-
-            stage_prev = stage_num.shift(1)
-            stage1to2Transition = (stage_num == 2) & ((stage_prev == 1) | (stage_prev == 4))
-
-            transition_price = high.where(stage1to2Transition)
-            stage1to2Price = transition_price.ffill()
-
-            stage1to2Count30 = stage1to2Transition.astype(int).rolling(30).sum()
-            stage1to2Recent30 = stage1to2Count30 >= 1
-            stage1to2PriceAbove = stage1to2Price.notna() & (close > stage1to2Price)
-
-            stage1to2AlertCond = stage1to2Recent30 & stage1to2PriceAbove & (stage_num == 2)
-
-            if bool(stage1to2AlertCond.iloc[-1]) and close.iloc[-1] >= 20:
-                matches.append(ticker)
-
-        except Exception:
-            continue
-
-    return sorted(matches)
-
-@st.cache_data(ttl=3600)
-def compute_early_bull_combined(stocks_list, ticker_dfs, benchmark_df_input):
-    """
-    Single-pass version of compute_early_bull + compute_early_bull_no_filter.
-    Both scan the same Stage 1->2 / Stage 4->2 transition condition; the only
-    difference is the "filtered" list additionally requires cond1-cond4
-    (ADR%, ATR21_R, ATR50_R, EMA21-low distance%). Computing the shared
-    stage-transition/EMA/RS work once and branching at the end avoids
-    doing that work twice per run.
-
-    Returns: (filtered_matches, unfiltered_matches) — both sorted lists.
-    """
-    filtered = []
-    unfiltered = []
-
-    if benchmark_df_input is None or benchmark_df_input.empty:
-        return filtered, unfiltered
-
-    bm_idx = benchmark_df_input.index.tz_localize(None) if benchmark_df_input.index.tz is not None else benchmark_df_input.index
-    bm_aligned = benchmark_df_input.copy()
-    bm_aligned.index = bm_idx
-
-    for ticker in stocks_list:
-        try:
-            df = ticker_dfs.get(ticker)
-            if df is None or len(df) < 260:
-                continue
-
-            df_idx = df.index.tz_localize(None) if df.index.tz is not None else df.index
-            df_aligned = df.copy()
-            df_aligned.index = df_idx
-
-            combined = pd.merge(
-                df_aligned[['Close', 'Open', 'High', 'Low']],
-                bm_aligned[['Close']].rename(columns={'Close': 'Close_bench'}),
-                left_index=True, right_index=True, how='inner'
-            )
-            if len(combined) < 260:
-                continue
-
-            close = combined['Close']; open_ = combined['Open']
-            high  = combined['High'];  low   = combined['Low']
-
-            ema126 = df_aligned['Close'].ewm(span=126, adjust=False).mean().reindex(combined.index, method='ffill')
-            rs = close / combined['Close_bench']
-
-            ema_spans = [21, 42, 63, 72, 84, 126, 147, 168]
-            r = {s: rs.ewm(span=s, adjust=False).mean() for s in ema_spans}
-
-            stage1_cond = (rs >= r[84]) & (rs < r[126])
-            stage3_cond = (
-                (rs < r[42]) & (rs >= r[72]) & (rs >= r[84]) & (rs >= r[126])
-                & ((r[42] > r[63]) | (rs < r[63])) & (r[63] > r[126]) & (close >= ema126)
-            )
-            stage2a_cond = (
-                (rs >= r[168]) & (rs >= r[147]) & (rs >= r[126])
-                & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
-            )
-            stage2b_cond = (rs >= r[126]) & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
-            stage4_cond = ((rs < r[63]) & (rs < r[126])) | ((r[63] < r[126]) & (rs < r[126]))
-
-            # Resolve final stage number per bar
-            stage_num = pd.Series(0, index=combined.index)
-            stage_num[stage1_cond] = 1
-            remaining = ~stage1_cond
-            stage_num[remaining & stage3_cond] = 3
-            remaining = remaining & ~stage3_cond
-            stage_num[remaining & (stage2a_cond | stage2b_cond)] = 2
-            remaining = remaining & ~(stage2a_cond | stage2b_cond)
-            stage_num[remaining & stage4_cond] = 4
-
-            # === Stage 1->2 or Stage 4->2 Transition ===
-            stage_prev = stage_num.shift(1)
-            stage1to2Transition = (stage_num == 2) & ((stage_prev == 1) | (stage_prev == 4))
-
-            transition_price = high.where(stage1to2Transition)
-            stage1to2Price = transition_price.ffill()
-
-            stage1to2Count30 = stage1to2Transition.astype(int).rolling(30).sum()
-            stage1to2Recent30 = stage1to2Count30 >= 1
-            stage1to2PriceAbove = stage1to2Price.notna() & (close > stage1to2Price)
-
-            stage1to2AlertCond = stage1to2Recent30 & stage1to2PriceAbove & (stage_num == 2)
-
-            if not bool(stage1to2AlertCond.iloc[-1]):
-                continue
-            if close.iloc[-1] < 20:
-                continue
-
-            # Unfiltered match confirmed
-            unfiltered.append(ticker)
-
-            # === cond1..cond4 (ADR%, ATR21_R, ATR50_R, EMA21-low distance%) ===
-            sma50 = close.rolling(50).mean()
-            ema21_close = close.ewm(span=21, adjust=False).mean()
-            ema21_low   = low.ewm(span=21, adjust=False).mean()
-
-            tr = pd.concat([
-                high - low,
-                (high - close.shift(1)).abs(),
-                (low - close.shift(1)).abs()
-            ], axis=1).max(axis=1)
-            atr = tr.rolling(14).mean()
-            atrPercent = (atr / close) * 100
-
-            atr21_R = (((close - ema21_close) / close) * 100) / (atrPercent + 1e-6)
-            atr50_R = (((close - sma50) / close) * 100) / (atrPercent + 1e-6)
-            emaDistPercent = ((close - ema21_low) / close) * 100
-
-            hl_ratio = high / low
-            adrPercent = 100 * (hl_ratio.rolling(20).mean() - 1)
-
-            cond1 = (adrPercent.iloc[-1] >= 2.45) and (adrPercent.iloc[-1] < 8.05)
-            cond2 = -0.5 <= atr21_R.iloc[-1] <= 1
-            cond3 = 0 <= atr50_R.iloc[-1] <= 3
-            cond4 = 0 < emaDistPercent.iloc[-1] <= 8
-
-            if cond1 and cond2 and cond3 and cond4:
-                filtered.append(ticker)
-
-        except Exception:
-            continue
-
-    return sorted(filtered), sorted(unfiltered)
-
-@st.cache_data(ttl=3600)
-def compute_early_bull_history(stocks_list, ticker_dfs, benchmark_df_input):
-    """
-    Vectorized version of the Stage 1->2 / Stage 4->2 transition logic from
-    compute_early_bull, evaluated across the FULL time series (not just the
-    latest bar) so we get a daily Early Bull count history, mirroring how
-    compute_two_botak_history / compute_stage_history work.
-    Note: unlike compute_early_bull, this does NOT apply the cond1-cond4
-    (ADR%/ATR%/EMA-distance) filters — it only tracks the stage transition condition.
-    """
-    try:
-        if benchmark_df_input is None or benchmark_df_input.empty:
-            return pd.DataFrame()
-
-        bm_idx = benchmark_df_input.index.tz_localize(None) if benchmark_df_input.index.tz is not None else benchmark_df_input.index
-        bm_aligned = benchmark_df_input.copy()
-        bm_aligned.index = bm_idx
-
-        all_series = []
-
-        for ticker in stocks_list:
-            try:
-                df = ticker_dfs.get(ticker)
-                if df is None or len(df) < 260:
-                    continue
-
-                df_idx = df.index.tz_localize(None) if df.index.tz is not None else df.index
-                df_aligned = df.copy()
-                df_aligned.index = df_idx
-
-                combined = pd.merge(
-                    df_aligned[['Close', 'Open', 'High', 'Low']],
-                    bm_aligned[['Close']].rename(columns={'Close': 'Close_bench'}),
-                    left_index=True, right_index=True, how='inner'
-                )
-                if len(combined) < 260:
-                    continue
-
-                close = combined['Close']
-                high  = combined['High']
-
-                ema126 = df_aligned['Close'].ewm(span=126, adjust=False).mean().reindex(combined.index, method='ffill')
-                rs = close / combined['Close_bench']
-
-                ema_spans = [21, 42, 63, 72, 84, 126, 147, 168]
-                r = {s: rs.ewm(span=s, adjust=False).mean() for s in ema_spans}
-
-                stage1_cond = (rs >= r[84]) & (rs < r[126])
-                stage3_cond = (
-                    (rs < r[42]) & (rs >= r[72]) & (rs >= r[84]) & (rs >= r[126])
-                    & ((r[42] > r[63]) | (rs < r[63])) & (r[63] > r[126]) & (close >= ema126)
-                )
-                stage2a_cond = (
-                    (rs >= r[168]) & (rs >= r[147]) & (rs >= r[126])
-                    & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
-                )
-                stage2b_cond = (rs >= r[126]) & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
-                stage4_cond = ((rs < r[63]) & (rs < r[126])) | ((r[63] < r[126]) & (rs < r[126]))
-
-                stage_num = pd.Series(0, index=combined.index)
-                stage_num[stage1_cond] = 1
-                remaining = ~stage1_cond
-                stage_num[remaining & stage3_cond] = 3
-                remaining = remaining & ~stage3_cond
-                stage_num[remaining & (stage2a_cond | stage2b_cond)] = 2
-                remaining = remaining & ~(stage2a_cond | stage2b_cond)
-                stage_num[remaining & stage4_cond] = 4
-
-                stage_prev = stage_num.shift(1)
-                stage1to2Transition = (stage_num == 2) & ((stage_prev == 1) | (stage_prev == 4))
-
-                transition_price = high.where(stage1to2Transition)
-                stage1to2Price = transition_price.ffill()
-
-                stage1to2Count30 = stage1to2Transition.astype(int).rolling(30).sum()
-                stage1to2Recent30 = stage1to2Count30 >= 1
-                stage1to2PriceAbove = stage1to2Price.notna() & (close > stage1to2Price)
-
-                stage1to2AlertCond = stage1to2Recent30 & stage1to2PriceAbove & (stage_num == 2) & (close >= 20)
-
-                all_series.append(stage1to2AlertCond.astype(int))
-            except Exception:
-                continue
-
-        if not all_series:
-            return pd.DataFrame()
-
-        combined_all = pd.concat(all_series, axis=1).fillna(0)
-        daily_counts = combined_all.sum(axis=1)
-
-        result = daily_counts.tail(60).reset_index()
-        result.columns = ["Date", "Early Bull Count"]
-        result["Date"] = result["Date"].dt.strftime("%Y-%m-%d")
-        return result
-    except Exception:
-        return pd.DataFrame()
-
-
 st.markdown("---")
 
-# with st.spinner("Scanning Early Bull setups..."):
-#     early_bull_list = timed(
-#         "compute_early_bull",
-#         compute_early_bull,
-#         stocks_tuple, ticker_dfs_shared, benchmark_df_shared
-#     )
+@st.cache_data(ttl=1800)
+def fetch_reddit_mentions_apewisdom(stocks_tuple, filter_type="wallstreetbets"):
+    """
+    filter_type options: 'all-stocks', 'wallstreetbets', 'stocks', 'investing', 'options', etc.
+    Returns top 100 most-mentioned tickers from the last 24h, filtered to KNOWN_STOCKS.
+    """
+    def safe_int(v, default=0):
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return default
 
-# st.markdown(f"#### 🐂 Early Bull = buyable Sector ({len(early_bull_list)})")
+    known_set = set(stocks_tuple)
+    rows = []
+    page = 1
 
-# if early_bull_list:
-#     # Map each Early Bull ticker to its industry group(s), reusing the same
-#     # helper used for the RS Leader section.
-#     eb_industry_counts, eb_ticker_industry = build_leader_industry_map(early_bull_list, INDUSTRIES)
+    try:
+        while True:
+            resp = requests.get(
+                f"https://apewisdom.io/api/v1.0/filter/{filter_type}/page/{page}",
+                timeout=15,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            results = data.get("results", [])
+            if not results:
+                break
 
-#     html_eb = ""
-#     for sym in early_bull_list:
-#         industries = eb_ticker_industry.get(sym, [])
-#         ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
-#         is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+            for r in results:
+                ticker = r.get("ticker")
+                if ticker in known_set:
+                    rows.append({
+                        "Ticker": ticker,
+                        "Rank": safe_int(r.get("rank")),
+                        "Mentions": safe_int(r.get("mentions")),
+                        "Mentions 24h Ago": safe_int(r.get("mentions_24h_ago")),
+                        "Upvotes": safe_int(r.get("upvotes")),
+                    })
 
-#         glow_style = (
-#             "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
-#             if is_top20_industry else ""
-#         )
+            if page >= safe_int(data.get("pages"), 1):
+                break
+            page += 1
 
-#         html_eb += setup_badge(sym, extra_style=glow_style)
+    except Exception as e:
+        st.warning(f"ApeWisdom fetch error: {e}")
+        return pd.DataFrame()
 
-#     st.markdown(html_eb, unsafe_allow_html=True)
-# else:
-#     st.info("No active setups discovered.")
+    if not rows:
+        return pd.DataFrame()
 
-# st.write("")
+    df = pd.DataFrame(rows)
+    df["Δ Mentions"] = df["Mentions"] - df["Mentions 24h Ago"]
+    return df.sort_values("Mentions", ascending=False).reset_index(drop=True)
 
-# with st.spinner("Scanning Early Bull (unfiltered) setups..."):
-#     early_bull_no_filter_list = timed(
-#         "compute_early_bull_no_filter",
-#         compute_early_bull_no_filter,
-#         stocks_tuple, ticker_dfs_shared, benchmark_df_shared
-#     )
-
-with st.spinner("Scanning Early Bull setups..."):
-    early_bull_list, early_bull_no_filter_list = timed(
-        "compute_early_bull_combined",
-        compute_early_bull_combined,
-        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
+with st.spinner("Fetching Reddit sentiment..."):
+    reddit_df = timed(
+        "fetch_reddit_mentions_apewisdom",
+        fetch_reddit_mentions_apewisdom,
+        stocks_tuple, "wallstreetbets"
     )
 
-st.markdown(f"#### 🐂 Early Bull = buyable + Sector ({len(early_bull_list)} + {len(early_bull_no_filter_list)})")
+#st.markdown(f"#### 🧵 Reddit ({len(reddit_df)})")
+st.markdown(
+    f"""
+    <div style="display:flex; align-items:center; gap:8px; margin-top:22px; margin-bottom:6px;">
+        <img src="https://www.redditstatic.com/desktop2x/img/favicon/android-icon-192x192.png"
+             style="width:24px; height:24px; vertical-align:middle;">
+        <span style="font-size:1.5em; font-weight:600; color:#ffffff;">
+            Reddit ({len(reddit_df)})
+        </span>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
-if early_bull_no_filter_list:
-    eb_nf_industry_counts, eb_nf_ticker_industry = build_leader_industry_map(early_bull_no_filter_list, INDUSTRIES)
-    early_bull_set = set(early_bull_list)   # NEW — for O(1) membership check
-
-    html_eb_nf = ""
-    for sym in early_bull_no_filter_list:
-        industries = eb_nf_ticker_industry.get(sym, [])
-        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
-        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
-
-        glow_style = (
-            "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
-            if is_top20_industry else ""
-        )
-        text_color = "#378ADD" if sym in early_bull_set else None   # NEW
-
-        html_eb_nf += setup_badge(sym, extra_style=glow_style, extra_text_color=text_color)
-
-    st.markdown(html_eb_nf, unsafe_allow_html=True)
-
-    render_group_ai_insight(
-        early_bull_no_filter_list,
-        "Early Bull (unfiltered stage transition)",
-        "early_bull_no_filter",
-        extra_note="stock just transitioned from Stage 1 or Stage 4 into Stage 2 within the last 30 bars and price is holding above the transition-bar high, WITHOUT the ADR%/ATR%/EMA-distance quality filters applied"
-    )
+if reddit_df.empty:
+    st.info("No known-stock mentions found on Reddit right now.")
 else:
-    st.info("No active setups discovered.")
+    html_reddit = ""
+    for _, row in reddit_df.head(30).iterrows():
+        sym = row["Ticker"]
+        delta = row["Δ Mentions"]
+        delta_color = "#00FF00" if delta > 0 else "#FF4B4B" if delta < 0 else "#888888"
+        delta_str = f"+{delta}" if delta > 0 else str(delta)
+        html_reddit += (
+            f'<div class="ticker-badge">'
+            f'<span class="ticker-name">{sym}</span>'
+            f'<span class="ticker-rs">{row["Mentions"]} mentions</span>'
+            f'<span style="color:{delta_color}; margin-left:5px; font-size:11px;">({delta_str})</span>'
+            f'</div>'
+        )
+    st.markdown(html_reddit, unsafe_allow_html=True)
+    st.write("")
 
-st.write("")
-
-with st.spinner("Scanning for Early Bull History..."):
-    early_bull_hist = timed(
-        "compute_early_bull_history",
-        compute_early_bull_history,
-        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
-    )
-
-if not early_bull_hist.empty:
-    chart_df_eb = early_bull_hist.copy()
-    today_value_eb = chart_df_eb["Early Bull Count"].iloc[-1]
-    max_value_eb = chart_df_eb["Early Bull Count"].max()
-
-    if today_value_eb == max_value_eb:
-        chart_df_eb["Bar_Color"] = "#29B5E8"
-        chart_df_eb.iloc[-1, chart_df_eb.columns.get_loc("Bar_Color")] = "#FF4B4B"
-    else:
-        chart_df_eb["Bar_Color"] = "#29B5E8"
-
-    st.bar_chart(
-        data=chart_df_eb,
-        x="Date",
-        y="Early Bull Count",
-        color="Bar_Color",
-        use_container_width=True
-    )
+    with st.expander("Full table"):
+        st.dataframe(reddit_df, use_container_width=False, width=500, hide_index=True)
 
 st.markdown("---")
 
@@ -7917,105 +8016,6 @@ def explain_volatility_hits(tickers_tuple):
         reasons[t] = tags
 
     return reasons, news_map, sec_map, form4_map, earnings_map
-
-st.markdown("---")
-
-@st.cache_data(ttl=1800)
-def fetch_reddit_mentions_apewisdom(stocks_tuple, filter_type="wallstreetbets"):
-    """
-    filter_type options: 'all-stocks', 'wallstreetbets', 'stocks', 'investing', 'options', etc.
-    Returns top 100 most-mentioned tickers from the last 24h, filtered to KNOWN_STOCKS.
-    """
-    def safe_int(v, default=0):
-        try:
-            return int(v)
-        except (TypeError, ValueError):
-            return default
-
-    known_set = set(stocks_tuple)
-    rows = []
-    page = 1
-
-    try:
-        while True:
-            resp = requests.get(
-                f"https://apewisdom.io/api/v1.0/filter/{filter_type}/page/{page}",
-                timeout=15,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            results = data.get("results", [])
-            if not results:
-                break
-
-            for r in results:
-                ticker = r.get("ticker")
-                if ticker in known_set:
-                    rows.append({
-                        "Ticker": ticker,
-                        "Rank": safe_int(r.get("rank")),
-                        "Mentions": safe_int(r.get("mentions")),
-                        "Mentions 24h Ago": safe_int(r.get("mentions_24h_ago")),
-                        "Upvotes": safe_int(r.get("upvotes")),
-                    })
-
-            if page >= safe_int(data.get("pages"), 1):
-                break
-            page += 1
-
-    except Exception as e:
-        st.warning(f"ApeWisdom fetch error: {e}")
-        return pd.DataFrame()
-
-    if not rows:
-        return pd.DataFrame()
-
-    df = pd.DataFrame(rows)
-    df["Δ Mentions"] = df["Mentions"] - df["Mentions 24h Ago"]
-    return df.sort_values("Mentions", ascending=False).reset_index(drop=True)
-
-with st.spinner("Fetching Reddit sentiment..."):
-    reddit_df = timed(
-        "fetch_reddit_mentions_apewisdom",
-        fetch_reddit_mentions_apewisdom,
-        stocks_tuple, "wallstreetbets"
-    )
-
-#st.markdown(f"#### 🧵 Reddit ({len(reddit_df)})")
-st.markdown(
-    f"""
-    <div style="display:flex; align-items:center; gap:8px; margin-top:22px; margin-bottom:6px;">
-        <img src="https://www.redditstatic.com/desktop2x/img/favicon/android-icon-192x192.png"
-             style="width:24px; height:24px; vertical-align:middle;">
-        <span style="font-size:1.5em; font-weight:600; color:#ffffff;">
-            Reddit ({len(reddit_df)})
-        </span>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-if reddit_df.empty:
-    st.info("No known-stock mentions found on Reddit right now.")
-else:
-    html_reddit = ""
-    for _, row in reddit_df.head(30).iterrows():
-        sym = row["Ticker"]
-        delta = row["Δ Mentions"]
-        delta_color = "#00FF00" if delta > 0 else "#FF4B4B" if delta < 0 else "#888888"
-        delta_str = f"+{delta}" if delta > 0 else str(delta)
-        html_reddit += (
-            f'<div class="ticker-badge">'
-            f'<span class="ticker-name">{sym}</span>'
-            f'<span class="ticker-rs">{row["Mentions"]} mentions</span>'
-            f'<span style="color:{delta_color}; margin-left:5px; font-size:11px;">({delta_str})</span>'
-            f'</div>'
-        )
-    st.markdown(html_reddit, unsafe_allow_html=True)
-    st.write("")
-
-    with st.expander("Full table"):
-        st.dataframe(reddit_df, use_container_width=False, width=500, hide_index=True)
 
 @st.cache_data(ttl=21600)
 def fetch_known_stocks_upcoming_earnings(stocks_tuple, days_ahead=7):
