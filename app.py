@@ -4530,7 +4530,7 @@ if quad_points:
             text="Industry RS — Weekly vs Monthly",
             x=0.5,
             xanchor="center",
-            font=dict(size=16, color=quad_title_color),   # ← changed from "#ffffff"
+            font=dict(size=16, color=quad_title_color),
         ),
         xaxis=dict(
             title="Weekly RS",
@@ -4540,7 +4540,7 @@ if quad_points:
             gridcolor="rgba(120,120,120,0.18)",
             zeroline=False,
             tickfont=dict(color="#aaaaaa", size=11),
-            title_font=dict(color="#aaaaaa", size=12),
+            title_font=dict(color=quad_title_color, size=12),   # ← changed from "#aaaaaa"
         ),
         yaxis=dict(
             title="Monthly RS",
@@ -4550,7 +4550,7 @@ if quad_points:
             gridcolor="rgba(120,120,120,0.18)",
             zeroline=False,
             tickfont=dict(color="#aaaaaa", size=11),
-            title_font=dict(color="#aaaaaa", size=12),
+            title_font=dict(color=quad_title_color, size=12),   # ← changed from "#aaaaaa"
         ),
         plot_bgcolor ="rgba(20,22,30,1)",
         paper_bgcolor="rgba(13,17,23,0)",
@@ -7156,6 +7156,19 @@ def download_all_industry_stocks_data(stocks_tuple, known_ticker_dfs):
 st.markdown("---")
 st.markdown(f"#### Pie Chart")
 
+def compute_rsi(close_series, period=14):
+    """Standard Wilder's RSI."""
+    delta = close_series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+
+    avg_gain = gain.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
+
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
 # ETF daily direction pie chart at the bottom of the page
 def _etf_pie_chart():
     etf_symbols = INDUSTRIES.get('ETF', [])
@@ -7221,6 +7234,37 @@ def _etf_pie_chart():
                 margin=dict(l=0, r=0, t=50, b=0)
             )
             st.plotly_chart(fig, use_container_width=True)
+
+            # ── 14-day RSI, sorted high to low ──
+            rsi_rows = []
+            for sym in etf_symbols:
+                df_sym = ticker_dfs_shared.get(sym)
+                if df_sym is None or len(df_sym) < 15:
+                    continue
+                rsi_series = compute_rsi(df_sym['Close'], period=14)
+                rsi_val = rsi_series.iloc[-1]
+                if pd.isna(rsi_val):
+                    continue
+                rsi_rows.append((sym, round(float(rsi_val), 1)))
+
+            if rsi_rows:
+                rsi_rows.sort(key=lambda x: -x[1])
+                rsi_html = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+                for sym, rsi_val in rsi_rows:
+                    if rsi_val >= 70:
+                        bg, border, txt = "#FFB3B3", "#CC0000", "#4B0000"
+                    elif rsi_val <= 30:
+                        bg, border, txt = "#90EE90", "#228B22", "#003300"
+                    else:
+                        bg, border, txt = "#1e1e1e", "#444", "#eeeeee"
+                    rsi_html += (
+                        f'<div class="ticker-badge" style="background:{bg}; border:1px solid {border};">'
+                        f'<span class="ticker-name" style="color:{txt};">{sym}</span>'
+                        f'<span class="ticker-rs" style="color:{txt}; margin-left:4px;">{rsi_val:.1f}</span>'
+                        f'</div>'
+                    )
+                rsi_html += "</div>"
+                st.markdown(rsi_html, unsafe_allow_html=True)
         else:
             st.info('ETF daily direction data unavailable.')
 
@@ -7735,7 +7779,7 @@ else:
         html_reddit += (
             f'<div class="ticker-badge">'
             f'<span class="ticker-name">{sym}</span>'
-            f'<span class="ticker-rs">{row["Mentions"]} mentions</span>'
+            f'<span class="ticker-rs">{row["Mentions"]} </span>'
             f'<span style="color:{delta_color}; margin-left:5px; font-size:11px;">({delta_str})</span>'
             f'</div>'
         )
@@ -7744,6 +7788,23 @@ else:
 
     with st.expander("Full table"):
         st.dataframe(reddit_df, use_container_width=False, width=500, hide_index=True)
+
+    # ── Common tickers between Quant Sentiment (trending) and Reddit ──
+    common_syms = sorted(set(trending_today) & set(reddit_df_display["Ticker"]))
+    st.markdown(
+        f"**🔗 In Common (Trending ∩ Reddit): {len(common_syms)}**"
+    )
+    if common_syms:
+        common_html = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+        for sym in common_syms:
+            common_html += (
+                f'<div class="ticker-badge" style="background:#FFD700; border:1px solid #B8860B; color:#111111; font-weight:bold;">'
+                f'<span>{sym}</span></div>'
+            )
+        common_html += "</div>"
+        st.markdown(common_html, unsafe_allow_html=True)
+    else:
+        st.info("No overlap between trending and Reddit lists.")
 
 st.markdown("---")
 
