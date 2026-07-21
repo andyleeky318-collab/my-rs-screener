@@ -7762,7 +7762,7 @@ st.markdown("---")
 def fetch_reddit_mentions_apewisdom(stocks_tuple, filter_type="wallstreetbets"):
     """
     filter_type options: 'all-stocks', 'wallstreetbets', 'stocks', 'investing', 'options', etc.
-    Returns top 100 most-mentioned tickers from the last 24h, filtered to KNOWN_STOCKS.
+    Returns top mentioned tickers from the last 24h (all tickers, not just KNOWN_STOCKS).
     """
     def safe_int(v, default=0):
         try:
@@ -7770,7 +7770,6 @@ def fetch_reddit_mentions_apewisdom(stocks_tuple, filter_type="wallstreetbets"):
         except (TypeError, ValueError):
             return default
 
-    known_set = set(stocks_tuple)
     rows = []
     page = 1
 
@@ -7788,14 +7787,15 @@ def fetch_reddit_mentions_apewisdom(stocks_tuple, filter_type="wallstreetbets"):
 
             for r in results:
                 ticker = r.get("ticker")
-                if ticker in known_set:
-                    rows.append({
-                        "Ticker": ticker,
-                        "Rank": safe_int(r.get("rank")),
-                        "Mentions": safe_int(r.get("mentions")),
-                        "Mentions 24h Ago": safe_int(r.get("mentions_24h_ago")),
-                        "Upvotes": safe_int(r.get("upvotes")),
-                    })
+                if not ticker:
+                    continue
+                rows.append({
+                    "Ticker": ticker,
+                    "Rank": safe_int(r.get("rank")),
+                    "Mentions": safe_int(r.get("mentions")),
+                    "Mentions 24h Ago": safe_int(r.get("mentions_24h_ago")),
+                    "Upvotes": safe_int(r.get("upvotes")),
+                })
 
             if page >= safe_int(data.get("pages"), 1):
                 break
@@ -7834,7 +7834,7 @@ st.markdown(
 )
 
 if reddit_df.empty:
-    st.info("No known-stock mentions found on Reddit right now.")
+    st.info("No mentions found on Reddit right now.")
 else:
     reddit_df_display = reddit_df[~reddit_df["Ticker"].isin(["SPY", "QQQ"])]
     html_reddit = ""
@@ -7843,8 +7843,14 @@ else:
         delta = row["Δ Mentions"]
         delta_color = "#00FF00" if delta > 0 else "#FF4B4B" if delta < 0 else "#888888"
         delta_str = f"+{delta}" if delta > 0 else str(delta)
+
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FFD700; border:1px solid #FFD700;"
+            if sym not in KNOWN_STOCKS else ""
+        )
+
         html_reddit += (
-            f'<div class="ticker-badge">'
+            f'<div class="ticker-badge" style="{glow_style}">'
             f'<span class="ticker-name">{sym}</span>'
             f'<span class="ticker-rs" style="color:#378ADD;">{row["Mentions"]} </span>'
             f'<span style="color:{delta_color}; margin-left:5px; font-size:11px;">({delta_str})</span>'
