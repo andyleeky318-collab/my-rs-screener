@@ -7315,10 +7315,13 @@ def _etf_pie_chart():
                 rsi_rows.sort(key=lambda x: -x[1])
                 rsi_html = "<div style='display:flex;flex-wrap:wrap;justify-content:center;gap:4px;padding:6px 0;'>"
                 for sym, rsi_val in rsi_rows:
-                    if rsi_val >= 70:
-                        bg, border, txt = "#FFB3B3", "#CC0000", "#4B0000"
-                    elif rsi_val <= 30:
-                        bg, border, txt = "#90EE90", "#228B22", "#003300"
+                    pct = etf_changes_pct.get(sym, 0.0)
+                    if pct > 0:
+                        bg, border, txt = "#00FF00", "#009900", "#000000"
+                    # elif rsi_val >= 70:
+                    #     bg, border, txt = "#FFB3B3", "#CC0000", "#4B0000"
+                    # elif rsi_val <= 30:
+                    #     bg, border, txt = "#90EE90", "#228B22", "#003300"
                     else:
                         bg, border, txt = "#1e1e1e", "#444", "#eeeeee"
                     rsi_html += (
