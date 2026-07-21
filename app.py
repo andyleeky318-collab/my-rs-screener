@@ -7740,10 +7740,15 @@ if trending_today:
                 "background:#1e1e1e; border:1px solid #444; color:#FFFFFF;"
             )
 
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FFD700;"
+            if sym not in KNOWN_STOCKS else ""
+        )
+
         qs_html += (
             f"<div style='display:inline-flex; align-items:center; gap:4px; "
             f"padding:2px 7px; border-radius:3px; font-size:11px; "
-            f"white-space:nowrap; {badge_style}'>"
+            f"white-space:nowrap; {badge_style} {glow_style}'>"
             f"<span>{sym}</span>"
             #f"{'<span style=\"font-size:9px;\">★</span>' if is_new else ''}"
             f"</div>"
