@@ -2883,7 +2883,7 @@ SECTOR_KEYWORDS = {
     "Insurance": "#FF69B4",
     "Transportation": "#FF69B4", "Shipping": "#FF69B4", "Airlines": "#FF69B4",
     "Housing": "#FF69B4", "Homebuilders": "#FF69B4",
-    "Crypto": "#FF69B4", "Gold": "#FF69B4", "Broker": "#FF69B4", "Brokerage": "#FF69B4", "Rail": "#FF69B4", "Rails": "#FF69B4", "finance": "#FF69B4", "metals": "#FF69B4", "Payment Processing": "#FF69B4", 
+    "Crypto": "#FF69B4", "Gold": "#FF69B4", "Broker": "#FF69B4", "Brokerage": "#FF69B4", "Rail": "#FF69B4", "Rails": "#FF69B4", "finance": "#FF69B4", "metals": "#FF69B4", "Payment Processing": "#FF69B4", "travel": "#FF69B4", "airline": "#FF69B4", 
 }
 
 def format_ai_analysis_text(text, tickers=None, industries=None):
@@ -4825,7 +4825,7 @@ if email_content_stocks or email_content_removed:
             ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
             is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
             if is_top20_industry:
-                glow_style = "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
+                glow_style = "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
 
         minervini_html += setup_badge(
             sym,
@@ -5089,8 +5089,8 @@ if leader_list or leader_yest:
         dot = (
             '<span style="'
             'display:inline-block;width:7px;height:7px;'
-            'border-radius:50%;background:#FF4B4B;'
-            'box-shadow:0 0 5px 2px #FF4B4B;'
+            'border-radius:50%;background:#378ADD;'
+            'box-shadow:0 0 5px 2px #378ADD;'
             'margin-right:4px;vertical-align:middle;'
             '"></span>'
             if sym in leader_rs_nh_matches and sym != "SPY" else ""
@@ -5108,7 +5108,7 @@ if leader_list or leader_yest:
         ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
         is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
         glow_style = (
-            "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
             if is_top20_industry and sym in (ma50bounce_all | cloudwick_all | cloud21ema_all)
             else ""
         )
@@ -5728,7 +5728,7 @@ if rs_nh_b4_today or rs_nh_b4_yest:
         ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
         is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
         glow_style = (
-            "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
             if is_top20_industry else ""
         )
         html_rsnh += setup_badge(sym, is_new=(sym not in rs_nh_b4_yest), extra_style=glow_style)
@@ -5764,7 +5764,7 @@ if ppp_list or ppp_yest:
         ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
         is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
         glow_style = (
-            "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
             if is_top20_industry else ""
         )
         html_p += setup_badge(sym, is_new=(sym not in ppp_yest), extra_style=glow_style)
@@ -5911,7 +5911,7 @@ if gapper_list or gapper_yest:
         ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
         is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
         glow_style = (
-            "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
             if is_top20_industry else ""
         )
         html_g += setup_badge(sym, is_new=(sym not in gapper_yest), extra_style=glow_style)
@@ -6601,7 +6601,7 @@ if early_bull_no_filter_list:
         is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
 
         glow_style = (
-            "box-shadow:0 0 8px 2px #FFA500; border:1px solid #FFA500;"
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
             if is_top20_industry else ""
         )
         text_color = "#378ADD" if sym in early_bull_set else None   # NEW
@@ -8043,7 +8043,7 @@ def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
             lines.append("----------")
             separator_inserted = True
 
-        setup_str = "/".join(r["setups"])
+        setup_str = ",".join(r["setups"])
         risk_str  = f'{r["risk"]:.1f}%' if r["risk"] is not None else "n/a"
         ticker_str = f'<b><i>{r["ticker"]}</i></b>' if r["is_leader"] else r["ticker"]
         lines.append(
