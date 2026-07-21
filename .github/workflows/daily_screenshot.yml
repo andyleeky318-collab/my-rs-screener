@@ -28,4 +28,7 @@ jobs:
           STREAMLIT_APP_URL: ${{ secrets.STREAMLIT_APP_URL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TRADINGVIEW_EMAIL: ${{ secrets.TRADINGVIEW_EMAIL }}
+          TRADINGVIEW_PASSWORD: ${{ secrets.TV_PASSWORD }}
+          TRADINGVIEW_CHART_URL: ${{ secrets.TRADINGVIEW_CHART_URL }}
         run: python screenshot_and_send.py
