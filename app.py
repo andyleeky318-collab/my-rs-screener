@@ -8199,13 +8199,17 @@ def fetch_known_stocks_upcoming_earnings(stocks_tuple, days_ahead=7):
         except (TypeError, ValueError):
             return date_str
 
+    # Sort BEFORE formatting: raw "YYYY-MM-DD" strings sort correctly
+    # chronologically as plain strings, so sort by (raw_date, ticker).
+    filtered.sort(key=lambda r: (r.get("date") or "", r.get("symbol") or ""))
+
     df = pd.DataFrame([{
         "Ticker": r.get("symbol"),
         "Date": format_date_with_day(r.get("date")),
         "Time": hour_labels.get(r.get("hour"), r.get("hour", "?")),
     } for r in filtered])
 
-    return df.sort_values("Ticker").reset_index(drop=True)
+    return df.reset_index(drop=True)
 
 st.markdown("---")
 
