@@ -17,6 +17,10 @@ each section as its OWN Telegram photo (never combined/stitched).
 - The whole run is wrapped in try/except with full traceback logging so a
   single unexpected error can no longer silently kill the script after
   only the first screenshot.
+- TradingView capture: if login, navigation, or any step times out /
+  errors, the script no longer just skips the photo -- it takes whatever
+  is currently on screen and sends THAT to Telegram instead, with a
+  caption noting it's a fallback capture, so you always get something.
 
 Env vars required (set as GitHub Actions secrets):
   STREAMLIT_APP_URL   e.g. https://your-app-name.streamlit.app
@@ -454,16 +458,34 @@ def capture_and_send_external_top(browser, url, caption, settle_seconds=SCROLL_S
     except Exception as e:
         print(f"External screenshot failed for '{url}': {e} -- skipping.")
 
+
+def _safe_fallback_screenshot(page, caption):
+    """
+    Best-effort screenshot of whatever is currently on screen, used when a
+    TradingView step (login, chart load, nav click) fails or times out.
+    Never raises -- worst case it just logs and sends nothing.
+    """
+    try:
+        img_bytes = page.screenshot()
+        send_photo(img_bytes, caption)
+    except Exception as shot_err:
+        print(f"Fallback screenshot ('{caption}') also failed: {shot_err}")
+
+
 def tradingview_login(browser):
     """
     Logs into TradingView via email/password and returns an authenticated
-    Playwright page. Returns None on any failure (never raises) so a login
-    problem just results in this one screenshot being skipped.
+    Playwright page. On failure, instead of just skipping, captures
+    whatever is currently on screen (e.g. the signin page mid-failure) and
+    sends that to Telegram as a fallback so a login hiccup still produces
+    a photo. Returns None on any failure (never raises) so a login
+    problem just results in the login-specific page being closed.
     """
     if not (TV_EMAIL and TV_PASSWORD):
         print("TradingView credentials not set -- skipping TradingView screenshot.")
         return None
 
+    page = None
     try:
         page = browser.new_page(viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT})
         page.goto("https://www.tradingview.com/accounts/signin/",
@@ -486,7 +508,13 @@ def tradingview_login(browser):
         print("TradingView login succeeded.")
         return page
     except Exception as e:
-        print(f"TradingView login failed: {e} -- skipping TradingView screenshot.")
+        print(f"TradingView login failed: {e} -- capturing whatever is on screen instead of skipping.")
+        if page is not None:
+            _safe_fallback_screenshot(page, "TradingView Chart (fallback -- login issue)")
+            try:
+                page.close()
+            except Exception:
+                pass
         return None
 
 
@@ -495,8 +523,9 @@ def capture_and_send_tradingview(browser):
     Logs into TradingView and sends one screenshot of a chart. If
     TV_CHART_URL is set, goes straight there. If not, falls back to
     clicking the 'Products' tab in the top nav (which lands directly on
-    a chart). Fully self-contained and non-fatal -- any failure just
-    skips this photo.
+    a chart). Fully self-contained and non-fatal -- any failure now falls
+    back to screenshotting whatever is currently on screen rather than
+    skipping the photo entirely.
     """
     page = tradingview_login(browser)
     if page is None:
@@ -510,14 +539,19 @@ def capture_and_send_tradingview(browser):
             try:
                 products = page.get_by_text("Products", exact=False)
                 if products.count() == 0 or not products.first.is_visible():
-                    print("Could not find 'Products' tab -- skipping TradingView screenshot.")
+                    print("Could not find 'Products' tab -- capturing current page instead of skipping.")
+                    _safe_fallback_screenshot(page, "TradingView Chart (fallback -- 'Products' tab not found)")
                     page.close()
                     return
                 products.first.click()
                 page.wait_for_load_state("domcontentloaded", timeout=EXTRA_PAGE_LOAD_TIMEOUT)
             except Exception as e:
-                print(f"Could not click 'Products': {e} -- skipping TradingView screenshot.")
-                page.close()
+                print(f"Could not click 'Products': {e} -- capturing current page instead of skipping.")
+                _safe_fallback_screenshot(page, "TradingView Chart (fallback -- nav click failed)")
+                try:
+                    page.close()
+                except Exception:
+                    pass
                 return
 
         time.sleep(TV_CHART_SETTLE_SECONDS)
@@ -525,7 +559,13 @@ def capture_and_send_tradingview(browser):
         send_photo(img_bytes, "TradingView Chart")
         page.close()
     except Exception as e:
-        print(f"TradingView chart screenshot failed: {e} -- skipping.")
+        print(f"TradingView chart screenshot failed: {e} -- capturing current page as a fallback.")
+        _safe_fallback_screenshot(page, "TradingView Chart (fallback -- error during load)")
+        try:
+            page.close()
+        except Exception:
+            pass
+
 
 def run():
     with sync_playwright() as p:
