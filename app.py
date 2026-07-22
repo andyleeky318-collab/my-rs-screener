@@ -2883,7 +2883,9 @@ SECTOR_KEYWORDS = {
     "Insurance": "#FF69B4",
     "Transportation": "#FF69B4", "Shipping": "#FF69B4", "Airlines": "#FF69B4",
     "Housing": "#FF69B4", "Homebuilders": "#FF69B4",
-    "Crypto": "#FF69B4", "Gold": "#FF69B4", "Broker": "#FF69B4", "Brokerage": "#FF69B4", "Rail": "#FF69B4", "Rails": "#FF69B4", "finance": "#FF69B4", "metals": "#FF69B4", "Payment Processing": "#FF69B4", "travel": "#FF69B4", "airline": "#FF69B4", 
+    "Crypto": "#FF69B4", "Gold": "#FF69B4", "Broker": "#FF69B4", "Brokerage": "#FF69B4", "Rail": "#FF69B4", 
+    "Rails": "#FF69B4", "finance": "#FF69B4", "metals": "#FF69B4", "Payment Processing": "#FF69B4", 
+    "travel": "#FF69B4", "airline": "#FF69B4", "fintech": "#FF69B4", "uranium": "#FF69B4", 
 }
 
 def format_ai_analysis_text(text, tickers=None, industries=None):
@@ -7007,7 +7009,7 @@ with st.spinner("Scanning volatility pickup..."):
     )
 
 #st.markdown("---")
-st.markdown(f"#### 〽️ Volatility ({len(volatility_hits)})")
+st.markdown(f"#### 〽️ Volatility = TV Horizontal Line ({len(volatility_hits)})")
 
 if volatility_hits:
     vol_html = "<div style='display:flex; flex-wrap:wrap; gap:4px; padding:6px 0;'>"
@@ -8032,8 +8034,8 @@ def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
         best_industry, best_rank = min(ranks, key=lambda x: x[1]) if ranks else ("-", 9999)
 
         setup_types = []
-        if sym in cloud21ema_all: setup_types.append("21ema_cloud")
-        if sym in cloudwick_all:  setup_types.append("21ema_wick")
+        if sym in cloud21ema_all: setup_types.append("21_cloud")
+        if sym in cloudwick_all:  setup_types.append("21_wick")
         if sym in ma50bounce_all: setup_types.append("50ma_b")
 
         rows.append({
