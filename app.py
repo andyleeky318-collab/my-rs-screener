@@ -8224,6 +8224,20 @@ def fetch_known_stocks_weekly_earnings(stocks_tuple):
     return df.reset_index(drop=True), monday, friday
 
 
+@st.cache_data(ttl=21600)
+def fetch_market_caps_for_earnings(tickers_tuple):
+    """Market cap per ticker (in raw dollars), used to sort the earnings grid largest-first."""
+    caps = {}
+    for t in tickers_tuple:
+        try:
+            fi = yf.Ticker(t).fast_info
+            cap = fi.get("market_cap") or fi.get("marketCap")
+            caps[t] = float(cap) if cap else 0.0
+        except Exception:
+            caps[t] = 0.0
+    return caps
+
+
 def render_weekly_earnings_grid(df, monday, friday):
     """Render a 5-column (Mon-Fri) x 2-subcolumn (Before Open / After Close) ticker grid."""
     if df is None or df.empty or monday is None:
@@ -8248,18 +8262,16 @@ def render_weekly_earnings_grid(df, monday, friday):
         hour = row["Hour"] if row["Hour"] in ("bmo", "amc") else "dmh"
         buckets[day_idx][hour].append(row["Ticker"])
 
+    all_tickers_tuple = tuple(sorted(set(df["Ticker"])))
+    market_caps = fetch_market_caps_for_earnings(all_tickers_tuple)
+
     def ticker_col(tickers):
         if not tickers:
             return "<div style='color:#444;font-size:11px;padding:6px;text-align:center;'>—</div>"
         html = ""
         style = "background:#1e1e1e;border:1px solid #444;color:#eeeeee;"
-        for t in sorted(set(tickers)):
-            # if t in LIME_STOCKS1:
-            #     style = "background:#00FF00;border:1px solid #009900;color:#000000;font-weight:bold;"
-            # elif t in KNOWN_STOCKS:
-            #     style = "background:#FFD700;border:1px solid #B8860B;color:#111111;font-weight:bold;"
-            # else:
-            #     style = "background:#1e1e1e;border:1px solid #444;color:#eeeeee;"
+        sorted_tickers = sorted(set(tickers), key=lambda t: -market_caps.get(t, 0.0))
+        for t in sorted_tickers:
             html += (
                 f"<div style='margin:2px 0;padding:3px 6px;border-radius:4px;"
                 f"font-size:12px;text-align:center;{style}'>{t}</div>"
