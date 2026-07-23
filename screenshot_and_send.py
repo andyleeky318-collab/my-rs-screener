@@ -492,14 +492,22 @@ def tradingview_login(browser):
                    wait_until="domcontentloaded", timeout=TV_LOGIN_TIMEOUT_MS)
 
         # The signin page shows social-login buttons first; click "Email" to
-        # reveal the email/password form.
-        email_toggle = page.get_by_text("Email", exact=False)
+        # reveal the email/password form. Target the real `name="Email"`
+        # button attribute directly -- get_by_text() was matching against
+        # generated CSS-module classes/duplicate hidden text nodes and
+        # unreliably finding nothing, which silently skipped the click.
+        email_toggle = page.locator('button[name="Email"]')
         if email_toggle.count() > 0:
+            email_toggle.first.wait_for(state="visible", timeout=TV_LOGIN_TIMEOUT_MS)
             email_toggle.first.click()
-            time.sleep(1)
+        else:
+            print("Email toggle button (button[name='Email']) not found on signin page.")
 
-        page.fill('input[name="username"]', TV_EMAIL)
-        page.fill('input[name="password"]', TV_PASSWORD)
+        # Wait for the username field to actually be attached before filling,
+        # instead of assuming the click revealed it immediately.
+        page.wait_for_selector('input[name="id_username"]', state="visible", timeout=TV_LOGIN_TIMEOUT_MS)
+        page.fill('input[name="id_username"]', TV_EMAIL)
+        page.fill('input[name="id_password"]', TV_PASSWORD)
         page.click('button[type="submit"]')
 
         # Wait for login to complete -- signin form disappears once redirected.
