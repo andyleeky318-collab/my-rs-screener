@@ -8252,13 +8252,14 @@ def render_weekly_earnings_grid(df, monday, friday):
         if not tickers:
             return "<div style='color:#444;font-size:11px;padding:6px;text-align:center;'>—</div>"
         html = ""
+        style = "background:#1e1e1e;border:1px solid #444;color:#eeeeee;"
         for t in sorted(set(tickers)):
-            if t in LIME_STOCKS1:
-                style = "background:#00FF00;border:1px solid #009900;color:#000000;font-weight:bold;"
-            elif t in KNOWN_STOCKS:
-                style = "background:#FFD700;border:1px solid #B8860B;color:#111111;font-weight:bold;"
-            else:
-                style = "background:#1e1e1e;border:1px solid #444;color:#eeeeee;"
+            # if t in LIME_STOCKS1:
+            #     style = "background:#00FF00;border:1px solid #009900;color:#000000;font-weight:bold;"
+            # elif t in KNOWN_STOCKS:
+            #     style = "background:#FFD700;border:1px solid #B8860B;color:#111111;font-weight:bold;"
+            # else:
+            #     style = "background:#1e1e1e;border:1px solid #444;color:#eeeeee;"
             html += (
                 f"<div style='margin:2px 0;padding:3px 6px;border-radius:4px;"
                 f"font-size:12px;text-align:center;{style}'>{t}</div>"
