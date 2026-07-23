@@ -8250,7 +8250,7 @@ def render_weekly_earnings_grid(df, monday, friday):
 
     def ticker_col(tickers):
         if not tickers:
-            return "<div style='color:#444; font-size:11px; padding:6px; text-align:center;'>—</div>"
+            return "<div style='color:#444;font-size:11px;padding:6px;text-align:center;'>—</div>"
         html = ""
         for t in sorted(set(tickers)):
             if t in LIME_STOCKS1:
@@ -8265,38 +8265,38 @@ def render_weekly_earnings_grid(df, monday, friday):
             )
         return html
 
+    # NOTE: built as flat, non-indented strings — st.markdown treats 4+ leading
+    # spaces as a code block, so multi-line indented f-strings render as raw text.
     cols_html = ""
     for i in range(5):
         date_label = day_dates[i].strftime("%b %d")
         bmo_tickers = buckets[i]["bmo"] + buckets[i]["dmh"]  # During-Market folded into Before Open
         amc_tickers = buckets[i]["amc"]
 
-        cols_html += f"""
-        <td style="vertical-align:top; border-right:2px solid #333; padding:8px; min-width:150px;">
-            <div style="text-align:center; font-weight:bold; color:#ffffff; font-size:14px;">{day_names[i]}</div>
-            <div style="text-align:center; color:#888888; font-size:11px; margin-bottom:8px;">{date_label}</div>
-            <table style="width:100%; border-collapse:collapse;">
-              <tr>
-                <td style="width:50%; vertical-align:top; padding-right:5px; border-right:1px solid #333;">
-                    <div style="text-align:center; font-size:10.5px; color:#4ecdc4; font-weight:bold; margin-bottom:5px; white-space:nowrap;">Before Open</div>
-                    {ticker_col(bmo_tickers)}
-                </td>
-                <td style="width:50%; vertical-align:top; padding-left:5px;">
-                    <div style="text-align:center; font-size:10.5px; color:#FF69B4; font-weight:bold; margin-bottom:5px; white-space:nowrap;">After Close</div>
-                    {ticker_col(amc_tickers)}
-                </td>
-              </tr>
-            </table>
-        </td>
-        """
+        cols_html += (
+            '<td style="vertical-align:top;border-right:2px solid #333;padding:8px;min-width:150px;">'
+            f'<div style="text-align:center;font-weight:bold;color:#ffffff;font-size:14px;">{day_names[i]}</div>'
+            f'<div style="text-align:center;color:#888888;font-size:11px;margin-bottom:8px;">{date_label}</div>'
+            '<table style="width:100%;border-collapse:collapse;"><tr>'
+            '<td style="width:50%;vertical-align:top;padding-right:5px;border-right:1px solid #333;">'
+            '<div style="text-align:center;font-size:10.5px;color:#4ecdc4;font-weight:bold;margin-bottom:5px;white-space:nowrap;">Before Open</div>'
+            f'{ticker_col(bmo_tickers)}'
+            '</td>'
+            '<td style="width:50%;vertical-align:top;padding-left:5px;">'
+            '<div style="text-align:center;font-size:10.5px;color:#FF69B4;font-weight:bold;margin-bottom:5px;white-space:nowrap;">After Close</div>'
+            f'{ticker_col(amc_tickers)}'
+            '</td>'
+            '</tr></table>'
+            '</td>'
+        )
 
-    grid_html = f"""
-    <div style="overflow-x:auto; background:#0e1117; border-radius:6px; padding:6px 0;">
-    <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
-      <tr>{cols_html}</tr>
-    </table>
-    </div>
-    """
+    grid_html = (
+        '<div style="overflow-x:auto;background:#0e1117;border-radius:6px;padding:6px 0;">'
+        '<table style="width:100%;border-collapse:collapse;table-layout:fixed;">'
+        f'<tr>{cols_html}</tr>'
+        '</table>'
+        '</div>'
+    )
     st.markdown(grid_html, unsafe_allow_html=True)
 
 
@@ -8318,6 +8318,7 @@ if not st.secrets.get("FINNHUB_API_KEY"):
     st.info("Add FINNHUB_API_KEY to secrets.toml to enable this.")
 else:
     render_weekly_earnings_grid(weekly_earnings_df, week_monday, week_friday)
+
 
 st.markdown("---")
 st.markdown("#### 🔎 Volatility Explanation Panel (Massive.com)")
