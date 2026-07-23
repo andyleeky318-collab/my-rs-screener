@@ -7843,7 +7843,7 @@ st.markdown(
 if reddit_df.empty:
     st.info("No mentions found on Reddit right now.")
 else:
-    reddit_df_display = reddit_df[~reddit_df["Ticker"].isin(["SPY", "QQQ"])]
+    reddit_df_display = reddit_df[~reddit_df["Ticker"].isin(["SPY", "QQQ", "VOO"])]
     html_reddit = ""
     for _, row in reddit_df_display.head(30).iterrows():
         sym = row["Ticker"]
@@ -8176,20 +8176,32 @@ def explain_volatility_hits(tickers_tuple):
 
     return reasons, news_map, sec_map, form4_map, earnings_map
 
+# ==============================================================================
+# REPLACEMENT FOR: fetch_known_stocks_upcoming_earnings() + its display block
+# Drop this in place of the existing "📅 Upcoming Earnings" section.
+# ==============================================================================
+
 @st.cache_data(ttl=21600)
-def fetch_known_stocks_upcoming_earnings(stocks_tuple, days_ahead=7):
+def fetch_known_stocks_weekly_earnings(stocks_tuple):
+    """
+    Fetch KNOWN_STOCKS earnings for the current Mon-Fri week from Finnhub.
+    Returns (df, monday_date, friday_date). df columns: Ticker, Date, Hour.
+    """
     finnhub_key = st.secrets.get("FINNHUB_API_KEY")
-    if not finnhub_key:
-        return pd.DataFrame()
 
     today = datetime.date.today()
-    end = today + datetime.timedelta(days=days_ahead)
+    monday = today - datetime.timedelta(days=today.weekday())
+    friday = monday + datetime.timedelta(days=4)
+
+    if not finnhub_key:
+        return pd.DataFrame(), monday, friday
+
     known_set = set(stocks_tuple)
 
     try:
         resp = requests.get(
             "https://finnhub.io/api/v1/calendar/earnings",
-            params={"from": str(today), "to": str(end), "token": finnhub_key},
+            params={"from": str(monday), "to": str(friday), "token": finnhub_key},
             timeout=15,
         )
         resp.raise_for_status()
@@ -8197,55 +8209,115 @@ def fetch_known_stocks_upcoming_earnings(stocks_tuple, days_ahead=7):
         rows = data.get("earningsCalendar", []) or []
     except Exception as e:
         st.warning(f"Finnhub earnings fetch error: {e}")
-        return pd.DataFrame()
+        return pd.DataFrame(), monday, friday
 
     filtered = [r for r in rows if r.get("symbol") in known_set]
     if not filtered:
-        return pd.DataFrame()
-
-    hour_labels = {"bmo": "Pre-Market", "amc": "Post-Market", "dmh": "During Market"}
-
-    def format_date_with_day(date_str):
-        try:
-            d = datetime.datetime.strptime(date_str, "%Y-%m-%d")
-            return f"{date_str} ({d.strftime('%a')})"
-        except (TypeError, ValueError):
-            return date_str
-
-    # Sort BEFORE formatting: raw "YYYY-MM-DD" strings sort correctly
-    # chronologically as plain strings, so sort by (raw_date, ticker).
-    filtered.sort(key=lambda r: (r.get("date") or "", r.get("symbol") or ""))
+        return pd.DataFrame(), monday, friday
 
     df = pd.DataFrame([{
         "Ticker": r.get("symbol"),
-        "Date": format_date_with_day(r.get("date")),
-        "Time": hour_labels.get(r.get("hour"), r.get("hour", "?")),
+        "Date": r.get("date"),
+        "Hour": r.get("hour"),  # bmo / amc / dmh
     } for r in filtered])
 
-    return df.reset_index(drop=True)
+    return df.reset_index(drop=True), monday, friday
 
+
+def render_weekly_earnings_grid(df, monday, friday):
+    """Render a 5-column (Mon-Fri) x 2-subcolumn (Before Open / After Close) ticker grid."""
+    if df is None or df.empty or monday is None:
+        st.info("No known-stock earnings this week.")
+        return
+
+    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    day_dates = [monday + datetime.timedelta(days=i) for i in range(5)]
+
+    # bucket: day_idx -> {"bmo": [...], "amc": [...], "dmh": [...]}
+    buckets = {i: {"bmo": [], "amc": [], "dmh": []} for i in range(5)}
+    for _, row in df.iterrows():
+        try:
+            d = datetime.datetime.strptime(row["Date"], "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            continue
+        if d < monday or d > friday:
+            continue
+        day_idx = (d - monday).days
+        if day_idx < 0 or day_idx > 4:
+            continue
+        hour = row["Hour"] if row["Hour"] in ("bmo", "amc") else "dmh"
+        buckets[day_idx][hour].append(row["Ticker"])
+
+    def ticker_col(tickers):
+        if not tickers:
+            return "<div style='color:#444; font-size:11px; padding:6px; text-align:center;'>—</div>"
+        html = ""
+        for t in sorted(set(tickers)):
+            if t in LIME_STOCKS1:
+                style = "background:#00FF00;border:1px solid #009900;color:#000000;font-weight:bold;"
+            elif t in KNOWN_STOCKS:
+                style = "background:#FFD700;border:1px solid #B8860B;color:#111111;font-weight:bold;"
+            else:
+                style = "background:#1e1e1e;border:1px solid #444;color:#eeeeee;"
+            html += (
+                f"<div style='margin:2px 0;padding:3px 6px;border-radius:4px;"
+                f"font-size:12px;text-align:center;{style}'>{t}</div>"
+            )
+        return html
+
+    cols_html = ""
+    for i in range(5):
+        date_label = day_dates[i].strftime("%b %d")
+        bmo_tickers = buckets[i]["bmo"] + buckets[i]["dmh"]  # During-Market folded into Before Open
+        amc_tickers = buckets[i]["amc"]
+
+        cols_html += f"""
+        <td style="vertical-align:top; border-right:2px solid #333; padding:8px; min-width:150px;">
+            <div style="text-align:center; font-weight:bold; color:#ffffff; font-size:14px;">{day_names[i]}</div>
+            <div style="text-align:center; color:#888888; font-size:11px; margin-bottom:8px;">{date_label}</div>
+            <table style="width:100%; border-collapse:collapse;">
+              <tr>
+                <td style="width:50%; vertical-align:top; padding-right:5px; border-right:1px solid #333;">
+                    <div style="text-align:center; font-size:10.5px; color:#4ecdc4; font-weight:bold; margin-bottom:5px; white-space:nowrap;">Before Open</div>
+                    {ticker_col(bmo_tickers)}
+                </td>
+                <td style="width:50%; vertical-align:top; padding-left:5px;">
+                    <div style="text-align:center; font-size:10.5px; color:#FF69B4; font-weight:bold; margin-bottom:5px; white-space:nowrap;">After Close</div>
+                    {ticker_col(amc_tickers)}
+                </td>
+              </tr>
+            </table>
+        </td>
+        """
+
+    grid_html = f"""
+    <div style="overflow-x:auto; background:#0e1117; border-radius:6px; padding:6px 0;">
+    <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
+      <tr>{cols_html}</tr>
+    </table>
+    </div>
+    """
+    st.markdown(grid_html, unsafe_allow_html=True)
+
+
+# ── Display block (replaces the old earnings_df section) ────────────────────
 st.markdown("---")
 
 with st.spinner("Fetching upcoming earnings..."):
-    earnings_df = timed(
-        "fetch_known_stocks_upcoming_earnings",
-        fetch_known_stocks_upcoming_earnings,
+    weekly_earnings_df, week_monday, week_friday = timed(
+        "fetch_known_stocks_weekly_earnings",
+        fetch_known_stocks_weekly_earnings,
         stocks_tuple  # your existing tuple(KNOWN_STOCKS)
     )
 
-st.markdown(f"#### 📅 Upcoming Earnings ({len(earnings_df)})")
+total_week_count = len(weekly_earnings_df) if weekly_earnings_df is not None and not weekly_earnings_df.empty else 0
+week_label = f"{week_monday.strftime('%b %d')} – {week_friday.strftime('%b %d, %Y')}" if week_monday else ""
+st.markdown(f"#### 📅 Upcoming Earnings — Week of {week_label} ({total_week_count})")
 
 if not st.secrets.get("FINNHUB_API_KEY"):
     st.info("Add FINNHUB_API_KEY to secrets.toml to enable this.")
-elif earnings_df.empty:
-    st.info("No known-stock earnings in the next 7 days.")
 else:
-    st.dataframe(
-        earnings_df,
-        use_container_width=False,
-        width=400,
-        hide_index=True
-    )
+    render_weekly_earnings_grid(weekly_earnings_df, week_monday, week_friday)
 
 st.markdown("---")
 st.markdown("#### 🔎 Volatility Explanation Panel (Massive.com)")
