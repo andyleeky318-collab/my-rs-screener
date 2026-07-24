@@ -8332,8 +8332,9 @@ total_week_count = len(weekly_earnings_df) if weekly_earnings_df is not None and
 week_label = f"{week_monday.strftime('%b %d')} – {week_friday.strftime('%b %d, %Y')}" if week_monday else ""
 st.markdown(f"#### 📅 Upcoming Earnings — Week of {week_label} ({total_week_count})")
 
-earnings_gold_tickers = set(trending_today) | (set(reddit_df["Ticker"]) if not reddit_df.empty else set())
-
+earnings_gold_tickers = set(trending_today) | (
+    set(reddit_df_display.head(30)["Ticker"]) if not reddit_df.empty else set()
+)
 if not st.secrets.get("FINNHUB_API_KEY"):
     st.info("Add FINNHUB_API_KEY to secrets.toml to enable this.")
 else:
