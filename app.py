@@ -2864,7 +2864,7 @@ Be direct, name industries explicitly, no fluff, no repeating the prompt. Each l
     return f"🔴 **All AI providers failed**\n\n{failure_lines}"
 
 SECTOR_KEYWORDS = {
-    "Healthcare": "#FF69B4", "Health Care": "#FF69B4", "Medical": "#FF69B4",
+    "Healthcare": "#FF69B4", "Health Care": "#FF69B4", "Medical": "#FF69B4", "Medicals": "#FF69B4",
     "Biotech": "#FF69B4", "Pharma": "#FF69B4",
     "Energy": "#FF69B4", "Oil": "#FF69B4", "Gas": "#FF69B4", "Solar": "#FF69B4",
     "Financials": "#FF69B4", "Financial": "#FF69B4", "Banks": "#FF69B4", "Banking": "#FF69B4",
@@ -8238,11 +8238,14 @@ def fetch_market_caps_for_earnings(tickers_tuple):
     return caps
 
 
-def render_weekly_earnings_grid(df, monday, friday):
+def render_weekly_earnings_grid(df, monday, friday, gold_tickers=None):
     """Render a 5-column (Mon-Fri) x 2-subcolumn (Before Open / After Close) ticker grid."""
     if df is None or df.empty or monday is None:
         st.info("No known-stock earnings this week.")
         return
+
+    if gold_tickers is None:
+        gold_tickers = set()
 
     day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
     day_dates = [monday + datetime.timedelta(days=i) for i in range(5)]
@@ -8269,9 +8272,11 @@ def render_weekly_earnings_grid(df, monday, friday):
         if not tickers:
             return "<div style='color:#444;font-size:11px;padding:6px;text-align:center;'>—</div>"
         html = ""
-        style = "background:#1e1e1e;border:1px solid #444;color:#eeeeee;"
+        default_style = "background:#1e1e1e;border:1px solid #444;color:#eeeeee;"
+        gold_style = "background:#FFD700;border:1px solid #B8860B;color:#111111;font-weight:bold;"
         sorted_tickers = sorted(set(tickers), key=lambda t: -market_caps.get(t, 0.0))
         for t in sorted_tickers:
+            style = gold_style if t in gold_tickers else default_style
             html += (
                 f"<div style='margin:2px 0;padding:3px 6px;border-radius:4px;"
                 f"font-size:12px;text-align:center;{style}'>{t}</div>"
@@ -8327,10 +8332,12 @@ total_week_count = len(weekly_earnings_df) if weekly_earnings_df is not None and
 week_label = f"{week_monday.strftime('%b %d')} – {week_friday.strftime('%b %d, %Y')}" if week_monday else ""
 st.markdown(f"#### 📅 Upcoming Earnings — Week of {week_label} ({total_week_count})")
 
+earnings_gold_tickers = set(trending_today) | (set(reddit_df["Ticker"]) if not reddit_df.empty else set())
+
 if not st.secrets.get("FINNHUB_API_KEY"):
     st.info("Add FINNHUB_API_KEY to secrets.toml to enable this.")
 else:
-    render_weekly_earnings_grid(weekly_earnings_df, week_monday, week_friday)
+    render_weekly_earnings_grid(weekly_earnings_df, week_monday, week_friday, gold_tickers=earnings_gold_tickers)
 
 
 st.markdown("---")

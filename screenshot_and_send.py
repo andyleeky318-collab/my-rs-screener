@@ -138,8 +138,8 @@ SECTION_KEYWORDS = [
     "Engulfing = HL",
     "3x Engulfing",
     "PowerTrend = Thematic Extended",
-    "Volatility",
-    "Value Trap",
+    "Volatility = ",
+    "Value Trap = ",
     "Pie Chart",
     "ETF Ratio",
     "Quant Sentiment",
@@ -496,12 +496,19 @@ def tradingview_login(browser):
         # button attribute directly -- get_by_text() was matching against
         # generated CSS-module classes/duplicate hidden text nodes and
         # unreliably finding nothing, which silently skipped the click.
+        #
+        # NOTE: right after goto(..., wait_until="domcontentloaded"), the
+        # button hasn't necessarily rendered into the DOM yet, so calling
+        # .count() immediately can return 0 even though the button shows up
+        # moments later -- that was silently skipping the click (count()==0
+        # -> print-only -> falls straight through to the username selector,
+        # which then times out because nothing was ever clicked, landing in
+        # the except block with a screenshot of the untouched signin page).
+        # wait_for(state="visible") already polls/retries on its own, so
+        # call it directly instead of gating on count() first.
         email_toggle = page.locator('button[name="Email"]')
-        if email_toggle.count() > 0:
-            email_toggle.first.wait_for(state="visible", timeout=TV_LOGIN_TIMEOUT_MS)
-            email_toggle.first.click()
-        else:
-            print("Email toggle button (button[name='Email']) not found on signin page.")
+        email_toggle.first.wait_for(state="visible", timeout=TV_LOGIN_TIMEOUT_MS)
+        email_toggle.first.click()
 
         # Wait for the username field to actually be attached before filling,
         # instead of assuming the click revealed it immediately.
