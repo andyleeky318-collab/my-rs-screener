@@ -8876,7 +8876,9 @@ with st.spinner("Scanning for True Market Leaders (healthyPct >= 69.5%)..."):
         stocks_tuple, ticker_dfs_shared, benchmark_df_shared
     )
 
-st.markdown(f"#### 👑 True Market Leader (healthyPct ≥ 69.5%) ({len(tml_list)})")
+tml_count = len(tml_list)
+tml_count_color = "#FF4B4B" if tml_count == 0 else "#FFFFFF"
+st.markdown(f"#### 👑 True Market Leader (<span style='color:{tml_count_color};'>{tml_count}</span>)", unsafe_allow_html=True)
 
 if tml_list:
     tml_industry_counts, tml_ticker_industry = build_leader_industry_map(tml_list, INDUSTRIES)
