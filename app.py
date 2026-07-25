@@ -6681,7 +6681,11 @@ with st.spinner("Scanning for Two Botak History..."):
 #st.write(f"two_botak_hist shape: {two_botak_hist.shape}")
 
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
-st.markdown(f"#### 🔥 Two Botak = Short term Group burst ({len(b_list)})")
+two_botak_count_color = "#FF6B6B" if len(b_list) == 0 else "inherit"
+st.markdown(
+    f"<h4>🔥 Two Botak = Short term Group burst <span style='color:{two_botak_count_color}; font-weight:bold;'>({len(b_list)})</span></h4>",
+    unsafe_allow_html=True
+)
 if b_list or b_yest:
     html_b = ""
     for sym in b_list:
@@ -6900,7 +6904,11 @@ with st.spinner("Scanning for PowerTrend History..."):
     powertrend_hist=timed("compute_powertrend_history",    compute_powertrend_history,    stocks_tuple, ticker_dfs_shared)
 
 # --- 4. POWERTREND (Full Horizontal Row) ---
-st.markdown(f"#### ⚡ PowerTrend = Thematic Extended ({len(pt_list)})")
+powertrend_count_color = "#FF6B6B" if len(pt_list) == 0 else "inherit"
+st.markdown(
+    f"<h4>⚡ PowerTrend = Thematic Extended <span style='color:{powertrend_count_color}; font-weight:bold;'>({len(pt_list)})</span></h4>",
+    unsafe_allow_html=True
+)
 if pt_list or pt_yest:
     html_pt = ""
     pt_yest_set = set(pt_yest)
@@ -7036,7 +7044,11 @@ with st.spinner("Scanning volatility pickup..."):
     )
 
 #st.markdown("---")
-st.markdown(f"#### 〽️ Volatility = TV Horizontal Line ({len(volatility_hits)})")
+volatility_count_color = "#FF6B6B" if len(volatility_hits) == 0 else "inherit"
+st.markdown(
+    f"<h4>〽️ Volatility = TV Horizontal Line <span style='color:{volatility_count_color}; font-weight:bold;'>({len(volatility_hits)})</span></h4>",
+    unsafe_allow_html=True
+)
 
 if volatility_hits:
     vol_html = "<div style='display:flex; flex-wrap:wrap; gap:4px; padding:6px 0;'>"
@@ -7113,7 +7125,11 @@ if not volatility_hist.empty:
 st.markdown("---")
 
 # --- 6. VALUE TRAP (Full Horizontal Row Below PowerTrend Not Extended) ---
-st.markdown(f"#### ⚠️ Value Trap = MAG7 ({len(vt_list)})")
+value_trap_count_color = "#FF6B6B" if len(vt_list) == 0 else "inherit"
+st.markdown(
+    f"<h4>⚠️ Value Trap = MAG7 <span style='color:{value_trap_count_color}; font-weight:bold;'>({len(vt_list)})</span></h4>",
+    unsafe_allow_html=True
+)
 if vt_list or vt_yest:
     html_vt = ""
     vt_yest_set = set(vt_yest)
@@ -7378,7 +7394,7 @@ def _relative_etf_ratios():
         ("XLY", "XLP"),
         ("SPHB", "SPY"),
         ("IWM", "QQQ"),
-        ("VUG", "VTV"),
+        ("VTV", "VUG"),
     )
 
     #st.markdown("#### Relative ETF Ratios (1 Year)")
