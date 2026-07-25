@@ -7418,9 +7418,10 @@ def _relative_etf_ratios():
                 )
             )
 
-            # Highlight label if the latest value is a new high for the period
+            # Highlight label if the latest value is a new high or new low for the period
             is_new_high = y_values.iloc[-1] > y_values.iloc[:-1].max()
-            label_color = "lime" if is_new_high else "white"
+            is_new_low = y_values.iloc[-1] < y_values.iloc[:-1].min()
+            label_color = "lime" if is_new_high else "red" if is_new_low else "white"
 
             annotations.append(
                 dict(
