@@ -8576,19 +8576,22 @@ def compute_character_shift(stocks_list, ticker_dfs, benchmark_df_input):
             all_up20_series.append(score_up20.astype(int).rename(ticker))
             all_down20_series.append(score_down20.astype(int).rename(ticker))
 
+            current_close = float(close.iloc[-1]) if pd.notna(close.iloc[-1]) else np.nan
+            is_price_above_20 = pd.notna(current_close) and current_close > 20
+
             if len(score) >= 2:
-                if bool(score_up20.iloc[-1]):
+                if is_price_above_20 and bool(score_up20.iloc[-1]):
                     up_today.append(ticker)
                     up_score_map[ticker] = int(score.iloc[-1])
                     up_delta_map[ticker] = int(score.iloc[-1] - score.iloc[-2])
-                if bool(score_down20.iloc[-1]):
+                if is_price_above_20 and bool(score_down20.iloc[-1]):
                     down_today.append(ticker)
                     down_score_map[ticker] = int(score.iloc[-1])
                     down_delta_map[ticker] = int(score.iloc[-1] - score.iloc[-2])
                 if len(score_up20) >= 3:
-                    if bool(score_up20.iloc[-2]):
+                    if is_price_above_20 and bool(score_up20.iloc[-2]):
                         up_yest.append(ticker)
-                    if bool(score_down20.iloc[-2]):
+                    if is_price_above_20 and bool(score_down20.iloc[-2]):
                         down_yest.append(ticker)
         except Exception:
             continue
