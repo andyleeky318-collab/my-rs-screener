@@ -143,7 +143,8 @@ SECTION_KEYWORDS = [
     "Pie Chart",
     "ETF Ratio",
     "Quant Sentiment",
-    "Setup Quality",    
+    "Setup Quality",
+    "Change of Character",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the
