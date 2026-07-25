@@ -268,7 +268,7 @@ INDUSTRIES = {
 
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
-    'IBB', 'Q', 'OUST', 'VPG', 'WOLF', 'NOK', 'HSBC', 'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
+    'WEN', 'OKLO', 'IBB', 'Q', 'OUST', 'VPG', 'WOLF', 'NOK', 'HSBC', 'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
     'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EWY', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'NTAP', 'OR', 
     'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
@@ -531,11 +531,11 @@ def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
 
                 total_processed += 1
 
-                # 1. New High / New Low
-                if currentClose >= high_of_52week:
+                # 1. New High / New Low (only include stocks trading above $20)
+                if currentClose >= 20 and currentClose >= high_of_52week:
                     breadth_stats['new_high'] += 1
                     new_high_tickers.append(ticker)
-                if currentClose <= low_of_52week:
+                if currentClose >= 20 and currentClose <= low_of_52week:
                     breadth_stats['new_low'] += 1
                     new_low_tickers.append(ticker)
 
@@ -5597,14 +5597,18 @@ else:
                 return ["background-color: #90EE90; color: #000000; font-weight: bold;"] * len(row)
             return [""] * len(row)
 
-        styled_leaders_df = df_leaders_summary.style.apply(highlight_top3_lime, axis=1)
+        TOP_N_DEFAULT = 5
+
+        # ── Default: top 5 rows only ─────────────────────────────────────────
+        df_top5 = df_leaders_summary.head(TOP_N_DEFAULT)
+        styled_top5_df = df_top5.style.apply(highlight_top3_lime, axis=1)
 
         st.dataframe(
-            styled_leaders_df,
+            styled_top5_df,
             use_container_width=False,
             width=300,
             hide_index=True,
-            height=min(300, 36 * len(summary_rows) + 38),
+            height=36 * len(df_top5) + 38,
             column_config={
                 "Leaders": st.column_config.Column(
                     alignment="left"
@@ -6094,6 +6098,13 @@ if (gapBottom !== null && gapTop !== null && {gap_date_js} !== null) {{
 """
                     import streamlit.components.v1 as components
                     components.html(chart_html, height=GAPPER_CHART_SIZE + 32, scrolling=False)
+
+    render_group_ai_insight(
+        gapper_list,
+        "Gapper Earning Drift (opportunity)",
+        "gapper_drift",
+        extra_note="the stock gapped up 10%+ (often on earnings) and that gap remains unfilled within the last 30 trading days, suggesting continuation/drift after a strong catalyst"
+    )
 
 else:
     st.info("No active setups discovered.")
@@ -8091,7 +8102,7 @@ def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
 
         setup_str = ",".join(r["setups"])
         risk_str  = f'{r["risk"]:.1f}%' if r["risk"] is not None else "n/a"
-        ticker_str = f'<b><i>{r["ticker"]}</i></b>' if r["is_leader"] else r["ticker"]
+        ticker_str = f'<b><i><u>{r["ticker"]}</u></i></b>' if r["is_leader"] else r["ticker"]
         lines.append(
             f'#{r["rank"]} | {ticker_str} ({r["rs"]:.0f}) | '
             f'{setup_str} | {risk_str}'
@@ -8214,13 +8225,20 @@ def explain_volatility_hits(tickers_tuple):
 @st.cache_data(ttl=21600)
 def fetch_known_stocks_weekly_earnings(stocks_tuple):
     """
-    Fetch KNOWN_STOCKS earnings for the current Mon-Fri week from Finnhub.
+    Fetch KNOWN_STOCKS earnings for the current (or upcoming, if it's the
+    weekend) Mon-Fri week from Finnhub.
     Returns (df, monday_date, friday_date). df columns: Ticker, Date, Hour.
     """
     finnhub_key = st.secrets.get("FINNHUB_API_KEY")
 
     today = datetime.date.today()
-    monday = today - datetime.timedelta(days=today.weekday())
+
+    if today.weekday() >= 5:  # Sat=5, Sun=6 → roll to NEXT week's Monday
+        days_until_next_monday = 7 - today.weekday()
+        monday = today + datetime.timedelta(days=days_until_next_monday)
+    else:
+        monday = today - datetime.timedelta(days=today.weekday())
+
     friday = monday + datetime.timedelta(days=4)
 
     if not finnhub_key:
