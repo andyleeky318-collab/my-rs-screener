@@ -8475,3 +8475,188 @@ else:
             #         when = {"bmo": "Before Open", "amc": "After Close"}.get(e.get("time"), e.get("time", ""))
             #         st.markdown(f"- {e.get('date','?')} ({when})")
 
+# ============================================================
+# CHANGE OF CHARACTER (scoreUp20) — Composite Score Δ≥20 Scan
+# Ported from TradingView "Score" indicator's scoreUp20 signal.
+# score5 (Darvas streak) omitted; score6/score7 use lite proxies
+# — see docstring below for full mapping.
+# ============================================================
+@st.cache_data(ttl=3600)
+def compute_change_of_character(stocks_list, ticker_dfs, benchmark_df_input):
+    """
+    Composite 9-component health score (max 90, since score5/Darvas-streak
+    is omitted) mirroring the TradingView 'Score' indicator:
+      s1  RS (close/benchmark) > RS's 21 EMA
+      s2  Stage == 2 (same rs84/126/147/168 cascade used elsewhere in file)
+      s3  close > 21 EMA
+      s4  close > 50 SMA
+      s6  LITE: today is NOT a fresh 14-bar low (proxy for belowCount<0)
+      s7  LITE: no ≥3% gap-down candle in the trailing 10 bars
+      s8  biggest up-day % (rolling ~220d) is NOT smaller than the
+          magnitude of the biggest down-day %
+      s9  price is NOT more than 25% below its 252-day high
+      s10 50 EMA >= 100 EMA
+
+    scoreUp20 = (score - score.shift(1)) >= 20  → "Change of Character"
+    Returns: today_matches, yest_matches, score_today_map, score_delta_map, history_df
+    """
+    today_matches = []
+    yest_matches  = []
+    score_today_map = {}
+    score_delta_map = {}
+    all_up20_series = []
+
+    for ticker in stocks_list:
+        try:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < 260:
+                continue
+
+            close = df['Close']; high = df['High']; low = df['Low']
+
+            rs = close / benchmark_df_input['Close']
+            if rs.dropna().empty:
+                continue
+
+            ema126 = close.ewm(span=126, adjust=False).mean()
+            r = {sp: rs.ewm(span=sp, adjust=False).mean() for sp in [21, 42, 63, 72, 84, 126, 147, 168]}
+
+            stage1_cond  = (rs >= r[84]) & (rs < r[126])
+            stage3_cond  = (
+                (rs < r[42]) & (rs >= r[72]) & (rs >= r[84]) & (rs >= r[126])
+                & ((r[42] > r[63]) | (rs < r[63])) & (r[63] > r[126]) & (close >= ema126)
+            )
+            stage2a_cond = (
+                (rs >= r[168]) & (rs >= r[147]) & (rs >= r[126])
+                & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+            )
+            stage2b_cond = (rs >= r[126]) & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+            stage2_cond  = (~stage1_cond & ~stage3_cond & (stage2a_cond | stage2b_cond))
+
+            rsMA21  = rs.ewm(span=21, adjust=False).mean()
+            ema21   = close.ewm(span=21, adjust=False).mean()
+            sma50   = close.rolling(50).mean()
+            low14   = low.rolling(14).min().shift(1)
+            ema50t  = close.ewm(span=50, adjust=False).mean()
+            ema100t = close.ewm(span=100, adjust=False).mean()
+
+            # score7 lite: any ≥3% gap-down candle in trailing 10 bars
+            gap_down_evt       = (high < low.shift(1))
+            gap_down_pct       = ((close.shift(1) - close) / close.shift(1) * 100).where(gap_down_evt)
+            gap_down_qualified = gap_down_evt & (gap_down_pct >= 3)
+            recent_gap_down    = gap_down_qualified.rolling(10, min_periods=1).max().fillna(0).astype(bool)
+
+            # score8: biggest up-day % vs biggest down-day % (rolling ~220d)
+            pct_chg = close.pct_change() * 100
+            win = min(220, len(pct_chg))
+            biggest_drop = pct_chg.rolling(window=win, min_periods=20).min()
+            biggest_up   = pct_chg.rolling(window=win, min_periods=20).max()
+
+            # score9: distance from 252-day high
+            high252 = high.rolling(252, min_periods=50).max()
+            pct_from_high = (close - high252) / high252 * 100
+
+            s1  = (rs > rsMA21).fillna(False).astype(int) * 10
+            s2  = stage2_cond.fillna(False).astype(int) * 10
+            s3  = (close > ema21).fillna(False).astype(int) * 10
+            s4  = (close > sma50).fillna(False).astype(int) * 10
+            s6  = (~(close < low14).fillna(False)).astype(int) * 10
+            s7  = (~recent_gap_down).astype(int) * 10
+            s8  = (~(biggest_up < -biggest_drop).fillna(False)).astype(int) * 10
+            s9  = (~(pct_from_high < -25).fillna(False)).astype(int) * 10
+            s10 = (ema50t >= ema100t).fillna(False).astype(int) * 10
+
+            score = s1 + s2 + s3 + s4 + s6 + s7 + s8 + s9 + s10
+            score_up20 = (score.diff() >= 20)
+
+            all_up20_series.append(score_up20.astype(int).rename(ticker))
+
+            if len(score) >= 2:
+                if bool(score_up20.iloc[-1]):
+                    today_matches.append(ticker)
+                    score_today_map[ticker] = int(score.iloc[-1])
+                    score_delta_map[ticker] = int(score.iloc[-1] - score.iloc[-2])
+                if len(score_up20) >= 3 and bool(score_up20.iloc[-2]):
+                    yest_matches.append(ticker)
+        except Exception:
+            continue
+
+    history_df = pd.DataFrame()
+    if all_up20_series:
+        combined = pd.concat(all_up20_series, axis=1).fillna(0)
+        daily_counts = combined.sum(axis=1)
+        history_df = daily_counts.tail(60).reset_index()
+        history_df.columns = ["Date", "CoC Count"]
+        history_df["Date"] = pd.to_datetime(history_df["Date"]).dt.strftime("%Y-%m-%d")
+
+    return (sorted(today_matches), sorted(yest_matches),
+            score_today_map, score_delta_map, history_df)
+
+
+# ── Render section — append at the very bottom of the dashboard ────────────
+st.markdown("---")
+
+with st.spinner("Scanning for Change of Character (Score Δ≥20)..."):
+    coc_today, coc_yest, coc_score_map, coc_delta_map, coc_hist = timed(
+        "compute_change_of_character",
+        compute_change_of_character,
+        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
+    )
+
+st.markdown(f"#### 🔀 Change of Character = Score Δ≥20 ({len(coc_today)})")
+
+if coc_today or coc_yest:
+    coc_industry_counts, coc_ticker_industry = build_leader_industry_map(coc_today, INDUSTRIES)
+
+    html_coc = ""
+    for sym in sorted(coc_today, key=lambda s: -coc_delta_map.get(s, 0)):
+        industries = coc_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+        glow_style = (
+            "box-shadow:0 0 8px 2px #00FF00; border:1px solid #00FF00;"
+            if is_top20_industry else ""
+        )
+        delta = coc_delta_map.get(sym, 0)
+        score_val = coc_score_map.get(sym, 0)
+        suffix = f"{score_val} (+{delta})"
+        html_coc += setup_badge(
+            sym,
+            is_new=(sym not in coc_yest),
+            extra_style=glow_style,
+            extra_suffix=suffix,
+            extra_suffix_color="#00FF00",
+        )
+
+    removed_coc = [sym for sym in coc_yest if sym not in coc_today]
+    for sym in sorted(removed_coc):
+        html_coc += f'<div class="ticker-badge removed-badge">{sym}</div>'
+
+    st.markdown(html_coc, unsafe_allow_html=True)
+
+    render_group_ai_insight(
+        coc_today,
+        "Change of Character (Score jump ≥20)",
+        "change_of_character",
+        extra_note="the stock's composite health score (RS-vs-benchmark, stage, trend, gap, and drawdown-symmetry checks) jumped by 20+ points day-over-day, signaling a fast-improving technical picture / bullish character change"
+    )
+else:
+    st.info("No active setups discovered.")
+
+st.write("")
+if not coc_hist.empty:
+    chart_df_coc = coc_hist.copy()
+    today_coc = chart_df_coc["CoC Count"].iloc[-1]
+    max_coc = chart_df_coc["CoC Count"].max()
+
+    chart_df_coc["Bar_Color"] = "#29B5E8"
+    if today_coc == max_coc:
+        chart_df_coc.iloc[-1, chart_df_coc.columns.get_loc("Bar_Color")] = "#FF4B4B"
+
+    st.bar_chart(
+        data=chart_df_coc,
+        x="Date",
+        y="CoC Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
