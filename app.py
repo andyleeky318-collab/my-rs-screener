@@ -323,6 +323,17 @@ LIME_STOCKS1 = [
     'XTN', 'IYT', 'BOAT', 'MOO', 'BLOK', 'PICK', 'BOTZ', 'MJ', 'WQTM', 'IBB'
 ]
 
+TICKER_ALIASES = {
+    "GOOG": "GOOGL",
+}
+
+def normalize_ticker(sym):
+    """Map alias tickers (e.g. GOOG) to their canonical KNOWN_STOCKS symbol (GOOGL)."""
+    if not sym:
+        return sym
+    sym = sym.strip().upper()
+    return TICKER_ALIASES.get(sym, sym)
+
 # ============================================================
 # SHARED DOWNLOAD: runs once, feeds all history compute fns
 # ============================================================
@@ -7584,6 +7595,8 @@ def fetch_trending_stocks_today():
                 if c.isalpha() or c == "-"
             ).strip()
 
+            symbol = normalize_ticker(symbol)
+
             market_cap_text = cells[marketcap_idx].get_text(strip=True)
             market_cap = parse_market_cap(market_cap_text)
 
@@ -7750,7 +7763,7 @@ if trending_today:
 
         qs_html += (
             f"<div style='display:inline-flex; align-items:center; gap:4px; "
-            f"padding:2px 7px; border-radius:3px; font-size:11px; "
+            f"padding:2px 7px; border-radius:3px; font-size:12px; "
             f"white-space:nowrap; {badge_style} {glow_style}'>"
             f"<span style='font-weight:bold; color:inherit;'>{sym}</span>"
             #f"{'<span style=\"font-size:9px;\">★</span>' if is_new else ''}"
@@ -7817,6 +7830,22 @@ def fetch_reddit_mentions_apewisdom(stocks_tuple, filter_type="wallstreetbets"):
         return pd.DataFrame()
 
     df = pd.DataFrame(rows)
+    df["Ticker"] = df["Ticker"].apply(normalize_ticker)
+
+    # If normalization caused two rows to collapse onto the same
+    # ticker (e.g. both GOOG and GOOGL were trending separately),
+    # aggregate them into a single row instead of leaving duplicates:
+    # sum mention counts, keep the best (lowest) rank, sum upvotes.
+    df = (
+        df.groupby("Ticker", as_index=False)
+        .agg({
+            "Rank": "min",
+            "Mentions": "sum",
+            "Mentions 24h Ago": "sum",
+            "Upvotes": "sum",
+        })
+    )
+
     df["Δ Mentions"] = df["Mentions"] - df["Mentions 24h Ago"]
     return df.sort_values("Mentions", ascending=False).reset_index(drop=True)
 
@@ -7861,7 +7890,7 @@ else:
             f'<div class="ticker-badge" style="{glow_style}">'
             f'<span class="ticker-name">{sym}</span>'
             f'<span class="ticker-rs" style="color:#378ADD;">{row["Mentions"]} </span>'
-            f'<span style="color:{delta_color}; margin-left:5px; font-size:11px;">({delta_str})</span>'
+            f'<span style="color:{delta_color}; margin-left:5px; font-size:12px;">({delta_str})</span>'
             f'</div>'
         )
     st.markdown(html_reddit, unsafe_allow_html=True)
