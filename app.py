@@ -6766,7 +6766,11 @@ with st.spinner("Scanning for Bullish Engulfing History..."):
 
 # --- 3. BULLISH ENGULFING (Full Horizontal Row Below Tight PPP) ---
 total_engulf = len(e2_list) + len(e3_list)
-st.markdown(f"#### 🐳 Engulfing = HL ({total_engulf})")
+engulf_count_color = "#FF6B6B" if total_engulf == 0 else "inherit"
+st.markdown(
+    f"<h4>🐳 Engulfing = HL <span style='color:{engulf_count_color}; font-weight:bold;'>({total_engulf})</span></h4>",
+    unsafe_allow_html=True
+)
 
 if e2_list or e3_list or e2_yest or e3_yest:
     if e2_list or e2_yest:

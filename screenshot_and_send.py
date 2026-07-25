@@ -129,7 +129,7 @@ SECTION_KEYWORDS = [
     "Market Regime",
     "Minervini (Positive Pct",
     "RS Leader = Long term",
-    "Retry AI Analysis",
+    #"Retry AI Analysis",
     "RS NH B4 Price = Opportunity",
     "PPP = Opportunity",
     "Gapper Earning Drift = Opportunity",
