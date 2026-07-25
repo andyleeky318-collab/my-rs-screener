@@ -106,7 +106,7 @@ INDUSTRIES = {
     'DATA CENTER': ['WGMI', 'CRWV', 'NBIS', 'IREN', 'WULF', 'CORZ', 'CIFR', 'HUT', 'BTDR', 'EQIX'],
     'SOLAR': ['TAN', 'SEDG', 'ENPH', 'FSLR', 'ARRY', 'SHLS', 'CSIQ', 'RUN', 'DQ'],
     'COML SVCS-ADVRTSNG': ['OMC', 'DJT', 'TTD', 'MGNI', 'PUBM'],
-    'AEROSPACE/DEFENSE': ['SHLD', 'RTX', 'LMT', 'HON', 'BA', 'NOC'],
+    'AEROSPACE/DEFENSE': ['SHLD', 'ITA', 'RTX', 'LMT', 'HON', 'BA', 'NOC'],
     #'AEROSPACE/DEFENSE': ['ITA', 'RTX', 'LMT', 'HON', 'BA', 'NOC', 'TDG', 'LHX', 'HWM', 'AXON', 'HEI', 'LDOS', 'TDY', 'TXT', 'FTAI', 'CW', 'BWXT', 'HII', 'CR', 'DRS', 'LOAR', 'AVAV', 'HXL', 'KTOS', 'MIR', 'OSIS', 'AIR', 'MRCY'],
     'AGRICULTURAL OPRTIONS': ['ADM', 'BG', 'PPC', 'CALM', 'SEB'],
     'TRNSPRT-AIR FREIGHT': ['UPS', 'FDX'],
@@ -2868,7 +2868,7 @@ SECTOR_KEYWORDS = {
     "Biotech": "#FF69B4", "Pharma": "#FF69B4",
     "Energy": "#FF69B4", "Oil": "#FF69B4", "Gas": "#FF69B4", "Solar": "#FF69B4",
     "Financials": "#FF69B4", "Financial": "#FF69B4", "Banks": "#FF69B4", "Banking": "#FF69B4",
-    "Industrials": "#FF69B4",
+    "Industrials": "#FF69B4", "industrial ": "#FF69B4",
     "Materials": "#FF69B4", "Mining": "#FF69B4", "Chemicals": "#FF69B4",
     "Utilities": "#FF69B4", "Electric": "#FF69B4", "Elec": "#FF69B4", "tech": "#FF69B4",
     "Technology": "#FF69B4", "Software": "#FF69B4",
@@ -2879,13 +2879,14 @@ SECTOR_KEYWORDS = {
     "Consumer Staples": "#FF69B4",
     "Real Estate": "#FF69B4",
     "Communication Services": "#FF69B4",
-    "Defense": "#FF69B4", "Aerospace": "#FF69B4",
+    "Defense": "#FF69B4", "Aerospace": "#FF69B4", "biomed": "#FF69B4",
     "Insurance": "#FF69B4",
-    "Transportation": "#FF69B4", "Shipping": "#FF69B4", "Airlines": "#FF69B4",
+    "Transportation": "#FF69B4", "Shipping": "#FF69B4", "Airlines": "#FF69B4", "transport": "#FF69B4",
     "Housing": "#FF69B4", "Homebuilders": "#FF69B4",
-    "Crypto": "#FF69B4", "Gold": "#FF69B4", "Broker": "#FF69B4", "Brokerage": "#FF69B4", "Rail": "#FF69B4", 
+    "Crypto": "#FF69B4", "Gold": "#FF69B4", "Broker": "#FF69B4", "Brokerage": "#FF69B4", "Rail": "#FF69B4", "railroads": "#FF69B4", 
     "Rails": "#FF69B4", "finance": "#FF69B4", "metals": "#FF69B4", "Payment Processing": "#FF69B4", 
-    "travel": "#FF69B4", "airline": "#FF69B4", "fintech": "#FF69B4", "uranium": "#FF69B4", 
+    "travel": "#FF69B4", "airline": "#FF69B4", "fintech": "#FF69B4", "uranium": "#FF69B4", "mega-cap": "#FF69B4", 
+    "apparel": "#FF69B4",
 }
 
 def format_ai_analysis_text(text, tickers=None, industries=None):
@@ -7739,7 +7740,7 @@ if trending_today:
         #     )
         else:
             badge_style = (
-                "background:#1e1e1e; border:1px solid #444; color:#FFFFFF;"
+                "background:#1e1e1e; border:1px solid #444; color:#FFFFFF; font-weight:bold;"
             )
 
         glow_style = (
@@ -7751,7 +7752,7 @@ if trending_today:
             f"<div style='display:inline-flex; align-items:center; gap:4px; "
             f"padding:2px 7px; border-radius:3px; font-size:11px; "
             f"white-space:nowrap; {badge_style} {glow_style}'>"
-            f"<span>{sym}</span>"
+            f"<span style='font-weight:bold; color:inherit;'>{sym}</span>"
             #f"{'<span style=\"font-size:9px;\">★</span>' if is_new else ''}"
             f"</div>"
         )

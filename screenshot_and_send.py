@@ -515,7 +515,34 @@ def tradingview_login(browser):
         page.wait_for_selector('input[name="id_username"]', state="visible", timeout=TV_LOGIN_TIMEOUT_MS)
         page.fill('input[name="id_username"]', TV_EMAIL)
         page.fill('input[name="id_password"]', TV_PASSWORD)
-        page.click('button[type="submit"]')
+
+        # The submit button has NO type="submit" attribute (confirmed via
+        # inspecting live markup -- it's a bare <button> with only hashed
+        # CSS-module class names like "mLEhCrVw", which are also unsafe to
+        # match on since they can change on any TradingView frontend
+        # deploy). button[type="submit"] therefore never matched anything,
+        # and page.click() was timing out waiting for the LOCATOR to even
+        # attach -- not waiting on a disabled state.
+        #
+        # Instead, target it by accessible role + name ("Sign in"), derived
+        # from the button's visible text. This is scoped to real <button>
+        # elements only, so it won't accidentally match the "Sign in with
+        # email" heading text elsewhere on the page, and survives class
+        # name/hash changes.
+        submit_btn = page.get_by_role("button", name="Sign in", exact=True).first
+        submit_btn.wait_for(state="visible", timeout=TV_LOGIN_TIMEOUT_MS)
+
+        try:
+            submit_btn.click(timeout=10000)
+        except Exception as e:
+            print(f"Normal click on 'Sign in' button failed: {e} -- "
+                  f"trying force click, then Enter-key fallback.")
+            try:
+                submit_btn.click(timeout=10000, force=True)
+            except Exception as e2:
+                print(f"Force click also failed: {e2} -- "
+                      f"pressing Enter in password field instead.")
+                page.press('input[name="id_password"]', "Enter")
 
         # Wait for login to complete -- signin form disappears once redirected.
         page.wait_for_selector('input[name="password"]', state="detached", timeout=TV_LOGIN_TIMEOUT_MS)
