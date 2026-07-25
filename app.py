@@ -2768,6 +2768,8 @@ Each row shows: current RS, RS from 1 week ago, RS from 1 month ago, and △T (a
 
 {industries_block}
 {nh_nl_block}
+IMPORTANT FORMATTING RULE: Whenever you mention an industry name anywhere in your response, immediately follow it with its top tickers shown above in brackets, exactly like this: "Aerospace/Defense (LMT, NOC, SHLD, ITA, XAR)". Use ONLY tickers already shown for that industry above — do not invent or add others.
+
 Respond with EXACTLY these lines, each starting with the bolded label below followed by a colon, then the content on the SAME line. Do not add extra bullets, headers, or commentary outside these lines. Do not rename, reorder, or skip a label{"" if nh_nl_label_block else " (omit the New High/Low Concentration line entirely since no data was given)"}.
 
 **Dominant Theme**: What is the dominant market theme or macro narrative connecting these top industries right now (e.g. AI/semis, defense, gold/metals, crypto, industrials, etc)?
@@ -2775,7 +2777,7 @@ Respond with EXACTLY these lines, each starting with the bolded label below foll
 **Outliers**: Any industry here that looks like an outlier / doesn't fit the dominant theme?
 {nh_nl_label_block}**Tactical Takeaway**: One-line tactical takeaway for a swing trader on where leadership is concentrated (and where weakness is concentrated, if New Lows data was given).
 
-Be direct, name industries explicitly, no fluff, no repeating the prompt. Each line's content should be 1-2 sentences max.
+Be direct, name industries explicitly with the bracket format above, no fluff, no repeating the prompt. Each line's content should be 1-2 sentences max.
 """
 
     TRANSIENT_CODES = ["503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "quota",
@@ -5208,15 +5210,17 @@ if not leader_hist.empty:
     )
 
 def generate_leader_ai_analysis(leader_list, industry_counts, ticker_industry, rs_nh_list, quad_points=None):
-    """
-    Call AI providers in order: Gemini → Groq → GitHub Models → OpenRouter.
-    Falls through to the next provider only on transient/capacity errors.
-    """
-
-    # ── Build the prompt ──────────────────────────────────────────────────
     sorted_industries = sorted(industry_counts.items(), key=lambda x: -x[1])
+
+    # ── NEW: industry -> tickers, so prompt can show bracketed lists ──
+    industry_ticker_map = {}
+    for t, inds in ticker_industry.items():
+        for ind in inds:
+            industry_ticker_map.setdefault(ind, []).append(t)
+
     top_industries_str = "\n".join(
-        f"  - {ind}: {cnt} leader(s)" for ind, cnt in sorted_industries[:10]
+        f"  - {ind} ({', '.join(sorted(industry_ticker_map.get(ind, [])))}): {cnt} leader(s)"
+        for ind, cnt in sorted_industries[:10]
     )
 
     tagged_leaders = []
@@ -5246,12 +5250,14 @@ You are a concise IBD-style market analyst. I will give you a list of RS Leader 
 RS Leaders ({len(leader_list)} total):
 {leaders_str}
 
-Industry concentration (by leader count):
+Industry concentration (with matching tickers):
 {top_industries_str}
 
 {quad_summary}
 
 Note: [BLUE DOT] = stock hitting a 250-day RS high right now (strongest near-term momentum).
+
+IMPORTANT FORMATTING RULE: Whenever you mention an industry or sector name anywhere in your response, immediately follow it with the matching tickers in brackets, exactly like this: "Aerospace/Defense (LMT, NOC, SHLD, ITA, XAR)". Use ONLY the tickers listed next to that industry above — do not add or invent tickers.
 
 Respond with EXACTLY these 5 lines, each starting with the bolded label below followed by a colon, then the content on the SAME line. Do not add extra bullets, headers, or commentary outside these 5 lines. Do not rename or reorder the labels.
 
@@ -5261,7 +5267,7 @@ Respond with EXACTLY these 5 lines, each starting with the bolded label below fo
 **Quadrant Map Insight**: Which quadrant has the most concentration, and what does the Strong vs Improving vs Weakening split suggest about market rotation right now?
 **Tactical Takeaway**: One-line tactical takeaway for a swing trader.
 
-Be direct, use industry names, no fluff. Each line's content should be 1-2 sentences max.
+Be direct, use industry names with the bracket format above, no fluff. Each line's content should be 1-2 sentences max.
 """
 
     TRANSIENT_CODES = [
@@ -5404,11 +5410,6 @@ Be direct, use industry names, no fluff. Each line's content should be 1-2 sente
     )
 
 def generate_group_theme_insight(tickers, section_title, session_key, extra_note="", industries_dict=None):
-    """
-    Generic, lightweight version of generate_leader_ai_analysis for ANY ticker
-    group (Two Botak, PowerTrend, Value Trap, Volatility, 21ema Cloud/Wick,
-    50ma Bounce, etc). Same provider fallback chain, shorter prompt/output.
-    """
     if industries_dict is None:
         industries_dict = INDUSTRIES
     if not tickers:
@@ -5416,8 +5417,18 @@ def generate_group_theme_insight(tickers, section_title, session_key, extra_note
 
     industry_counts, ticker_industry = build_leader_industry_map(tickers, industries_dict)
     sorted_industries = sorted(industry_counts.items(), key=lambda x: -x[1])
-    top_industries_str = "\n".join(f"  - {ind}: {cnt}" for ind, cnt in sorted_industries[:8]) \
-        or "  - (no industry matches found)"
+
+    # ── NEW: build industry -> matching tickers map, so we can show
+    # "Industry Name (TICK1, TICK2)" directly in the prompt itself ──
+    industry_ticker_map = {}
+    for t, inds in ticker_industry.items():
+        for ind in inds:
+            industry_ticker_map.setdefault(ind, []).append(t)
+
+    top_industries_str = "\n".join(
+        f"  - {ind} ({', '.join(sorted(industry_ticker_map.get(ind, [])))}): {cnt}"
+        for ind, cnt in sorted_industries[:8]
+    ) or "  - (no industry matches found)"
 
     tagged = [f"{t} ({', '.join(ticker_industry.get(t, ['?']))})" for t in tickers[:40]]
     tickers_str = "\n".join(tagged)
@@ -5428,8 +5439,10 @@ You are a concise IBD-style market analyst. Below is a list of stocks that just 
 Tickers ({len(tickers)} total) with industry group:
 {tickers_str}
 
-Industry concentration:
+Industry concentration (with matching tickers):
 {top_industries_str}
+
+IMPORTANT FORMATTING RULE: Whenever you mention an industry or sector name anywhere in your response, immediately follow it with the matching tickers in brackets, exactly like this: "Aerospace/Defense (LMT, NOC, SHLD, ITA, XAR)". Use ONLY the tickers listed next to that industry above — do not add or invent tickers.
 
 Respond with EXACTLY these 3 lines, each starting with the bolded label below followed by a colon, then the content on the SAME line. Do not add extra bullets, headers, or commentary outside these 3 lines. Do not rename or reorder the labels.
 
@@ -5437,7 +5450,7 @@ Respond with EXACTLY these 3 lines, each starting with the bolded label below fo
 **Standout Industries**: Which 1-2 industries/sub-groups stand out, and what might that imply?
 **Tactical Takeaway**: One-line tactical takeaway for a swing trader watching this screen.
 
-Be direct, name industries/tickers explicitly, no fluff, no repeating the prompt. Each line's content should be 1-2 sentences max.
+Be direct, name industries/tickers explicitly with the bracket format above, no fluff, no repeating the prompt. Each line's content should be 1-2 sentences max.
 """
 
     TRANSIENT_CODES = ["503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "quota",
