@@ -8744,3 +8744,186 @@ if not boc_hist.empty:
         color="Bar_Color",
         use_container_width=True
     )
+
+# ============================================================
+# TRUE MARKET LEADER (TML) — healthyPct >= 69.5% Scan
+# Ported from TradingView "Score" indicator's TML logic.
+# Reuses the same 9-component score as Change/Breakdown of
+# Character (score5/Darvas-streak omitted; score6/score7 lite).
+# Note: Pine's "[X days ago]" label is tied to a separate
+# is_leader (RS-leader) state, not this threshold — omitted here.
+# ============================================================
+@st.cache_data(ttl=3600)
+def compute_true_market_leaders(stocks_list, ticker_dfs, benchmark_df_input,
+                                  lookback_period=126, threshold=69.5):
+    """
+    healthyBars   = count of bars where score >= 90 within lookback (126)
+    healthySeries = 100 if score>=90 else 0
+    healthyPct    = WMA(healthySeries, lookback)   (Pine ta.wma: linear weights,
+                    oldest bar weight=1 ... newest bar weight=lookback_period)
+    TML           = healthyPct >= 69.5
+
+    Returns: today_matches (sorted), healthy_pct_map {ticker: pct}, history_df
+    """
+    today_matches = []
+    healthy_pct_map = {}
+    all_flag_series = []
+
+    weights = np.arange(1, lookback_period + 1)  # Pine ta.wma weighting
+    weight_sum = weights.sum()
+
+    def _wma(arr):
+        return np.dot(arr, weights) / weight_sum
+
+    for ticker in stocks_list:
+        try:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < 260 + lookback_period:
+                continue
+
+            close = df['Close']; high = df['High']; low = df['Low']
+
+            rs = close / benchmark_df_input['Close']
+            if rs.dropna().empty:
+                continue
+
+            ema126 = close.ewm(span=126, adjust=False).mean()
+            r = {sp: rs.ewm(span=sp, adjust=False).mean() for sp in [21, 42, 63, 72, 84, 126, 147, 168]}
+
+            stage1_cond  = (rs >= r[84]) & (rs < r[126])
+            stage3_cond  = (
+                (rs < r[42]) & (rs >= r[72]) & (rs >= r[84]) & (rs >= r[126])
+                & ((r[42] > r[63]) | (rs < r[63])) & (r[63] > r[126]) & (close >= ema126)
+            )
+            stage2a_cond = (
+                (rs >= r[168]) & (rs >= r[147]) & (rs >= r[126])
+                & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+            )
+            stage2b_cond = (rs >= r[126]) & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+            stage2_cond  = (~stage1_cond & ~stage3_cond & (stage2a_cond | stage2b_cond))
+
+            rsMA21  = rs.ewm(span=21, adjust=False).mean()
+            ema21   = close.ewm(span=21, adjust=False).mean()
+            sma50   = close.rolling(50).mean()
+            low14   = low.rolling(14).min().shift(1)
+            ema50t  = close.ewm(span=50, adjust=False).mean()
+            ema100t = close.ewm(span=100, adjust=False).mean()
+
+            gap_down_evt       = (high < low.shift(1))
+            gap_down_pct       = ((close.shift(1) - close) / close.shift(1) * 100).where(gap_down_evt)
+            gap_down_qualified = gap_down_evt & (gap_down_pct >= 3)
+            recent_gap_down    = gap_down_qualified.rolling(10, min_periods=1).max().fillna(0).astype(bool)
+
+            pct_chg = close.pct_change() * 100
+            win = min(220, len(pct_chg))
+            biggest_drop = pct_chg.rolling(window=win, min_periods=20).min()
+            biggest_up   = pct_chg.rolling(window=win, min_periods=20).max()
+
+            high252 = high.rolling(252, min_periods=50).max()
+            pct_from_high = (close - high252) / high252 * 100
+
+            s1  = (rs > rsMA21).fillna(False).astype(int) * 10
+            s2  = stage2_cond.fillna(False).astype(int) * 10
+            s3  = (close > ema21).fillna(False).astype(int) * 10
+            s4  = (close > sma50).fillna(False).astype(int) * 10
+            s6  = (~(close < low14).fillna(False)).astype(int) * 10
+            s7  = (~recent_gap_down).astype(int) * 10
+            s8  = (~(biggest_up < -biggest_drop).fillna(False)).astype(int) * 10
+            s9  = (~(pct_from_high < -25).fillna(False)).astype(int) * 10
+            s10 = (ema50t >= ema100t).fillna(False).astype(int) * 10
+
+            score = s1 + s2 + s3 + s4 + s6 + s7 + s8 + s9 + s10
+            healthy_series = (score >= 90).astype(float) * 100.0
+
+            if len(healthy_series) < lookback_period:
+                continue
+
+            healthy_pct_series = healthy_series.rolling(lookback_period).apply(_wma, raw=True)
+
+            today_pct = healthy_pct_series.iloc[-1]
+            if pd.isna(today_pct):
+                continue
+
+            healthy_pct_map[ticker] = round(float(today_pct), 1)
+            if today_pct >= threshold:
+                today_matches.append(ticker)
+
+            all_flag_series.append(
+                (healthy_pct_series >= threshold).astype(int).tail(60).rename(ticker)
+            )
+
+        except Exception:
+            continue
+
+    history_df = pd.DataFrame()
+    if all_flag_series:
+        combined = pd.concat(all_flag_series, axis=1).fillna(0)
+        daily_counts = combined.sum(axis=1)
+        history_df = daily_counts.reset_index()
+        history_df.columns = ["Date", "TML Count"]
+        history_df["Date"] = pd.to_datetime(history_df["Date"]).dt.strftime("%Y-%m-%d")
+
+    return sorted(today_matches), healthy_pct_map, history_df
+
+
+# ── Render section — append at the very bottom of the dashboard ────────────
+st.markdown("---")
+
+with st.spinner("Scanning for True Market Leaders (healthyPct >= 69.5%)..."):
+    tml_list, tml_pct_map, tml_hist = timed(
+        "compute_true_market_leaders",
+        compute_true_market_leaders,
+        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
+    )
+
+st.markdown(f"#### 👑 True Market Leader (healthyPct ≥ 69.5%) ({len(tml_list)})")
+
+if tml_list:
+    tml_industry_counts, tml_ticker_industry = build_leader_industry_map(tml_list, INDUSTRIES)
+
+    html_tml = ""
+    for sym in tml_list:  # alphabetical
+        industries = tml_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FFD700; border:1px solid #FFD700;"
+            if is_top20_industry else ""
+        )
+        pct_val = tml_pct_map.get(sym, 0)
+        suffix = f"{pct_val:.0f}%"
+        html_tml += setup_badge(
+            sym,
+            extra_style=glow_style,
+            extra_suffix=suffix,
+            extra_suffix_color="#B8860B",  # dark gold
+        )
+
+    st.markdown(html_tml, unsafe_allow_html=True)
+
+    render_group_ai_insight(
+        tml_list,
+        "True Market Leader (healthyPct >= 69.5%)",
+        "true_market_leader",
+        extra_note="the stock's composite health score has been at or above 90 (out of 90) for a weighted-majority of the trailing 126 trading days, indicating sustained multi-month technical leadership rather than a one-day spike"
+    )
+else:
+    st.info("No active True Market Leaders discovered.")
+
+st.write("")
+if not tml_hist.empty:
+    chart_df_tml = tml_hist.copy()
+    today_tml = chart_df_tml["TML Count"].iloc[-1]
+    max_tml = chart_df_tml["TML Count"].max()
+
+    chart_df_tml["Bar_Color"] = "#29B5E8"
+    if today_tml == max_tml:
+        chart_df_tml.iloc[-1, chart_df_tml.columns.get_loc("Bar_Color")] = "#FFD700"
+
+    st.bar_chart(
+        data=chart_df_tml,
+        x="Date",
+        y="TML Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
