@@ -8969,7 +8969,7 @@ _pt_syms_fallback = set(
 SECTION_DEFINITIONS = {
     "Minervini":          set(sym for sym, _, _ in globals().get("email_content_stocks", [])),
     "RS Leader":          set(globals().get("leader_list", [])),
-    "True Market Leader": set(globals().get("tml_list", [])),
+    "TML":                set(globals().get("tml_list", [])),
     "RS NH B4 Price":     set(globals().get("rs_nh_b4_today", [])),
     "PPP":                set(globals().get("ppp_list", [])),
     "Gapper":             set(globals().get("gapper_list", [])),          # short form
@@ -9041,7 +9041,7 @@ if master_rows:
     # Columns that should get a white divider line on their RIGHT edge,
     # marking the end of a logical group. No horizontal lines added.
     GROUP_DIVIDER_AFTER = {
-        "True Market Leader",  # ends: Minervini / RS Leader / True Market Leader
+        "TML",                 # ends: Minervini / RS Leader / True Market Leader
         "Early Bull",          # ends: RS NH B4 Price -> Early Bull
         "CoC",                 # ends: Two Botak -> CoC
         "50ma_bounce",         # ends: 21ema_valid -> 50ma_bounce
