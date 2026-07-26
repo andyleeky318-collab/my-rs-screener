@@ -8777,8 +8777,11 @@ def compute_true_market_leaders(stocks_list, ticker_dfs, benchmark_df_input,
     def _wma(arr):
         return np.dot(arr, weights) / weight_sum
 
+    excluded_etfs = {"IWM", "QQQ", "SPY"}
     for ticker in stocks_list:
         try:
+            if ticker in excluded_etfs:
+                continue
             df = ticker_dfs.get(ticker)
             if df is None or len(df) < 260 + lookback_period:
                 continue
