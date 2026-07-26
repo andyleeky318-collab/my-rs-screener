@@ -3241,7 +3241,9 @@ if all_data:
     th { padding: 4px 8px !important; background-color: #1f77b4; color: white; font-size: 13px; }
     td { padding: 2px 8px !important; border-bottom: 1px solid #333; font-size: 13px; }
     th:nth-child(3), td:nth-child(3),
-    th:nth-child(6), td:nth-child(6),
+    th:nth-child(6), td:nth-child(6) {
+        border-right: 3px solid #ffffff;
+    }
     th:nth-child(7), td:nth-child(7) {
         border-right: 3px solid #ff0000;
     }
