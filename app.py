@@ -9036,6 +9036,16 @@ if master_rows:
     section_cols = list(SECTION_DEFINITIONS.keys())
     extra_cols = ["Volatility", "Distribution"]  # appended at the very end, not counted
 
+    # Columns that should get a white divider line on their RIGHT edge,
+    # marking the end of a logical group. No horizontal lines added.
+    GROUP_DIVIDER_AFTER = {
+        "True Market Leader",  # ends: Minervini / RS Leader / True Market Leader
+        "Early Bull",          # ends: RS NH B4 Price -> Early Bull
+        "CoC",                 # ends: Two Botak -> CoC
+        "50ma_bounce",         # ends: 21ema_valid -> 50ma_bounce
+    }
+    DIVIDER_STYLE = "border-right:2px solid #ffffff;"
+
     rows_html = ""
     for row_num, row in enumerate(master_rows, start=1):
         bg = "#262730" if row_num % 2 == 0 else "#0e1117"
@@ -9044,7 +9054,7 @@ if master_rows:
             if row["Top20 Industry"] else ""
         )
         section_cells = "".join(
-            f"<td style='text-align:center;'>"
+            f"<td style='text-align:center;{DIVIDER_STYLE if col in GROUP_DIVIDER_AFTER else ''}'>"
             f"{'<span style=\"color:#00FF00;font-weight:bold;\">✔</span>' if row[col] else ''}"
             f"</td>"
             for col in section_cols
@@ -9060,12 +9070,13 @@ if master_rows:
             f"<td style='text-align:center;color:#888888;'>{row_num}</td>"
             f"<td style='font-weight:bold;color:#ffffff;white-space:nowrap;'>{row['Ticker']}</td>"
             f"<td style='text-align:center;color:#4ecdc4;font-weight:bold;'>{row['Count']}</td>"
-            f"<td style='text-align:center;'>{top20_mark}</td>"
+            f"<td style='text-align:center;{DIVIDER_STYLE}'>{top20_mark}</td>"
             f"{section_cells}{extra_cells}</tr>"
         )
 
     header_cells = "".join(
-        f"<th style='text-align:center;font-size:11px;white-space:nowrap;padding:4px 6px;'>{col}</th>"
+        f"<th style='text-align:center;font-size:11px;white-space:nowrap;padding:4px 6px;"
+        f"{DIVIDER_STYLE if col in GROUP_DIVIDER_AFTER else ''}'>{col}</th>"
         for col in section_cols
     )
     extra_header_cells = "".join(
@@ -9080,7 +9091,7 @@ if master_rows:
     <th style="width:30px; text-align:center;">#</th>
     <th style="text-align:center;">Ticker</th>
     <th style="width:55px; text-align:center;">Count</th>
-    <th style="width:70px; text-align:center;">Top20 Ind.</th>
+    <th style="width:70px; text-align:center;{DIVIDER_STYLE}">Top20 Ind.</th>
     {header_cells}
     {extra_header_cells}
     </tr></thead>
