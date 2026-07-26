@@ -9057,6 +9057,9 @@ if master_rows:
     rows_html = ""
     for row_num, row in enumerate(master_rows, start=1):
         bg = "#262730" if row_num % 2 == 0 else "#0e1117"
+        ticker_color = "#00FF00" if row["Ticker"] in _lime_stocks1_safe else "#ffffff"
+        no_ema_setup = not (row["21ema_valid"] or row["21ema_cloud"] or row["21ema_wick"] or row["50ma_bounce"])  # NEW
+        ticker_style = f"font-weight:bold;color:{ticker_color};white-space:nowrap;" + ("text-decoration:line-through;" if no_ema_setup else "")  # NEW
         top20_mark = (
             "<span style='color:#FFD700;font-weight:bold;'>★</span>"
             if row["Top20 Industry"] else ""
@@ -9073,11 +9076,10 @@ if master_rows:
             f"</td>"
             for col in extra_cols
         )
-        ticker_color = "#00FF00" if row["Ticker"] in _lime_stocks1_safe else "#ffffff"
         rows_html += (
             f"<tr style='background-color:{bg};'>"
             f"<td style='text-align:center;color:#888888;'>{row_num}</td>"
-            f"<td style='font-weight:bold;color:{ticker_color};white-space:nowrap;'>{row['Ticker']}</td>"
+            f"<td style='{ticker_style}'>{row['Ticker']}</td>"  # CHANGED: inline style -> {ticker_style}
             f"<td style='text-align:center;color:#4ecdc4;font-weight:bold;{THICK_DIVIDER_STYLE}'>{row['Count']}</td>"
             f"<td style='text-align:center;'>{top20_mark}</td>"
             f"{section_cells}{extra_cells}</tr>"
