@@ -9012,10 +9012,12 @@ def _ticker_in_distribution_industry(sym):
         for ind in ticker_to_industries.get(sym, [])
     )
 
-# Union of every ticker appearing in at least one counted section
+# Union of every ticker appearing in at least one counted section,
+# restricted to the KNOWN_STOCKS universe only.
 master_ticker_set = set()
 for _tset in SECTION_DEFINITIONS.values():
     master_ticker_set.update(_tset)
+master_ticker_set &= set(KNOWN_STOCKS)
 
 master_rows = []
 for sym in master_ticker_set:
@@ -9039,7 +9041,6 @@ if master_rows:
     # Columns that should get a white divider line on their RIGHT edge,
     # marking the end of a logical group. No horizontal lines added.
     GROUP_DIVIDER_AFTER = {
-        "True Market Leader",  # ends: Minervini / RS Leader / True Market Leader
         "Early Bull",          # ends: RS NH B4 Price -> Early Bull
         "CoC",                 # ends: Two Botak -> CoC
         "50ma_bounce",         # ends: 21ema_valid -> 50ma_bounce
