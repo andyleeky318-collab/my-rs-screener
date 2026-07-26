@@ -8938,3 +8938,119 @@ if not tml_hist.empty:
         color="Bar_Color",
         use_container_width=True
     )
+
+# ==============================================================================
+# MASTER SETUP CONSOLIDATION TABLE
+# Aggregates every tracked screen into one ticker x section table, ticked where
+# a ticker currently qualifies for that section, sorted by how many sections
+# it appears in (most -> least). Also flags whether ANY industry the ticker
+# belongs to is currently in the top 20 by Group RS.
+# ==============================================================================
+st.markdown("---")
+st.markdown("#### 📋 Master Setup Consolidation Table")
+
+# Global "21ema_valid" set = the underlying buyable/cloud-eligible list
+# (item["Cloud"] per industry), same pool that feeds 21ema_cloud/wick/50ma_bounce.
+cloud_valid_all = set()
+for item in all_data:
+    cloud_valid_all.update(item.get("Cloud", []))
+
+# Column label -> set of tickers currently qualifying for that section.
+# Reuses variables already computed earlier in the script — nothing recomputed.
+SECTION_DEFINITIONS = {
+    "Minervini":            set(sym for sym, _, _ in email_content_stocks),
+    "RS Leader":            set(leader_list),
+    "True Market Leader":   set(tml_list),
+    "RS NH B4 Price":       set(rs_nh_b4_today),
+    "PPP":                  set(ppp_list),
+    "Gapper Earning Drift": set(gapper_list),
+    "Early Bull":           set(early_bull_list),
+    "Two Botak":            set(b_list),
+    "Engulfing":            set(engulf_combined_syms),
+    "PowerTrend":           set(pt_syms),
+    "Change of Character":  set(coc_today),
+    "21ema_valid":          cloud_valid_all,
+    "21ema_cloud":          cloud21ema_all,
+    "21ema_wick":           cloudwick_all,
+    "50ma_bounce":          ma50bounce_all,
+}
+
+# Reverse lookup: ticker -> industries it belongs to (built once, O(1) lookups after)
+ticker_to_industries = {}
+for _industry, _tickers_in_group in INDUSTRIES.items():
+    for _t in _tickers_in_group:
+        ticker_to_industries.setdefault(_t, []).append(_industry)
+
+def _ticker_is_top20_industry(sym):
+    """True if ANY industry this ticker belongs to is currently ranked <= 20 by Group RS."""
+    return any(
+        industry_rank_map.get(ind, 9999) <= 20
+        for ind in ticker_to_industries.get(sym, [])
+    )
+
+# Union of every ticker appearing in at least one section
+master_ticker_set = set()
+for _tset in SECTION_DEFINITIONS.values():
+    master_ticker_set.update(_tset)
+
+master_rows = []
+for sym in master_ticker_set:
+    section_flags = {label: (sym in tset) for label, tset in SECTION_DEFINITIONS.items()}
+    master_rows.append({
+        "Ticker": sym,
+        "Count": sum(section_flags.values()),
+        "Top20 Industry": _ticker_is_top20_industry(sym),
+        **section_flags,
+    })
+
+# Most sections first, then alphabetical tiebreaker
+master_rows.sort(key=lambda r: (-r["Count"], r["Ticker"]))
+
+if master_rows:
+    section_cols = list(SECTION_DEFINITIONS.keys())
+
+    rows_html = ""
+    for row_num, row in enumerate(master_rows, start=1):
+        bg = "#262730" if row_num % 2 == 0 else "#0e1117"
+        top20_mark = (
+            "<span style='color:#FFD700;font-weight:bold;'>★</span>"
+            if row["Top20 Industry"] else ""
+        )
+        cells = "".join(
+            f"<td style='text-align:center;'>"
+            f"{'<span style=\"color:#00FF00;font-weight:bold;\">✔</span>' if row[col] else ''}"
+            f"</td>"
+            for col in section_cols
+        )
+        rows_html += (
+            f"<tr style='background-color:{bg};'>"
+            f"<td style='text-align:center;color:#888888;'>{row_num}</td>"
+            f"<td style='font-weight:bold;color:#ffffff;white-space:nowrap;'>{row['Ticker']}</td>"
+            f"<td style='text-align:center;color:#4ecdc4;font-weight:bold;'>{row['Count']}</td>"
+            f"<td style='text-align:center;'>{top20_mark}</td>"
+            f"{cells}</tr>"
+        )
+
+    header_cells = "".join(
+        f"<th style='text-align:center;font-size:11px;white-space:nowrap;padding:4px 6px;'>{col}</th>"
+        for col in section_cols
+    )
+
+    master_table_html = f"""
+    <div style="overflow-x:auto; background:#0e1117; border-radius:6px;">
+    <table style="width:100%; border-collapse:collapse;">
+    <thead><tr>
+    <th style="width:30px; text-align:center;">#</th>
+    <th style="text-align:center;">Ticker</th>
+    <th style="width:55px; text-align:center;">Count</th>
+    <th style="width:70px; text-align:center;">Top20 Ind.</th>
+    {header_cells}
+    </tr></thead>
+    <tbody>{rows_html}</tbody>
+    </table>
+    </div>
+    """
+    st.markdown(master_table_html, unsafe_allow_html=True)
+    st.caption(f"{len(master_rows)} tickers currently active across at least one tracked setup.")
+else:
+    st.info("No tickers currently qualify for any tracked setup.")
