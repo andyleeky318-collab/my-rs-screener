@@ -9046,7 +9046,10 @@ if master_rows:
         "CoC",                 # ends: Two Botak -> CoC
         "50ma_bounce",         # ends: 21ema_valid -> 50ma_bounce
     }
-    DIVIDER_STYLE = "border-right:2px solid #ffffff !important;"
+    # box-shadow instead of border-right: it paints directly on the cell and
+    # is never subject to the table's border-collapse conflict resolution,
+    # so it can't be swallowed by the leaked nth-child(7) red border rule.
+    DIVIDER_STYLE = "box-shadow: inset -2px 0 0 0 #ffffff;"
 
     rows_html = ""
     for row_num, row in enumerate(master_rows, start=1):
@@ -9088,9 +9091,6 @@ if master_rows:
 
     master_table_html = f"""
     <style>
-    /* Scoped resets: neutralize position-based CSS rules defined earlier
-       for the main industry table (row-21 red border, nth-child(3)/(6)/(7)
-       colored borders) so they don't leak into this table by column position. */
     .master-setup-table tbody tr:nth-child(21) td {{
         border-top: none !important;
     }}
