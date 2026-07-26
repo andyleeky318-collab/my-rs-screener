@@ -8947,7 +8947,7 @@ if not tml_hist.empty:
 # belongs to is currently in the top 20 by Group RS.
 # ==============================================================================
 st.markdown("---")
-st.markdown("#### 📋 Master Setup Consolidation Table")
+st.markdown("#### 📋 Lazy Table")
 
 # Global "21ema_valid" set = the underlying buyable/cloud-eligible list
 # (item["Cloud"] per industry), same pool that feeds 21ema_cloud/wick/50ma_bounce.
@@ -9088,11 +9088,16 @@ if master_rows:
 
     master_table_html = f"""
     <style>
-    /* Scoped override: neutralize the global "row 21 red border" rule
-       (defined earlier for the main industry table) so it doesn't leak
-       into this table too. */
+    /* Scoped resets: neutralize position-based CSS rules defined earlier
+       for the main industry table (row-21 red border, nth-child(3)/(6)/(7)
+       colored borders) so they don't leak into this table by column position. */
     .master-setup-table tbody tr:nth-child(21) td {{
         border-top: none !important;
+    }}
+    .master-setup-table th:nth-child(3), .master-setup-table td:nth-child(3),
+    .master-setup-table th:nth-child(6), .master-setup-table td:nth-child(6),
+    .master-setup-table th:nth-child(7), .master-setup-table td:nth-child(7) {{
+        border-right: none !important;
     }}
     </style>
     <div class="master-setup-table" style="overflow-x:auto; background:#0e1117; border-radius:6px;">
