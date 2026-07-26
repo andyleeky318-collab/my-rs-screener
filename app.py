@@ -3243,10 +3243,10 @@ if all_data:
     th:nth-child(3), td:nth-child(3),
     th:nth-child(6), td:nth-child(6),
     th:nth-child(7), td:nth-child(7) {
-        border-right: 3px solid #ffffff;
+        border-right: 3px solid #ff0000;
     }
     tbody tr:nth-child(21) td {
-        border-top: 3px solid #ffffff;
+        border-top: 3px solid #ff0000;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -4524,7 +4524,7 @@ if quad_points:
     q_weakening = sum(1 for p in quad_points if p["weekly_rs"] <  50 and p["monthly_rs"] >= 50)
     q_weak      = sum(1 for p in quad_points if p["weekly_rs"] <  50 and p["monthly_rs"] <  50)
 
-    quad_title_color = "#90EE90" if (q_strong + q_improving) > (q_weak + q_weakening) else "#FF6B6B"
+    quad_title_color = "#00FF00" if (q_strong + q_improving) > (q_weak + q_weakening) else "#FF6B6B"
 
     fig.add_annotation(x=25,  y=96, text=f"<b>Weakening ({q_weakening})</b>",  **quad_label_cfg)
     fig.add_annotation(x=75,  y=96, text=f"<b>Strong ({q_strong})</b>",        **quad_label_cfg)
@@ -8805,6 +8805,7 @@ def compute_true_market_leaders(stocks_list, ticker_dfs, benchmark_df_input,
             rsMA21  = rs.ewm(span=21, adjust=False).mean()
             ema21   = close.ewm(span=21, adjust=False).mean()
             sma50   = close.rolling(50).mean()
+            sma200  = close.rolling(200).mean()
             low14   = low.rolling(14).min().shift(1)
             ema50t  = close.ewm(span=50, adjust=False).mean()
             ema100t = close.ewm(span=100, adjust=False).mean()
@@ -8846,7 +8847,10 @@ def compute_true_market_leaders(stocks_list, ticker_dfs, benchmark_df_input,
 
             healthy_pct_map[ticker] = round(float(today_pct), 1)
             if today_pct >= threshold:
-                today_matches.append(ticker)
+                latest_above_ma50 = close.iloc[-1] > sma50.iloc[-1]
+                latest_above_ma200 = close.iloc[-1] > sma200.iloc[-1]
+                if latest_above_ma50 and latest_above_ma200:
+                    today_matches.append(ticker)
 
             all_flag_series.append(
                 (healthy_pct_series >= threshold).astype(int).tail(60).rename(ticker)
