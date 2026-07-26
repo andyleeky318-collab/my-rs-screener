@@ -9001,6 +9001,7 @@ def _ticker_is_top20_industry(sym):
 # Volatility: ticker itself hit today's volatility Z-score screen
 _vol_hits_safe = globals().get("volatility_hits", [])
 vol_hit_syms = set(sym for sym, _z, _pct in _vol_hits_safe)
+_lime_stocks1_safe = set(globals().get("LIME_STOCKS1", []))
 
 # Distribution: ticker belongs to an industry currently flagged for
 # distribution (the same set that colors the industry-table rank number red)
@@ -9072,10 +9073,11 @@ if master_rows:
             f"</td>"
             for col in extra_cols
         )
+        ticker_color = "#32CD32" if row["Ticker"] in _lime_stocks1_safe else "#ffffff"
         rows_html += (
             f"<tr style='background-color:{bg};'>"
             f"<td style='text-align:center;color:#888888;'>{row_num}</td>"
-            f"<td style='font-weight:bold;color:#ffffff;white-space:nowrap;'>{row['Ticker']}</td>"
+            f"<td style='font-weight:bold;color:{ticker_color};white-space:nowrap;'>{row['Ticker']}</td>"
             f"<td style='text-align:center;color:#4ecdc4;font-weight:bold;{THICK_DIVIDER_STYLE}'>{row['Count']}</td>"
             f"<td style='text-align:center;'>{top20_mark}</td>"
             f"{section_cells}{extra_cells}</tr>"
