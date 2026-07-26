@@ -8967,21 +8967,21 @@ _pt_syms_fallback = set(
 )
 
 SECTION_DEFINITIONS = {
-    "Minervini":            set(sym for sym, _, _ in globals().get("email_content_stocks", [])),
-    "RS Leader":            set(globals().get("leader_list", [])),
-    "True Market Leader":   set(globals().get("tml_list", [])),
-    "RS NH B4 Price":       set(globals().get("rs_nh_b4_today", [])),
-    "PPP":                  set(globals().get("ppp_list", [])),
-    "Gapper Earning Drift": set(globals().get("gapper_list", [])),
-    "Early Bull":           set(globals().get("early_bull_list", [])),
-    "Two Botak":            set(globals().get("b_list", [])),
-    "Engulfing":            set(globals().get("engulf_combined_syms", [])),
-    "PowerTrend":           _pt_syms_fallback,
-    "Change of Character":  set(globals().get("coc_today", [])),
-    "21ema_valid":          cloud_valid_all,
-    "21ema_cloud":          cloud21ema_all,
-    "21ema_wick":           cloudwick_all,
-    "50ma_bounce":          ma50bounce_all,
+    "Minervini":          set(sym for sym, _, _ in globals().get("email_content_stocks", [])),
+    "RS Leader":          set(globals().get("leader_list", [])),
+    "True Market Leader": set(globals().get("tml_list", [])),
+    "RS NH B4 Price":     set(globals().get("rs_nh_b4_today", [])),
+    "PPP":                set(globals().get("ppp_list", [])),
+    "Gapper":             set(globals().get("gapper_list", [])),          # short form
+    "Early Bull":         set(globals().get("early_bull_list", [])),
+    "Two Botak":          set(globals().get("b_list", [])),
+    "Engulfing":          set(globals().get("engulf_combined_syms", [])),
+    "PowerTrend":         _pt_syms_fallback,
+    "CoC":                set(globals().get("coc_today", [])),            # short form
+    "21ema_valid":        cloud_valid_all,
+    "21ema_cloud":        cloud21ema_all,
+    "21ema_wick":         cloudwick_all,
+    "50ma_bounce":        ma50bounce_all,
 }
 
 # Reverse lookup: ticker -> industries it belongs to (built once, O(1) lookups after)
@@ -8997,7 +8997,22 @@ def _ticker_is_top20_industry(sym):
         for ind in ticker_to_industries.get(sym, [])
     )
 
-# Union of every ticker appearing in at least one section
+# ── Extra non-counted columns (not part of SECTION_DEFINITIONS/Count) ──────
+# Volatility: ticker itself hit today's volatility Z-score screen
+_vol_hits_safe = globals().get("volatility_hits", [])
+vol_hit_syms = set(sym for sym, _z, _pct in _vol_hits_safe)
+
+# Distribution: ticker belongs to an industry currently flagged for
+# distribution (the same set that colors the industry-table rank number red)
+_vol_flagged_industries_safe = globals().get("vol_flagged_industries", set())
+
+def _ticker_in_distribution_industry(sym):
+    return any(
+        ind in _vol_flagged_industries_safe
+        for ind in ticker_to_industries.get(sym, [])
+    )
+
+# Union of every ticker appearing in at least one counted section
 master_ticker_set = set()
 for _tset in SECTION_DEFINITIONS.values():
     master_ticker_set.update(_tset)
@@ -9009,6 +9024,8 @@ for sym in master_ticker_set:
         "Ticker": sym,
         "Count": sum(section_flags.values()),
         "Top20 Industry": _ticker_is_top20_industry(sym),
+        "Volatility": sym in vol_hit_syms,
+        "Distribution": _ticker_in_distribution_industry(sym),
         **section_flags,
     })
 
@@ -9017,6 +9034,7 @@ master_rows.sort(key=lambda r: (-r["Count"], r["Ticker"]))
 
 if master_rows:
     section_cols = list(SECTION_DEFINITIONS.keys())
+    extra_cols = ["Volatility", "Distribution"]  # appended at the very end, not counted
 
     rows_html = ""
     for row_num, row in enumerate(master_rows, start=1):
@@ -9025,11 +9043,17 @@ if master_rows:
             "<span style='color:#FFD700;font-weight:bold;'>★</span>"
             if row["Top20 Industry"] else ""
         )
-        cells = "".join(
+        section_cells = "".join(
             f"<td style='text-align:center;'>"
             f"{'<span style=\"color:#00FF00;font-weight:bold;\">✔</span>' if row[col] else ''}"
             f"</td>"
             for col in section_cols
+        )
+        extra_cells = "".join(
+            f"<td style='text-align:center;'>"
+            f"{'<span style=\"color:#FF4B4B;font-weight:bold;\">✗</span>' if row[col] else ''}"
+            f"</td>"
+            for col in extra_cols
         )
         rows_html += (
             f"<tr style='background-color:{bg};'>"
@@ -9037,12 +9061,16 @@ if master_rows:
             f"<td style='font-weight:bold;color:#ffffff;white-space:nowrap;'>{row['Ticker']}</td>"
             f"<td style='text-align:center;color:#4ecdc4;font-weight:bold;'>{row['Count']}</td>"
             f"<td style='text-align:center;'>{top20_mark}</td>"
-            f"{cells}</tr>"
+            f"{section_cells}{extra_cells}</tr>"
         )
 
     header_cells = "".join(
         f"<th style='text-align:center;font-size:11px;white-space:nowrap;padding:4px 6px;'>{col}</th>"
         for col in section_cols
+    )
+    extra_header_cells = "".join(
+        f"<th style='text-align:center;font-size:11px;white-space:nowrap;padding:4px 6px;'>{col}</th>"
+        for col in extra_cols
     )
 
     master_table_html = f"""
@@ -9054,6 +9082,7 @@ if master_rows:
     <th style="width:55px; text-align:center;">Count</th>
     <th style="width:70px; text-align:center;">Top20 Ind.</th>
     {header_cells}
+    {extra_header_cells}
     </tr></thead>
     <tbody>{rows_html}</tbody>
     </table>
