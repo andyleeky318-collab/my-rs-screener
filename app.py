@@ -9073,7 +9073,7 @@ if master_rows:
             f"</td>"
             for col in extra_cols
         )
-        ticker_color = "#32CD32" if row["Ticker"] in _lime_stocks1_safe else "#ffffff"
+        ticker_color = "#00FF00" if row["Ticker"] in _lime_stocks1_safe else "#ffffff"
         rows_html += (
             f"<tr style='background-color:{bg};'>"
             f"<td style='text-align:center;color:#888888;'>{row_num}</td>"
