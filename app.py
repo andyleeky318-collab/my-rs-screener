@@ -8947,7 +8947,6 @@ if not tml_hist.empty:
 # belongs to is currently in the top 20 by Group RS.
 # ==============================================================================
 st.markdown("---")
-st.markdown("#### 📋 Lazy Table")
 
 # Global "21ema_valid" set = the underlying buyable/cloud-eligible list
 # (item["Cloud"] per industry), same pool that feeds 21ema_cloud/wick/50ma_bounce.
@@ -9035,6 +9034,7 @@ for sym in master_ticker_set:
 
 # Most sections first, then alphabetical tiebreaker
 master_rows.sort(key=lambda r: (-r["Count"], r["Ticker"]))
+st.markdown(f"#### 📋 Lazy Table ({len(master_rows)})")
 
 if master_rows:
     section_cols = list(SECTION_DEFINITIONS.keys())
@@ -9121,6 +9121,5 @@ if master_rows:
     </div>
     """
     st.markdown(master_table_html, unsafe_allow_html=True)
-    st.caption(f"{len(master_rows)} tickers currently active across at least one tracked setup.")
 else:
     st.info("No tickers currently qualify for any tracked setup.")
