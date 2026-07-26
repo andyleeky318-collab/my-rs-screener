@@ -145,6 +145,8 @@ SECTION_KEYWORDS = [
     "Quant Sentiment",
     "Setup Quality",
     "Change of Character",
+    "Breakdown of Character",
+    "True Market Leader",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the

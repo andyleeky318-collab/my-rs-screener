@@ -8833,7 +8833,7 @@ def compute_true_market_leaders(stocks_list, ticker_dfs, benchmark_df_input,
             s10 = (ema50t >= ema100t).fillna(False).astype(int) * 10
 
             score = s1 + s2 + s3 + s4 + s6 + s7 + s8 + s9 + s10
-            healthy_series = (score >= 90).astype(float) * 100.0
+            healthy_series = (score >= 80).astype(float) * 100.0
 
             if len(healthy_series) < lookback_period:
                 continue
