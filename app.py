@@ -9106,7 +9106,7 @@ if master_rows:
     <th style="width:30px; text-align:center;">#</th>
     <th style="text-align:center;">Ticker</th>
     <th style="width:55px; text-align:center;">Count</th>
-    <th style="width:70px; text-align:center;">Top20 Ind.</th>
+    <th style="width:70px; text-align:center;">Industry</th>
     {header_cells}
     {extra_header_cells}
     </tr></thead>
