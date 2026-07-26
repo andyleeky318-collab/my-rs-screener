@@ -9050,6 +9050,7 @@ if master_rows:
     # is never subject to the table's border-collapse conflict resolution,
     # so it can't be swallowed by the leaked nth-child(7) red border rule.
     DIVIDER_STYLE = "box-shadow: inset -2px 0 0 0 #ffffff;"
+    THICK_DIVIDER_STYLE = "box-shadow: inset -3px 0 0 0 #ffffff;"  # NEW: Count | Industry separator
 
     rows_html = ""
     for row_num, row in enumerate(master_rows, start=1):
@@ -9074,7 +9075,7 @@ if master_rows:
             f"<tr style='background-color:{bg};'>"
             f"<td style='text-align:center;color:#888888;'>{row_num}</td>"
             f"<td style='font-weight:bold;color:#ffffff;white-space:nowrap;'>{row['Ticker']}</td>"
-            f"<td style='text-align:center;color:#4ecdc4;font-weight:bold;'>{row['Count']}</td>"
+            f"<td style='text-align:center;color:#4ecdc4;font-weight:bold;{THICK_DIVIDER_STYLE}'>{row['Count']}</td>"
             f"<td style='text-align:center;'>{top20_mark}</td>"
             f"{section_cells}{extra_cells}</tr>"
         )
@@ -9105,7 +9106,7 @@ if master_rows:
     <thead><tr>
     <th style="width:30px; text-align:center;">#</th>
     <th style="text-align:center;">Ticker</th>
-    <th style="width:55px; text-align:center;">Count</th>
+    <th style="width:55px; text-align:center;{THICK_DIVIDER_STYLE}">Count</th>
     <th style="width:70px; text-align:center;">Industry</th>
     {header_cells}
     {extra_header_cells}
