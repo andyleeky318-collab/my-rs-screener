@@ -9041,6 +9041,7 @@ if master_rows:
     # Columns that should get a white divider line on their RIGHT edge,
     # marking the end of a logical group. No horizontal lines added.
     GROUP_DIVIDER_AFTER = {
+        "True Market Leader",  # ends: Minervini / RS Leader / True Market Leader
         "Early Bull",          # ends: RS NH B4 Price -> Early Bull
         "CoC",                 # ends: Two Botak -> CoC
         "50ma_bounce",         # ends: 21ema_valid -> 50ma_bounce
@@ -9071,7 +9072,7 @@ if master_rows:
             f"<td style='text-align:center;color:#888888;'>{row_num}</td>"
             f"<td style='font-weight:bold;color:#ffffff;white-space:nowrap;'>{row['Ticker']}</td>"
             f"<td style='text-align:center;color:#4ecdc4;font-weight:bold;'>{row['Count']}</td>"
-            f"<td style='text-align:center;{DIVIDER_STYLE}'>{top20_mark}</td>"
+            f"<td style='text-align:center;'>{top20_mark}</td>"
             f"{section_cells}{extra_cells}</tr>"
         )
 
@@ -9086,13 +9087,21 @@ if master_rows:
     )
 
     master_table_html = f"""
-    <div style="overflow-x:auto; background:#0e1117; border-radius:6px;">
+    <style>
+    /* Scoped override: neutralize the global "row 21 red border" rule
+       (defined earlier for the main industry table) so it doesn't leak
+       into this table too. */
+    .master-setup-table tbody tr:nth-child(21) td {{
+        border-top: none !important;
+    }}
+    </style>
+    <div class="master-setup-table" style="overflow-x:auto; background:#0e1117; border-radius:6px;">
     <table style="width:100%; border-collapse:collapse;">
     <thead><tr>
     <th style="width:30px; text-align:center;">#</th>
     <th style="text-align:center;">Ticker</th>
     <th style="width:55px; text-align:center;">Count</th>
-    <th style="width:70px; text-align:center;{DIVIDER_STYLE}">Top20 Ind.</th>
+    <th style="width:70px; text-align:center;">Top20 Ind.</th>
     {header_cells}
     {extra_header_cells}
     </tr></thead>
