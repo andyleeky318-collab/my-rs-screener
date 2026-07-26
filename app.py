@@ -9046,7 +9046,7 @@ if master_rows:
         "CoC",                 # ends: Two Botak -> CoC
         "50ma_bounce",         # ends: 21ema_valid -> 50ma_bounce
     }
-    DIVIDER_STYLE = "border-right:2px solid #ffffff;"
+    DIVIDER_STYLE = "border-right:2px solid #ffffff !important;"
 
     rows_html = ""
     for row_num, row in enumerate(master_rows, start=1):
