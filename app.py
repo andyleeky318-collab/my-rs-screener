@@ -9022,10 +9022,11 @@ master_ticker_set &= set(KNOWN_STOCKS)
 master_rows = []
 for sym in master_ticker_set:
     section_flags = {label: (sym in tset) for label, tset in SECTION_DEFINITIONS.items()}
+    is_top20 = _ticker_is_top20_industry(sym)
     master_rows.append({
         "Ticker": sym,
-        "Count": sum(section_flags.values()),
-        "Top20 Industry": _ticker_is_top20_industry(sym),
+        "Count": sum(section_flags.values()) + (1 if is_top20 else 0),
+        "Top20 Industry": is_top20,
         "Volatility": sym in vol_hit_syms,
         "Distribution": _ticker_in_distribution_industry(sym),
         **section_flags,
@@ -9049,7 +9050,7 @@ if master_rows:
     # box-shadow instead of border-right: it paints directly on the cell and
     # is never subject to the table's border-collapse conflict resolution,
     # so it can't be swallowed by the leaked nth-child(7) red border rule.
-    DIVIDER_STYLE = "box-shadow: inset -2px 0 0 0 #ffffff;"
+    DIVIDER_STYLE = "box-shadow: inset -3px 0 0 0 #ffffff;"
     THICK_DIVIDER_STYLE = "box-shadow: inset -3px 0 0 0 #ffffff;"  # NEW: Count | Industry separator
 
     rows_html = ""
