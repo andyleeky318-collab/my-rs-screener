@@ -8956,19 +8956,28 @@ for item in all_data:
     cloud_valid_all.update(item.get("Cloud", []))
 
 # Column label -> set of tickers currently qualifying for that section.
-# Reuses variables already computed earlier in the script — nothing recomputed.
+# Built defensively: several of these (pt_syms, coc_today, etc.) only get
+# defined inside their section's "if list or yest_list:" conditional block,
+# so on a day where that list is empty the variable never exists. Reading
+# everything through globals().get(...) with a safe default avoids a
+# NameError crash on those quiet days.
+_pt_list_safe = globals().get("pt_list", [])
+_pt_syms_fallback = set(
+    item[0] if isinstance(item, tuple) else item for item in _pt_list_safe
+)
+
 SECTION_DEFINITIONS = {
-    "Minervini":            set(sym for sym, _, _ in email_content_stocks),
-    "RS Leader":            set(leader_list),
-    "True Market Leader":   set(tml_list),
-    "RS NH B4 Price":       set(rs_nh_b4_today),
-    "PPP":                  set(ppp_list),
-    "Gapper Earning Drift": set(gapper_list),
-    "Early Bull":           set(early_bull_list),
-    "Two Botak":            set(b_list),
-    "Engulfing":            set(engulf_combined_syms),
-    "PowerTrend":           set(pt_syms),
-    "Change of Character":  set(coc_today),
+    "Minervini":            set(sym for sym, _, _ in globals().get("email_content_stocks", [])),
+    "RS Leader":            set(globals().get("leader_list", [])),
+    "True Market Leader":   set(globals().get("tml_list", [])),
+    "RS NH B4 Price":       set(globals().get("rs_nh_b4_today", [])),
+    "PPP":                  set(globals().get("ppp_list", [])),
+    "Gapper Earning Drift": set(globals().get("gapper_list", [])),
+    "Early Bull":           set(globals().get("early_bull_list", [])),
+    "Two Botak":            set(globals().get("b_list", [])),
+    "Engulfing":            set(globals().get("engulf_combined_syms", [])),
+    "PowerTrend":           _pt_syms_fallback,
+    "Change of Character":  set(globals().get("coc_today", [])),
     "21ema_valid":          cloud_valid_all,
     "21ema_cloud":          cloud21ema_all,
     "21ema_wick":           cloudwick_all,
