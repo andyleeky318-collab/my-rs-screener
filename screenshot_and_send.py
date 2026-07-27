@@ -144,7 +144,7 @@ SECTION_KEYWORDS = [
     "Volatility = ",
     "Value Trap = ",
     "Pie Chart",
-    "ETF Ratio",
+    #"ETF Ratio",
     "Quant Sentiment",
     "Setup Quality",
     "Change of Character",
@@ -247,7 +247,7 @@ def build_and_send_consolidated_pdf():
         pdf_bytes = buf.getvalue()
 
         filename = f"{date.today().strftime('%Y-%m-%d')}.pdf"
-        send_document(pdf_bytes, filename, f"Consolidated report — {date.today().strftime('%Y-%m-%d')}")
+        send_document(pdf_bytes, filename, f"{date.today().strftime('%Y-%m-%d')}")
     except Exception as e:
         print(f"Failed to build/send consolidated PDF: {e}")
         traceback.print_exc()
