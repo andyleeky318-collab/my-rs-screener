@@ -2898,8 +2898,8 @@ SECTOR_KEYWORDS = {
     "Housing": "#FF69B4", "Homebuilders": "#FF69B4",
     "Crypto": "#FF69B4", "Gold": "#FF69B4", "Broker": "#FF69B4", "Brokerage": "#FF69B4", "Rail": "#FF69B4", "railroads": "#FF69B4", 
     "Rails": "#FF69B4", "finance": "#FF69B4", "metals": "#FF69B4", "Payment Processing": "#FF69B4", 
-    "travel": "#FF69B4", "airline": "#FF69B4", "fintech": "#FF69B4", "uranium": "#FF69B4", "mega-cap": "#FF69B4", 
-    "apparel": "#FF69B4",
+    "travel": "#FF69B4", "airline": "#FF69B4", "fintech": "#FF69B4", "uranium": "#FF69B4", "mega-cap": "#FF69B4",
+    "apparel": "#FF69B4", "risk-on": "#FF69B4", "risk-off": "#FF69B4", 
 }
 
 def format_ai_analysis_text(text, tickers=None, industries=None):
@@ -5094,7 +5094,7 @@ with st.spinner("Scanning for Leader History..."):
 
 # --- LEADERS SECTION ---
 st.markdown(f"#### 🏆 RS Leader = Long term ({len(leader_list)}) ")
-st.markdown(f"#### 🔺 Blue Dot = Short term ({len([s for s in leader_rs_nh_matches if s != 'SPY'])})")
+st.markdown(f"#### 🔵 Blue Dot = Short term ({len([s for s in leader_rs_nh_matches if s != 'SPY'])})")
 
 if leader_list or leader_yest:
 
@@ -9058,7 +9058,7 @@ if master_rows:
     rows_html = ""
     for row_num, row in enumerate(master_rows, start=1):
         bg = "#262730" if row_num % 2 == 0 else "#0e1117"
-        ticker_color = "#00FF00" if row["Ticker"] in _lime_stocks1_safe else "#ffffff"
+        ticker_color = "#FF4B4B" if (row["Volatility"] or row["Distribution"]) else ("#00FF00" if row["Ticker"] in _lime_stocks1_safe else "#ffffff")
         no_ema_setup = not (row["21ema_valid"] or row["21ema_cloud"] or row["21ema_wick"] or row["50ma_bounce"])  # NEW
         ticker_style = f"font-weight:bold;color:{ticker_color};white-space:nowrap;" + ("text-decoration:line-through;" if no_ema_setup else "")  # NEW
         top20_mark = (
