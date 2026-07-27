@@ -7142,7 +7142,7 @@ st.markdown("---")
 # --- 6. VALUE TRAP (Full Horizontal Row Below PowerTrend Not Extended) ---
 value_trap_count_color = "#FF6B6B" if len(vt_list) == 0 else "inherit"
 st.markdown(
-    f"<h4>⚠️ Value Trap = MAG7 <span style='color:{value_trap_count_color}; font-weight:bold;'>({len(vt_list)})</span></h4>",
+    f"<h4>⚠️ Value Trap = MAG7 & MOAT <span style='color:{value_trap_count_color}; font-weight:bold;'>({len(vt_list)})</span></h4>",
     unsafe_allow_html=True
 )
 if vt_list or vt_yest:
@@ -7410,6 +7410,7 @@ def _relative_etf_ratios():
         ("SPHB", "SPY"),
         ("IWM", "QQQ"),
         ("VUG", "VTV"),
+        ("RSP", "SPY"),
     )
 
     #st.markdown("#### Relative ETF Ratios (1 Year)")
