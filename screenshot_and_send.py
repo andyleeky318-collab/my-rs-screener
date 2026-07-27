@@ -33,6 +33,9 @@ import time
 import traceback
 import requests
 from playwright.sync_api import sync_playwright
+import io
+from datetime import date
+from PIL import Image
 
 APP_URL   = os.environ["STREAMLIT_APP_URL"]
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
@@ -178,13 +181,14 @@ class Deadline:
 
 
 deadline = Deadline(MAX_RUNTIME_SECONDS)
-
+ALL_SCREENSHOT_BYTES = []
 
 def send_photo(image_bytes, caption):
     """Send exactly ONE screenshot to Telegram. Never combine/stitch."""
     if not image_bytes:
         print(f"Skipping empty image for '{caption}'")
         return
+    ALL_SCREENSHOT_BYTES.append(image_bytes)
     try:
         resp = requests.post(
             f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto",
@@ -199,6 +203,54 @@ def send_photo(image_bytes, caption):
     except Exception as e:
         print(f"Telegram send raised an exception for '{caption}': {e}")
 
+def send_document(file_bytes, filename, caption):
+    """Send a file (e.g. the consolidated PDF) to Telegram as a document."""
+    if not file_bytes:
+        print(f"Skipping empty document for '{caption}'")
+        return
+    try:
+        resp = requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument",
+            data={"chat_id": CHAT_ID, "caption": caption[:1024]},
+            files={"document": (filename, file_bytes, "application/pdf")},
+            timeout=120,
+        )
+        if resp.status_code != 200:
+            print(f"Telegram document send FAILED for '{filename}': {resp.status_code} {resp.text}")
+        else:
+            print(f"Sent document: {filename}")
+    except Exception as e:
+        print(f"Telegram document send raised an exception for '{filename}': {e}")
+
+
+def build_and_send_consolidated_pdf():
+    """
+    Consolidate every screenshot captured this run (in the exact order they
+    were sent to Telegram) into a single multi-page PDF, one screenshot per
+    page. Each page is sized to that screenshot's own native pixel
+    dimensions -- no resizing/scaling/cropping -- so every image fills its
+    page at full resolution with its aspect ratio untouched. Non-fatal: any
+    failure here only skips the PDF, it never affects the photos already sent.
+    """
+    if not ALL_SCREENSHOT_BYTES:
+        print("No screenshots captured this run -- skipping PDF consolidation.")
+        return
+
+    try:
+        pil_pages = []
+        for img_bytes in ALL_SCREENSHOT_BYTES:
+            img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+            pil_pages.append(img)
+
+        buf = io.BytesIO()
+        pil_pages[0].save(buf, format="PDF", save_all=True, append_images=pil_pages[1:])
+        pdf_bytes = buf.getvalue()
+
+        filename = f"{date.today().strftime('%Y-%m-%d')}.pdf"
+        send_document(pdf_bytes, filename, f"Consolidated report — {date.today().strftime('%Y-%m-%d')}")
+    except Exception as e:
+        print(f"Failed to build/send consolidated PDF: {e}")
+        traceback.print_exc()
 
 def try_wake_app(page):
     """Click through Streamlit Community Cloud's sleep-screen prompt if present."""
@@ -686,6 +738,8 @@ def run():
             print("Global cutoff reached -- skipping TradingView screenshot.")
 
         browser.close()
+
+    build_and_send_consolidated_pdf()
 
     print("Done.")
 

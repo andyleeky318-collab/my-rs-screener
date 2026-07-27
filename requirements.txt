@@ -6,3 +6,4 @@ matplotlib
 google-genai
 plotly
 openai>=1.0.0
+Pillow
