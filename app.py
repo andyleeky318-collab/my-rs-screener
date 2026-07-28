@@ -2709,7 +2709,8 @@ def generate_top_industries_theme_insight(
         item = next((d for d in all_data_list if d["Industry"] == industry), None)
         top_tickers = ""
         if item is not None:
-            top5 = item["Tickers"].sort_values("RS Score", ascending=False).head(5)
+            known_only = item["Tickers"][item["Tickers"]["Ticker"].isin(KNOWN_STOCKS)]
+            top5 = known_only.sort_values("RS Score", ascending=False).head(5)
             top_tickers = ", ".join(f"{t}({s:.0f})" for t, s in zip(top5["Ticker"], top5["RS Score"]))
 
         rs_1w  = row.get("Group RS Prev", None)
@@ -8927,9 +8928,12 @@ if not tml_hist.empty:
     chart_df_tml = tml_hist.copy()
     today_tml = chart_df_tml["TML Count"].iloc[-1]
     max_tml = chart_df_tml["TML Count"].max()
+    min_tml = chart_df_tml["TML Count"].min()
 
     chart_df_tml["Bar_Color"] = "#29B5E8"
-    if today_tml == max_tml:
+    if today_tml == min_tml:
+        chart_df_tml.iloc[-1, chart_df_tml.columns.get_loc("Bar_Color")] = "#FF4B4B"
+    elif today_tml == max_tml:
         chart_df_tml.iloc[-1, chart_df_tml.columns.get_loc("Bar_Color")] = "#FFD700"
 
     st.bar_chart(
