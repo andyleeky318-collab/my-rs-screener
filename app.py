@@ -100,7 +100,7 @@ INDUSTRIES = {
     'Nuclear': ['URA', 'NLR', 'CEG', 'CCJ', 'OKLO', 'UUUU', 'SMR', 'LEU'],
     'MAG7': ['MAGS', 'AAPL', 'GOOGL', 'NVDA', 'META', 'MSFT', 'AMZN', 'TSLA'],
     'ETF': ['XLK', 'XLF', 'XLV', 'XLE', 'XLU', 'XLP', 'XLY', 'XLC', 'XLI', 'XLB'],
-    'SPACE': ['SPCX', 'UFO', 'VSAT', 'RKLB', 'SATL', 'RDW', 'LUNR', 'BKSY', 'PL', 'IRDM', 'SATS', 'GSAT', 'ASTS', 'NASA', 'FLY', 'SPCE', 'KRMN', 'SIDU'],
+    'SPACE': ['SPCX', 'UFO', 'VSAT', 'RKLB', 'SATL', 'RDW', 'LUNR', 'BKSY', 'PL', 'IRDM', 'GSAT', 'ASTS', 'NASA', 'FLY', 'SPCE', 'KRMN', 'SIDU'],
     'CATHIE WOOD': ['ARKG', 'ARKK', 'ARKQ', 'ARKW', 'ARKF', 'ARKX'],
     'CHINA': ['FUTU', 'LI', 'KWEB', 'XPEV', 'NIO', 'PDD', 'BIDU', 'JD', 'BABA'],
     'DATA CENTER': ['WGMI', 'CRWV', 'NBIS', 'IREN', 'WULF', 'CORZ', 'CIFR', 'HUT', 'BTDR', 'EQIX'],
@@ -120,7 +120,7 @@ INDUSTRIES = {
     'AUTO/TRCK-RPLC PRTS': ['LKQ', 'DORM', 'AAP'],
     'BEVERAGES-ALCOHOLIC': ['STZ', 'TAP', 'SAM'],
     'BEV-NON-ALCOHOLIC': ['KO', 'MNST', 'CCEP', 'COKE', 'BRBR', 'CELH', 'FIZZ'],
-    'MEDICAL-BIOMED/BTH': ['IBB', 'BNTX', 'AMGN', 'GILD', 'MRNA', 'ILMN', 'SMMT', 'PCVX', 'BMRN', 'TECH', 'NUVL', 'ELAN', 'HALO', 'RNA', 'KRYS', 'ADMA', 'BBIO', 'IMVT', 'AXSM', 'CRSP', 'DNLI', 'ALVO', 'APGE', 'DYN', 'RYTM', 'KYMR', 'EWTX', 'PTGX', 'TWST', 'TXG', 'CGON', 'JANX', 'ARWR', 'VERA', 'NVAX', 'CLDX', 'Q'],
+    'MEDICAL-BIOMED/BTH': ['IBB', 'BNTX', 'AMGN', 'GILD', 'MRNA', 'ILMN', 'SMMT', 'PCVX', 'BMRN', 'TECH', 'ELAN', 'HALO', 'RNA', 'KRYS', 'ADMA', 'BBIO', 'IMVT', 'AXSM', 'CRSP', 'DNLI', 'ALVO', 'APGE', 'DYN', 'RYTM', 'KYMR', 'EWTX', 'PTGX', 'TWST', 'TXG', 'CGON', 'JANX', 'ARWR', 'VERA', 'NVAX', 'CLDX', 'Q'],
     'MEDIA-RADIO/TV': ['FOX', 'SIRI', 'NXST'],
     'TELCOM-SVC-CBL/SAT': ['CMCSA', 'CHTR'],
     'LEISRE-GAMNG/EQUIP': ['BETZ', 'FLUT', 'LVS', 'MGM', 'WYNN', 'CZR', 'BYD', 'RSI', 'DKNG', 'CHDN', 'PENN'],
@@ -151,7 +151,7 @@ INDUSTRIES = {
     'RETAIL-CNSMR ELEC': ['BBY', 'GME'],
     'CONSUMER PROD-ELEC': ['SN', 'ROKU', 'WHR', 'SPB', 'SONY'],
     'BLDG-HEAVY CONSTR': ['PWR', 'IESC', 'EME', 'FIX', 'ACM', 'TTEK', 'MTZ', 'APG', 'FLR', 'DY', 'STRL', 'ROAD', 'GVA', 'PRIM'],
-    'BLDG-RSIDNT/COMML': ['ITB', 'IBP', 'EXPO', 'DHI', 'LEN', 'NVR', 'PHM', 'TOL', 'MTH', 'TMHC', 'KBH', 'SKY', 'MHO', 'FTDR', 'GRBK', 'DFH', 'CCS', 'LGIH'],
+    'BLDG-RSIDNT/COMML': ['ITB', 'IBP', 'EXPO', 'DHI', 'LEN', 'NVR', 'PHM', 'TOL', 'MTH', 'KBH', 'SKY', 'MHO', 'FTDR', 'GRBK', 'DFH', 'CCS', 'LGIH'],
     'BLDG-MBILE/MFG & RV': ['CVCO', 'PATK'],
     'POLLUTION CONTROL': ['WM', 'RSG', 'CLH', 'CWST'],
     'COMML SVCS-LEASING': ['URI', 'AER', 'UHAL', 'WSC', 'R', 'HRI', 'WD', 'CAR', 'MGRC', 'PRG'],
@@ -239,7 +239,7 @@ INDUSTRIES = {
     'RETAIL-SPECIALTY': ['MUSA', 'CASY', 'HZO', 'COST', 'BJ', 'ARKO', 'WMT', 'PSMT', 'TBBB', 'TGT', 'DKS', 'FIVE', 'BOBS', 'BBW', 'WINA', 'GME', 'MNSO', 'BBY', 'ULTA', 'EVGO', 'BWMX', 'OLLI', 'DLTR', 'RH', 'ASO', 'WSM', 'WOOF', 'DG', 'BBWI', 'SVV', 'SBH', 'BNED', 'ARHS', 'TSCO', 'EYE'],
     'RETAIL-RESTAURANTS': ['MCD', 'SBUX', 'CMG', 'YUM', 'QSR', 'DRI', 'YUMC', 'CAVA', 'DPZ', 'WING', 'TXRH', 'ARMK', 'SHAK', 'SG', 'EAT', 'WEN', 'CAKE', 'PZZA'],
     'TELECOM SVCS-FOREIGN': ['CCOI', 'LBTYA'],
-    'TELCOM-INFRASTR': ['SATS', 'ASTS', 'IRDM', 'NOK', 'AMT'],
+    'TELCOM-INFRASTR': ['ASTS', 'IRDM', 'NOK', 'AMT'],
     'STEEL-PRODUCERS': ['XME', 'SLX', 'NWPX', 'PKX', 'NUE', 'STLD', 'WS', 'RS', 'ASTL', 'CLF', 'GGB', 'CMC', 'RIO', 'TX', 'MTUS', 'MT', 'HCC', 'MSB', 'VALE', 'SID'],
     'TELCOM-CONS PROD': ['MSI', 'GRMN', 'UI'],
     #'TEXTILES': ['AIN', 'CULP', 'UFI'],
@@ -4573,7 +4573,7 @@ if quad_points:
             gridcolor="rgba(120,120,120,0.18)",
             zeroline=False,
             tickfont=dict(color="#aaaaaa", size=11),
-            title_font=dict(color=quad_title_color, size=12),   # ← changed from "#aaaaaa"
+            title_font=dict(color=quad_title_color, size=16),   # ← changed from "#aaaaaa"
         ),
         yaxis=dict(
             title="Monthly RS",
@@ -4583,7 +4583,7 @@ if quad_points:
             gridcolor="rgba(120,120,120,0.18)",
             zeroline=False,
             tickfont=dict(color="#aaaaaa", size=11),
-            title_font=dict(color=quad_title_color, size=12),   # ← changed from "#aaaaaa"
+            title_font=dict(color=quad_title_color, size=16),   # ← changed from "#aaaaaa"
         ),
         plot_bgcolor ="rgba(20,22,30,1)",
         paper_bgcolor="rgba(13,17,23,0)",
