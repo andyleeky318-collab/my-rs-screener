@@ -8146,6 +8146,10 @@ def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
             f'{setup_str} | {risk_str}'
         )
 
+    # NEW: last line — NaN-today ticker count
+    lines.append("")
+    lines.append(f"⚠️ NaN-today: {nan_ticker_count} tickers")
+
     return "\n".join(lines)
 
 sgt_now = datetime.datetime.now(ZoneInfo("Asia/Singapore"))
@@ -8158,7 +8162,8 @@ if in_send_window and st.session_state.get("telegram_setup_summary_sig") != setu
     summary_text = build_setup_summary_text(
         global_setup_tickers, global_setup_ticker_groups, industry_rank_map,
         all_data, cloud21ema_all, cloudwick_all, ma50bounce_all, ticker_dfs_shared,
-        leader_list=leader_list
+        leader_list=leader_list,
+        nan_ticker_count=len(_latest_nan_tickers),   # NEW
     )
     tg_token = st.secrets.get("TELEGRAM_BOT_TOKEN")
     tg_chat  = st.secrets.get("TELEGRAM_CHAT_ID")
@@ -8761,19 +8766,15 @@ if not boc_hist.empty:
 def compute_true_market_leaders(stocks_list, ticker_dfs, benchmark_df_input,
                                   lookback_period=126, threshold=69.5):
     """
-    healthyBars   = count of bars where score >= 90 within lookback (126)
-    healthySeries = 100 if score>=90 else 0
-    healthyPct    = WMA(healthySeries, lookback)   (Pine ta.wma: linear weights,
-                    oldest bar weight=1 ... newest bar weight=lookback_period)
-    TML           = healthyPct >= 69.5
-
-    Returns: today_matches (sorted), healthy_pct_map {ticker: pct}, history_df
+    ...
+    Returns: today_matches (sorted), yest_matches (sorted), healthy_pct_map {ticker: pct}, history_df
     """
     today_matches = []
+    yest_matches = []
     healthy_pct_map = {}
     all_flag_series = []
 
-    weights = np.arange(1, lookback_period + 1)  # Pine ta.wma weighting
+    weights = np.arange(1, lookback_period + 1)
     weight_sum = weights.sum()
 
     def _wma(arr):
@@ -8853,11 +8854,20 @@ def compute_true_market_leaders(stocks_list, ticker_dfs, benchmark_df_input,
                 continue
 
             healthy_pct_map[ticker] = round(float(today_pct), 1)
-            if today_pct >= threshold:
-                latest_above_ma50 = close.iloc[-1] > sma50.iloc[-1]
-                latest_above_ma200 = close.iloc[-1] > sma200.iloc[-1]
-                if latest_above_ma50 and latest_above_ma200:
-                    today_matches.append(ticker)
+
+            latest_above_ma50 = close.iloc[-1] > sma50.iloc[-1]
+            latest_above_ma200 = close.iloc[-1] > sma200.iloc[-1]
+            if today_pct >= threshold and latest_above_ma50 and latest_above_ma200:
+                today_matches.append(ticker)
+
+            # ── Yesterday check (mirrors today, shifted one bar back) ──
+            if len(healthy_pct_series) >= 2:
+                yest_pct = healthy_pct_series.iloc[-2]
+                if pd.notna(yest_pct) and len(sma50) >= 2 and len(sma200) >= 2 and len(close) >= 2:
+                    yest_above_ma50 = close.iloc[-2] > sma50.iloc[-2]
+                    yest_above_ma200 = close.iloc[-2] > sma200.iloc[-2]
+                    if yest_pct >= threshold and yest_above_ma50 and yest_above_ma200:
+                        yest_matches.append(ticker)
 
             all_flag_series.append(
                 (healthy_pct_series >= threshold).astype(int).tail(60).rename(ticker)
@@ -8874,14 +8884,14 @@ def compute_true_market_leaders(stocks_list, ticker_dfs, benchmark_df_input,
         history_df.columns = ["Date", "TML Count"]
         history_df["Date"] = pd.to_datetime(history_df["Date"]).dt.strftime("%Y-%m-%d")
 
-    return sorted(today_matches), healthy_pct_map, history_df
+    return sorted(today_matches), sorted(yest_matches), healthy_pct_map, history_df
 
 
 # ── Render section — append at the very bottom of the dashboard ────────────
 st.markdown("---")
 
 with st.spinner("Scanning for True Market Leaders (healthyPct >= 69.5%)..."):
-    tml_list, tml_pct_map, tml_hist = timed(
+    tml_list, tml_yest, tml_pct_map, tml_hist = timed(
         "compute_true_market_leaders",
         compute_true_market_leaders,
         stocks_tuple, ticker_dfs_shared, benchmark_df_shared
@@ -8891,7 +8901,7 @@ tml_count = len(tml_list)
 tml_count_color = "#FF4B4B" if tml_count == 0 else "#FFFFFF"
 st.markdown(f"#### 👑 True Market Leader (<span style='color:{tml_count_color};'>{tml_count}</span>)", unsafe_allow_html=True)
 
-if tml_list:
+if tml_list or tml_yest:
     tml_industry_counts, tml_ticker_industry = build_leader_industry_map(tml_list, INDUSTRIES)
 
     html_tml = ""
@@ -8907,10 +8917,15 @@ if tml_list:
         suffix = f"{pct_val:.0f}%"
         html_tml += setup_badge(
             sym,
+            is_new=(sym not in tml_yest),
             extra_style=glow_style,
             extra_suffix=suffix,
-            extra_suffix_color="#B8860B",  # dark gold
+            extra_suffix_color="#B8860B",
         )
+
+    removed_tml = [sym for sym in tml_yest if sym not in tml_list]
+    for sym in sorted(removed_tml):
+        html_tml += f'<div class="ticker-badge removed-badge">{sym}</div>'
 
     st.markdown(html_tml, unsafe_allow_html=True)
 
