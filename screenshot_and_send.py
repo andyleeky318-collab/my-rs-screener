@@ -51,7 +51,7 @@ TV_CHART_SETTLE_SECONDS = 10
 VIEWPORT_WIDTH  = 1600
 VIEWPORT_HEIGHT = 1200
 
-MAX_RUNTIME_SECONDS   = 25 * 60   # hard cutoff for the ENTIRE run
+MAX_RUNTIME_SECONDS   = 29 * 60   # hard cutoff for the ENTIRE run
 SCROLL_SETTLE_SECONDS = 3         # let charts / custom HTML components re-render after a scroll
 
 # How long (seconds) to keep retrying to find a single section keyword
@@ -83,7 +83,7 @@ SECTION_TOP_OFFSET_PX = 20
 # everything else keeps Playwright's plain default page behavior.
 EXTRA_SCREENSHOTS = [
     ("https://stockbee.blogspot.com/p/mm.html",
-     "Stockbee", 3, False, "Primary Breadth Indicators"),
+     "Stockbee", 3, True, "Primary Breadth Indicators"),
     ("https://docs.google.com/spreadsheets/d/1ZkNk5A5nPQGGSK00eAOlroGmJi2wVHPwdz3LAYAVb7U/edit?gid=0#gid=0",
      "Market Monitor Traffic Light", 8, False, None),
     ("https://stockcharts.com/sc3/ui/?s=%24USHL5",
@@ -490,6 +490,26 @@ def capture_and_send_external_top(browser, url, caption, settle_seconds=SCROLL_S
 
         ext_page.goto(url, wait_until="domcontentloaded", timeout=EXTRA_PAGE_LOAD_TIMEOUT)
 
+        recaptcha_retries = 0
+        while is_recaptcha_challenge(ext_page) and recaptcha_retries < 3:
+            recaptcha_retries += 1
+            print(f"reCAPTCHA challenge detected for '{caption}' "
+                  f"(retry {recaptcha_retries}/3) -- reopening with stealth UA...")
+            ext_page.close()
+            time.sleep(8)
+            ext_page = browser.new_page(
+                viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
+                user_agent=STEALTH_USER_AGENT,
+                locale="en-US",
+            )
+            ext_page.add_init_script(STEALTH_INIT_SCRIPT)
+            ext_page.goto(url, wait_until="domcontentloaded", timeout=EXTRA_PAGE_LOAD_TIMEOUT)
+
+        if is_recaptcha_challenge(ext_page):
+            print(f"reCAPTCHA still blocking '{caption}' after {recaptcha_retries} retries -- "
+                  f"sending the challenge page as a fallback anyway.")
+            caption = f"{caption} (fallback -- reCAPTCHA blocked)"
+
         for attempt in range(1, max_attempts + 1):
             found = True
             if wait_text:
@@ -527,7 +547,22 @@ def _safe_fallback_screenshot(page, caption):
     except Exception as shot_err:
         print(f"Fallback screenshot ('{caption}') also failed: {shot_err}")
 
+RECAPTCHA_MARKERS = ["I'm not a robot", "unusual traffic", "detected unusual traffic"]
 
+
+def is_recaptcha_challenge(page):
+    """
+    Detect Google's reCAPTCHA 'unusual traffic' interstitial -- seen
+    intermittently on Stockbee since it's hosted on Blogspot/Google and
+    the check is IP/network-based, not per-request. Checks page content
+    for known markers.
+    """
+    try:
+        content = page.content()
+        return any(marker in content for marker in RECAPTCHA_MARKERS)
+    except Exception:
+        return False
+    
 def tradingview_login(browser):
     """
     Logs into TradingView via email/password and returns an authenticated
