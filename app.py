@@ -1251,7 +1251,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, _bench
         open_data = data['Open']
 
         close_data = close_data.copy()
-        close_data[benchmark_ticker] = _benchmark_df['Close'].reindex(close_data.index)
+        close_data[benchmark_ticker] = _benchmark_df['Close'].reindex(close_data.index).ffill()
 
         global _latest_bar_dropped, _latest_nan_tickers, _benchmark_nan_seen  # 🔧
 
