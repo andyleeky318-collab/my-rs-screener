@@ -8068,7 +8068,7 @@ def send_telegram_text(text, bot_token, chat_id, parse_mode="HTML"):
 def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
                                industry_rank_map, all_data,
                                cloud21ema_all, cloudwick_all, ma50bounce_all,
-                               ticker_dfs_shared, leader_list=None):
+                               ticker_dfs_shared, leader_list=None, nan_ticker_count=0):
     if not global_setup_tickers:
         return None
 
