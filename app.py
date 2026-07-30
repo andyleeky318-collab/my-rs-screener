@@ -3553,7 +3553,8 @@ if all_data:
         for industry in top20_industries:
             item = next((d for d in all_data if d["Industry"] == industry), None)
             if item is not None:
-                top5 = item["Tickers"].sort_values("RS Score", ascending=False).head(5)
+                known_only = item["Tickers"][item["Tickers"]["Ticker"].isin(KNOWN_STOCKS)]
+                top5 = known_only.sort_values("RS Score", ascending=False).head(5)
                 top20_tickers.extend(top5["Ticker"].tolist())
 
         combined_tickers = list(set(top20_tickers) | set(new_high_tickers) | set(new_low_tickers))
@@ -4837,14 +4838,14 @@ if email_content_stocks or email_content_removed:
         else:
             up_logo = ""
 
-        has_setup_badge = sym in (ma50bounce_all | cloudwick_all | cloud21ema_all)
+        #has_setup_badge = sym in (ma50bounce_all | cloudwick_all | cloud21ema_all)
         glow_style = ""
-        if has_setup_badge:
-            industries = minervini_ticker_industry.get(sym, [])
-            ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
-            is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
-            if is_top20_industry:
-                glow_style = "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+        #if has_setup_badge:
+        industries = minervini_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+        if is_top20_industry:
+            glow_style = "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
 
         minervini_html += setup_badge(
             sym,
@@ -5128,7 +5129,7 @@ if leader_list or leader_yest:
         is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
         glow_style = (
             "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
-            if is_top20_industry and sym in (ma50bounce_all | cloudwick_all | cloud21ema_all)
+            if is_top20_industry #and sym in (ma50bounce_all | cloudwick_all | cloud21ema_all)
             else ""
         )
 
