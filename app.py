@@ -5160,7 +5160,7 @@ if leader_list or leader_yest:
             )
         else:
             html_leader += (
-                f'<div class="ticker-badge">'
+                f'<div class="ticker-badge" style="{glow_style}">'
                 f'{dot}'
                 f'<span class="ticker-name">{sym}</span>'
                 f'{streak_html}'
