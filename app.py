@@ -9301,10 +9301,25 @@ with st.spinner("Scanning for Biggest Move History..."):
 if not biggest_move_hist.empty:
     # --- Biggest Up Count chart ---
     chart_df_up = biggest_move_hist.copy()
+
     today_up_cnt = chart_df_up["Biggest Up Count"].iloc[-1]
     max_up_cnt   = chart_df_up["Biggest Up Count"].max()
 
+    mean_up = chart_df_up["Biggest Up Count"].mean()
+    std_up  = chart_df_up["Biggest Up Count"].std(ddof=1)
+
+    if std_up and std_up > 0:
+        z_scores_up = (chart_df_up["Biggest Up Count"] - mean_up) / std_up
+    else:
+        z_scores_up = pd.Series(0, index=chart_df_up.index)
+
+    # Default: every bar blue
     chart_df_up["Bar_Color"] = "#29B5E8"
+
+    # Statistical outliers (>=2 std dev above mean) turn red
+    chart_df_up.loc[z_scores_up >= 2, "Bar_Color"] = "#FF4B4B"
+
+    # Latest bar also turns red if it's the highest in the window (ties count)
     if today_up_cnt == max_up_cnt:
         chart_df_up.iloc[-1, chart_df_up.columns.get_loc("Bar_Color")] = "#FF4B4B"
 
@@ -9318,10 +9333,25 @@ if not biggest_move_hist.empty:
 
     # --- Biggest Down Count chart ---
     chart_df_down = biggest_move_hist.copy()
+
     today_down_cnt = chart_df_down["Biggest Down Count"].iloc[-1]
     max_down_cnt   = chart_df_down["Biggest Down Count"].max()
 
+    mean_down = chart_df_down["Biggest Down Count"].mean()
+    std_down  = chart_df_down["Biggest Down Count"].std(ddof=1)
+
+    if std_down and std_down > 0:
+        z_scores_down = (chart_df_down["Biggest Down Count"] - mean_down) / std_down
+    else:
+        z_scores_down = pd.Series(0, index=chart_df_down.index)
+
+    # Default: every bar blue
     chart_df_down["Bar_Color"] = "#29B5E8"
+
+    # Statistical outliers (>=2 std dev above mean) turn red
+    chart_df_down.loc[z_scores_down >= 2, "Bar_Color"] = "#FF4B4B"
+
+    # Latest bar also turns red if it's the highest in the window (ties count)
     if today_down_cnt == max_down_cnt:
         chart_df_down.iloc[-1, chart_df_down.columns.get_loc("Bar_Color")] = "#FF4B4B"
 
