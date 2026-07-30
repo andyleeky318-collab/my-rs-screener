@@ -9234,3 +9234,101 @@ with col_down:
         st.markdown(html_down, unsafe_allow_html=True)
     else:
         st.info("None today.")
+
+@st.cache_data(ttl=3600)
+def compute_biggest_move_history(stocks_list, ticker_dfs):
+    """
+    Vectorized daily count of tickers hitting a new rolling biggest-up-day
+    or biggest-down-day (same win = min(220, len) logic as
+    compute_biggest_move_today / TML's s8 component), evaluated across the
+    full time series for a 60-day breadth history.
+    """
+    try:
+        if not ticker_dfs:
+            return pd.DataFrame()
+
+        all_up_series = []
+        all_down_series = []
+
+        for ticker, df in ticker_dfs.items():
+            if 'Close' not in df.columns or len(df) < 21:
+                continue
+            try:
+                close = df['Close']
+                pct_chg = close.pct_change() * 100
+                win = min(220, len(pct_chg))
+
+                biggest_up   = pct_chg.rolling(window=win, min_periods=20).max()
+                biggest_drop = pct_chg.rolling(window=win, min_periods=20).min()
+
+                up_flag   = (pct_chg >= biggest_up).astype(int)
+                down_flag = (pct_chg <= biggest_drop).astype(int)
+
+                all_up_series.append(up_flag)
+                all_down_series.append(down_flag)
+            except Exception:
+                continue
+
+        if not all_up_series:
+            return pd.DataFrame()
+
+        up_combined   = pd.concat(all_up_series, axis=1).fillna(0)
+        down_combined = pd.concat(all_down_series, axis=1).fillna(0)
+
+        up_counts   = up_combined.sum(axis=1)
+        down_counts = down_combined.sum(axis=1)
+
+        result = pd.DataFrame({
+            "Date": up_counts.index,
+            "Biggest Up Count": up_counts.values,
+            "Biggest Down Count": down_counts.reindex(up_counts.index).values,
+        }).tail(60)
+        result["Date"] = pd.to_datetime(result["Date"]).dt.strftime("%Y-%m-%d")
+        return result.reset_index(drop=True)
+    except Exception:
+        return pd.DataFrame()
+
+
+st.write("")
+
+with st.spinner("Scanning for Biggest Move History..."):
+    biggest_move_hist = timed(
+        "compute_biggest_move_history",
+        compute_biggest_move_history,
+        stocks_tuple, ticker_dfs_shared
+    )
+
+if not biggest_move_hist.empty:
+    # --- Biggest Up Count chart ---
+    chart_df_up = biggest_move_hist.copy()
+    today_up_cnt = chart_df_up["Biggest Up Count"].iloc[-1]
+    max_up_cnt   = chart_df_up["Biggest Up Count"].max()
+
+    chart_df_up["Bar_Color"] = "#29B5E8"
+    if today_up_cnt == max_up_cnt:
+        chart_df_up.iloc[-1, chart_df_up.columns.get_loc("Bar_Color")] = "#FF4B4B"
+
+    st.bar_chart(
+        data=chart_df_up,
+        x="Date",
+        y="Biggest Up Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
+
+    # --- Biggest Down Count chart ---
+    chart_df_down = biggest_move_hist.copy()
+    today_down_cnt = chart_df_down["Biggest Down Count"].iloc[-1]
+    max_down_cnt   = chart_df_down["Biggest Down Count"].max()
+
+    chart_df_down["Bar_Color"] = "#29B5E8"
+    if today_down_cnt == max_down_cnt:
+        chart_df_down.iloc[-1, chart_df_down.columns.get_loc("Bar_Color")] = "#FF4B4B"
+
+    st.bar_chart(
+        data=chart_df_down,
+        x="Date",
+        y="Biggest Down Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
