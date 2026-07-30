@@ -9144,3 +9144,93 @@ if master_rows:
     st.markdown(master_table_html, unsafe_allow_html=True)
 else:
     st.info("No tickers currently qualify for any tracked setup.")
+
+# ============================================================
+# BIGGEST UP / BIGGEST DOWN DAY — same formula as TML's score8 check
+# (pct_chg.rolling(win).max()/.min(), win = min(220, len))
+# Flags tickers where TODAY's % change equals its own rolling
+# biggest-up or biggest-down day within that window.
+# ============================================================
+@st.cache_data(ttl=3600)
+def compute_biggest_move_today(stocks_list, ticker_dfs):
+    biggest_up_today = []
+    biggest_down_today = []
+
+    for ticker in stocks_list:
+        try:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < 21:
+                continue
+
+            close = df['Close']
+            pct_chg = close.pct_change() * 100
+            win = min(220, len(pct_chg))
+
+            biggest_drop = pct_chg.rolling(window=win, min_periods=20).min()
+            biggest_up   = pct_chg.rolling(window=win, min_periods=20).max()
+
+            today_chg  = pct_chg.iloc[-1]
+            today_up   = biggest_up.iloc[-1]
+            today_down = biggest_drop.iloc[-1]
+
+            if pd.isna(today_chg) or pd.isna(today_up) or pd.isna(today_down):
+                continue
+
+            if today_chg >= today_up:
+                biggest_up_today.append((ticker, round(float(today_chg), 2)))
+            elif today_chg <= today_down:
+                biggest_down_today.append((ticker, round(float(today_chg), 2)))
+
+        except Exception:
+            continue
+
+    biggest_up_today.sort(key=lambda x: -x[1])
+    biggest_down_today.sort(key=lambda x: x[1])
+
+    return biggest_up_today, biggest_down_today
+
+
+st.markdown("---")
+
+with st.spinner("Scanning for biggest up/down day extremes..."):
+    biggest_up_today, biggest_down_today = timed(
+        "compute_biggest_move_today",
+        compute_biggest_move_today,
+        stocks_tuple, ticker_dfs_shared
+    )
+
+st.markdown(f"#### 📈📉 Biggest Move Today (Up: {len(biggest_up_today)} | Down: {len(biggest_down_today)})")
+
+col_up, col_down = st.columns(2)
+
+with col_up:
+    st.markdown(f"**🟢 Biggest Up Day ({len(biggest_up_today)})**")
+    if biggest_up_today:
+        html_up = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+        for sym, pct in biggest_up_today:
+            html_up += (
+                f'<div class="ticker-badge" style="background:#90EE90;border:1px solid #228B22;">'
+                f'<span class="ticker-name" style="color:#003300;">{sym}</span>'
+                f'<span class="ticker-rs" style="color:#003300;margin-left:4px;">+{pct:.1f}%</span>'
+                f'</div>'
+            )
+        html_up += "</div>"
+        st.markdown(html_up, unsafe_allow_html=True)
+    else:
+        st.info("None today.")
+
+with col_down:
+    st.markdown(f"**🔴 Biggest Down Day ({len(biggest_down_today)})**")
+    if biggest_down_today:
+        html_down = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+        for sym, pct in biggest_down_today:
+            html_down += (
+                f'<div class="ticker-badge" style="background:#FFB3B3;border:1px solid #CC0000;">'
+                f'<span class="ticker-name" style="color:#4B0000;">{sym}</span>'
+                f'<span class="ticker-rs" style="color:#4B0000;margin-left:4px;">{pct:.1f}%</span>'
+                f'</div>'
+            )
+        html_down += "</div>"
+        st.markdown(html_down, unsafe_allow_html=True)
+    else:
+        st.info("None today.")
