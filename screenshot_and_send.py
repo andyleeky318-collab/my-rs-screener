@@ -151,6 +151,7 @@ SECTION_KEYWORDS = [
     "Breakdown of Character",
     "True Market Leader",
     "Lazy Table",
+    "Biggest Move Today",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the
