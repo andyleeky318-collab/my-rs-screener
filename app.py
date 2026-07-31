@@ -320,7 +320,7 @@ LIME_STOCKS1 = [
     'UFO', 'URA', 'USO', 'VTV', 'VUG', 'WGMI', 'XBI',
     'XME', 'XRT', 'XTL', 'SPY', 'QQQ', 'RSP', 'FOTO', 'KBE', 'NLR', 
     'CLOU', 'XHB', 'BUG', 'HACK', 'ITA', 'IAT', 'XOP', 'NASA', 
-    'XTN', 'IYT', 'BOAT', 'MOO', 'BLOK', 'PICK', 'BOTZ', 'MJ', 'WQTM', 'IBB'
+    'XTN', 'IYT', 'BOAT', 'MOO', 'BLOK', 'PICK', 'BOTZ', 'MJ', 'WQTM', 'IBB', 'KIE', 'IAI', 'SOXX'
 ]
 
 TICKER_ALIASES = {
@@ -4574,7 +4574,7 @@ if quad_points:
             gridcolor="rgba(120,120,120,0.18)",
             zeroline=False,
             tickfont=dict(color="#aaaaaa", size=11),
-            title_font=dict(color=quad_title_color, size=16),   # ← changed from "#aaaaaa"
+            title_font=dict(color=quad_title_color, size=22),   # ← changed from "#aaaaaa"
         ),
         yaxis=dict(
             title="Monthly RS",
@@ -4584,7 +4584,7 @@ if quad_points:
             gridcolor="rgba(120,120,120,0.18)",
             zeroline=False,
             tickfont=dict(color="#aaaaaa", size=11),
-            title_font=dict(color=quad_title_color, size=16),   # ← changed from "#aaaaaa"
+            title_font=dict(color=quad_title_color, size=22),   # ← changed from "#aaaaaa"
         ),
         plot_bgcolor ="rgba(20,22,30,1)",
         paper_bgcolor="rgba(13,17,23,0)",
@@ -9046,6 +9046,224 @@ if not boc_hist.empty:
         use_container_width=True
     )
 
+# ============================================================
+# BIGGEST UP / BIGGEST DOWN DAY — same formula as TML's score8 check
+# (pct_chg.rolling(win).max()/.min(), win = min(220, len))
+# Flags tickers where TODAY's % change equals its own rolling
+# biggest-up or biggest-down day within that window.
+# ============================================================
+@st.cache_data(ttl=3600)
+def compute_biggest_move_today(stocks_list, ticker_dfs):
+    biggest_up_today = []
+    biggest_down_today = []
+
+    for ticker in stocks_list:
+        try:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < 21:
+                continue
+
+            close = df['Close']
+            pct_chg = close.pct_change() * 100
+            win = min(220, len(pct_chg))
+
+            biggest_drop = pct_chg.rolling(window=win, min_periods=20).min()
+            biggest_up   = pct_chg.rolling(window=win, min_periods=20).max()
+
+            today_chg  = pct_chg.iloc[-1]
+            today_up   = biggest_up.iloc[-1]
+            today_down = biggest_drop.iloc[-1]
+
+            if pd.isna(today_chg) or pd.isna(today_up) or pd.isna(today_down):
+                continue
+
+            if today_chg >= today_up:
+                biggest_up_today.append((ticker, round(float(today_chg), 2)))
+            elif today_chg <= today_down:
+                biggest_down_today.append((ticker, round(float(today_chg), 2)))
+
+        except Exception:
+            continue
+
+    biggest_up_today.sort(key=lambda x: -x[1])
+    biggest_down_today.sort(key=lambda x: x[1])
+
+    return biggest_up_today, biggest_down_today
+
+
+st.markdown("---")
+
+with st.spinner("Scanning for biggest up/down day extremes..."):
+    biggest_up_today, biggest_down_today = timed(
+        "compute_biggest_move_today",
+        compute_biggest_move_today,
+        stocks_tuple, ticker_dfs_shared
+    )
+
+st.markdown(f"#### 📈📉 Biggest Move Today ({len(biggest_up_today)} vs {len(biggest_down_today)})")
+
+col_up, col_down = st.columns(2)
+
+with col_up:
+    #st.markdown(f"**🟢 Biggest Up Day ({len(biggest_up_today)})**")
+    if biggest_up_today:
+        html_up = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+        for sym, pct in biggest_up_today:
+            html_up += (
+                f'<div class="ticker-badge" style="background:#90EE90;border:1px solid #228B22;">'
+                f'<span class="ticker-name" style="color:#003300;">{sym}</span>'
+                f'<span class="ticker-rs" style="color:#003300;margin-left:4px;">+{pct:.1f}%</span>'
+                f'</div>'
+            )
+        html_up += "</div>"
+        st.markdown(html_up, unsafe_allow_html=True)
+    else:
+        st.info("None today.")
+
+with col_down:
+    #st.markdown(f"**🔴 Biggest Down Day ({len(biggest_down_today)})**")
+    if biggest_down_today:
+        html_down = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+        for sym, pct in biggest_down_today:
+            html_down += (
+                f'<div class="ticker-badge" style="background:#FFB3B3;border:1px solid #CC0000;">'
+                f'<span class="ticker-name" style="color:#4B0000;">{sym}</span>'
+                f'<span class="ticker-rs" style="color:#4B0000;margin-left:4px;">{pct:.1f}%</span>'
+                f'</div>'
+            )
+        html_down += "</div>"
+        st.markdown(html_down, unsafe_allow_html=True)
+    else:
+        st.info("None today.")
+
+@st.cache_data(ttl=3600)
+def compute_biggest_move_history(stocks_list, ticker_dfs):
+    """
+    Vectorized daily count of tickers hitting a new rolling biggest-up-day
+    or biggest-down-day (same win = min(220, len) logic as
+    compute_biggest_move_today / TML's s8 component), evaluated across the
+    full time series for a 60-day breadth history.
+    """
+    try:
+        if not ticker_dfs:
+            return pd.DataFrame()
+
+        all_up_series = []
+        all_down_series = []
+
+        for ticker, df in ticker_dfs.items():
+            if 'Close' not in df.columns or len(df) < 21:
+                continue
+            try:
+                close = df['Close']
+                pct_chg = close.pct_change() * 100
+                win = min(220, len(pct_chg))
+
+                biggest_up   = pct_chg.rolling(window=win, min_periods=20).max()
+                biggest_drop = pct_chg.rolling(window=win, min_periods=20).min()
+
+                up_flag   = (pct_chg >= biggest_up).astype(int)
+                down_flag = (pct_chg <= biggest_drop).astype(int)
+
+                all_up_series.append(up_flag)
+                all_down_series.append(down_flag)
+            except Exception:
+                continue
+
+        if not all_up_series:
+            return pd.DataFrame()
+
+        up_combined   = pd.concat(all_up_series, axis=1).fillna(0)
+        down_combined = pd.concat(all_down_series, axis=1).fillna(0)
+
+        up_counts   = up_combined.sum(axis=1)
+        down_counts = down_combined.sum(axis=1)
+
+        result = pd.DataFrame({
+            "Date": up_counts.index,
+            "Biggest Up Count": up_counts.values,
+            "Biggest Down Count": down_counts.reindex(up_counts.index).values,
+        }).tail(60)
+        result["Date"] = pd.to_datetime(result["Date"]).dt.strftime("%Y-%m-%d")
+        return result.reset_index(drop=True)
+    except Exception:
+        return pd.DataFrame()
+
+
+st.write("")
+
+with st.spinner("Scanning for Biggest Move History..."):
+    biggest_move_hist = timed(
+        "compute_biggest_move_history",
+        compute_biggest_move_history,
+        stocks_tuple, ticker_dfs_shared
+    )
+
+if not biggest_move_hist.empty:
+    # --- Biggest Up Count chart ---
+    chart_df_up = biggest_move_hist.copy()
+
+    today_up_cnt = chart_df_up["Biggest Up Count"].iloc[-1]
+    max_up_cnt   = chart_df_up["Biggest Up Count"].max()
+
+    mean_up = chart_df_up["Biggest Up Count"].mean()
+    std_up  = chart_df_up["Biggest Up Count"].std(ddof=1)
+
+    if std_up and std_up > 0:
+        z_scores_up = (chart_df_up["Biggest Up Count"] - mean_up) / std_up
+    else:
+        z_scores_up = pd.Series(0, index=chart_df_up.index)
+
+    # Default: every bar blue
+    chart_df_up["Bar_Color"] = "#29B5E8"
+
+    # Statistical outliers (>=2 std dev above mean) turn red
+    chart_df_up.loc[z_scores_up >= 2, "Bar_Color"] = "#FF4B4B"
+
+    # Latest bar also turns red if it's the highest in the window (ties count)
+    if today_up_cnt == max_up_cnt:
+        chart_df_up.iloc[-1, chart_df_up.columns.get_loc("Bar_Color")] = "#FF4B4B"
+
+    st.bar_chart(
+        data=chart_df_up,
+        x="Date",
+        y="Biggest Up Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
+
+    # --- Biggest Down Count chart ---
+    chart_df_down = biggest_move_hist.copy()
+
+    today_down_cnt = chart_df_down["Biggest Down Count"].iloc[-1]
+    max_down_cnt   = chart_df_down["Biggest Down Count"].max()
+
+    mean_down = chart_df_down["Biggest Down Count"].mean()
+    std_down  = chart_df_down["Biggest Down Count"].std(ddof=1)
+
+    if std_down and std_down > 0:
+        z_scores_down = (chart_df_down["Biggest Down Count"] - mean_down) / std_down
+    else:
+        z_scores_down = pd.Series(0, index=chart_df_down.index)
+
+    # Default: every bar blue
+    chart_df_down["Bar_Color"] = "#29B5E8"
+
+    # Statistical outliers (>=2 std dev above mean) turn red
+    chart_df_down.loc[z_scores_down >= 2, "Bar_Color"] = "#FF4B4B"
+
+    # Latest bar also turns red if it's the highest in the window (ties count)
+    if today_down_cnt == max_down_cnt:
+        chart_df_down.iloc[-1, chart_df_down.columns.get_loc("Bar_Color")] = "#FF4B4B"
+
+    st.bar_chart(
+        data=chart_df_down,
+        x="Date",
+        y="Biggest Down Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
+
 # ==============================================================================
 # MASTER SETUP CONSOLIDATION TABLE
 # Aggregates every tracked screen into one ticker x section table, ticked where
@@ -9230,221 +9448,3 @@ if master_rows:
     st.markdown(master_table_html, unsafe_allow_html=True)
 else:
     st.info("No tickers currently qualify for any tracked setup.")
-
-# ============================================================
-# BIGGEST UP / BIGGEST DOWN DAY — same formula as TML's score8 check
-# (pct_chg.rolling(win).max()/.min(), win = min(220, len))
-# Flags tickers where TODAY's % change equals its own rolling
-# biggest-up or biggest-down day within that window.
-# ============================================================
-@st.cache_data(ttl=3600)
-def compute_biggest_move_today(stocks_list, ticker_dfs):
-    biggest_up_today = []
-    biggest_down_today = []
-
-    for ticker in stocks_list:
-        try:
-            df = ticker_dfs.get(ticker)
-            if df is None or len(df) < 21:
-                continue
-
-            close = df['Close']
-            pct_chg = close.pct_change() * 100
-            win = min(220, len(pct_chg))
-
-            biggest_drop = pct_chg.rolling(window=win, min_periods=20).min()
-            biggest_up   = pct_chg.rolling(window=win, min_periods=20).max()
-
-            today_chg  = pct_chg.iloc[-1]
-            today_up   = biggest_up.iloc[-1]
-            today_down = biggest_drop.iloc[-1]
-
-            if pd.isna(today_chg) or pd.isna(today_up) or pd.isna(today_down):
-                continue
-
-            if today_chg >= today_up:
-                biggest_up_today.append((ticker, round(float(today_chg), 2)))
-            elif today_chg <= today_down:
-                biggest_down_today.append((ticker, round(float(today_chg), 2)))
-
-        except Exception:
-            continue
-
-    biggest_up_today.sort(key=lambda x: -x[1])
-    biggest_down_today.sort(key=lambda x: x[1])
-
-    return biggest_up_today, biggest_down_today
-
-
-st.markdown("---")
-
-with st.spinner("Scanning for biggest up/down day extremes..."):
-    biggest_up_today, biggest_down_today = timed(
-        "compute_biggest_move_today",
-        compute_biggest_move_today,
-        stocks_tuple, ticker_dfs_shared
-    )
-
-st.markdown(f"#### 📈📉 Biggest Move Today (Up: {len(biggest_up_today)} | Down: {len(biggest_down_today)})")
-
-col_up, col_down = st.columns(2)
-
-with col_up:
-    st.markdown(f"**🟢 Biggest Up Day ({len(biggest_up_today)})**")
-    if biggest_up_today:
-        html_up = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
-        for sym, pct in biggest_up_today:
-            html_up += (
-                f'<div class="ticker-badge" style="background:#90EE90;border:1px solid #228B22;">'
-                f'<span class="ticker-name" style="color:#003300;">{sym}</span>'
-                f'<span class="ticker-rs" style="color:#003300;margin-left:4px;">+{pct:.1f}%</span>'
-                f'</div>'
-            )
-        html_up += "</div>"
-        st.markdown(html_up, unsafe_allow_html=True)
-    else:
-        st.info("None today.")
-
-with col_down:
-    st.markdown(f"**🔴 Biggest Down Day ({len(biggest_down_today)})**")
-    if biggest_down_today:
-        html_down = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
-        for sym, pct in biggest_down_today:
-            html_down += (
-                f'<div class="ticker-badge" style="background:#FFB3B3;border:1px solid #CC0000;">'
-                f'<span class="ticker-name" style="color:#4B0000;">{sym}</span>'
-                f'<span class="ticker-rs" style="color:#4B0000;margin-left:4px;">{pct:.1f}%</span>'
-                f'</div>'
-            )
-        html_down += "</div>"
-        st.markdown(html_down, unsafe_allow_html=True)
-    else:
-        st.info("None today.")
-
-@st.cache_data(ttl=3600)
-def compute_biggest_move_history(stocks_list, ticker_dfs):
-    """
-    Vectorized daily count of tickers hitting a new rolling biggest-up-day
-    or biggest-down-day (same win = min(220, len) logic as
-    compute_biggest_move_today / TML's s8 component), evaluated across the
-    full time series for a 60-day breadth history.
-    """
-    try:
-        if not ticker_dfs:
-            return pd.DataFrame()
-
-        all_up_series = []
-        all_down_series = []
-
-        for ticker, df in ticker_dfs.items():
-            if 'Close' not in df.columns or len(df) < 21:
-                continue
-            try:
-                close = df['Close']
-                pct_chg = close.pct_change() * 100
-                win = min(220, len(pct_chg))
-
-                biggest_up   = pct_chg.rolling(window=win, min_periods=20).max()
-                biggest_drop = pct_chg.rolling(window=win, min_periods=20).min()
-
-                up_flag   = (pct_chg >= biggest_up).astype(int)
-                down_flag = (pct_chg <= biggest_drop).astype(int)
-
-                all_up_series.append(up_flag)
-                all_down_series.append(down_flag)
-            except Exception:
-                continue
-
-        if not all_up_series:
-            return pd.DataFrame()
-
-        up_combined   = pd.concat(all_up_series, axis=1).fillna(0)
-        down_combined = pd.concat(all_down_series, axis=1).fillna(0)
-
-        up_counts   = up_combined.sum(axis=1)
-        down_counts = down_combined.sum(axis=1)
-
-        result = pd.DataFrame({
-            "Date": up_counts.index,
-            "Biggest Up Count": up_counts.values,
-            "Biggest Down Count": down_counts.reindex(up_counts.index).values,
-        }).tail(60)
-        result["Date"] = pd.to_datetime(result["Date"]).dt.strftime("%Y-%m-%d")
-        return result.reset_index(drop=True)
-    except Exception:
-        return pd.DataFrame()
-
-
-st.write("")
-
-with st.spinner("Scanning for Biggest Move History..."):
-    biggest_move_hist = timed(
-        "compute_biggest_move_history",
-        compute_biggest_move_history,
-        stocks_tuple, ticker_dfs_shared
-    )
-
-if not biggest_move_hist.empty:
-    # --- Biggest Up Count chart ---
-    chart_df_up = biggest_move_hist.copy()
-
-    today_up_cnt = chart_df_up["Biggest Up Count"].iloc[-1]
-    max_up_cnt   = chart_df_up["Biggest Up Count"].max()
-
-    mean_up = chart_df_up["Biggest Up Count"].mean()
-    std_up  = chart_df_up["Biggest Up Count"].std(ddof=1)
-
-    if std_up and std_up > 0:
-        z_scores_up = (chart_df_up["Biggest Up Count"] - mean_up) / std_up
-    else:
-        z_scores_up = pd.Series(0, index=chart_df_up.index)
-
-    # Default: every bar blue
-    chart_df_up["Bar_Color"] = "#29B5E8"
-
-    # Statistical outliers (>=2 std dev above mean) turn red
-    chart_df_up.loc[z_scores_up >= 2, "Bar_Color"] = "#FF4B4B"
-
-    # Latest bar also turns red if it's the highest in the window (ties count)
-    if today_up_cnt == max_up_cnt:
-        chart_df_up.iloc[-1, chart_df_up.columns.get_loc("Bar_Color")] = "#FF4B4B"
-
-    st.bar_chart(
-        data=chart_df_up,
-        x="Date",
-        y="Biggest Up Count",
-        color="Bar_Color",
-        use_container_width=True
-    )
-
-    # --- Biggest Down Count chart ---
-    chart_df_down = biggest_move_hist.copy()
-
-    today_down_cnt = chart_df_down["Biggest Down Count"].iloc[-1]
-    max_down_cnt   = chart_df_down["Biggest Down Count"].max()
-
-    mean_down = chart_df_down["Biggest Down Count"].mean()
-    std_down  = chart_df_down["Biggest Down Count"].std(ddof=1)
-
-    if std_down and std_down > 0:
-        z_scores_down = (chart_df_down["Biggest Down Count"] - mean_down) / std_down
-    else:
-        z_scores_down = pd.Series(0, index=chart_df_down.index)
-
-    # Default: every bar blue
-    chart_df_down["Bar_Color"] = "#29B5E8"
-
-    # Statistical outliers (>=2 std dev above mean) turn red
-    chart_df_down.loc[z_scores_down >= 2, "Bar_Color"] = "#FF4B4B"
-
-    # Latest bar also turns red if it's the highest in the window (ties count)
-    if today_down_cnt == max_down_cnt:
-        chart_df_down.iloc[-1, chart_df_down.columns.get_loc("Bar_Color")] = "#FF4B4B"
-
-    st.bar_chart(
-        data=chart_df_down,
-        x="Date",
-        y="Biggest Down Count",
-        color="Bar_Color",
-        use_container_width=True
-    )

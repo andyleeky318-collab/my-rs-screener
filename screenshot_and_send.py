@@ -147,11 +147,12 @@ SECTION_KEYWORDS = [
     "Pie Chart",
     #"ETF Ratio",
     "Quant Sentiment",
-    "Setup Quality",
+    #"Setup Quality",
+    "Upcoming Earnings",
     "Change of Character",
     "Breakdown of Character",
-    "Lazy Table",
     "Biggest Move Today",
+    "Lazy Table",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the
