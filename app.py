@@ -5178,14 +5178,6 @@ else:
     st.info("No active setups discovered.")
 
 st.write("")
-# if not leader_hist.empty:
-#     st.bar_chart(
-#         data=leader_hist,
-#         x="Date",
-#         y="Leader Count",
-#         use_container_width=True
-#     )
-
 if not leader_hist.empty:
     # 1. Create a temporary copy to prevent altering your original global dataframe
     chart_df = leader_hist.copy()
@@ -5194,15 +5186,22 @@ if not leader_hist.empty:
     today_value = chart_df["Leader Count"].iloc[-1]
     max_value = chart_df["Leader Count"].max()
     min_value = chart_df["Leader Count"].min()
+
+    # NEW: statistical outliers (>=2 std dev above mean) turn red
+    mean_val = chart_df["Leader Count"].mean()
+    std_val  = chart_df["Leader Count"].std(ddof=1)
+    if std_val and std_val > 0:
+        z_scores = (chart_df["Leader Count"] - mean_val) / std_val
+    else:
+        z_scores = pd.Series(0, index=chart_df.index)
+    chart_df["Bar_Color"] = "#29B5E8"
+    chart_df.loc[z_scores >= 2, "Bar_Color"] = "#FF4B4B"
     
     # 3. Add a explicit 'Bar_Color' column to your dataframe
     if today_value == max_value or today_value == min_value:
         # Define base color array, then override the last row (today) with your accent color
-        chart_df["Bar_Color"] = "#29B5E8"
         chart_df.iloc[-1, chart_df.columns.get_loc("Bar_Color")] = "#FF4B4B"
-    else:
-        # Standard uniform blue color if today isn't the highest
-        chart_df["Bar_Color"] = "#29B5E8"
+    # else: leave as-is (already blue, or red from z-score outlier check above)
 
     # 4. Render chart mapping color directly to the new dataframe column
     st.bar_chart(
@@ -6140,6 +6139,15 @@ if not gapper_hist.empty:
     # Default: every bar blue
     chart_df_g["Bar_Color"] = "#29B5E8"
 
+    # NEW: statistical outliers (>=2 std dev above mean) turn red
+    mean_g = chart_df_g["Gapper Count"].mean()
+    std_g  = chart_df_g["Gapper Count"].std(ddof=1)
+    if std_g and std_g > 0:
+        z_scores_g = (chart_df_g["Gapper Count"] - mean_g) / std_g
+    else:
+        z_scores_g = pd.Series(0, index=chart_df_g.index)
+    chart_df_g.loc[z_scores_g >= 2, "Bar_Color"] = "#FF4B4B"
+
     # Latest bar turns red if today is either the highest OR the lowest
     # value across the whole 60-day window
     if today_g == max_g or today_g == min_g:
@@ -6675,11 +6683,19 @@ if not early_bull_hist.empty:
     today_value_eb = chart_df_eb["Early Bull Count"].iloc[-1]
     max_value_eb = chart_df_eb["Early Bull Count"].max()
 
-    if today_value_eb == max_value_eb:
-        chart_df_eb["Bar_Color"] = "#29B5E8"
-        chart_df_eb.iloc[-1, chart_df_eb.columns.get_loc("Bar_Color")] = "#FF4B4B"
+    chart_df_eb["Bar_Color"] = "#29B5E8"
+
+    # NEW: statistical outliers (>=2 std dev above mean) turn red
+    mean_eb = chart_df_eb["Early Bull Count"].mean()
+    std_eb  = chart_df_eb["Early Bull Count"].std(ddof=1)
+    if std_eb and std_eb > 0:
+        z_scores_eb = (chart_df_eb["Early Bull Count"] - mean_eb) / std_eb
     else:
-        chart_df_eb["Bar_Color"] = "#29B5E8"
+        z_scores_eb = pd.Series(0, index=chart_df_eb.index)
+    chart_df_eb.loc[z_scores_eb >= 2, "Bar_Color"] = "#FF4B4B"
+
+    if today_value_eb == max_value_eb:
+        chart_df_eb.iloc[-1, chart_df_eb.columns.get_loc("Bar_Color")] = "#FF4B4B"
 
     st.bar_chart(
         data=chart_df_eb,
@@ -6842,14 +6858,21 @@ if not engulf_hist.empty:
     chart_df_2x = engulf_hist.copy()
     today_2x = chart_df_2x["2x Engulfing Count"].iloc[-1]
     max_2x = chart_df_2x["2x Engulfing Count"].max()
+
+    chart_df_2x["Bar_Color"] = "#29B5E8"
+
+    # NEW: statistical outliers (>=2 std dev above mean) turn red
+    mean_2x = chart_df_2x["2x Engulfing Count"].mean()
+    std_2x  = chart_df_2x["2x Engulfing Count"].std(ddof=1)
+    if std_2x and std_2x > 0:
+        z_scores_2x = (chart_df_2x["2x Engulfing Count"] - mean_2x) / std_2x
+    else:
+        z_scores_2x = pd.Series(0, index=chart_df_2x.index)
+    chart_df_2x.loc[z_scores_2x >= 2, "Bar_Color"] = "#FF4B4B"
     
     if today_2x == max_2x:
-        chart_df_2x["Bar_Color"] = "#29B5E8"
         chart_df_2x.iloc[-1, chart_df_2x.columns.get_loc("Bar_Color")] = "#FF4B4B"
-    else:
-        chart_df_2x["Bar_Color"] = "#29B5E8"
 
-    # st.markdown("#### 🐳 2x Engulfing Breadth (60 Days)")
     st.bar_chart(
         data=chart_df_2x,
         x="Date",
@@ -6886,14 +6909,21 @@ if not engulf_hist.empty:
     chart_df_3x = engulf_hist.copy()
     today_3x = chart_df_3x["3x Engulfing Count"].iloc[-1]
     max_3x = chart_df_3x["3x Engulfing Count"].max()
-    
-    if today_3x == max_3x:
-        chart_df_3x["Bar_Color"] = "#29B5E8"
-        chart_df_3x.iloc[-1, chart_df_3x.columns.get_loc("Bar_Color")] = "#FF4B4B"
-    else:
-        chart_df_3x["Bar_Color"] = "#29B5E8"
 
-    # st.markdown("#### 🐳 3x Engulfing Breadth (60 Days)")
+    chart_df_3x["Bar_Color"] = "#29B5E8"
+
+    # NEW: statistical outliers (>=2 std dev above mean) turn red
+    mean_3x = chart_df_3x["3x Engulfing Count"].mean()
+    std_3x  = chart_df_3x["3x Engulfing Count"].std(ddof=1)
+    if std_3x and std_3x > 0:
+        z_scores_3x = (chart_df_3x["3x Engulfing Count"] - mean_3x) / std_3x
+    else:
+        z_scores_3x = pd.Series(0, index=chart_df_3x.index)
+    chart_df_3x.loc[z_scores_3x >= 2, "Bar_Color"] = "#FF4B4B"
+
+    if today_3x == max_3x:
+        chart_df_3x.iloc[-1, chart_df_3x.columns.get_loc("Bar_Color")] = "#FF4B4B"
+
     st.bar_chart(
         data=chart_df_3x,
         x="Date",
@@ -6971,15 +7001,22 @@ if not powertrend_hist.empty:
     today_value = chart_df["PowerTrend Count"].iloc[-1]
     max_value = chart_df["PowerTrend Count"].max()
     min_value = chart_df["PowerTrend Count"].min()
+
+    # NEW: statistical outliers (>=2 std dev above mean) turn red
+    mean_val = chart_df["PowerTrend Count"].mean()
+    std_val  = chart_df["PowerTrend Count"].std(ddof=1)
+    if std_val and std_val > 0:
+        z_scores = (chart_df["PowerTrend Count"] - mean_val) / std_val
+    else:
+        z_scores = pd.Series(0, index=chart_df.index)
+    chart_df["Bar_Color"] = "#29B5E8"
+    chart_df.loc[z_scores >= 2, "Bar_Color"] = "#FF4B4B"
     
     # 3. Add an explicit 'Bar_Color' column to your dataframe
     if today_value == max_value or today_value == min_value:
         # Define base color, then override the last row (today) with your accent color
-        chart_df["Bar_Color"] = "#29B5E8"
         chart_df.iloc[-1, chart_df.columns.get_loc("Bar_Color")] = "#FF4B4B"
-    else:
-        # Standard uniform blue color if today isn't the highest
-        chart_df["Bar_Color"] = "#29B5E8"
+    # else: leave as-is (already blue, or red from z-score outlier check above)
 
     # 4. Render chart mapping color directly to the new dataframe column
     st.bar_chart(
@@ -7186,6 +7223,15 @@ if not value_trap_hist.empty:
 
     # Default: every bar blue
     chart_df_vt["Bar_Color"] = "#29B5E8"
+
+    # NEW: statistical outliers (>=2 std dev above mean) turn red
+    mean_vt = chart_df_vt["Value Trap Count"].mean()
+    std_vt  = chart_df_vt["Value Trap Count"].std(ddof=1)
+    if std_vt and std_vt > 0:
+        z_scores_vt = (chart_df_vt["Value Trap Count"] - mean_vt) / std_vt
+    else:
+        z_scores_vt = pd.Series(0, index=chart_df_vt.index)
+    chart_df_vt.loc[z_scores_vt >= 2, "Bar_Color"] = "#FF4B4B"
 
     # Only the LATEST bar turns red, and only if it's also the highest
     # value across the whole 60-day window (ties count as "highest" too)
@@ -8149,7 +8195,7 @@ def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
 
     # NEW: last line — NaN-today ticker count
     lines.append("")
-    lines.append(f"⚠️ NaN-today: {nan_ticker_count} tickers")
+    lines.append(f"⚠️ NaN-today: {nan_ticker_count}")
 
     return "\n".join(lines)
 
@@ -8679,10 +8725,25 @@ else:
 st.write("")
 if not coc_hist.empty:
     chart_df_coc = coc_hist.copy()
-    today_coc = chart_df_coc["CoC Count"].iloc[-1]
-    max_coc = chart_df_coc["CoC Count"].max()
 
+    today_coc = chart_df_coc["CoC Count"].iloc[-1]
+    max_coc   = chart_df_coc["CoC Count"].max()
+
+    mean_coc = chart_df_coc["CoC Count"].mean()
+    std_coc  = chart_df_coc["CoC Count"].std(ddof=1)
+
+    if std_coc and std_coc > 0:
+        z_scores_coc = (chart_df_coc["CoC Count"] - mean_coc) / std_coc
+    else:
+        z_scores_coc = pd.Series(0, index=chart_df_coc.index)
+
+    # Default: every bar blue
     chart_df_coc["Bar_Color"] = "#29B5E8"
+
+    # Statistical outliers (>=2 std dev above mean) turn red
+    chart_df_coc.loc[z_scores_coc >= 2, "Bar_Color"] = "#FF4B4B"
+
+    # Latest bar also turns red if it's the highest in the window (ties count)
     if today_coc == max_coc:
         chart_df_coc.iloc[-1, chart_df_coc.columns.get_loc("Bar_Color")] = "#FF4B4B"
 
@@ -8740,10 +8801,25 @@ else:
 st.write("")
 if not boc_hist.empty:
     chart_df_boc = boc_hist.copy()
-    today_boc = chart_df_boc["BoC Count"].iloc[-1]
-    max_boc = chart_df_boc["BoC Count"].max()
 
+    today_boc = chart_df_boc["BoC Count"].iloc[-1]
+    max_boc   = chart_df_boc["BoC Count"].max()
+
+    mean_boc = chart_df_boc["BoC Count"].mean()
+    std_boc  = chart_df_boc["BoC Count"].std(ddof=1)
+
+    if std_boc and std_boc > 0:
+        z_scores_boc = (chart_df_boc["BoC Count"] - mean_boc) / std_boc
+    else:
+        z_scores_boc = pd.Series(0, index=chart_df_boc.index)
+
+    # Default: every bar blue
     chart_df_boc["Bar_Color"] = "#29B5E8"
+
+    # Statistical outliers (>=2 std dev above mean) turn red
+    chart_df_boc.loc[z_scores_boc >= 2, "Bar_Color"] = "#FF4B4B"
+
+    # Latest bar also turns red if it's the highest in the window (ties count)
     if today_boc == max_boc:
         chart_df_boc.iloc[-1, chart_df_boc.columns.get_loc("Bar_Color")] = "#FF4B4B"
 
@@ -8947,6 +9023,16 @@ if not tml_hist.empty:
     min_tml = chart_df_tml["TML Count"].min()
 
     chart_df_tml["Bar_Color"] = "#29B5E8"
+
+    # NEW: statistical outliers (>=2 std dev above mean) turn red
+    mean_tml = chart_df_tml["TML Count"].mean()
+    std_tml  = chart_df_tml["TML Count"].std(ddof=1)
+    if std_tml and std_tml > 0:
+        z_scores_tml = (chart_df_tml["TML Count"] - mean_tml) / std_tml
+    else:
+        z_scores_tml = pd.Series(0, index=chart_df_tml.index)
+    chart_df_tml.loc[z_scores_tml >= 2, "Bar_Color"] = "#FF4B4B"
+
     if today_tml == min_tml:
         chart_df_tml.iloc[-1, chart_df_tml.columns.get_loc("Bar_Color")] = "#FF4B4B"
     elif today_tml == max_tml:
