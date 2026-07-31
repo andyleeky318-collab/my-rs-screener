@@ -133,6 +133,7 @@ SECTION_KEYWORDS = [
     "Minervini (Positive Pct",
     "RS Leader = Long term",
     #"Retry AI Analysis",
+    "True Market Leader",
     "RS NH B4 Price = Opportunity",
     "PPP = Opportunity",
     "Gapper Earning Drift = Opportunity",
@@ -149,7 +150,6 @@ SECTION_KEYWORDS = [
     "Setup Quality",
     "Change of Character",
     "Breakdown of Character",
-    "True Market Leader",
     "Lazy Table",
     "Biggest Move Today",
 ]
