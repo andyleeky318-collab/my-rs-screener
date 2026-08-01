@@ -143,15 +143,15 @@ SECTION_KEYWORDS = [
     #"3x Engulfing",
     "PowerTrend = Thematic Extended",
     "Volatility = ",
+    "Change of Character",
+    "Breakdown of Character",
+    "Biggest Move Today",    
     "Value Trap = ",
     "Pie Chart",
     #"ETF Ratio",
     "Quant Sentiment",
     #"Setup Quality",
     "Upcoming Earnings",
-    "Change of Character",
-    "Breakdown of Character",
-    "Biggest Move Today",
     "Lazy Table",
 ]
 

@@ -7376,6 +7376,510 @@ if not volatility_hist.empty:
         use_container_width=True
     )
 
+# ============================================================
+# CHANGE OF CHARACTER (scoreUp20) — Composite Score Δ≥20 Scan
+# Ported from TradingView "Score" indicator's scoreUp20 signal.
+# score5 (Darvas streak) omitted; score6/score7 use lite proxies
+# — see docstring below for full mapping.
+# ============================================================
+@st.cache_data(ttl=3600)
+def compute_character_shift(stocks_list, ticker_dfs, benchmark_df_input):
+    """
+    Single-pass version of compute_change_of_character that returns BOTH
+    directions of the composite score's day-over-day delta:
+      - Change of Character   : score jumped by >= 20 (bullish)
+      - Breakdown of Character: score dropped by >= 20 (bearish)
+    Same 9-component score (score5/Darvas-streak omitted; score6/score7
+    use lite proxies) as compute_change_of_character — see that function's
+    docstring for the full component mapping.
+    """
+    up_today, up_yest     = [], []
+    down_today, down_yest = [], []
+    up_score_map, up_delta_map     = {}, {}
+    down_score_map, down_delta_map = {}, {}
+    all_up20_series, all_down20_series = [], []
+
+    for ticker in stocks_list:
+        try:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < 260:
+                continue
+
+            close = df['Close']; high = df['High']; low = df['Low']
+
+            rs = close / benchmark_df_input['Close']
+            if rs.dropna().empty:
+                continue
+
+            ema126 = close.ewm(span=126, adjust=False).mean()
+            r = {sp: rs.ewm(span=sp, adjust=False).mean() for sp in [21, 42, 63, 72, 84, 126, 147, 168]}
+
+            stage1_cond  = (rs >= r[84]) & (rs < r[126])
+            stage3_cond  = (
+                (rs < r[42]) & (rs >= r[72]) & (rs >= r[84]) & (rs >= r[126])
+                & ((r[42] > r[63]) | (rs < r[63])) & (r[63] > r[126]) & (close >= ema126)
+            )
+            stage2a_cond = (
+                (rs >= r[168]) & (rs >= r[147]) & (rs >= r[126])
+                & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+            )
+            stage2b_cond = (rs >= r[126]) & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+            stage2_cond  = (~stage1_cond & ~stage3_cond & (stage2a_cond | stage2b_cond))
+
+            rsMA21  = rs.ewm(span=21, adjust=False).mean()
+            ema21   = close.ewm(span=21, adjust=False).mean()
+            sma50   = close.rolling(50).mean()
+            low14   = low.rolling(14).min().shift(1)
+            ema50t  = close.ewm(span=50, adjust=False).mean()
+            ema100t = close.ewm(span=100, adjust=False).mean()
+
+            gap_down_evt       = (high < low.shift(1))
+            gap_down_pct       = ((close.shift(1) - close) / close.shift(1) * 100).where(gap_down_evt)
+            gap_down_qualified = gap_down_evt & (gap_down_pct >= 3)
+            recent_gap_down    = gap_down_qualified.rolling(10, min_periods=1).max().fillna(0).astype(bool)
+
+            pct_chg = close.pct_change() * 100
+            win = min(220, len(pct_chg))
+            biggest_drop = pct_chg.rolling(window=win, min_periods=20).min()
+            biggest_up   = pct_chg.rolling(window=win, min_periods=20).max()
+
+            high252 = high.rolling(252, min_periods=50).max()
+            pct_from_high = (close - high252) / high252 * 100
+
+            s1  = (rs > rsMA21).fillna(False).astype(int) * 10
+            s2  = stage2_cond.fillna(False).astype(int) * 10
+            s3  = (close > ema21).fillna(False).astype(int) * 10
+            s4  = (close > sma50).fillna(False).astype(int) * 10
+            s6  = (~(close < low14).fillna(False)).astype(int) * 10
+            s7  = (~recent_gap_down).astype(int) * 10
+            s8  = (~(biggest_up < -biggest_drop).fillna(False)).astype(int) * 10
+            s9  = (~(pct_from_high < -25).fillna(False)).astype(int) * 10
+            s10 = (ema50t >= ema100t).fillna(False).astype(int) * 10
+
+            score = s1 + s2 + s3 + s4 + s6 + s7 + s8 + s9 + s10
+            score_delta = score.diff()
+            score_up20   = (score_delta >= 20)
+            score_down20 = (score_delta <= -20)
+
+            all_up20_series.append(score_up20.astype(int).rename(ticker))
+            all_down20_series.append(score_down20.astype(int).rename(ticker))
+
+            current_close = float(close.iloc[-1]) if pd.notna(close.iloc[-1]) else np.nan
+            is_price_above_20 = pd.notna(current_close) and current_close > 20
+
+            if len(score) >= 2:
+                if is_price_above_20 and bool(score_up20.iloc[-1]):
+                    up_today.append(ticker)
+                    up_score_map[ticker] = int(score.iloc[-1])
+                    up_delta_map[ticker] = int(score.iloc[-1] - score.iloc[-2])
+                if is_price_above_20 and bool(score_down20.iloc[-1]):
+                    down_today.append(ticker)
+                    down_score_map[ticker] = int(score.iloc[-1])
+                    down_delta_map[ticker] = int(score.iloc[-1] - score.iloc[-2])
+                if len(score_up20) >= 3:
+                    if is_price_above_20 and bool(score_up20.iloc[-2]):
+                        up_yest.append(ticker)
+                    if is_price_above_20 and bool(score_down20.iloc[-2]):
+                        down_yest.append(ticker)
+        except Exception:
+            continue
+
+    def _hist(series_list, col_name):
+        if not series_list:
+            return pd.DataFrame()
+        combined = pd.concat(series_list, axis=1).fillna(0)
+        daily_counts = combined.sum(axis=1)
+        out = daily_counts.tail(60).reset_index()
+        out.columns = ["Date", col_name]
+        out["Date"] = pd.to_datetime(out["Date"]).dt.strftime("%Y-%m-%d")
+        return out
+
+    up_hist   = _hist(all_up20_series, "CoC Count")
+    down_hist = _hist(all_down20_series, "BoC Count")
+
+    return (
+        sorted(up_today), sorted(up_yest), up_score_map, up_delta_map, up_hist,
+        sorted(down_today), sorted(down_yest), down_score_map, down_delta_map, down_hist,
+    )
+
+# ── Render section — append at the very bottom of the dashboard ────────────
+st.markdown("---")
+
+with st.spinner("Scanning for Change / Breakdown of Character (Score Δ≥20)..."):
+    (coc_today, coc_yest, coc_score_map, coc_delta_map, coc_hist,
+     boc_today, boc_yest, boc_score_map, boc_delta_map, boc_hist) = timed(
+        "compute_character_shift",
+        compute_character_shift,
+        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
+    )
+
+# ═══════════════════ CHANGE OF CHARACTER (Δ ≥ +20) ═══════════════════
+st.markdown(f"#### 🔀 Change of Character ({len(coc_today)})")
+
+if coc_today or coc_yest:
+    coc_industry_counts, coc_ticker_industry = build_leader_industry_map(coc_today, INDUSTRIES)
+
+    html_coc = ""
+    for sym in coc_today:  # alphabetical
+        industries = coc_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+        glow_style = (
+            "box-shadow:0 0 8px 2px #00FF00; border:1px solid #00FF00;"
+            if is_top20_industry else ""
+        )
+        delta = coc_delta_map.get(sym, 0)
+        score_val = coc_score_map.get(sym, 0)
+        suffix = f"{score_val} (+{delta})"
+        html_coc += setup_badge(
+            sym,
+            is_new=(sym not in coc_yest),
+            extra_style=glow_style,
+            extra_suffix=suffix,
+            extra_suffix_color="#006400",  # dark green
+        )
+
+    removed_coc = [sym for sym in coc_yest if sym not in coc_today]
+    for sym in sorted(removed_coc):
+        html_coc += f'<div class="ticker-badge removed-badge">{sym}</div>'
+
+    st.markdown(html_coc, unsafe_allow_html=True)
+
+    render_group_ai_insight(
+        coc_today,
+        "Change of Character (Score jump ≥20)",
+        "change_of_character",
+        extra_note="the stock's composite health score (RS-vs-benchmark, stage, trend, gap, and drawdown-symmetry checks) jumped by 20+ points day-over-day, signaling a fast-improving technical picture / bullish character change"
+    )
+else:
+    st.info("No active setups discovered.")
+
+st.write("")
+if not coc_hist.empty:
+    chart_df_coc = coc_hist.copy()
+
+    today_coc = chart_df_coc["CoC Count"].iloc[-1]
+    max_coc   = chart_df_coc["CoC Count"].max()
+
+    mean_coc = chart_df_coc["CoC Count"].mean()
+    std_coc  = chart_df_coc["CoC Count"].std(ddof=1)
+
+    if std_coc and std_coc > 0:
+        z_scores_coc = (chart_df_coc["CoC Count"] - mean_coc) / std_coc
+    else:
+        z_scores_coc = pd.Series(0, index=chart_df_coc.index)
+
+    # Default: every bar blue
+    chart_df_coc["Bar_Color"] = "#29B5E8"
+
+    # Statistical outliers (>=2 std dev above mean) turn red
+    chart_df_coc.loc[z_scores_coc >= 2, "Bar_Color"] = "#FF4B4B"
+
+    # Latest bar also turns red if it's the highest in the window (ties count)
+    if today_coc == max_coc:
+        chart_df_coc.iloc[-1, chart_df_coc.columns.get_loc("Bar_Color")] = "#FF4B4B"
+
+    st.bar_chart(
+        data=chart_df_coc,
+        x="Date",
+        y="CoC Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
+
+st.markdown("---")
+
+# ═══════════════════ BREAKDOWN OF CHARACTER (Δ ≤ -20) ═══════════════════
+st.markdown(f"#### 🔻 Breakdown of Character ({len(boc_today)})")
+
+if boc_today or boc_yest:
+    boc_industry_counts, boc_ticker_industry = build_leader_industry_map(boc_today, INDUSTRIES)
+
+    html_boc = ""
+    for sym in boc_today:  # alphabetical
+        industries = boc_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+            if is_top20_industry else ""
+        )
+        delta = boc_delta_map.get(sym, 0)
+        score_val = boc_score_map.get(sym, 0)
+        suffix = f"{score_val} ({delta})"  # delta already negative, no manual "-" needed
+        html_boc += setup_badge(
+            sym,
+            is_new=(sym not in boc_yest),
+            extra_style=glow_style,
+            extra_suffix=suffix,
+            extra_suffix_color="#8B0000",  # dark red
+        )
+
+    removed_boc = [sym for sym in boc_yest if sym not in boc_today]
+    for sym in sorted(removed_boc):
+        html_boc += f'<div class="ticker-badge removed-badge">{sym}</div>'
+
+    st.markdown(html_boc, unsafe_allow_html=True)
+
+    render_group_ai_insight(
+        boc_today,
+        "Breakdown of Character (Score drop ≥20)",
+        "breakdown_of_character",
+        extra_note="the stock's composite health score (RS-vs-benchmark, stage, trend, gap, and drawdown-symmetry checks) dropped by 20+ points day-over-day, signaling a fast-deteriorating technical picture / bearish character change"
+    )
+else:
+    st.info("No active setups discovered.")
+
+st.write("")
+if not boc_hist.empty:
+    chart_df_boc = boc_hist.copy()
+
+    today_boc = chart_df_boc["BoC Count"].iloc[-1]
+    max_boc   = chart_df_boc["BoC Count"].max()
+
+    mean_boc = chart_df_boc["BoC Count"].mean()
+    std_boc  = chart_df_boc["BoC Count"].std(ddof=1)
+
+    if std_boc and std_boc > 0:
+        z_scores_boc = (chart_df_boc["BoC Count"] - mean_boc) / std_boc
+    else:
+        z_scores_boc = pd.Series(0, index=chart_df_boc.index)
+
+    # Default: every bar blue
+    chart_df_boc["Bar_Color"] = "#29B5E8"
+
+    # Statistical outliers (>=2 std dev above mean) turn red
+    chart_df_boc.loc[z_scores_boc >= 2, "Bar_Color"] = "#FF4B4B"
+
+    # Latest bar also turns red if it's the highest in the window (ties count)
+    if today_boc == max_boc:
+        chart_df_boc.iloc[-1, chart_df_boc.columns.get_loc("Bar_Color")] = "#FF4B4B"
+
+    st.bar_chart(
+        data=chart_df_boc,
+        x="Date",
+        y="BoC Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
+
+# ============================================================
+# BIGGEST UP / BIGGEST DOWN DAY — same formula as TML's score8 check
+# (pct_chg.rolling(win).max()/.min(), win = min(220, len))
+# Flags tickers where TODAY's % change equals its own rolling
+# biggest-up or biggest-down day within that window.
+# ============================================================
+@st.cache_data(ttl=3600)
+def compute_biggest_move_today(stocks_list, ticker_dfs):
+    biggest_up_today = []
+    biggest_down_today = []
+
+    for ticker in stocks_list:
+        try:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < 21:
+                continue
+
+            close = df['Close']
+            pct_chg = close.pct_change() * 100
+            win = min(220, len(pct_chg))
+
+            biggest_drop = pct_chg.rolling(window=win, min_periods=20).min()
+            biggest_up   = pct_chg.rolling(window=win, min_periods=20).max()
+
+            today_chg  = pct_chg.iloc[-1]
+            today_up   = biggest_up.iloc[-1]
+            today_down = biggest_drop.iloc[-1]
+
+            if pd.isna(today_chg) or pd.isna(today_up) or pd.isna(today_down):
+                continue
+
+            if today_chg >= today_up:
+                biggest_up_today.append((ticker, round(float(today_chg), 2)))
+            elif today_chg <= today_down:
+                biggest_down_today.append((ticker, round(float(today_chg), 2)))
+
+        except Exception:
+            continue
+
+    biggest_up_today.sort(key=lambda x: -x[1])
+    biggest_down_today.sort(key=lambda x: x[1])
+
+    return biggest_up_today, biggest_down_today
+
+
+st.markdown("---")
+
+with st.spinner("Scanning for biggest up/down day extremes..."):
+    biggest_up_today, biggest_down_today = timed(
+        "compute_biggest_move_today",
+        compute_biggest_move_today,
+        stocks_tuple, ticker_dfs_shared
+    )
+
+st.markdown(f"#### 📈📉 Biggest Move Today ({len(biggest_up_today)} vs {len(biggest_down_today)})")
+
+col_up, col_down = st.columns(2)
+
+with col_up:
+    #st.markdown(f"**🟢 Biggest Up Day ({len(biggest_up_today)})**")
+    if biggest_up_today:
+        html_up = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+        for sym, pct in biggest_up_today:
+            html_up += (
+                f'<div class="ticker-badge" style="background:#90EE90;border:1px solid #228B22;">'
+                f'<span class="ticker-name" style="color:#003300;">{sym}</span>'
+                f'<span class="ticker-rs" style="color:#003300;margin-left:4px;">+{pct:.1f}%</span>'
+                f'</div>'
+            )
+        html_up += "</div>"
+        st.markdown(html_up, unsafe_allow_html=True)
+    else:
+        st.info("None today.")
+
+with col_down:
+    #st.markdown(f"**🔴 Biggest Down Day ({len(biggest_down_today)})**")
+    if biggest_down_today:
+        html_down = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+        for sym, pct in biggest_down_today:
+            html_down += (
+                f'<div class="ticker-badge" style="background:#FFB3B3;border:1px solid #CC0000;">'
+                f'<span class="ticker-name" style="color:#4B0000;">{sym}</span>'
+                f'<span class="ticker-rs" style="color:#4B0000;margin-left:4px;">{pct:.1f}%</span>'
+                f'</div>'
+            )
+        html_down += "</div>"
+        st.markdown(html_down, unsafe_allow_html=True)
+    else:
+        st.info("None today.")
+
+@st.cache_data(ttl=3600)
+def compute_biggest_move_history(stocks_list, ticker_dfs):
+    """
+    Vectorized daily count of tickers hitting a new rolling biggest-up-day
+    or biggest-down-day (same win = min(220, len) logic as
+    compute_biggest_move_today / TML's s8 component), evaluated across the
+    full time series for a 60-day breadth history.
+    """
+    try:
+        if not ticker_dfs:
+            return pd.DataFrame()
+
+        all_up_series = []
+        all_down_series = []
+
+        for ticker, df in ticker_dfs.items():
+            if 'Close' not in df.columns or len(df) < 21:
+                continue
+            try:
+                close = df['Close']
+                pct_chg = close.pct_change() * 100
+                win = min(220, len(pct_chg))
+
+                biggest_up   = pct_chg.rolling(window=win, min_periods=20).max()
+                biggest_drop = pct_chg.rolling(window=win, min_periods=20).min()
+
+                up_flag   = (pct_chg >= biggest_up).astype(int)
+                down_flag = (pct_chg <= biggest_drop).astype(int)
+
+                all_up_series.append(up_flag)
+                all_down_series.append(down_flag)
+            except Exception:
+                continue
+
+        if not all_up_series:
+            return pd.DataFrame()
+
+        up_combined   = pd.concat(all_up_series, axis=1).fillna(0)
+        down_combined = pd.concat(all_down_series, axis=1).fillna(0)
+
+        up_counts   = up_combined.sum(axis=1)
+        down_counts = down_combined.sum(axis=1)
+
+        result = pd.DataFrame({
+            "Date": up_counts.index,
+            "Biggest Up Count": up_counts.values,
+            "Biggest Down Count": down_counts.reindex(up_counts.index).values,
+        }).tail(60)
+        result["Date"] = pd.to_datetime(result["Date"]).dt.strftime("%Y-%m-%d")
+        return result.reset_index(drop=True)
+    except Exception:
+        return pd.DataFrame()
+
+
+st.write("")
+
+with st.spinner("Scanning for Biggest Move History..."):
+    biggest_move_hist = timed(
+        "compute_biggest_move_history",
+        compute_biggest_move_history,
+        stocks_tuple, ticker_dfs_shared
+    )
+
+if not biggest_move_hist.empty:
+    # --- Biggest Up Count chart ---
+    chart_df_up = biggest_move_hist.copy()
+
+    today_up_cnt = chart_df_up["Biggest Up Count"].iloc[-1]
+    max_up_cnt   = chart_df_up["Biggest Up Count"].max()
+
+    mean_up = chart_df_up["Biggest Up Count"].mean()
+    std_up  = chart_df_up["Biggest Up Count"].std(ddof=1)
+
+    if std_up and std_up > 0:
+        z_scores_up = (chart_df_up["Biggest Up Count"] - mean_up) / std_up
+    else:
+        z_scores_up = pd.Series(0, index=chart_df_up.index)
+
+    # Default: every bar blue
+    chart_df_up["Bar_Color"] = "#29B5E8"
+
+    # Statistical outliers (>=2 std dev above mean) turn red
+    chart_df_up.loc[z_scores_up >= 2, "Bar_Color"] = "#FF4B4B"
+
+    # Latest bar also turns red if it's the highest in the window (ties count)
+    if today_up_cnt == max_up_cnt:
+        chart_df_up.iloc[-1, chart_df_up.columns.get_loc("Bar_Color")] = "#FF4B4B"
+
+    st.bar_chart(
+        data=chart_df_up,
+        x="Date",
+        y="Biggest Up Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
+
+    # --- Biggest Down Count chart ---
+    chart_df_down = biggest_move_hist.copy()
+
+    today_down_cnt = chart_df_down["Biggest Down Count"].iloc[-1]
+    max_down_cnt   = chart_df_down["Biggest Down Count"].max()
+
+    mean_down = chart_df_down["Biggest Down Count"].mean()
+    std_down  = chart_df_down["Biggest Down Count"].std(ddof=1)
+
+    if std_down and std_down > 0:
+        z_scores_down = (chart_df_down["Biggest Down Count"] - mean_down) / std_down
+    else:
+        z_scores_down = pd.Series(0, index=chart_df_down.index)
+
+    # Default: every bar blue
+    chart_df_down["Bar_Color"] = "#29B5E8"
+
+    # Statistical outliers (>=2 std dev above mean) turn red
+    chart_df_down.loc[z_scores_down >= 2, "Bar_Color"] = "#FF4B4B"
+
+    # Latest bar also turns red if it's the highest in the window (ties count)
+    if today_down_cnt == max_down_cnt:
+        chart_df_down.iloc[-1, chart_df_down.columns.get_loc("Bar_Color")] = "#FF4B4B"
+
+    st.bar_chart(
+        data=chart_df_down,
+        x="Date",
+        y="Biggest Down Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
@@ -8745,511 +9249,6 @@ else:
             #     for e in earnings[:2]:
             #         when = {"bmo": "Before Open", "amc": "After Close"}.get(e.get("time"), e.get("time", ""))
             #         st.markdown(f"- {e.get('date','?')} ({when})")
-
-# ============================================================
-# CHANGE OF CHARACTER (scoreUp20) — Composite Score Δ≥20 Scan
-# Ported from TradingView "Score" indicator's scoreUp20 signal.
-# score5 (Darvas streak) omitted; score6/score7 use lite proxies
-# — see docstring below for full mapping.
-# ============================================================
-@st.cache_data(ttl=3600)
-def compute_character_shift(stocks_list, ticker_dfs, benchmark_df_input):
-    """
-    Single-pass version of compute_change_of_character that returns BOTH
-    directions of the composite score's day-over-day delta:
-      - Change of Character   : score jumped by >= 20 (bullish)
-      - Breakdown of Character: score dropped by >= 20 (bearish)
-    Same 9-component score (score5/Darvas-streak omitted; score6/score7
-    use lite proxies) as compute_change_of_character — see that function's
-    docstring for the full component mapping.
-    """
-    up_today, up_yest     = [], []
-    down_today, down_yest = [], []
-    up_score_map, up_delta_map     = {}, {}
-    down_score_map, down_delta_map = {}, {}
-    all_up20_series, all_down20_series = [], []
-
-    for ticker in stocks_list:
-        try:
-            df = ticker_dfs.get(ticker)
-            if df is None or len(df) < 260:
-                continue
-
-            close = df['Close']; high = df['High']; low = df['Low']
-
-            rs = close / benchmark_df_input['Close']
-            if rs.dropna().empty:
-                continue
-
-            ema126 = close.ewm(span=126, adjust=False).mean()
-            r = {sp: rs.ewm(span=sp, adjust=False).mean() for sp in [21, 42, 63, 72, 84, 126, 147, 168]}
-
-            stage1_cond  = (rs >= r[84]) & (rs < r[126])
-            stage3_cond  = (
-                (rs < r[42]) & (rs >= r[72]) & (rs >= r[84]) & (rs >= r[126])
-                & ((r[42] > r[63]) | (rs < r[63])) & (r[63] > r[126]) & (close >= ema126)
-            )
-            stage2a_cond = (
-                (rs >= r[168]) & (rs >= r[147]) & (rs >= r[126])
-                & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
-            )
-            stage2b_cond = (rs >= r[126]) & (close >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
-            stage2_cond  = (~stage1_cond & ~stage3_cond & (stage2a_cond | stage2b_cond))
-
-            rsMA21  = rs.ewm(span=21, adjust=False).mean()
-            ema21   = close.ewm(span=21, adjust=False).mean()
-            sma50   = close.rolling(50).mean()
-            low14   = low.rolling(14).min().shift(1)
-            ema50t  = close.ewm(span=50, adjust=False).mean()
-            ema100t = close.ewm(span=100, adjust=False).mean()
-
-            gap_down_evt       = (high < low.shift(1))
-            gap_down_pct       = ((close.shift(1) - close) / close.shift(1) * 100).where(gap_down_evt)
-            gap_down_qualified = gap_down_evt & (gap_down_pct >= 3)
-            recent_gap_down    = gap_down_qualified.rolling(10, min_periods=1).max().fillna(0).astype(bool)
-
-            pct_chg = close.pct_change() * 100
-            win = min(220, len(pct_chg))
-            biggest_drop = pct_chg.rolling(window=win, min_periods=20).min()
-            biggest_up   = pct_chg.rolling(window=win, min_periods=20).max()
-
-            high252 = high.rolling(252, min_periods=50).max()
-            pct_from_high = (close - high252) / high252 * 100
-
-            s1  = (rs > rsMA21).fillna(False).astype(int) * 10
-            s2  = stage2_cond.fillna(False).astype(int) * 10
-            s3  = (close > ema21).fillna(False).astype(int) * 10
-            s4  = (close > sma50).fillna(False).astype(int) * 10
-            s6  = (~(close < low14).fillna(False)).astype(int) * 10
-            s7  = (~recent_gap_down).astype(int) * 10
-            s8  = (~(biggest_up < -biggest_drop).fillna(False)).astype(int) * 10
-            s9  = (~(pct_from_high < -25).fillna(False)).astype(int) * 10
-            s10 = (ema50t >= ema100t).fillna(False).astype(int) * 10
-
-            score = s1 + s2 + s3 + s4 + s6 + s7 + s8 + s9 + s10
-            score_delta = score.diff()
-            score_up20   = (score_delta >= 20)
-            score_down20 = (score_delta <= -20)
-
-            all_up20_series.append(score_up20.astype(int).rename(ticker))
-            all_down20_series.append(score_down20.astype(int).rename(ticker))
-
-            current_close = float(close.iloc[-1]) if pd.notna(close.iloc[-1]) else np.nan
-            is_price_above_20 = pd.notna(current_close) and current_close > 20
-
-            if len(score) >= 2:
-                if is_price_above_20 and bool(score_up20.iloc[-1]):
-                    up_today.append(ticker)
-                    up_score_map[ticker] = int(score.iloc[-1])
-                    up_delta_map[ticker] = int(score.iloc[-1] - score.iloc[-2])
-                if is_price_above_20 and bool(score_down20.iloc[-1]):
-                    down_today.append(ticker)
-                    down_score_map[ticker] = int(score.iloc[-1])
-                    down_delta_map[ticker] = int(score.iloc[-1] - score.iloc[-2])
-                if len(score_up20) >= 3:
-                    if is_price_above_20 and bool(score_up20.iloc[-2]):
-                        up_yest.append(ticker)
-                    if is_price_above_20 and bool(score_down20.iloc[-2]):
-                        down_yest.append(ticker)
-        except Exception:
-            continue
-
-    def _hist(series_list, col_name):
-        if not series_list:
-            return pd.DataFrame()
-        combined = pd.concat(series_list, axis=1).fillna(0)
-        daily_counts = combined.sum(axis=1)
-        out = daily_counts.tail(60).reset_index()
-        out.columns = ["Date", col_name]
-        out["Date"] = pd.to_datetime(out["Date"]).dt.strftime("%Y-%m-%d")
-        return out
-
-    up_hist   = _hist(all_up20_series, "CoC Count")
-    down_hist = _hist(all_down20_series, "BoC Count")
-
-    return (
-        sorted(up_today), sorted(up_yest), up_score_map, up_delta_map, up_hist,
-        sorted(down_today), sorted(down_yest), down_score_map, down_delta_map, down_hist,
-    )
-
-# ── Render section — append at the very bottom of the dashboard ────────────
-st.markdown("---")
-
-with st.spinner("Scanning for Change / Breakdown of Character (Score Δ≥20)..."):
-    (coc_today, coc_yest, coc_score_map, coc_delta_map, coc_hist,
-     boc_today, boc_yest, boc_score_map, boc_delta_map, boc_hist) = timed(
-        "compute_character_shift",
-        compute_character_shift,
-        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
-    )
-
-# ═══════════════════ CHANGE OF CHARACTER (Δ ≥ +20) ═══════════════════
-st.markdown(f"#### 🔀 Change of Character ({len(coc_today)})")
-
-if coc_today or coc_yest:
-    coc_industry_counts, coc_ticker_industry = build_leader_industry_map(coc_today, INDUSTRIES)
-
-    html_coc = ""
-    for sym in coc_today:  # alphabetical
-        industries = coc_ticker_industry.get(sym, [])
-        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
-        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
-        glow_style = (
-            "box-shadow:0 0 8px 2px #00FF00; border:1px solid #00FF00;"
-            if is_top20_industry else ""
-        )
-        delta = coc_delta_map.get(sym, 0)
-        score_val = coc_score_map.get(sym, 0)
-        suffix = f"{score_val} (+{delta})"
-        html_coc += setup_badge(
-            sym,
-            is_new=(sym not in coc_yest),
-            extra_style=glow_style,
-            extra_suffix=suffix,
-            extra_suffix_color="#006400",  # dark green
-        )
-
-    removed_coc = [sym for sym in coc_yest if sym not in coc_today]
-    for sym in sorted(removed_coc):
-        html_coc += f'<div class="ticker-badge removed-badge">{sym}</div>'
-
-    st.markdown(html_coc, unsafe_allow_html=True)
-
-    render_group_ai_insight(
-        coc_today,
-        "Change of Character (Score jump ≥20)",
-        "change_of_character",
-        extra_note="the stock's composite health score (RS-vs-benchmark, stage, trend, gap, and drawdown-symmetry checks) jumped by 20+ points day-over-day, signaling a fast-improving technical picture / bullish character change"
-    )
-else:
-    st.info("No active setups discovered.")
-
-st.write("")
-if not coc_hist.empty:
-    chart_df_coc = coc_hist.copy()
-
-    today_coc = chart_df_coc["CoC Count"].iloc[-1]
-    max_coc   = chart_df_coc["CoC Count"].max()
-
-    mean_coc = chart_df_coc["CoC Count"].mean()
-    std_coc  = chart_df_coc["CoC Count"].std(ddof=1)
-
-    if std_coc and std_coc > 0:
-        z_scores_coc = (chart_df_coc["CoC Count"] - mean_coc) / std_coc
-    else:
-        z_scores_coc = pd.Series(0, index=chart_df_coc.index)
-
-    # Default: every bar blue
-    chart_df_coc["Bar_Color"] = "#29B5E8"
-
-    # Statistical outliers (>=2 std dev above mean) turn red
-    chart_df_coc.loc[z_scores_coc >= 2, "Bar_Color"] = "#FF4B4B"
-
-    # Latest bar also turns red if it's the highest in the window (ties count)
-    if today_coc == max_coc:
-        chart_df_coc.iloc[-1, chart_df_coc.columns.get_loc("Bar_Color")] = "#FF4B4B"
-
-    st.bar_chart(
-        data=chart_df_coc,
-        x="Date",
-        y="CoC Count",
-        color="Bar_Color",
-        use_container_width=True
-    )
-
-st.markdown("---")
-
-# ═══════════════════ BREAKDOWN OF CHARACTER (Δ ≤ -20) ═══════════════════
-st.markdown(f"#### 🔻 Breakdown of Character ({len(boc_today)})")
-
-if boc_today or boc_yest:
-    boc_industry_counts, boc_ticker_industry = build_leader_industry_map(boc_today, INDUSTRIES)
-
-    html_boc = ""
-    for sym in boc_today:  # alphabetical
-        industries = boc_ticker_industry.get(sym, [])
-        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
-        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
-        glow_style = (
-            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
-            if is_top20_industry else ""
-        )
-        delta = boc_delta_map.get(sym, 0)
-        score_val = boc_score_map.get(sym, 0)
-        suffix = f"{score_val} ({delta})"  # delta already negative, no manual "-" needed
-        html_boc += setup_badge(
-            sym,
-            is_new=(sym not in boc_yest),
-            extra_style=glow_style,
-            extra_suffix=suffix,
-            extra_suffix_color="#8B0000",  # dark red
-        )
-
-    removed_boc = [sym for sym in boc_yest if sym not in boc_today]
-    for sym in sorted(removed_boc):
-        html_boc += f'<div class="ticker-badge removed-badge">{sym}</div>'
-
-    st.markdown(html_boc, unsafe_allow_html=True)
-
-    render_group_ai_insight(
-        boc_today,
-        "Breakdown of Character (Score drop ≥20)",
-        "breakdown_of_character",
-        extra_note="the stock's composite health score (RS-vs-benchmark, stage, trend, gap, and drawdown-symmetry checks) dropped by 20+ points day-over-day, signaling a fast-deteriorating technical picture / bearish character change"
-    )
-else:
-    st.info("No active setups discovered.")
-
-st.write("")
-if not boc_hist.empty:
-    chart_df_boc = boc_hist.copy()
-
-    today_boc = chart_df_boc["BoC Count"].iloc[-1]
-    max_boc   = chart_df_boc["BoC Count"].max()
-
-    mean_boc = chart_df_boc["BoC Count"].mean()
-    std_boc  = chart_df_boc["BoC Count"].std(ddof=1)
-
-    if std_boc and std_boc > 0:
-        z_scores_boc = (chart_df_boc["BoC Count"] - mean_boc) / std_boc
-    else:
-        z_scores_boc = pd.Series(0, index=chart_df_boc.index)
-
-    # Default: every bar blue
-    chart_df_boc["Bar_Color"] = "#29B5E8"
-
-    # Statistical outliers (>=2 std dev above mean) turn red
-    chart_df_boc.loc[z_scores_boc >= 2, "Bar_Color"] = "#FF4B4B"
-
-    # Latest bar also turns red if it's the highest in the window (ties count)
-    if today_boc == max_boc:
-        chart_df_boc.iloc[-1, chart_df_boc.columns.get_loc("Bar_Color")] = "#FF4B4B"
-
-    st.bar_chart(
-        data=chart_df_boc,
-        x="Date",
-        y="BoC Count",
-        color="Bar_Color",
-        use_container_width=True
-    )
-
-# ============================================================
-# BIGGEST UP / BIGGEST DOWN DAY — same formula as TML's score8 check
-# (pct_chg.rolling(win).max()/.min(), win = min(220, len))
-# Flags tickers where TODAY's % change equals its own rolling
-# biggest-up or biggest-down day within that window.
-# ============================================================
-@st.cache_data(ttl=3600)
-def compute_biggest_move_today(stocks_list, ticker_dfs):
-    biggest_up_today = []
-    biggest_down_today = []
-
-    for ticker in stocks_list:
-        try:
-            df = ticker_dfs.get(ticker)
-            if df is None or len(df) < 21:
-                continue
-
-            close = df['Close']
-            pct_chg = close.pct_change() * 100
-            win = min(220, len(pct_chg))
-
-            biggest_drop = pct_chg.rolling(window=win, min_periods=20).min()
-            biggest_up   = pct_chg.rolling(window=win, min_periods=20).max()
-
-            today_chg  = pct_chg.iloc[-1]
-            today_up   = biggest_up.iloc[-1]
-            today_down = biggest_drop.iloc[-1]
-
-            if pd.isna(today_chg) or pd.isna(today_up) or pd.isna(today_down):
-                continue
-
-            if today_chg >= today_up:
-                biggest_up_today.append((ticker, round(float(today_chg), 2)))
-            elif today_chg <= today_down:
-                biggest_down_today.append((ticker, round(float(today_chg), 2)))
-
-        except Exception:
-            continue
-
-    biggest_up_today.sort(key=lambda x: -x[1])
-    biggest_down_today.sort(key=lambda x: x[1])
-
-    return biggest_up_today, biggest_down_today
-
-
-st.markdown("---")
-
-with st.spinner("Scanning for biggest up/down day extremes..."):
-    biggest_up_today, biggest_down_today = timed(
-        "compute_biggest_move_today",
-        compute_biggest_move_today,
-        stocks_tuple, ticker_dfs_shared
-    )
-
-st.markdown(f"#### 📈📉 Biggest Move Today ({len(biggest_up_today)} vs {len(biggest_down_today)})")
-
-col_up, col_down = st.columns(2)
-
-with col_up:
-    #st.markdown(f"**🟢 Biggest Up Day ({len(biggest_up_today)})**")
-    if biggest_up_today:
-        html_up = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
-        for sym, pct in biggest_up_today:
-            html_up += (
-                f'<div class="ticker-badge" style="background:#90EE90;border:1px solid #228B22;">'
-                f'<span class="ticker-name" style="color:#003300;">{sym}</span>'
-                f'<span class="ticker-rs" style="color:#003300;margin-left:4px;">+{pct:.1f}%</span>'
-                f'</div>'
-            )
-        html_up += "</div>"
-        st.markdown(html_up, unsafe_allow_html=True)
-    else:
-        st.info("None today.")
-
-with col_down:
-    #st.markdown(f"**🔴 Biggest Down Day ({len(biggest_down_today)})**")
-    if biggest_down_today:
-        html_down = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
-        for sym, pct in biggest_down_today:
-            html_down += (
-                f'<div class="ticker-badge" style="background:#FFB3B3;border:1px solid #CC0000;">'
-                f'<span class="ticker-name" style="color:#4B0000;">{sym}</span>'
-                f'<span class="ticker-rs" style="color:#4B0000;margin-left:4px;">{pct:.1f}%</span>'
-                f'</div>'
-            )
-        html_down += "</div>"
-        st.markdown(html_down, unsafe_allow_html=True)
-    else:
-        st.info("None today.")
-
-@st.cache_data(ttl=3600)
-def compute_biggest_move_history(stocks_list, ticker_dfs):
-    """
-    Vectorized daily count of tickers hitting a new rolling biggest-up-day
-    or biggest-down-day (same win = min(220, len) logic as
-    compute_biggest_move_today / TML's s8 component), evaluated across the
-    full time series for a 60-day breadth history.
-    """
-    try:
-        if not ticker_dfs:
-            return pd.DataFrame()
-
-        all_up_series = []
-        all_down_series = []
-
-        for ticker, df in ticker_dfs.items():
-            if 'Close' not in df.columns or len(df) < 21:
-                continue
-            try:
-                close = df['Close']
-                pct_chg = close.pct_change() * 100
-                win = min(220, len(pct_chg))
-
-                biggest_up   = pct_chg.rolling(window=win, min_periods=20).max()
-                biggest_drop = pct_chg.rolling(window=win, min_periods=20).min()
-
-                up_flag   = (pct_chg >= biggest_up).astype(int)
-                down_flag = (pct_chg <= biggest_drop).astype(int)
-
-                all_up_series.append(up_flag)
-                all_down_series.append(down_flag)
-            except Exception:
-                continue
-
-        if not all_up_series:
-            return pd.DataFrame()
-
-        up_combined   = pd.concat(all_up_series, axis=1).fillna(0)
-        down_combined = pd.concat(all_down_series, axis=1).fillna(0)
-
-        up_counts   = up_combined.sum(axis=1)
-        down_counts = down_combined.sum(axis=1)
-
-        result = pd.DataFrame({
-            "Date": up_counts.index,
-            "Biggest Up Count": up_counts.values,
-            "Biggest Down Count": down_counts.reindex(up_counts.index).values,
-        }).tail(60)
-        result["Date"] = pd.to_datetime(result["Date"]).dt.strftime("%Y-%m-%d")
-        return result.reset_index(drop=True)
-    except Exception:
-        return pd.DataFrame()
-
-
-st.write("")
-
-with st.spinner("Scanning for Biggest Move History..."):
-    biggest_move_hist = timed(
-        "compute_biggest_move_history",
-        compute_biggest_move_history,
-        stocks_tuple, ticker_dfs_shared
-    )
-
-if not biggest_move_hist.empty:
-    # --- Biggest Up Count chart ---
-    chart_df_up = biggest_move_hist.copy()
-
-    today_up_cnt = chart_df_up["Biggest Up Count"].iloc[-1]
-    max_up_cnt   = chart_df_up["Biggest Up Count"].max()
-
-    mean_up = chart_df_up["Biggest Up Count"].mean()
-    std_up  = chart_df_up["Biggest Up Count"].std(ddof=1)
-
-    if std_up and std_up > 0:
-        z_scores_up = (chart_df_up["Biggest Up Count"] - mean_up) / std_up
-    else:
-        z_scores_up = pd.Series(0, index=chart_df_up.index)
-
-    # Default: every bar blue
-    chart_df_up["Bar_Color"] = "#29B5E8"
-
-    # Statistical outliers (>=2 std dev above mean) turn red
-    chart_df_up.loc[z_scores_up >= 2, "Bar_Color"] = "#FF4B4B"
-
-    # Latest bar also turns red if it's the highest in the window (ties count)
-    if today_up_cnt == max_up_cnt:
-        chart_df_up.iloc[-1, chart_df_up.columns.get_loc("Bar_Color")] = "#FF4B4B"
-
-    st.bar_chart(
-        data=chart_df_up,
-        x="Date",
-        y="Biggest Up Count",
-        color="Bar_Color",
-        use_container_width=True
-    )
-
-    # --- Biggest Down Count chart ---
-    chart_df_down = biggest_move_hist.copy()
-
-    today_down_cnt = chart_df_down["Biggest Down Count"].iloc[-1]
-    max_down_cnt   = chart_df_down["Biggest Down Count"].max()
-
-    mean_down = chart_df_down["Biggest Down Count"].mean()
-    std_down  = chart_df_down["Biggest Down Count"].std(ddof=1)
-
-    if std_down and std_down > 0:
-        z_scores_down = (chart_df_down["Biggest Down Count"] - mean_down) / std_down
-    else:
-        z_scores_down = pd.Series(0, index=chart_df_down.index)
-
-    # Default: every bar blue
-    chart_df_down["Bar_Color"] = "#29B5E8"
-
-    # Statistical outliers (>=2 std dev above mean) turn red
-    chart_df_down.loc[z_scores_down >= 2, "Bar_Color"] = "#FF4B4B"
-
-    # Latest bar also turns red if it's the highest in the window (ties count)
-    if today_down_cnt == max_down_cnt:
-        chart_df_down.iloc[-1, chart_df_down.columns.get_loc("Bar_Color")] = "#FF4B4B"
-
-    st.bar_chart(
-        data=chart_df_down,
-        x="Date",
-        y="Biggest Down Count",
-        color="Bar_Color",
-        use_container_width=True
-    )
 
 st.write("")
 st.write("")
