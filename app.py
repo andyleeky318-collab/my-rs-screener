@@ -7060,7 +7060,7 @@ if e2_list or e3_list or e2_yest or e3_yest:
 else:
     st.info("No active setups discovered.")
 
-st.write("")
+#st.write("")
 # if not engulf_hist.empty:
 #     #st.markdown("#### 🐳 2x Engulfing Breadth (60 Days)")
 #     st.bar_chart(engulf_hist, x="Date", y="2x Engulfing Count", use_container_width=True)
@@ -7089,7 +7089,7 @@ if not engulf_hist.empty:
     )
 
 if e3_list or e3_yest:
-    st.write("")
+    #st.write("")
     if len(e3_list) == 0 and len(e3_yest) == 0:
         st.markdown("**3x Engulfing (0):**")
         #st.text("None") # Optional: explicit visual feedback for an empty scanner
@@ -9251,6 +9251,32 @@ if not biggest_move_hist.empty:
         use_container_width=True
     )
 
+st.write("")
+st.write("")
+
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&display=swap');
+    .calligraphy-banner {
+        text-align: center;
+        padding: 40px 0 60px;
+    }
+    .calligraphy-banner span {
+        font-family: 'Ma Shan Zheng', cursive;
+        font-size: 90px;
+        color: #e0d8c3;
+        letter-spacing: 18px;
+        text-shadow: 0 0 12px rgba(224, 216, 195, 0.15);
+    }
+    </style>
+    <div class="calligraphy-banner">
+        <span>順勢而為</span>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 # ==============================================================================
 # MASTER SETUP CONSOLIDATION TABLE
 # Aggregates every tracked screen into one ticker x section table, ticked where
@@ -9436,29 +9462,3 @@ if master_rows:
 else:
     st.info("No tickers currently qualify for any tracked setup.")
 
-st.write("")
-st.write("")
-st.write("")
-
-st.markdown(
-    """
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&display=swap');
-    .calligraphy-banner {
-        text-align: center;
-        padding: 40px 0 60px;
-    }
-    .calligraphy-banner span {
-        font-family: 'Ma Shan Zheng', cursive;
-        font-size: 90px;
-        color: #e0d8c3;
-        letter-spacing: 18px;
-        text-shadow: 0 0 12px rgba(224, 216, 195, 0.15);
-    }
-    </style>
-    <div class="calligraphy-banner">
-        <span>順勢而為</span>
-    </div>
-    """,
-    unsafe_allow_html=True
-)

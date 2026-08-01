@@ -140,7 +140,7 @@ SECTION_KEYWORDS = [
     "Early Bull = buyable",
     "Two Botak = Short term Group burst",
     "Engulfing = HL",
-    "3x Engulfing",
+    #"3x Engulfing",
     "PowerTrend = Thematic Extended",
     "Volatility = ",
     "Value Trap = ",
