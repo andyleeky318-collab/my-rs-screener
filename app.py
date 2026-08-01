@@ -3325,7 +3325,7 @@ if all_data:
         # ROC cell
         roc_val = row['ROC']
         if roc_val > 90:
-            roc_str = f'<span style="background-color: #FF69B4; color: #000000; font-weight: bold; padding: 1px 6px; border-radius: 3px;">{roc_val:.1f}</span>'
+            roc_str = f'<span style="border: 2px solid #32CD32; color: inherit; font-weight: bold; padding: 1px 6px; border-radius: 3px; display: inline-block;">{roc_val:.1f}</span>'
         else:
             roc_str = f'{roc_val:.1f}'
         
@@ -3400,9 +3400,9 @@ if all_data:
                 )
             elif cloud_sym in KNOWN_STOCKS:
                 cloud_html += (
-                    f'<div class="ticker-badge new-pattern-badge">'
+                    f'<div class="ticker-badge" style="background-color:#FF69B4; border:1px solid #C71585;">'
                     f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{cloud_sym}</span>'
-                    f'<span class="ticker-rs" style="color: #004d26; font-weight: bold;">{cloud_rs:.0f}</span>'
+                    f'<span class="ticker-rs" style="color: #4B0026; font-weight: bold;">{cloud_rs:.0f}</span>'
                     f'</div>'
                 )
             else:
