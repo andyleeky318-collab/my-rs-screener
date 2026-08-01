@@ -9435,3 +9435,30 @@ if master_rows:
     st.markdown(master_table_html, unsafe_allow_html=True)
 else:
     st.info("No tickers currently qualify for any tracked setup.")
+
+st.write("")
+st.write("")
+st.write("")
+
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&display=swap');
+    .calligraphy-banner {
+        text-align: center;
+        padding: 40px 0 60px;
+    }
+    .calligraphy-banner span {
+        font-family: 'Ma Shan Zheng', cursive;
+        font-size: 90px;
+        color: #e0d8c3;
+        letter-spacing: 18px;
+        text-shadow: 0 0 12px rgba(224, 216, 195, 0.15);
+    }
+    </style>
+    <div class="calligraphy-banner">
+        <span>順勢而為</span>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
