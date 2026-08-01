@@ -129,7 +129,7 @@ SECTION_KEYWORDS = [
     "Setup =",
     "Weekly vs Monthly",
     "Stage",
-    "Market Regime",
+    #"Market Regime",
     "Minervini (Positive Pct",
     "RS Leader = Long term",
     #"Retry AI Analysis",

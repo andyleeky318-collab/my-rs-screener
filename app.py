@@ -268,7 +268,7 @@ INDUSTRIES = {
 
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
-    'TRV', 'WEN', 'OKLO', 'IBB', 'Q', 'OUST', 'VPG', 'WOLF', 'NOK', 'HSBC', 'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
+    'PRU', 'RGEN', 'UBS', 'TRV', 'WEN', 'OKLO', 'IBB', 'Q', 'OUST', 'VPG', 'WOLF', 'NOK', 'HSBC', 'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
     'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EWY', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'OR', 
     'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
@@ -7074,19 +7074,11 @@ if not engulf_hist.empty:
     today_2x = chart_df_2x["2x Engulfing Count"].iloc[-1]
     max_2x = chart_df_2x["2x Engulfing Count"].max()
 
-    chart_df_2x["Bar_Color"] = "#29B5E8"
-
-    # NEW: statistical outliers (>=2 std dev above mean) turn red
-    mean_2x = chart_df_2x["2x Engulfing Count"].mean()
-    std_2x  = chart_df_2x["2x Engulfing Count"].std(ddof=1)
-    if std_2x and std_2x > 0:
-        z_scores_2x = (chart_df_2x["2x Engulfing Count"] - mean_2x) / std_2x
-    else:
-        z_scores_2x = pd.Series(0, index=chart_df_2x.index)
-    chart_df_2x.loc[z_scores_2x >= 2, "Bar_Color"] = "#FF4B4B"
-    
     if today_2x == max_2x:
+        chart_df_2x["Bar_Color"] = "#29B5E8"
         chart_df_2x.iloc[-1, chart_df_2x.columns.get_loc("Bar_Color")] = "#FF4B4B"
+    else:
+        chart_df_2x["Bar_Color"] = "#29B5E8"
 
     st.bar_chart(
         data=chart_df_2x,
@@ -7125,19 +7117,11 @@ if not engulf_hist.empty:
     today_3x = chart_df_3x["3x Engulfing Count"].iloc[-1]
     max_3x = chart_df_3x["3x Engulfing Count"].max()
 
-    chart_df_3x["Bar_Color"] = "#29B5E8"
-
-    # NEW: statistical outliers (>=2 std dev above mean) turn red
-    mean_3x = chart_df_3x["3x Engulfing Count"].mean()
-    std_3x  = chart_df_3x["3x Engulfing Count"].std(ddof=1)
-    if std_3x and std_3x > 0:
-        z_scores_3x = (chart_df_3x["3x Engulfing Count"] - mean_3x) / std_3x
-    else:
-        z_scores_3x = pd.Series(0, index=chart_df_3x.index)
-    chart_df_3x.loc[z_scores_3x >= 2, "Bar_Color"] = "#FF4B4B"
-
     if today_3x == max_3x:
+        chart_df_3x["Bar_Color"] = "#29B5E8"
         chart_df_3x.iloc[-1, chart_df_3x.columns.get_loc("Bar_Color")] = "#FF4B4B"
+    else:
+        chart_df_3x["Bar_Color"] = "#29B5E8"
 
     st.bar_chart(
         data=chart_df_3x,
@@ -7314,8 +7298,11 @@ with st.spinner("Scanning volatility pickup..."):
 
 #st.markdown("---")
 volatility_count_color = "#FF6B6B" if len(volatility_hits) == 0 else "inherit"
+volatility_up_count = sum(1 for sym, z, pct in volatility_hits if pct >= 0)
+volatility_down_count = len(volatility_hits) - volatility_up_count
 st.markdown(
-    f"<h4>〽️ Volatility = TV Horizontal Line <span style='color:{volatility_count_color}; font-weight:bold;'>({len(volatility_hits)})</span></h4>",
+    f"<h4>〽️ Volatility = TV Horizontal Line <span style='color:{volatility_count_color}; font-weight:bold;'>"
+    f"({len(volatility_hits)} = {volatility_up_count} + {volatility_down_count})</span></h4>",
     unsafe_allow_html=True
 )
 
@@ -8683,7 +8670,7 @@ with st.spinner("Fetching upcoming earnings..."):
 
 total_week_count = len(weekly_earnings_df) if weekly_earnings_df is not None and not weekly_earnings_df.empty else 0
 week_label = f"{week_monday.strftime('%b %d')} – {week_friday.strftime('%b %d, %Y')}" if week_monday else ""
-st.markdown(f"#### 📅 Upcoming Earnings — Week of {week_label} ({total_week_count})")
+st.markdown(f"#### 📅 Upcoming Earnings = {week_label} ({total_week_count})")
 
 earnings_gold_tickers = set(trending_today) | (
     set(reddit_df_display.head(30)["Ticker"]) if not reddit_df.empty else set()
