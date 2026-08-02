@@ -153,6 +153,7 @@ SECTION_KEYWORDS = [
     #"Setup Quality",
     "Upcoming Earnings",
     "Lazy Table",
+    "Lazy Charts",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the
