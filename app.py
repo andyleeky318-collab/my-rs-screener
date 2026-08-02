@@ -9487,7 +9487,7 @@ else:
 # )
 
 st.markdown("---")
-st.markdown("#### 📊 All Charts — Side-by-Side Comparison")
+st.markdown("#### 📊 Lazy Charts")
 
 _compare_days = 60
 
@@ -9550,7 +9550,7 @@ def _render_bar_chart(title, df, date_col, value_col, colors, height=110, days=3
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 
-def _render_multi_line_chart(title, df, date_col, series, height=110, days=30):
+def _render_multi_line_chart(title, df, date_col, series, height=110, days=30, show_legend=True):
     if df is None or not isinstance(df, pd.DataFrame) or df.empty or date_col not in df.columns:
         st.caption(f"**{title}** — no data")
         return
@@ -9563,7 +9563,7 @@ def _render_multi_line_chart(title, df, date_col, series, height=110, days=30):
         fig.add_trace(go.Scatter(
             x=plot_df[date_col].astype(str), y=plot_df[col],
             mode="lines", name=col, line=dict(color=color, width=1.6),
-            showlegend=True,
+            showlegend=show_legend,
         ))
     fig.update_layout(
         title=dict(text=title, font=dict(size=11, color="#cccccc"), x=0.01, y=0.95),
@@ -9574,7 +9574,7 @@ def _render_multi_line_chart(title, df, date_col, series, height=110, days=30):
         xaxis=dict(type="category", showgrid=False, tickfont=dict(size=7, color="#666666"), nticks=6),
         yaxis=dict(showgrid=True, gridcolor="rgba(120,120,120,0.12)", tickfont=dict(size=8, color="#666666")),
         legend=dict(font=dict(size=8), orientation="h", yanchor="bottom", y=1.0, x=0.01),
-        showlegend=True,
+        showlegend=show_legend,
     )
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
@@ -9599,7 +9599,8 @@ if isinstance(globals().get("stage_hist", None), pd.DataFrame) and not stage_his
     _render_multi_line_chart(
         "Stage 2 vs Stage 4", stage_hist, "Date",
         [("S2 Count", "#378ADD"), ("S4 Count", "#FF69B4")],
-        height=_NARROW_HEIGHT, days=_compare_days
+        height=_NARROW_HEIGHT, days=_compare_days,
+        show_legend=False
     )
 else:
     st.caption("**Stage 2 vs Stage 4** — no data")
@@ -9612,7 +9613,8 @@ if isinstance(globals().get("historical_df", None), pd.DataFrame) and not histor
     _render_multi_line_chart(
         "Minervini Count", _chart_df_min, "Date",
         [("Minervini Count", "#1f77b4"), ("20D MA", _ma_color)],
-        height=_NARROW_HEIGHT, days=_compare_days
+        height=_NARROW_HEIGHT, days=_compare_days,
+        show_legend=False
     )
 else:
     st.caption("**Minervini Count** — no data")
