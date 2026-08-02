@@ -9634,6 +9634,8 @@ if isinstance(globals().get("tml_hist", None), pd.DataFrame) and not tml_hist.em
 else:
     st.caption("**True Market Leader Count** — no data")
 
+st.markdown("---")
+
 # ── 10. Gapper (z-score + max/min highlight) ────────────────────────────────
 if isinstance(globals().get("gapper_hist", None), pd.DataFrame) and not gapper_hist.empty:
     _colors = _zscore_outlier_colors(gapper_hist["Gapper Count"], check_max=True, check_min=True)
@@ -9648,7 +9650,7 @@ if isinstance(globals().get("powertrend_hist", None), pd.DataFrame) and not powe
 else:
     st.caption("**PowerTrend Count** — no data")
 
-
+st.markdown("---")
 
 # ── 9. Volatility (z-score + max-only highlight) ────────────────────────────
 if isinstance(globals().get("volatility_hist", None), pd.DataFrame) and not volatility_hist.empty:
@@ -9670,6 +9672,8 @@ if isinstance(globals().get("biggest_move_hist", None), pd.DataFrame) and not bi
     _render_bar_chart("Biggest Down Count", biggest_move_hist, "Date", "Biggest Down Count", _colors_down, height=_NARROW_HEIGHT, days=_compare_days)
 else:
     st.caption("**Biggest Down Count** — no data")
+
+st.markdown("---")
 
 # ── 13. Change of Character (z-score + max-only highlight) ──────────────────
 if isinstance(globals().get("coc_hist", None), pd.DataFrame) and not coc_hist.empty:
