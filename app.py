@@ -757,7 +757,7 @@ if lime_perf_rows:
     headers_html = (
         col_header(X0_1d, "DAILY") +
         col_header(X0_1w, "1 WEEK") +
-        col_header(X0_1m, "1 MONTH")
+        col_header(X0_1m, "1 MONTH (Leading Theme)")
     )
 
     def row_y(i):
@@ -9472,9 +9472,11 @@ else:
 
 # ==============================================================================
 # 14. ALL-CHARTS COMPARISON GRID — read-only, appended at the very bottom.
-# Compact multi-panel view of every *_hist series so they can be eyeballed
-# side-by-side over the same trailing window. Does not recompute anything;
-# purely re-renders DataFrames that already exist earlier in the script.
+# Vertical stack, narrow height, each chart keeps its ORIGINAL coloring logic
+# (z-score outliers, today's max/min highlight, etc.) so they match the
+# individually-rendered versions earlier in the script. Category x-axis on
+# every chart = no weekend/gap spacing, bars sit flush, dates line up
+# across charts for easy comparison.
 # ==============================================================================
 st.markdown("---")
 st.markdown("#### 📊 All Charts — Side-by-Side Comparison")
@@ -9484,81 +9486,154 @@ _compare_days = st.slider(
     key="compare_grid_days"
 )
 
-def _render_mini_chart(title, df, date_col, series, chart_type="bar", height=150, days=30):
-    """
-    series: list of (column_name, color) tuples.
-    chart_type: 'bar' or 'line'.
-    Silently no-ops if df is missing/empty/malformed — never raises.
-    """
-    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
-        st.caption(f"**{title}** — no data")
-        return
-    if date_col not in df.columns:
-        st.caption(f"**{title}** — no data")
-        return
+# ── Shared color helpers, mirroring each chart's original logic exactly ────
+def _zscore_outlier_colors(values, base="#29B5E8", outlier="#FF4B4B",
+                            check_max=True, check_min=False,
+                            max_color=None, min_color=None, z_check=True):
+    vals = pd.Series(values).astype(float)
+    colors = [base] * len(vals)
+    if z_check and len(vals) > 1:
+        mean_v, std_v = vals.mean(), vals.std(ddof=1)
+        if std_v and std_v > 0:
+            z = (vals - mean_v) / std_v
+            for i, zi in enumerate(z):
+                if zi >= 2:
+                    colors[i] = outlier
+    if len(vals) > 0:
+        today_val = vals.iloc[-1]
+        mx, mn = vals.max(), vals.min()
+        mcolor = max_color or outlier
+        mncolor = min_color or outlier
+        if check_min and today_val == mn:
+            colors[-1] = mncolor
+        elif check_max and today_val == mx:
+            colors[-1] = mcolor
+    return colors
 
-    plot_df = df.tail(days)
+
+def _max_only_colors(values, base="#29B5E8", outlier="#FF4B4B"):
+    """No z-score check — only today's-bar-is-max gets highlighted (Engulfing style)."""
+    vals = pd.Series(values).astype(float)
+    colors = [base] * len(vals)
+    if len(vals) > 0 and vals.iloc[-1] == vals.max():
+        colors[-1] = outlier
+    return colors
+
+
+def _render_bar_chart(title, df, date_col, value_col, colors, height=110, days=30):
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty or date_col not in df.columns:
+        st.caption(f"**{title}** — no data")
+        return
+    plot_df = df.tail(days).reset_index(drop=True)
+    plot_colors = colors[-len(plot_df):] if colors else ["#29B5E8"] * len(plot_df)
+
     fig = go.Figure()
-
-    for col, color in series:
-        if col not in plot_df.columns:
-            continue
-        if chart_type == "bar":
-            fig.add_trace(go.Bar(
-                x=plot_df[date_col], y=plot_df[col],
-                name=col, marker_color=color, showlegend=(len(series) > 1),
-            ))
-        else:
-            fig.add_trace(go.Scatter(
-                x=plot_df[date_col], y=plot_df[col],
-                mode="lines", name=col,
-                line=dict(color=color, width=1.6),
-                showlegend=(len(series) > 1),
-            ))
-
+    fig.add_trace(go.Bar(
+        x=plot_df[date_col].astype(str), y=plot_df[value_col],
+        marker_color=plot_colors, showlegend=False,
+    ))
     fig.update_layout(
-        title=dict(text=title, font=dict(size=11, color="#cccccc"), x=0.02, y=0.97),
+        title=dict(text=title, font=dict(size=11, color="#cccccc"), x=0.01, y=0.95),
         height=height,
-        margin=dict(l=4, r=4, t=26, b=18),
+        margin=dict(l=4, r=4, t=24, b=18),
         plot_bgcolor="rgba(20,22,30,1)",
         paper_bgcolor="rgba(13,17,23,0)",
-        font=dict(color="#888888", size=9),
-        xaxis=dict(showgrid=False, tickfont=dict(size=7, color="#666666"), nticks=4),
+        bargap=0,  # flush bars, no gaps
+        xaxis=dict(type="category", showgrid=False, tickfont=dict(size=7, color="#666666"), nticks=6),
         yaxis=dict(showgrid=True, gridcolor="rgba(120,120,120,0.12)", tickfont=dict(size=8, color="#666666")),
-        showlegend=(len(series) > 1),
-        legend=dict(font=dict(size=8), orientation="h", yanchor="bottom", y=1.0, x=0.02),
-        bargap=0.15,
     )
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 
-# ── Config: (title, dataframe_varname, date_col, [(value_col, color), ...], chart_type)
-_CHART_GRID_CONFIG = [
-    ("Minervini Count",       "historical_df",       "Date", [("Minervini Count", "#1f77b4"), ("20D MA", "#FF4B4B")], "line"),
-    ("RS Leader Count",       "leader_hist",          "Date", [("Leader Count", "#29B5E8")], "bar"),
-    ("Stage 2 vs Stage 4",    "stage_hist",           "Date", [("S2 Count", "#378ADD"), ("S4 Count", "#FF69B4")], "line"),
-    ("Two Botak Count",       "two_botak_hist",       "Date", [("Two Botak Count", "#29B5E8")], "bar"),
-    ("2x Engulfing Count",    "engulf_hist",          "Date", [("2x Engulfing Count", "#29B5E8")], "bar"),
-    ("3x Engulfing Count",    "engulf_hist",          "Date", [("3x Engulfing Count", "#29B5E8")], "bar"),
-    ("PowerTrend Count",      "powertrend_hist",      "Date", [("PowerTrend Count", "#29B5E8")], "bar"),
-    ("Value Trap Count",      "value_trap_hist",      "Date", [("Value Trap Count", "#29B5E8")], "bar"),
-    ("Volatility Count",      "volatility_hist",      "Date", [("Volatility Count", "#29B5E8")], "bar"),
-    ("Gapper Count",          "gapper_hist",          "Date", [("Gapper Count", "#29B5E8")], "bar"),
-    ("True Market Leader",    "tml_hist",             "Date", [("TML Count", "#29B5E8")], "bar"),
-    ("Early Bull Count",      "early_bull_hist",      "Date", [("Early Bull Count", "#29B5E8")], "bar"),
-    ("Change of Character",   "coc_hist",             "Date", [("CoC Count", "#00FF00")], "bar"),
-    ("Breakdown of Character","boc_hist",             "Date", [("BoC Count", "#FF4B4B")], "bar"),
-    ("Biggest Up/Down Day",   "biggest_move_hist",    "Date", [("Biggest Up Count", "#00C076"), ("Biggest Down Count", "#FF4B6E")], "line"),
-    ("Setup Avg Rank",        "setup_avgrank_hist",   "Date", [("Avg Rank", "#29B5E8")], "bar"),
-    ("Global Setup Count",    "setup_count_hist",     "Date", [("Setup Count", "#FF4B4B")], "line"),
-]
+def _render_multi_line_chart(title, df, date_col, series, height=110, days=30):
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty or date_col not in df.columns:
+        st.caption(f"**{title}** — no data")
+        return
+    plot_df = df.tail(days).reset_index(drop=True)
 
-_COLS_PER_ROW = 3
-_chart_rows = [_CHART_GRID_CONFIG[i:i + _COLS_PER_ROW] for i in range(0, len(_CHART_GRID_CONFIG), _COLS_PER_ROW)]
+    fig = go.Figure()
+    for col, color in series:
+        if col not in plot_df.columns:
+            continue
+        fig.add_trace(go.Scatter(
+            x=plot_df[date_col].astype(str), y=plot_df[col],
+            mode="lines", name=col, line=dict(color=color, width=1.6),
+            showlegend=True,
+        ))
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=11, color="#cccccc"), x=0.01, y=0.95),
+        height=height,
+        margin=dict(l=4, r=4, t=24, b=18),
+        plot_bgcolor="rgba(20,22,30,1)",
+        paper_bgcolor="rgba(13,17,23,0)",
+        xaxis=dict(type="category", showgrid=False, tickfont=dict(size=7, color="#666666"), nticks=6),
+        yaxis=dict(showgrid=True, gridcolor="rgba(120,120,120,0.12)", tickfont=dict(size=8, color="#666666")),
+        legend=dict(font=dict(size=8), orientation="h", yanchor="bottom", y=1.0, x=0.01),
+        showlegend=True,
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-for row_configs in _chart_rows:
-    cols = st.columns(_COLS_PER_ROW)
-    for col_widget, (title, df_varname, date_col, series, chart_type) in zip(cols, row_configs):
-        with col_widget:
-            _df = globals().get(df_varname, None)
-            _render_mini_chart(title, _df, date_col, series, chart_type=chart_type, days=_compare_days)
+
+def _render_two_bar_chart(title, df, date_col, value_col, colors_a,
+                           value_col2, colors_b, height=110, days=30):
+    """Two side-by-side single-series bar charts, e.g. Biggest Up / Biggest Down."""
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty or date_col not in df.columns:
+        st.caption(f"**{title}** — no data")
+        return
+    c1, c2 = st.columns(2)
+    with c1:
+        _render_bar_chart(f"{title} (Up)", df, date_col, value_col, colors_a, height=height, days=days)
+    with c2:
+        _render_bar_chart(f"{title} (Down)", df, date_col, value_col2, colors_b, height=height, days=days)
+
+
+_NARROW_HEIGHT = 110
+
+# ── 1. Minervini Count (line, matches original color logic) ────────────────
+if isinstance(globals().get("historical_df", None), pd.DataFrame) and not historical_df.empty:
+    _chart_df_min = historical_df.copy()
+    _chart_df_min["20D MA"] = _chart_df_min["Minervini Count"].rolling(window=20, min_periods=1).mean().round(1)
+    _ma_color = globals().get("status_color", "#FF4B4B")
+    _render_multi_line_chart(
+        "Minervini Count", _chart_df_min, "Date",
+        [("Minervini Count", "#1f77b4"), ("20D MA", _ma_color)],
+        height=_NARROW_HEIGHT, days=_compare_days
+    )
+else:
+    st.caption("**Minervini Count** — no data")
+
+# ── 2. RS Leader Count (z-score + max/min highlight) ────────────────────────
+if isinstance(globals().get("leader_hist", None), pd.DataFrame) and not leader_hist.empty:
+    _colors = _zscore_outlier_colors(leader_hist["Leader Count"], check_max=True, check_min=True)
+    _render_bar_chart("RS Leader Count", leader_hist, "Date", "Leader Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**RS Leader Count** — no data")
+
+# ── 3. Stage 2 vs Stage 4 (line, no bar coloring in original) ──────────────
+if isinstance(globals().get("stage_hist", None), pd.DataFrame) and not stage_hist.empty:
+    _render_multi_line_chart(
+        "Stage 2 vs Stage 4", stage_hist, "Date",
+        [("S2 Count", "#378ADD"), ("S4 Count", "#FF69B4")],
+        height=_NARROW_HEIGHT, days=_compare_days
+    )
+else:
+    st.caption("**Stage 2 vs Stage 4** — no data")
+
+# ── 4. Two Botak (z-score + max-only highlight) ─────────────────────────────
+if isinstance(globals().get("two_botak_hist", None), pd.DataFrame) and not two_botak_hist.empty:
+    _colors = _zscore_outlier_colors(two_botak_hist["Two Botak Count"], check_max=True, check_min=False)
+    _render_bar_chart("Two Botak Count", two_botak_hist, "Date", "Two Botak Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**Two Botak Count** — no data")
+
+# ── 5/6. 2x / 3x Engulfing (max-only, no z-score, matches original) ────────
+if isinstance(globals().get("engulf_hist", None), pd.DataFrame) and not engulf_hist.empty:
+    _colors_2x = _max_only_colors(engulf_hist["2x Engulfing Count"])
+    _render_bar_chart("2x Engulfing Count", engulf_hist, "Date", "2x Engulfing Count", _colors_2x, height=_NARROW_HEIGHT, days=_compare_days)
+    _colors_3x = _max_only_colors(engulf_hist["3x Engulfing Count"])
+    _render_bar_chart("3x Engulfing Count", engulf_hist, "Date", "3x Engulfing Count", _colors_3x, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**2x/3x Engulfing Count** — no data")
+
+# ── 7. PowerTrend (z-score + max/min highlight) ─────────────────────────────
+if isinstance(globals().get("powertrend_his
