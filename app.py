@@ -756,7 +756,7 @@ if lime_perf_rows:
 
     headers_html = (
         col_header(X0_1d, "DAILY") +
-        col_header(X0_1w, "1 WEEK") +
+        col_header(X0_1w, "1 WEEK (Developing)") +
         col_header(X0_1m, "1 MONTH (Leading Theme)")
     )
 
@@ -9478,13 +9478,18 @@ else:
 # every chart = no weekend/gap spacing, bars sit flush, dates line up
 # across charts for easy comparison.
 # ==============================================================================
+# st.markdown("---")
+# st.markdown("#### 📊 All Charts — Side-by-Side Comparison")
+
+# _compare_days = st.slider(
+#     "Days to display", min_value=10, max_value=60, value=60, step=5,
+#     key="compare_grid_days"
+# )
+
 st.markdown("---")
 st.markdown("#### 📊 All Charts — Side-by-Side Comparison")
 
-_compare_days = st.slider(
-    "Days to display", min_value=10, max_value=60, value=60, step=5,
-    key="compare_grid_days"
-)
+_compare_days = 60
 
 # ── Shared color helpers, mirroring each chart's original logic exactly ────
 def _zscore_outlier_colors(values, base="#29B5E8", outlier="#FF4B4B",
@@ -9636,7 +9641,49 @@ if isinstance(globals().get("gapper_hist", None), pd.DataFrame) and not gapper_h
 else:
     st.caption("**Gapper Count** — no data")
 
+# ── 7. PowerTrend (z-score + max/min highlight) ─────────────────────────────
+if isinstance(globals().get("powertrend_hist", None), pd.DataFrame) and not powertrend_hist.empty:
+    _colors = _zscore_outlier_colors(powertrend_hist["PowerTrend Count"], check_max=True, check_min=True)
+    _render_bar_chart("PowerTrend Count", powertrend_hist, "Date", "PowerTrend Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**PowerTrend Count** — no data")
 
+
+
+# ── 9. Volatility (z-score + max-only highlight) ────────────────────────────
+if isinstance(globals().get("volatility_hist", None), pd.DataFrame) and not volatility_hist.empty:
+    _colors = _zscore_outlier_colors(volatility_hist["Volatility Count"], check_max=True, check_min=False)
+    _render_bar_chart("Volatility Count", volatility_hist, "Date", "Volatility Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**Volatility Count** — no data")
+
+# ── 14. Breakdown of Character (z-score + max-only highlight) ───────────────
+if isinstance(globals().get("boc_hist", None), pd.DataFrame) and not boc_hist.empty:
+    _colors = _zscore_outlier_colors(boc_hist["BoC Count"], check_max=True, check_min=False)
+    _render_bar_chart("Breakdown of Character Count", boc_hist, "Date", "BoC Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**Breakdown of Character Count** — no data")
+
+# ── Biggest Down Count ───────────────────────────────────────────────────
+if isinstance(globals().get("biggest_move_hist", None), pd.DataFrame) and not biggest_move_hist.empty:
+    _colors_down = _zscore_outlier_colors(biggest_move_hist["Biggest Down Count"], check_max=True, check_min=False)
+    _render_bar_chart("Biggest Down Count", biggest_move_hist, "Date", "Biggest Down Count", _colors_down, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**Biggest Down Count** — no data")
+
+# ── 13. Change of Character (z-score + max-only highlight) ──────────────────
+if isinstance(globals().get("coc_hist", None), pd.DataFrame) and not coc_hist.empty:
+    _colors = _zscore_outlier_colors(coc_hist["CoC Count"], check_max=True, check_min=False)
+    _render_bar_chart("Change of Character Count", coc_hist, "Date", "CoC Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**Change of Character Count** — no data")
+
+# ── Biggest Up Count ─────────────────────────────────────────────────────
+if isinstance(globals().get("biggest_move_hist", None), pd.DataFrame) and not biggest_move_hist.empty:
+    _colors_up = _zscore_outlier_colors(biggest_move_hist["Biggest Up Count"], check_max=True, check_min=False)
+    _render_bar_chart("Biggest Up Count", biggest_move_hist, "Date", "Biggest Up Count", _colors_up, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**Biggest Up Count** — no data")
 
 # ── 12. Early Bull (z-score + max-only highlight) ───────────────────────────
 if isinstance(globals().get("early_bull_hist", None), pd.DataFrame) and not early_bull_hist.empty:
@@ -9661,12 +9708,7 @@ if isinstance(globals().get("engulf_hist", None), pd.DataFrame) and not engulf_h
 else:
     st.caption("**2x/3x Engulfing Count** — no data")
 
-# ── 7. PowerTrend (z-score + max/min highlight) ─────────────────────────────
-if isinstance(globals().get("powertrend_hist", None), pd.DataFrame) and not powertrend_hist.empty:
-    _colors = _zscore_outlier_colors(powertrend_hist["PowerTrend Count"], check_max=True, check_min=True)
-    _render_bar_chart("PowerTrend Count", powertrend_hist, "Date", "PowerTrend Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
-else:
-    st.caption("**PowerTrend Count** — no data")
+
 
 # ── 8. Value Trap (z-score + max-only highlight) ────────────────────────────
 if isinstance(globals().get("value_trap_hist", None), pd.DataFrame) and not value_trap_hist.empty:
@@ -9674,39 +9716,6 @@ if isinstance(globals().get("value_trap_hist", None), pd.DataFrame) and not valu
     _render_bar_chart("Value Trap Count", value_trap_hist, "Date", "Value Trap Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
 else:
     st.caption("**Value Trap Count** — no data")
-
-# ── 9. Volatility (z-score + max-only highlight) ────────────────────────────
-if isinstance(globals().get("volatility_hist", None), pd.DataFrame) and not volatility_hist.empty:
-    _colors = _zscore_outlier_colors(volatility_hist["Volatility Count"], check_max=True, check_min=False)
-    _render_bar_chart("Volatility Count", volatility_hist, "Date", "Volatility Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
-else:
-    st.caption("**Volatility Count** — no data")
-
-
-
-# ── 13. Change of Character (z-score + max-only highlight) ──────────────────
-if isinstance(globals().get("coc_hist", None), pd.DataFrame) and not coc_hist.empty:
-    _colors = _zscore_outlier_colors(coc_hist["CoC Count"], check_max=True, check_min=False)
-    _render_bar_chart("Change of Character Count", coc_hist, "Date", "CoC Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
-else:
-    st.caption("**Change of Character Count** — no data")
-
-# ── 14. Breakdown of Character (z-score + max-only highlight) ───────────────
-if isinstance(globals().get("boc_hist", None), pd.DataFrame) and not boc_hist.empty:
-    _colors = _zscore_outlier_colors(boc_hist["BoC Count"], check_max=True, check_min=False)
-    _render_bar_chart("Breakdown of Character Count", boc_hist, "Date", "BoC Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
-else:
-    st.caption("**Breakdown of Character Count** — no data")
-
-# ── 15. Biggest Up Day / Biggest Down Day (each own full-width row) ────────
-if isinstance(globals().get("biggest_move_hist", None), pd.DataFrame) and not biggest_move_hist.empty:
-    _colors_up = _zscore_outlier_colors(biggest_move_hist["Biggest Up Count"], check_max=True, check_min=False)
-    _render_bar_chart("Biggest Up Count", biggest_move_hist, "Date", "Biggest Up Count", _colors_up, height=_NARROW_HEIGHT, days=_compare_days)
-
-    _colors_down = _zscore_outlier_colors(biggest_move_hist["Biggest Down Count"], check_max=True, check_min=False)
-    _render_bar_chart("Biggest Down Count", biggest_move_hist, "Date", "Biggest Down Count", _colors_down, height=_NARROW_HEIGHT, days=_compare_days)
-else:
-    st.caption("**Biggest Up/Down Count** — no data")
 
 # ── 16. Setup Avg Rank (bespoke: lime=overall best, red=today-if-best) ─────
 # This is the one that needed the gap fix — category x-axis + bargap=0 below
