@@ -9685,38 +9685,6 @@ if isinstance(globals().get("biggest_move_hist", None), pd.DataFrame) and not bi
 else:
     st.caption("**Biggest Up Count** — no data")
 
-# ── 12. Early Bull (z-score + max-only highlight) ───────────────────────────
-if isinstance(globals().get("early_bull_hist", None), pd.DataFrame) and not early_bull_hist.empty:
-    _colors = _zscore_outlier_colors(early_bull_hist["Early Bull Count"], check_max=True, check_min=False)
-    _render_bar_chart("Early Bull Count", early_bull_hist, "Date", "Early Bull Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
-else:
-    st.caption("**Early Bull Count** — no data")
-
-# ── 4. Two Botak (z-score + max-only highlight) ─────────────────────────────
-if isinstance(globals().get("two_botak_hist", None), pd.DataFrame) and not two_botak_hist.empty:
-    _colors = _zscore_outlier_colors(two_botak_hist["Two Botak Count"], check_max=True, check_min=False)
-    _render_bar_chart("Two Botak Count", two_botak_hist, "Date", "Two Botak Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
-else:
-    st.caption("**Two Botak Count** — no data")
-
-# ── 5/6. 2x / 3x Engulfing (max-only, no z-score, matches original) ────────
-if isinstance(globals().get("engulf_hist", None), pd.DataFrame) and not engulf_hist.empty:
-    _colors_2x = _max_only_colors(engulf_hist["2x Engulfing Count"])
-    _render_bar_chart("2x Engulfing Count", engulf_hist, "Date", "2x Engulfing Count", _colors_2x, height=_NARROW_HEIGHT, days=_compare_days)
-    _colors_3x = _max_only_colors(engulf_hist["3x Engulfing Count"])
-    _render_bar_chart("3x Engulfing Count", engulf_hist, "Date", "3x Engulfing Count", _colors_3x, height=_NARROW_HEIGHT, days=_compare_days)
-else:
-    st.caption("**2x/3x Engulfing Count** — no data")
-
-
-
-# ── 8. Value Trap (z-score + max-only highlight) ────────────────────────────
-if isinstance(globals().get("value_trap_hist", None), pd.DataFrame) and not value_trap_hist.empty:
-    _colors = _zscore_outlier_colors(value_trap_hist["Value Trap Count"], check_max=True, check_min=False)
-    _render_bar_chart("Value Trap Count", value_trap_hist, "Date", "Value Trap Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
-else:
-    st.caption("**Value Trap Count** — no data")
-
 # ── 16. Setup Avg Rank (bespoke: lime=overall best, red=today-if-best) ─────
 # This is the one that needed the gap fix — category x-axis + bargap=0 below
 # makes it render flush like every other chart in this grid.
@@ -9765,3 +9733,38 @@ if isinstance(_setup_avgrank_hist, pd.DataFrame) and not _setup_avgrank_hist.emp
     st.plotly_chart(_fig_setup, use_container_width=True, config={"displayModeBar": False})
 else:
     st.caption("**Setup Avg Rank** — no data")
+
+st.markdown("---")
+
+# ── 12. Early Bull (z-score + max-only highlight) ───────────────────────────
+if isinstance(globals().get("early_bull_hist", None), pd.DataFrame) and not early_bull_hist.empty:
+    _colors = _zscore_outlier_colors(early_bull_hist["Early Bull Count"], check_max=True, check_min=False)
+    _render_bar_chart("Early Bull Count", early_bull_hist, "Date", "Early Bull Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**Early Bull Count** — no data")
+
+# ── 4. Two Botak (z-score + max-only highlight) ─────────────────────────────
+if isinstance(globals().get("two_botak_hist", None), pd.DataFrame) and not two_botak_hist.empty:
+    _colors = _zscore_outlier_colors(two_botak_hist["Two Botak Count"], check_max=True, check_min=False)
+    _render_bar_chart("Two Botak Count", two_botak_hist, "Date", "Two Botak Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**Two Botak Count** — no data")
+
+# ── 5/6. 2x / 3x Engulfing (max-only, no z-score, matches original) ────────
+if isinstance(globals().get("engulf_hist", None), pd.DataFrame) and not engulf_hist.empty:
+    _colors_2x = _max_only_colors(engulf_hist["2x Engulfing Count"])
+    _render_bar_chart("2x Engulfing Count", engulf_hist, "Date", "2x Engulfing Count", _colors_2x, height=_NARROW_HEIGHT, days=_compare_days)
+    _colors_3x = _max_only_colors(engulf_hist["3x Engulfing Count"])
+    _render_bar_chart("3x Engulfing Count", engulf_hist, "Date", "3x Engulfing Count", _colors_3x, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**2x/3x Engulfing Count** — no data")
+
+
+
+# ── 8. Value Trap (z-score + max-only highlight) ────────────────────────────
+if isinstance(globals().get("value_trap_hist", None), pd.DataFrame) and not value_trap_hist.empty:
+    _colors = _zscore_outlier_colors(value_trap_hist["Value Trap Count"], check_max=True, check_min=False)
+    _render_bar_chart("Value Trap Count", value_trap_hist, "Date", "Value Trap Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**Value Trap Count** — no data")
+
