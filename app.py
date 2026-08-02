@@ -9482,7 +9482,7 @@ st.markdown("---")
 st.markdown("#### 📊 All Charts — Side-by-Side Comparison")
 
 _compare_days = st.slider(
-    "Days to display", min_value=10, max_value=60, value=30, step=5,
+    "Days to display", min_value=10, max_value=60, value=60, step=5,
     key="compare_grid_days"
 )
 
@@ -9589,6 +9589,16 @@ def _render_two_bar_chart(title, df, date_col, value_col, colors_a,
 
 _NARROW_HEIGHT = 110
 
+# ── 3. Stage 2 vs Stage 4 (line, no bar coloring in original) ──────────────
+if isinstance(globals().get("stage_hist", None), pd.DataFrame) and not stage_hist.empty:
+    _render_multi_line_chart(
+        "Stage 2 vs Stage 4", stage_hist, "Date",
+        [("S2 Count", "#378ADD"), ("S4 Count", "#FF69B4")],
+        height=_NARROW_HEIGHT, days=_compare_days
+    )
+else:
+    st.caption("**Stage 2 vs Stage 4** — no data")
+
 # ── 1. Minervini Count (line, matches original color logic) ────────────────
 if isinstance(globals().get("historical_df", None), pd.DataFrame) and not historical_df.empty:
     _chart_df_min = historical_df.copy()
@@ -9609,15 +9619,31 @@ if isinstance(globals().get("leader_hist", None), pd.DataFrame) and not leader_h
 else:
     st.caption("**RS Leader Count** — no data")
 
-# ── 3. Stage 2 vs Stage 4 (line, no bar coloring in original) ──────────────
-if isinstance(globals().get("stage_hist", None), pd.DataFrame) and not stage_hist.empty:
-    _render_multi_line_chart(
-        "Stage 2 vs Stage 4", stage_hist, "Date",
-        [("S2 Count", "#378ADD"), ("S4 Count", "#FF69B4")],
-        height=_NARROW_HEIGHT, days=_compare_days
+# ── 11. True Market Leader (z-score + gold-max/red-min, matches original) ──
+if isinstance(globals().get("tml_hist", None), pd.DataFrame) and not tml_hist.empty:
+    _colors = _zscore_outlier_colors(
+        tml_hist["TML Count"], check_max=True, check_min=True,
+        max_color="#FFD700", min_color="#FF4B4B"
     )
+    _render_bar_chart("True Market Leader Count", tml_hist, "Date", "TML Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
 else:
-    st.caption("**Stage 2 vs Stage 4** — no data")
+    st.caption("**True Market Leader Count** — no data")
+
+# ── 10. Gapper (z-score + max/min highlight) ────────────────────────────────
+if isinstance(globals().get("gapper_hist", None), pd.DataFrame) and not gapper_hist.empty:
+    _colors = _zscore_outlier_colors(gapper_hist["Gapper Count"], check_max=True, check_min=True)
+    _render_bar_chart("Gapper Count", gapper_hist, "Date", "Gapper Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**Gapper Count** — no data")
+
+
+
+# ── 12. Early Bull (z-score + max-only highlight) ───────────────────────────
+if isinstance(globals().get("early_bull_hist", None), pd.DataFrame) and not early_bull_hist.empty:
+    _colors = _zscore_outlier_colors(early_bull_hist["Early Bull Count"], check_max=True, check_min=False)
+    _render_bar_chart("Early Bull Count", early_bull_hist, "Date", "Early Bull Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**Early Bull Count** — no data")
 
 # ── 4. Two Botak (z-score + max-only highlight) ─────────────────────────────
 if isinstance(globals().get("two_botak_hist", None), pd.DataFrame) and not two_botak_hist.empty:
@@ -9656,29 +9682,7 @@ if isinstance(globals().get("volatility_hist", None), pd.DataFrame) and not vola
 else:
     st.caption("**Volatility Count** — no data")
 
-# ── 10. Gapper (z-score + max/min highlight) ────────────────────────────────
-if isinstance(globals().get("gapper_hist", None), pd.DataFrame) and not gapper_hist.empty:
-    _colors = _zscore_outlier_colors(gapper_hist["Gapper Count"], check_max=True, check_min=True)
-    _render_bar_chart("Gapper Count", gapper_hist, "Date", "Gapper Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
-else:
-    st.caption("**Gapper Count** — no data")
 
-# ── 11. True Market Leader (z-score + gold-max/red-min, matches original) ──
-if isinstance(globals().get("tml_hist", None), pd.DataFrame) and not tml_hist.empty:
-    _colors = _zscore_outlier_colors(
-        tml_hist["TML Count"], check_max=True, check_min=True,
-        max_color="#FFD700", min_color="#FF4B4B"
-    )
-    _render_bar_chart("True Market Leader Count", tml_hist, "Date", "TML Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
-else:
-    st.caption("**True Market Leader Count** — no data")
-
-# ── 12. Early Bull (z-score + max-only highlight) ───────────────────────────
-if isinstance(globals().get("early_bull_hist", None), pd.DataFrame) and not early_bull_hist.empty:
-    _colors = _zscore_outlier_colors(early_bull_hist["Early Bull Count"], check_max=True, check_min=False)
-    _render_bar_chart("Early Bull Count", early_bull_hist, "Date", "Early Bull Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
-else:
-    st.caption("**Early Bull Count** — no data")
 
 # ── 13. Change of Character (z-score + max-only highlight) ──────────────────
 if isinstance(globals().get("coc_hist", None), pd.DataFrame) and not coc_hist.empty:
@@ -9694,18 +9698,15 @@ if isinstance(globals().get("boc_hist", None), pd.DataFrame) and not boc_hist.em
 else:
     st.caption("**Breakdown of Character Count** — no data")
 
-# ── 15. Biggest Up / Biggest Down Day (z-score + max-only each, side by side) ─
+# ── 15. Biggest Up Day / Biggest Down Day (each own full-width row) ────────
 if isinstance(globals().get("biggest_move_hist", None), pd.DataFrame) and not biggest_move_hist.empty:
     _colors_up = _zscore_outlier_colors(biggest_move_hist["Biggest Up Count"], check_max=True, check_min=False)
+    _render_bar_chart("Biggest Up Count", biggest_move_hist, "Date", "Biggest Up Count", _colors_up, height=_NARROW_HEIGHT, days=_compare_days)
+
     _colors_down = _zscore_outlier_colors(biggest_move_hist["Biggest Down Count"], check_max=True, check_min=False)
-    _render_two_bar_chart(
-        "Biggest Move Count", biggest_move_hist, "Date",
-        "Biggest Up Count", _colors_up,
-        "Biggest Down Count", _colors_down,
-        height=_NARROW_HEIGHT, days=_compare_days
-    )
+    _render_bar_chart("Biggest Down Count", biggest_move_hist, "Date", "Biggest Down Count", _colors_down, height=_NARROW_HEIGHT, days=_compare_days)
 else:
-    st.caption("**Biggest Move Count** — no data")
+    st.caption("**Biggest Up/Down Count** — no data")
 
 # ── 16. Setup Avg Rank (bespoke: lime=overall best, red=today-if-best) ─────
 # This is the one that needed the gap fix — category x-axis + bargap=0 below
