@@ -268,7 +268,7 @@ INDUSTRIES = {
 
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
-    'PRU', 'RGEN', 'UBS', 'TRV', 'WEN', 'OKLO', 'IBB', 'Q', 'OUST', 'VPG', 'WOLF', 'NOK', 'HSBC', 'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
+    'ESTC', 'PRU', 'RGEN', 'UBS', 'TRV', 'WEN', 'OKLO', 'IBB', 'Q', 'OUST', 'VPG', 'WOLF', 'NOK', 'HSBC', 'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
     'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EWY', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'OR', 
     'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
@@ -9470,3 +9470,95 @@ if master_rows:
 else:
     st.info("No tickers currently qualify for any tracked setup.")
 
+# ==============================================================================
+# 14. ALL-CHARTS COMPARISON GRID — read-only, appended at the very bottom.
+# Compact multi-panel view of every *_hist series so they can be eyeballed
+# side-by-side over the same trailing window. Does not recompute anything;
+# purely re-renders DataFrames that already exist earlier in the script.
+# ==============================================================================
+st.markdown("---")
+st.markdown("#### 📊 All Charts — Side-by-Side Comparison")
+
+_compare_days = st.slider(
+    "Days to display", min_value=10, max_value=60, value=30, step=5,
+    key="compare_grid_days"
+)
+
+def _render_mini_chart(title, df, date_col, series, chart_type="bar", height=150, days=30):
+    """
+    series: list of (column_name, color) tuples.
+    chart_type: 'bar' or 'line'.
+    Silently no-ops if df is missing/empty/malformed — never raises.
+    """
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        st.caption(f"**{title}** — no data")
+        return
+    if date_col not in df.columns:
+        st.caption(f"**{title}** — no data")
+        return
+
+    plot_df = df.tail(days)
+    fig = go.Figure()
+
+    for col, color in series:
+        if col not in plot_df.columns:
+            continue
+        if chart_type == "bar":
+            fig.add_trace(go.Bar(
+                x=plot_df[date_col], y=plot_df[col],
+                name=col, marker_color=color, showlegend=(len(series) > 1),
+            ))
+        else:
+            fig.add_trace(go.Scatter(
+                x=plot_df[date_col], y=plot_df[col],
+                mode="lines", name=col,
+                line=dict(color=color, width=1.6),
+                showlegend=(len(series) > 1),
+            ))
+
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=11, color="#cccccc"), x=0.02, y=0.97),
+        height=height,
+        margin=dict(l=4, r=4, t=26, b=18),
+        plot_bgcolor="rgba(20,22,30,1)",
+        paper_bgcolor="rgba(13,17,23,0)",
+        font=dict(color="#888888", size=9),
+        xaxis=dict(showgrid=False, tickfont=dict(size=7, color="#666666"), nticks=4),
+        yaxis=dict(showgrid=True, gridcolor="rgba(120,120,120,0.12)", tickfont=dict(size=8, color="#666666")),
+        showlegend=(len(series) > 1),
+        legend=dict(font=dict(size=8), orientation="h", yanchor="bottom", y=1.0, x=0.02),
+        bargap=0.15,
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+
+# ── Config: (title, dataframe_varname, date_col, [(value_col, color), ...], chart_type)
+_CHART_GRID_CONFIG = [
+    ("Minervini Count",       "historical_df",       "Date", [("Minervini Count", "#1f77b4"), ("20D MA", "#FF4B4B")], "line"),
+    ("RS Leader Count",       "leader_hist",          "Date", [("Leader Count", "#29B5E8")], "bar"),
+    ("Stage 2 vs Stage 4",    "stage_hist",           "Date", [("S2 Count", "#378ADD"), ("S4 Count", "#FF69B4")], "line"),
+    ("Two Botak Count",       "two_botak_hist",       "Date", [("Two Botak Count", "#29B5E8")], "bar"),
+    ("2x Engulfing Count",    "engulf_hist",          "Date", [("2x Engulfing Count", "#29B5E8")], "bar"),
+    ("3x Engulfing Count",    "engulf_hist",          "Date", [("3x Engulfing Count", "#29B5E8")], "bar"),
+    ("PowerTrend Count",      "powertrend_hist",      "Date", [("PowerTrend Count", "#29B5E8")], "bar"),
+    ("Value Trap Count",      "value_trap_hist",      "Date", [("Value Trap Count", "#29B5E8")], "bar"),
+    ("Volatility Count",      "volatility_hist",      "Date", [("Volatility Count", "#29B5E8")], "bar"),
+    ("Gapper Count",          "gapper_hist",          "Date", [("Gapper Count", "#29B5E8")], "bar"),
+    ("True Market Leader",    "tml_hist",             "Date", [("TML Count", "#29B5E8")], "bar"),
+    ("Early Bull Count",      "early_bull_hist",      "Date", [("Early Bull Count", "#29B5E8")], "bar"),
+    ("Change of Character",   "coc_hist",             "Date", [("CoC Count", "#00FF00")], "bar"),
+    ("Breakdown of Character","boc_hist",             "Date", [("BoC Count", "#FF4B4B")], "bar"),
+    ("Biggest Up/Down Day",   "biggest_move_hist",    "Date", [("Biggest Up Count", "#00C076"), ("Biggest Down Count", "#FF4B6E")], "line"),
+    ("Setup Avg Rank",        "setup_avgrank_hist",   "Date", [("Avg Rank", "#29B5E8")], "bar"),
+    ("Global Setup Count",    "setup_count_hist",     "Date", [("Setup Count", "#FF4B4B")], "line"),
+]
+
+_COLS_PER_ROW = 3
+_chart_rows = [_CHART_GRID_CONFIG[i:i + _COLS_PER_ROW] for i in range(0, len(_CHART_GRID_CONFIG), _COLS_PER_ROW)]
+
+for row_configs in _chart_rows:
+    cols = st.columns(_COLS_PER_ROW)
+    for col_widget, (title, df_varname, date_col, series, chart_type) in zip(cols, row_configs):
+        with col_widget:
+            _df = globals().get(df_varname, None)
+            _render_mini_chart(title, _df, date_col, series, chart_type=chart_type, days=_compare_days)
