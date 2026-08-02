@@ -1234,6 +1234,15 @@ dist_html = f"""
 
 st.markdown(dist_html, unsafe_allow_html=True)
 
+left_tail  = dist_buckets["≤-7%"] + dist_buckets["-7~-5%"]
+right_tail = dist_buckets["≥7%"] + dist_buckets["5~7%"]
+avg_bucket = sum(dist_buckets.values()) / len(dist_buckets)
+
+if left_tail > avg_bucket * 3:
+    st.markdown("⚠️ **Fat left tail — distribution day**", unsafe_allow_html=True)
+elif right_tail > avg_bucket * 3:
+    st.markdown("🚀 **Fat right tail — thrust day**", unsafe_allow_html=True)
+
 st.markdown("---")
 
 # 4. IMPLEMENTATION OF NEW NORMALIZED RS METHOD AND EMA CLOUD
@@ -9270,7 +9279,7 @@ st.markdown(
     }
     </style>
     <div class="calligraphy-banner">
-        <span>順勢而為</span>
+        <span>顺势而为</span>
     </div>
     """,
     unsafe_allow_html=True
