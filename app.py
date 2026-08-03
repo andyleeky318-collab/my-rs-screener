@@ -9594,17 +9594,6 @@ def _render_two_bar_chart(title, df, date_col, value_col, colors_a,
 
 _NARROW_HEIGHT = 110
 
-# ── 3. Stage 2 vs Stage 4 (line, no bar coloring in original) ──────────────
-if isinstance(globals().get("stage_hist", None), pd.DataFrame) and not stage_hist.empty:
-    _render_multi_line_chart(
-        "Stage 2 vs Stage 4", stage_hist, "Date",
-        [("S2 Count", "#378ADD"), ("S4 Count", "#FF69B4")],
-        height=_NARROW_HEIGHT, days=_compare_days,
-        show_legend=False
-    )
-else:
-    st.caption("**Stage 2 vs Stage 4** — no data")
-
 # ── 1. Minervini Count (line, matches original color logic) ────────────────
 if isinstance(globals().get("historical_df", None), pd.DataFrame) and not historical_df.empty:
     _chart_df_min = historical_df.copy()
@@ -9635,22 +9624,6 @@ if isinstance(globals().get("tml_hist", None), pd.DataFrame) and not tml_hist.em
     _render_bar_chart("True Market Leader Count", tml_hist, "Date", "TML Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
 else:
     st.caption("**True Market Leader Count** — no data")
-
-st.markdown("---")
-
-# ── 10. Gapper (z-score + max/min highlight) ────────────────────────────────
-if isinstance(globals().get("gapper_hist", None), pd.DataFrame) and not gapper_hist.empty:
-    _colors = _zscore_outlier_colors(gapper_hist["Gapper Count"], check_max=True, check_min=True)
-    _render_bar_chart("Gapper Count", gapper_hist, "Date", "Gapper Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
-else:
-    st.caption("**Gapper Count** — no data")
-
-# ── 7. PowerTrend (z-score + max/min highlight) ─────────────────────────────
-if isinstance(globals().get("powertrend_hist", None), pd.DataFrame) and not powertrend_hist.empty:
-    _colors = _zscore_outlier_colors(powertrend_hist["PowerTrend Count"], check_max=True, check_min=True)
-    _render_bar_chart("PowerTrend Count", powertrend_hist, "Date", "PowerTrend Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
-else:
-    st.caption("**PowerTrend Count** — no data")
 
 st.markdown("---")
 
@@ -9690,6 +9663,33 @@ if isinstance(globals().get("biggest_move_hist", None), pd.DataFrame) and not bi
     _render_bar_chart("Biggest Up Count", biggest_move_hist, "Date", "Biggest Up Count", _colors_up, height=_NARROW_HEIGHT, days=_compare_days)
 else:
     st.caption("**Biggest Up Count** — no data")
+
+st.markdown("---")
+
+# ── 3. Stage 2 vs Stage 4 (line, no bar coloring in original) ──────────────
+if isinstance(globals().get("stage_hist", None), pd.DataFrame) and not stage_hist.empty:
+    _render_multi_line_chart(
+        "Stage 2 vs Stage 4", stage_hist, "Date",
+        [("S2 Count", "#378ADD"), ("S4 Count", "#FF69B4")],
+        height=_NARROW_HEIGHT, days=_compare_days,
+        show_legend=False
+    )
+else:
+    st.caption("**Stage 2 vs Stage 4** — no data")
+
+# ── 10. Gapper (z-score + max/min highlight) ────────────────────────────────
+if isinstance(globals().get("gapper_hist", None), pd.DataFrame) and not gapper_hist.empty:
+    _colors = _zscore_outlier_colors(gapper_hist["Gapper Count"], check_max=True, check_min=True)
+    _render_bar_chart("Gapper Count", gapper_hist, "Date", "Gapper Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**Gapper Count** — no data")
+
+# ── 7. PowerTrend (z-score + max/min highlight) ─────────────────────────────
+if isinstance(globals().get("powertrend_hist", None), pd.DataFrame) and not powertrend_hist.empty:
+    _colors = _zscore_outlier_colors(powertrend_hist["PowerTrend Count"], check_max=True, check_min=True)
+    _render_bar_chart("PowerTrend Count", powertrend_hist, "Date", "PowerTrend Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**PowerTrend Count** — no data")
 
 # ── 16. Setup Avg Rank (bespoke: lime=overall best, red=today-if-best) ─────
 # This is the one that needed the gap fix — category x-axis + bargap=0 below
