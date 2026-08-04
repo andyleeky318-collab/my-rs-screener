@@ -3682,8 +3682,8 @@ if all_data:
             )
             engulf_html += (
                 f"<div style='margin-bottom:5px;'>"
-                f"<span style='color:#00FF00; font-weight:bold; font-size:12px; margin-right:6px;'>#{rank}</span>"
-                f"<span style='color:#00FF00; font-weight:bold; font-size:13px;'>{industry}</span>"
+                f"<span style='color:#FFFF00; font-weight:bold; font-size:12px; margin-right:6px;'>#{rank}</span>"
+                f"<span style='color:#FFFF00; font-weight:bold; font-size:13px;'>{industry}</span>"
                 f"<span style='margin-left:6px;'>{ticker_badges}</span>"
                 f"</div>"
             )
