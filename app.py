@@ -3316,6 +3316,15 @@ if all_data:
     <th style="text-align: center; width: 170px;">50ma_Bounce</th>
     </tr></thead><tbody>"""
 
+    # Quick bullish-engulfing-today set (for industry-name lime highlight)
+    _engulf_today_set = set()
+    for _t in KNOWN_STOCKS:
+        _df = ticker_dfs_shared.get(_t)
+        if _df is None or len(_df) < 2:
+            continue
+        if (_df['Open'].iloc[-1] < _df['Low'].iloc[-2]) and (_df['Close'].iloc[-1] > _df['High'].iloc[-2]):
+            _engulf_today_set.add(_t)
+
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
         item = next(d for d in all_data if d["Industry"] == row["Industry"])
         rs_lookup = dict(zip(item["Tickers"]["Ticker"], item["Tickers"]["RS Score"]))
@@ -3520,10 +3529,13 @@ if all_data:
                 )
 
         num_color = "#FF4B4B" if row["Industry"] in vol_flagged_industries else "#888888"
+
+        engulf_industry_count = sum(1 for t in item["Tickers"]["Ticker"] if t in _engulf_today_set)
+        industry_name_color = "#00FF00" if engulf_industry_count > 1 else "#ffffff"
         
         table_html += f"""<tr style="background-color: {bg_color};">
         <td style="text-align: center; color: {num_color}; font-weight: bold;">{row_num}</td>
-        <td style="font-weight: bold; color: #ffffff;">{row['Industry']}</td>
+        <td style="font-weight: bold; color: {industry_name_color};">{row['Industry']}</td>
         <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.1f}</td>
         <td style="text-align: center; vertical-align: middle;">{rank_str}</td>
         <td style="text-align: center; vertical-align: middle;">{rank_str_1m}</td>
