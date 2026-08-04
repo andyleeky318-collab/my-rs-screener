@@ -3696,7 +3696,7 @@ if all_data:
         if item_bk is None:
             continue
         tickers_bk = sorted(t for t in item_bk["Tickers"]["Ticker"] if t in _botak_today_set)
-        if len(tickers_bk) > 1:
+        if len(tickers_bk) > 2:
             botak_industry_tickers[row_bk["Industry"]] = tickers_bk
 
     all_botak_tickers = set()
