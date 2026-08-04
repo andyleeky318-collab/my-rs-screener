@@ -3640,6 +3640,49 @@ if all_data:
         unsafe_allow_html=True
     )
 
+    # ── Engulfing summary (industries with >1 bullish-engulfing-today ticker) ──
+    engulf_industry_tickers = {}
+    for _, row_e in df_main.iterrows():
+        item_e = next((d for d in all_data if d["Industry"] == row_e["Industry"]), None)
+        if item_e is None:
+            continue
+        tickers_e = sorted(t for t in item_e["Tickers"]["Ticker"] if t in _engulf_today_set)
+        if len(tickers_e) > 1:
+            engulf_industry_tickers[row_e["Industry"]] = tickers_e
+
+    all_engulf_tickers = set()
+    for tickers_list in engulf_industry_tickers.values():
+        all_engulf_tickers.update(tickers_list)
+
+    engulf_html = (
+        f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
+        f"🐳 Engulfing "
+        f"<span style='color:#00FF00;'>({len(engulf_industry_tickers)} industries, {len(all_engulf_tickers)} tickers)</span>"
+        f"</div>"
+    )
+    if engulf_industry_tickers:
+        sorted_engulf = sorted(
+            engulf_industry_tickers.keys(),
+            key=lambda ind: industry_rank_map.get(ind, 9999)
+        )
+        for industry in sorted_engulf:
+            rank = industry_rank_map.get(industry, "-")
+            tickers_for_ind = engulf_industry_tickers[industry]
+            ticker_badges = "".join(
+                f'<span style="display:inline-block;margin:1px 3px;padding:1px 5px;'
+                f'border:1px solid #336633;border-radius:3px;font-size:11px;'
+                f'background-color:#1a2d1a;color:#99FF99;font-weight:600;">{t}</span>'
+                for t in tickers_for_ind
+            )
+            engulf_html += (
+                f"<div style='margin-bottom:5px;'>"
+                f"<span style='color:#00FF00; font-weight:bold; font-size:12px; margin-right:6px;'>#{rank}</span>"
+                f"<span style='color:#00FF00; font-weight:bold; font-size:13px;'>{industry}</span>"
+                f"<span style='margin-left:6px;'>{ticker_badges}</span>"
+                f"</div>"
+            )
+    st.markdown(engulf_html, unsafe_allow_html=True)
+
     st.markdown(table_html, unsafe_allow_html=True)
 
 # 7. EXTRA SEPARATE PATTERNS SCANNING BLOCK
