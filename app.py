@@ -3544,7 +3544,7 @@ if all_data:
 
         engulf_industry_count = sum(1 for t in item["Tickers"]["Ticker"] if t in _engulf_today_set)
         botak_industry_count = sum(1 for t in item["Tickers"]["Ticker"] if t in _botak_today_set)
-        industry_name_color = "#FFFF00" if engulf_industry_count > 1 else ("#00FF00" if botak_industry_count > 1 else "#ffffff")
+        industry_name_color = "#FFFF00" if engulf_industry_count > 1 else ("#00FF00" if botak_industry_count > 2 else "#ffffff")
         
         table_html += f"""<tr style="background-color: {bg_color};">
         <td style="text-align: center; color: {num_color}; font-weight: bold;">{row_num}</td>
