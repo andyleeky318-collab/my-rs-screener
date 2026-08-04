@@ -3663,7 +3663,7 @@ if all_data:
     engulf_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
         f"🐳 Engulfing "
-        f"<span style='color:#00FF00;'>({len(engulf_industry_tickers)} industries, {len(all_engulf_tickers)} tickers)</span>"
+        f"<span style='color:#FFFF00;'>({len(engulf_industry_tickers)} industries, {len(all_engulf_tickers)} tickers)</span>"
         f"</div>"
     )
     if engulf_industry_tickers:
