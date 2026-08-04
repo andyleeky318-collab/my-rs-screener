@@ -3325,6 +3325,18 @@ if all_data:
         if (_df['Open'].iloc[-1] < _df['Low'].iloc[-2]) and (_df['Close'].iloc[-1] > _df['High'].iloc[-2]):
             _engulf_today_set.add(_t)
 
+    # Quick botak-today set (single bar, for industry-name lime highlight)
+    _botak_today_set = set()
+    for _t in KNOWN_STOCKS:
+        _df = ticker_dfs_shared.get(_t)
+        if _df is None or len(_df) < 1:
+            continue
+        _o, _h, _c = _df['Open'].iloc[-1], _df['High'].iloc[-1], _df['Close'].iloc[-1]
+        _is_botak = abs(_c - _h) < 0.05 and _c > _o
+        _is_pct   = _c > _o and ((_c - _o) / max(_h - _o, 0.001)) > 0.9
+        if (_is_botak or _is_pct) and _c > 20:
+            _botak_today_set.add(_t)
+
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
         item = next(d for d in all_data if d["Industry"] == row["Industry"])
         rs_lookup = dict(zip(item["Tickers"]["Ticker"], item["Tickers"]["RS Score"]))
@@ -3531,7 +3543,8 @@ if all_data:
         num_color = "#FF4B4B" if row["Industry"] in vol_flagged_industries else "#888888"
 
         engulf_industry_count = sum(1 for t in item["Tickers"]["Ticker"] if t in _engulf_today_set)
-        industry_name_color = "#00FF00" if engulf_industry_count > 1 else "#ffffff"
+        botak_industry_count = sum(1 for t in item["Tickers"]["Ticker"] if t in _botak_today_set)
+        industry_name_color = "#FFFF00" if engulf_industry_count > 1 else ("#00FF00" if botak_industry_count > 1 else "#ffffff")
         
         table_html += f"""<tr style="background-color: {bg_color};">
         <td style="text-align: center; color: {num_color}; font-weight: bold;">{row_num}</td>
@@ -3675,6 +3688,46 @@ if all_data:
                 f"</div>"
             )
     st.markdown(engulf_html, unsafe_allow_html=True)
+
+    # ── Botak summary (industries with >1 botak-today ticker) ──
+    botak_industry_tickers = {}
+    for _, row_bk in df_main.iterrows():
+        item_bk = next((d for d in all_data if d["Industry"] == row_bk["Industry"]), None)
+        if item_bk is None:
+            continue
+        tickers_bk = sorted(t for t in item_bk["Tickers"]["Ticker"] if t in _botak_today_set)
+        if len(tickers_bk) > 1:
+            botak_industry_tickers[row_bk["Industry"]] = tickers_bk
+
+    all_botak_tickers = set()
+    for tickers_list in botak_industry_tickers.values():
+        all_botak_tickers.update(tickers_list)
+
+    botak_html = (
+        f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
+        f"🔥 Botak "
+        f"<span style='color:#00FF00;'>({len(botak_industry_tickers)} industries, {len(all_botak_tickers)} tickers)</span>"
+        f"</div>"
+    )
+    if botak_industry_tickers:
+        sorted_botak = sorted(botak_industry_tickers.keys(), key=lambda ind: industry_rank_map.get(ind, 9999))
+        for industry in sorted_botak:
+            rank = industry_rank_map.get(industry, "-")
+            tickers_for_ind = botak_industry_tickers[industry]
+            ticker_badges = "".join(
+                f'<span style="display:inline-block;margin:1px 3px;padding:1px 5px;'
+                f'border:1px solid #336633;border-radius:3px;font-size:11px;'
+                f'background-color:#1a2d1a;color:#99FF99;font-weight:600;">{t}</span>'
+                for t in tickers_for_ind
+            )
+            botak_html += (
+                f"<div style='margin-bottom:5px;'>"
+                f"<span style='color:#00FF00; font-weight:bold; font-size:12px; margin-right:6px;'>#{rank}</span>"
+                f"<span style='color:#00FF00; font-weight:bold; font-size:13px;'>{industry}</span>"
+                f"<span style='margin-left:6px;'>{ticker_badges}</span>"
+                f"</div>"
+            )
+    st.markdown(botak_html, unsafe_allow_html=True)
 
     st.markdown(
         f'<div style="text-align: right; font-size: 20px; color: #888888; margin-bottom: 4px; font-family: monospace;">'
