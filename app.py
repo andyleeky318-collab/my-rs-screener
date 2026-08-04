@@ -310,8 +310,8 @@ LIME_STOCKS = [
     'IPAY', 'ITB', 'JETS', 'KRE', 'KWEB', 'LIT', 'MAGS',
     'PBW', 'REMX', 'SHLD', 'SIL', 'SLX', 'SMH', 'TAN',
     'UFO', 'URA', 'USO', 'VTV', 'VUG', 'WGMI', 'XBI',
-    'XME', 'XRT', 'XTL', 'SPY', 'QQQ', 'RSP'
-]#FOTO
+    'XME', 'XRT', 'FOTO', 'SPY', 'QQQ', 'RSP'
+]
 
 LIME_STOCKS1 = [
     'CIBR', 'COPX', 'DRAM', 'GDX', 'IBIT', 'IGV', 'IHI', 'EWY',
