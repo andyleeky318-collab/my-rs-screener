@@ -5756,9 +5756,7 @@ else:
             hide_index=True,
             height=36 * len(df_top5) + 38,
             column_config={
-                "Leaders": st.column_config.Column(
-                    alignment="left"
-                )
+                "Leaders": st.column_config.Column()
             }
         )
     with col_metrics:
