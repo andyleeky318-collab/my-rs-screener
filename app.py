@@ -3383,28 +3383,20 @@ if all_data:
             ticker_sym = r["Ticker"]
             rs_score = r["RS Score"]
             ticker_price = item["Prices"].get(ticker_sym, 0)
-            if ticker_sym in industry_vol_tickers.get(row["Industry"], []):
-                ticker_glow = "box-shadow:0 0 6px 2px #FF4B4B;"
-            elif engulf_industry_count > 1 and ticker_sym in _engulf_today_set:
-                ticker_glow = "box-shadow:0 0 6px 2px #FFFF00;"
-            elif botak_industry_count > 2 and ticker_sym in _botak_today_set:
-                ticker_glow = "box-shadow:0 0 6px 2px #00FF00;"
-            else:
-                ticker_glow = ""
             rs_threshold = 70 if ticker_sym in LIME_STOCKS1 else 80
             
             if (show_all_rs or rs_score >= rs_threshold) and ticker_price > 20:
                 # If the ticker is inside KNOWN_STOCKS, apply high-contrast dark text rules
                 if ticker_sym in LIME_STOCKS1:
                     ticker_html += (
-                        f'<div class="ticker-badge lime-badge" style="{ticker_glow}">'
+                        f'<div class="ticker-badge lime-badge">'
                         f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{ticker_sym}</span>' 
                         f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{rs_score:.0f}</span>' 
                         f'</div>'
                     )
                 elif ticker_sym in KNOWN_STOCKS:
                     ticker_html += (
-                        f'<div class="ticker-badge new-pattern-badge" style="{ticker_glow}">'
+                        f'<div class="ticker-badge new-pattern-badge">'
                         f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{ticker_sym}</span>' # Clean high-contrast dark charcoal text
                         f'<span class="ticker-rs" style="color: #004d26; font-weight: bold;">{r["RS Score"]:.0f}</span>' # Highly legible dark gold numbers
                         f'</div>'
@@ -3412,7 +3404,7 @@ if all_data:
                 else:
                     # Standard matching dark badge layout for everything else
                     ticker_html += (
-                        f'<div class="ticker-badge" style="{ticker_glow}">'
+                        f'<div class="ticker-badge">'
                         f'<span class="ticker-name">{ticker_sym}</span>'
                         f'<span class="ticker-rs">{r["RS Score"]:.0f}</span>'
                         f'</div>'
@@ -3552,12 +3544,7 @@ if all_data:
 
         engulf_industry_count = sum(1 for t in item["Tickers"]["Ticker"] if t in _engulf_today_set)
         botak_industry_count = sum(1 for t in item["Tickers"]["Ticker"] if t in _botak_today_set)
-        industry_name_color = (
-            "#FF4B4B" if row["Industry"] in vol_flagged_industries
-            else "#FFFF00" if engulf_industry_count > 1
-            else "#00FF00" if botak_industry_count > 2
-            else "#ffffff"
-        )
+        industry_name_color = "#FFFF00" if engulf_industry_count > 1 else ("#00FF00" if botak_industry_count > 2 else "#ffffff")
         
         table_html += f"""<tr style="background-color: {bg_color};">
         <td style="text-align: center; color: {num_color}; font-weight: bold;">{row_num}</td>
