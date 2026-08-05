@@ -7,4 +7,3 @@ google-genai
 plotly
 openai>=1.0.0
 Pillow
-altair==5.4.1
