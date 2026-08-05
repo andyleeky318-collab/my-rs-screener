@@ -3379,6 +3379,8 @@ if all_data:
             rank_str_1m = f'<span style="color: #aaaaaa;">0</span>'
 
         ticker_html = ""
+        engulf_industry_count = sum(1 for t in item["Tickers"]["Ticker"] if t in _engulf_today_set)
+        botak_industry_count = sum(1 for t in item["Tickers"]["Ticker"] if t in _botak_today_set)
         for _, r in item["Tickers"].iterrows():
             ticker_sym = r["Ticker"]
             rs_score = r["RS Score"]
@@ -3550,8 +3552,6 @@ if all_data:
 
         num_color = "#FF4B4B" if row["Industry"] in vol_flagged_industries else "#888888"
 
-        engulf_industry_count = sum(1 for t in item["Tickers"]["Ticker"] if t in _engulf_today_set)
-        botak_industry_count = sum(1 for t in item["Tickers"]["Ticker"] if t in _botak_today_set)
         industry_name_color = (
             "#FF4B4B" if row["Industry"] in vol_flagged_industries
             else "#FFFF00" if engulf_industry_count > 1
