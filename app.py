@@ -183,7 +183,7 @@ INDUSTRIES = {
     'COMPTER SFTWR-ENTR': ['IGV', 'FROG', 'TWLO', 'MSFT', 'ORCL', 'CRM', 'IBM', 'NOW', 'ADP', 'DOCN', 'PLTR', 'ADSK', 'ROP', 'TEAM', 'SNOW', 'VEEV', 'HUBS', 'PTC', 'MANH', 'TOST', 'MNDY', 'WDAY', 'SSNC', 'GWRE', 'BSY', 'PEGA', 'QTWO', 'APPF', 'BOX', 'WK', 'U', 'RNG'],
     'COMPTER SFTWR-DSGN': ['ADBE', 'INTU', 'SNPS', 'CDNS', 'IOT', 'DT', 'TRMB', 'WIX'],
     'CMPTER SFTWR-FINCL': ['FICO', 'FIS', 'NU', 'SHOP'],
-    'CMP SFTWR-GAMING': ['EA', 'TTWO', 'RBLX'],
+    'CMP SFTWR-GAMING': ['TTWO', 'RBLX'],
     'CMP SFTWR-DBASE': ['DDOG', 'MDB', 'ORCL', 'ESTC'],
     'COMPTER SFTWR-DSKTP': ['ZM', 'SNAP', 'Z'],
     'CMPTR SFTWR-MDCL': ['APP', 'HQY'],
