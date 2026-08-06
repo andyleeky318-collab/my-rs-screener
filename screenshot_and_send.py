@@ -125,8 +125,6 @@ WAKE_BUTTON_TEXTS = [
 # the page, including SVG text (e.g. Plotly chart titles).
 SECTION_KEYWORDS = [
     "New Highs vs New Lows",
-    "Pie Chart",
-    #"ETF Ratio",    
     "Refresh Theme Insight",
     "Setup =",
     "Weekly vs Monthly",
@@ -149,6 +147,8 @@ SECTION_KEYWORDS = [
     "Breakdown of Character",
     "Biggest Move Today",    
     "Value Trap = ",
+    "Pie Chart",
+    #"ETF Ratio",
     "Quant Sentiment",
     #"Setup Quality",
     "Upcoming Earnings",
