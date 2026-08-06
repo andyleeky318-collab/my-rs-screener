@@ -1244,6 +1244,207 @@ elif right_tail > avg_bucket * 3:
     st.markdown("🚀 **Fat right tail — thrust day**", unsafe_allow_html=True)
 
 st.markdown("---")
+st.markdown(f"#### Pie Chart")
+
+def compute_rsi(close_series, period=14):
+    """Standard Wilder's RSI."""
+    delta = close_series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+
+    avg_gain = gain.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
+
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
+# ETF daily direction pie chart at the bottom of the page
+def _etf_pie_chart():
+    etf_symbols = INDUSTRIES.get('ETF', [])
+    if etf_symbols:
+        etf_changes, etf_changes_pct, etf_latest_date, etf_market_caps = fetch_etf_daily_direction(tuple(etf_symbols))
+        if etf_changes and etf_market_caps:
+            labels = []
+            values = []
+            custom_text = []
+            colors = []
+
+            for sym in etf_symbols:
+                cap = etf_market_caps.get(sym)
+                if cap is None:
+                    cap = 1.0
+                pct = etf_changes_pct.get(sym, 0.0)
+                direction = etf_changes.get(sym, 0.0)
+                labels.append(sym)
+                values.append(cap)
+                custom_text.append(f"{pct:+.2f}%")
+                colors.append('#00b894' if direction > 0 else '#d63031' if direction < 0 else '#95a5a6')
+
+            # ── Identify the strongest and weakest ETF today ──
+            strongest_idx = max(
+                range(len(etf_symbols)),
+                key=lambda i: etf_changes_pct.get(etf_symbols[i], float('-inf'))
+            )
+            weakest_idx = min(
+                range(len(etf_symbols)),
+                key=lambda i: etf_changes_pct.get(etf_symbols[i], float('inf'))
+            )
+            text_colors = [
+                '#FFD700' if i in (strongest_idx, weakest_idx) else '#ffffff'
+                for i in range(len(etf_symbols))
+            ]
+
+            fig = go.Figure(
+                data=[go.Pie(
+                    labels=labels,
+                    values=values,
+                    text=custom_text,
+                    hole=0.4,
+                    marker=dict(colors=colors, line=dict(color='#ffffff', width=1)),
+                    sort=False,
+                    textinfo='label+text',
+                    textposition='inside',
+                    insidetextorientation='radial',
+                    showlegend=False,
+                    textfont=dict(color=text_colors),
+                    hovertemplate='%{label}<br>Daily Change: %{text}<br>Size: %{value:.2f}B<extra></extra>'
+                )]
+            )
+            fig.update_traces(textfont_size=11, pull=[0.02] * len(labels))
+
+            positive_count = sum(1 for change in etf_changes.values() if change > 0)
+            fig.update_layout(
+                title={
+                    'text': f"{positive_count}/10",
+                    'x': 0.5,
+                    'xanchor': 'center',
+                    'font': {'size': 30}
+                },
+                margin=dict(l=0, r=0, t=50, b=0)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            # ── 14-day RSI, sorted high to low ──
+            rsi_rows = []
+            for sym in etf_symbols:
+                df_sym = ticker_dfs_shared.get(sym)
+                if df_sym is None or len(df_sym) < 15:
+                    continue
+                rsi_series = compute_rsi(df_sym['Close'], period=14)
+                rsi_val = rsi_series.iloc[-1]
+                if pd.isna(rsi_val):
+                    continue
+                rsi_rows.append((sym, round(float(rsi_val), 1)))
+
+            if rsi_rows:
+                rsi_rows.sort(key=lambda x: -x[1])
+                rsi_html = "<div style='display:flex;flex-wrap:wrap;justify-content:center;gap:4px;padding:6px 0;'>"
+                for sym, rsi_val in rsi_rows:
+                    pct = etf_changes_pct.get(sym, 0.0)
+                    if pct > 0:
+                        bg, border, txt = "#00FF00", "#009900", "#000000"
+                    # elif rsi_val >= 70:
+                    #     bg, border, txt = "#FFB3B3", "#CC0000", "#4B0000"
+                    # elif rsi_val <= 30:
+                    #     bg, border, txt = "#90EE90", "#228B22", "#003300"
+                    else:
+                        bg, border, txt = "#1e1e1e", "#444", "#eeeeee"
+                    rsi_html += (
+                        f'<div class="ticker-badge" style="background:{bg}; border:1px solid {border};">'
+                        f'<span class="ticker-name" style="color:{txt};">{sym}</span>'
+                        #f'<span class="ticker-rs" style="color:{txt}; margin-left:4px;">{rsi_val:.1f}</span>'
+                        f'</div>'
+                    )
+                rsi_html += "</div>"
+                st.markdown(rsi_html, unsafe_allow_html=True)
+        else:
+            st.info('ETF daily direction data unavailable.')
+
+    else:
+        st.info('ETF ETF list unavailable.')
+
+timed("ETF Pie Chart", _etf_pie_chart)
+
+st.markdown("---")
+st.markdown(f"#### ETF Ratio")
+
+def _relative_etf_ratios():
+    ratio_pairs = (
+        ("XLK", "SPY"),
+        ("XLY", "XLP"),
+        ("SPHB", "SPY"),
+        ("IWM", "QQQ"),
+        ("VUG", "VTV"),
+        ("RSP", "SPY"),
+    )
+
+    #st.markdown("#### Relative ETF Ratios (1 Year)")
+    ratio_chart_df = fetch_ratio_chart_data(ratio_pairs, period="1y")
+
+    if not ratio_chart_df.empty:
+        normalized_ratio_df = ratio_chart_df.divide(ratio_chart_df.iloc[0]).mul(100)
+
+        fig = go.Figure()
+        annotations = []
+        for ratio_name in normalized_ratio_df.columns:
+            y_values = normalized_ratio_df[ratio_name]
+            fig.add_trace(
+                go.Scatter(
+                    x=normalized_ratio_df.index,
+                    y=y_values,
+                    mode="lines",
+                    name=ratio_name,
+                    showlegend=False,
+                    hovertemplate=f"{ratio_name}<br>%{{x|%Y-%m-%d}}<br>Indexed: %{{y:.2f}}<extra></extra>"
+                )
+            )
+
+            # Highlight label if the latest value is a new high or new low for the period
+            is_new_high = y_values.iloc[-1] > y_values.iloc[:-1].max()
+            is_new_low = y_values.iloc[-1] < y_values.iloc[:-1].min()
+            label_color = "lime" if is_new_high else "red" if is_new_low else "white"
+
+            annotations.append(
+                dict(
+                    x=normalized_ratio_df.index[-1],
+                    y=y_values.iloc[-1],
+                    xref="x",
+                    yref="y",
+                    text=ratio_name,
+                    xanchor="left",
+                    yanchor="middle",
+                    showarrow=False,
+                    font=dict(size=11, color=label_color),
+                    bgcolor="rgba(0,0,0,0.5)",
+                    bordercolor="rgba(0,0,0,0.1)",
+                    borderwidth=1,
+                    borderpad=2
+                )
+            )
+
+        fig.add_hline(
+            y=100,
+            line_width=3,
+            line_color="white",
+            layer="above"
+        )
+
+        fig.update_layout(
+            height=420,
+            margin=dict(l=0, r=120, t=10, b=0),
+            yaxis_title="Indexed to 100",
+            xaxis_title=None,
+            hovermode="x unified",
+            annotations=annotations
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Relative ETF ratio data unavailable.")
+
+timed("Relative ETF Ratios", _relative_etf_ratios)
+
+st.markdown("---")
 
 # 4. IMPLEMENTATION OF NEW NORMALIZED RS METHOD AND EMA CLOUD
 @st.cache_data(ttl=3600)
@@ -8182,208 +8383,6 @@ def download_all_industry_stocks_data(stocks_tuple, known_ticker_dfs):
             benchmark_df = pd.DataFrame({'Close': raw_data['Close'][benchmark_symbol]}).dropna()
 
     return ticker_dfs, benchmark_df
-
-
-st.markdown("---")
-st.markdown(f"#### Pie Chart")
-
-def compute_rsi(close_series, period=14):
-    """Standard Wilder's RSI."""
-    delta = close_series.diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-
-    avg_gain = gain.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
-    avg_loss = loss.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
-
-    rs = avg_gain / avg_loss.replace(0, np.nan)
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
-
-# ETF daily direction pie chart at the bottom of the page
-def _etf_pie_chart():
-    etf_symbols = INDUSTRIES.get('ETF', [])
-    if etf_symbols:
-        etf_changes, etf_changes_pct, etf_latest_date, etf_market_caps = fetch_etf_daily_direction(tuple(etf_symbols))
-        if etf_changes and etf_market_caps:
-            labels = []
-            values = []
-            custom_text = []
-            colors = []
-
-            for sym in etf_symbols:
-                cap = etf_market_caps.get(sym)
-                if cap is None:
-                    cap = 1.0
-                pct = etf_changes_pct.get(sym, 0.0)
-                direction = etf_changes.get(sym, 0.0)
-                labels.append(sym)
-                values.append(cap)
-                custom_text.append(f"{pct:+.2f}%")
-                colors.append('#00b894' if direction > 0 else '#d63031' if direction < 0 else '#95a5a6')
-
-            # ── Identify the strongest and weakest ETF today ──
-            strongest_idx = max(
-                range(len(etf_symbols)),
-                key=lambda i: etf_changes_pct.get(etf_symbols[i], float('-inf'))
-            )
-            weakest_idx = min(
-                range(len(etf_symbols)),
-                key=lambda i: etf_changes_pct.get(etf_symbols[i], float('inf'))
-            )
-            text_colors = [
-                '#FFD700' if i in (strongest_idx, weakest_idx) else '#ffffff'
-                for i in range(len(etf_symbols))
-            ]
-
-            fig = go.Figure(
-                data=[go.Pie(
-                    labels=labels,
-                    values=values,
-                    text=custom_text,
-                    hole=0.4,
-                    marker=dict(colors=colors, line=dict(color='#ffffff', width=1)),
-                    sort=False,
-                    textinfo='label+text',
-                    textposition='inside',
-                    insidetextorientation='radial',
-                    showlegend=False,
-                    textfont=dict(color=text_colors),
-                    hovertemplate='%{label}<br>Daily Change: %{text}<br>Size: %{value:.2f}B<extra></extra>'
-                )]
-            )
-            fig.update_traces(textfont_size=11, pull=[0.02] * len(labels))
-
-            positive_count = sum(1 for change in etf_changes.values() if change > 0)
-            fig.update_layout(
-                title={
-                    'text': f"{positive_count}/10",
-                    'x': 0.5,
-                    'xanchor': 'center',
-                    'font': {'size': 30}
-                },
-                margin=dict(l=0, r=0, t=50, b=0)
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-            # ── 14-day RSI, sorted high to low ──
-            rsi_rows = []
-            for sym in etf_symbols:
-                df_sym = ticker_dfs_shared.get(sym)
-                if df_sym is None or len(df_sym) < 15:
-                    continue
-                rsi_series = compute_rsi(df_sym['Close'], period=14)
-                rsi_val = rsi_series.iloc[-1]
-                if pd.isna(rsi_val):
-                    continue
-                rsi_rows.append((sym, round(float(rsi_val), 1)))
-
-            if rsi_rows:
-                rsi_rows.sort(key=lambda x: -x[1])
-                rsi_html = "<div style='display:flex;flex-wrap:wrap;justify-content:center;gap:4px;padding:6px 0;'>"
-                for sym, rsi_val in rsi_rows:
-                    pct = etf_changes_pct.get(sym, 0.0)
-                    if pct > 0:
-                        bg, border, txt = "#00FF00", "#009900", "#000000"
-                    # elif rsi_val >= 70:
-                    #     bg, border, txt = "#FFB3B3", "#CC0000", "#4B0000"
-                    # elif rsi_val <= 30:
-                    #     bg, border, txt = "#90EE90", "#228B22", "#003300"
-                    else:
-                        bg, border, txt = "#1e1e1e", "#444", "#eeeeee"
-                    rsi_html += (
-                        f'<div class="ticker-badge" style="background:{bg}; border:1px solid {border};">'
-                        f'<span class="ticker-name" style="color:{txt};">{sym}</span>'
-                        #f'<span class="ticker-rs" style="color:{txt}; margin-left:4px;">{rsi_val:.1f}</span>'
-                        f'</div>'
-                    )
-                rsi_html += "</div>"
-                st.markdown(rsi_html, unsafe_allow_html=True)
-        else:
-            st.info('ETF daily direction data unavailable.')
-
-    else:
-        st.info('ETF ETF list unavailable.')
-
-timed("ETF Pie Chart", _etf_pie_chart)
-
-st.markdown("---")
-st.markdown(f"#### ETF Ratio")
-
-def _relative_etf_ratios():
-    ratio_pairs = (
-        ("XLK", "SPY"),
-        ("XLY", "XLP"),
-        ("SPHB", "SPY"),
-        ("IWM", "QQQ"),
-        ("VUG", "VTV"),
-        ("RSP", "SPY"),
-    )
-
-    #st.markdown("#### Relative ETF Ratios (1 Year)")
-    ratio_chart_df = fetch_ratio_chart_data(ratio_pairs, period="1y")
-
-    if not ratio_chart_df.empty:
-        normalized_ratio_df = ratio_chart_df.divide(ratio_chart_df.iloc[0]).mul(100)
-
-        fig = go.Figure()
-        annotations = []
-        for ratio_name in normalized_ratio_df.columns:
-            y_values = normalized_ratio_df[ratio_name]
-            fig.add_trace(
-                go.Scatter(
-                    x=normalized_ratio_df.index,
-                    y=y_values,
-                    mode="lines",
-                    name=ratio_name,
-                    showlegend=False,
-                    hovertemplate=f"{ratio_name}<br>%{{x|%Y-%m-%d}}<br>Indexed: %{{y:.2f}}<extra></extra>"
-                )
-            )
-
-            # Highlight label if the latest value is a new high or new low for the period
-            is_new_high = y_values.iloc[-1] > y_values.iloc[:-1].max()
-            is_new_low = y_values.iloc[-1] < y_values.iloc[:-1].min()
-            label_color = "lime" if is_new_high else "red" if is_new_low else "white"
-
-            annotations.append(
-                dict(
-                    x=normalized_ratio_df.index[-1],
-                    y=y_values.iloc[-1],
-                    xref="x",
-                    yref="y",
-                    text=ratio_name,
-                    xanchor="left",
-                    yanchor="middle",
-                    showarrow=False,
-                    font=dict(size=11, color=label_color),
-                    bgcolor="rgba(0,0,0,0.5)",
-                    bordercolor="rgba(0,0,0,0.1)",
-                    borderwidth=1,
-                    borderpad=2
-                )
-            )
-
-        fig.add_hline(
-            y=100,
-            line_width=3,
-            line_color="white",
-            layer="above"
-        )
-
-        fig.update_layout(
-            height=420,
-            margin=dict(l=0, r=120, t=10, b=0),
-            yaxis_title="Indexed to 100",
-            xaxis_title=None,
-            hovermode="x unified",
-            annotations=annotations
-        )
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("Relative ETF ratio data unavailable.")
-
-timed("Relative ETF Ratios", _relative_etf_ratios)
 
 st.markdown("---")
 
