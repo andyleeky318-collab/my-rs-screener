@@ -8291,6 +8291,8 @@ def _etf_pie_chart():
                     #     bg, border, txt = "#90EE90", "#228B22", "#003300"
                     else:
                         bg, border, txt = "#1e1e1e", "#444", "#eeeeee"
+                    if sym == "XLK":
+                        txt = "#ff0000"
                     rsi_html += (
                         f'<div class="ticker-badge" style="background:{bg}; border:1px solid {border};">'
                         f'<span class="ticker-name" style="color:{txt};">{sym}</span>'
