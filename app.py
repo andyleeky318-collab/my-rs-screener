@@ -1245,6 +1245,34 @@ elif right_tail > avg_bucket * 3:
 
 st.markdown("---")
 
+st.write("")
+st.write("")
+
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&display=swap');
+    .calligraphy-banner {
+        text-align: center;
+        padding: 40px 0 60px;
+    }
+    .calligraphy-banner span {
+        font-family: 'Ma Shan Zheng', cursive;
+        font-size: 90px;
+        color: #e0d8c3;
+        letter-spacing: 18px;
+        text-shadow: 0 0 12px rgba(224, 216, 195, 0.15);
+    }
+    </style>
+    <div class="calligraphy-banner">
+        <span>顺势而为</span>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+st.markdown("---")
+
 # 4. IMPLEMENTATION OF NEW NORMALIZED RS METHOD AND EMA CLOUD
 @st.cache_data(ttl=3600)
 def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, _benchmark_df):
@@ -9404,32 +9432,6 @@ else:
             #     for e in earnings[:2]:
             #         when = {"bmo": "Before Open", "amc": "After Close"}.get(e.get("time"), e.get("time", ""))
             #         st.markdown(f"- {e.get('date','?')} ({when})")
-
-st.write("")
-st.write("")
-
-st.markdown(
-    """
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&display=swap');
-    .calligraphy-banner {
-        text-align: center;
-        padding: 40px 0 60px;
-    }
-    .calligraphy-banner span {
-        font-family: 'Ma Shan Zheng', cursive;
-        font-size: 90px;
-        color: #e0d8c3;
-        letter-spacing: 18px;
-        text-shadow: 0 0 12px rgba(224, 216, 195, 0.15);
-    }
-    </style>
-    <div class="calligraphy-banner">
-        <span>顺势而为</span>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
 
 # ==============================================================================
 # MASTER SETUP CONSOLIDATION TABLE
