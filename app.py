@@ -3631,7 +3631,7 @@ if all_data:
 
     dist_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"📊 Distribution "
+        f"📊 Distribution Cluster"
         f"<span style='color:#FF4B4B;'>({len(vol_flagged_industries)} industries, {total_vol_ticker_count} tickers)</span>"
         f"</div>"
     )
@@ -3675,7 +3675,7 @@ if all_data:
 
     engulf_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"🐳 Engulfing "
+        f"🐳 Engulfing Cluster"
         f"<span style='color:#FFFF00;'>({len(engulf_industry_tickers)} industries, {len(all_engulf_tickers)} tickers)</span>"
         f"</div>"
     )
@@ -3718,7 +3718,7 @@ if all_data:
 
     botak_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"🔥 Botak "
+        f"🔥 Botak Cluster"
         f"<span style='color:#00FF00;'>({len(botak_industry_tickers)} industries, {len(all_botak_tickers)} tickers)</span>"
         f"</div>"
     )
