@@ -2737,30 +2737,53 @@ def generate_top_industries_theme_insight(
 
     industries_block = "\n".join(lines)
 
-    # ── NEW: New High / New Low industry breakdown ──────────────────────────
+    # ── FIXED: New High / New Low industry breakdown — now includes the
+    # ACTUAL tickers that triggered NH/NL for each industry, not the
+    # unrelated top-5-RS tickers used in the top-20 industries_block. ──
     nh_nl_block = ""
     new_high_tickers = new_high_tickers or []
     new_low_tickers  = new_low_tickers or []
 
+    def _industry_ticker_map(ticker_list, industries_dict):
+        """industry -> sorted list of tickers (from ticker_list) that belong to it."""
+        _, ticker_industry = build_leader_industry_map(ticker_list, industries_dict)
+        industry_map = {}
+        for t, inds in ticker_industry.items():
+            for ind in inds:
+                if ind == "Uncategorized":
+                    continue
+                industry_map.setdefault(ind, []).append(t)
+        for ind in industry_map:
+            industry_map[ind] = sorted(set(industry_map[ind]))
+        return industry_map
+
+    nh_industry_ticker_map = _industry_ticker_map(new_high_tickers, INDUSTRIES)
+    nl_industry_ticker_map = _industry_ticker_map(new_low_tickers, INDUSTRIES)
+
+    nh_sorted = sorted(nh_industry_ticker_map.items(), key=lambda x: -len(x[1]))
+    nl_sorted = sorted(nl_industry_ticker_map.items(), key=lambda x: -len(x[1]))
+
+    nh_str = "\n".join(
+        f"  - {ind} ({', '.join(tickers)}): {len(tickers)}"
+        for ind, tickers in nh_sorted[:10]
+    ) or "  - none"
+    nl_str = "\n".join(
+        f"  - {ind} ({', '.join(tickers)}): {len(tickers)}"
+        for ind, tickers in nl_sorted[:10]
+    ) or "  - none"
+
+    nh_tickers_str = ", ".join(sorted(new_high_tickers)[:40]) or "none"
+    nl_tickers_str = ", ".join(sorted(new_low_tickers)[:40]) or "none"
+
     if new_high_tickers or new_low_tickers:
-        nh_industry_counts, _ = build_leader_industry_map(new_high_tickers, INDUSTRIES)
-        nl_industry_counts, _ = build_leader_industry_map(new_low_tickers, INDUSTRIES)
-
-        nh_sorted = sorted(nh_industry_counts.items(), key=lambda x: -x[1])
-        nl_sorted = sorted(nl_industry_counts.items(), key=lambda x: -x[1])
-
-        nh_str = ", ".join(f"{ind}({cnt})" for ind, cnt in nh_sorted[:10]) or "none"
-        nl_str = ", ".join(f"{ind}({cnt})" for ind, cnt in nl_sorted[:10]) or "none"
-
-        nh_tickers_str = ", ".join(sorted(new_high_tickers)[:40]) or "none"
-        nl_tickers_str = ", ".join(sorted(new_low_tickers)[:40]) or "none"
-
         nh_nl_block = f"""
 New 52-Week Highs ({len(new_high_tickers)} tickers): {nh_tickers_str}
-New High industry concentration: {nh_str}
+New High industry concentration (with the EXACT tickers from this New Highs list that belong to each industry):
+{nh_str}
 
 New 52-Week Lows ({len(new_low_tickers)} tickers): {nl_tickers_str}
-New Low industry concentration: {nl_str}
+New Low industry concentration (with the EXACT tickers from this New Lows list that belong to each industry):
+{nl_str}
 """
 
     nh_nl_label_block = ""
@@ -2778,7 +2801,9 @@ Each row shows: current RS, RS from 1 week ago, RS from 1 month ago, and △T (a
 
 {industries_block}
 {nh_nl_block}
-IMPORTANT FORMATTING RULE: Whenever you mention an industry name anywhere in your response, immediately follow it with its top tickers shown above in brackets, exactly like this: "Aerospace/Defense (LMT, NOC, SHLD, ITA, XAR)". Use ONLY tickers already shown for that industry above — do not invent or add others.
+IMPORTANT FORMATTING RULE — TWO SEPARATE TICKER SOURCES, DO NOT MIX THEM:
+1. When discussing the TOP {len(top_rows)} INDUSTRIES section (Dominant Theme, Sub-Themes, Outliers, Tactical Takeaway), bracket each industry name with its "top:" tickers shown in that section above, e.g. "Aerospace/Defense (LMT, NOC, SHLD, ITA, XAR)".
+2. When discussing the NEW HIGH/NEW LOW CONCENTRATION line specifically, bracket each industry name ONLY with the tickers listed next to it under "New High industry concentration" or "New Low industry concentration" above — these are the actual tickers that are currently at a new high/low, and are usually a DIFFERENT set of tickers than that industry's top-RS list. Never reuse the top-industries tickers for the New High/Low line, and never invent tickers not explicitly listed for that industry in the relevant section.
 
 Respond with EXACTLY these lines, each starting with the bolded label below followed by a colon, then the content on the SAME line. Do not add extra bullets, headers, or commentary outside these lines. Do not rename, reorder, or skip a label{"" if nh_nl_label_block else " (omit the New High/Low Concentration line entirely since no data was given)"}.
 
@@ -3631,7 +3656,7 @@ if all_data:
 
     dist_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"📊 Distribution Cluster"
+        f"📊 Distribution Cluster "
         f"<span style='color:#FF4B4B;'>({len(vol_flagged_industries)} industries, {total_vol_ticker_count} tickers)</span>"
         f"</div>"
     )
@@ -3675,7 +3700,7 @@ if all_data:
 
     engulf_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"🐳 Engulfing Cluster"
+        f"🐳 Engulfing Cluster "
         f"<span style='color:#FFFF00;'>({len(engulf_industry_tickers)} industries, {len(all_engulf_tickers)} tickers)</span>"
         f"</div>"
     )
@@ -3718,7 +3743,7 @@ if all_data:
 
     botak_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"🔥 Botak Cluster"
+        f"🔥 Botak Cluster "
         f"<span style='color:#00FF00;'>({len(botak_industry_tickers)} industries, {len(all_botak_tickers)} tickers)</span>"
         f"</div>"
     )
