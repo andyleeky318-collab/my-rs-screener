@@ -6526,7 +6526,7 @@ with st.spinner("Scanning for Gapper History..."):
 
 st.write("")
 if not gapper_hist.empty:
-    chart_df_g = gapper_hist.copy()
+    chart_df_g = gapper_hist.copy().reset_index(drop=True)
 
     today_g = chart_df_g["Gapper Count"].iloc[-1]
     max_g   = chart_df_g["Gapper Count"].max()
