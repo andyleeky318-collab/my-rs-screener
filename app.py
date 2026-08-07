@@ -5814,7 +5814,7 @@ else:
         )
     st.markdown(
         "<style>div[data-testid='stMetricLabel']{font-size:11px !important;}"
-        "div[data-testid='stMetricValue']{font-size:16px !important;}</style>",
+        "div[data-testid='stMetricValue']{font-size:20px !important;}</style>",
         unsafe_allow_html=True
     )
     with col_metrics:
