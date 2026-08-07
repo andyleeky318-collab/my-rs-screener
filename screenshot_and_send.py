@@ -154,6 +154,7 @@ SECTION_KEYWORDS = [
     "Upcoming Earnings",
     "Lazy Table",
     "Lazy Charts",
+    "Stage 2 vs Stage 4",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the
