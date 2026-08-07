@@ -3742,8 +3742,8 @@ if all_data:
             tickers_for_ind = engulf_industry_tickers[industry]
             ticker_badges = "".join(
                 f'<span style="display:inline-block;margin:1px 3px;padding:1px 5px;'
-                f'border:1px solid #336633;border-radius:3px;font-size:11px;'
-                f'background-color:#1a2d1a;color:#99FF99;font-weight:600;">{t}</span>'
+                f'border:1px solid #8a6d00;border-radius:3px;font-size:11px;'
+                f'background-color:#3a2f00;color:#ffe066;font-weight:600;">{t}</span>'
                 for t in tickers_for_ind
             )
             engulf_html += (
