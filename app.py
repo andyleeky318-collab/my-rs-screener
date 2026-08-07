@@ -8906,6 +8906,70 @@ else:
     # else:
     #     st.info("No overlap between trending and Reddit lists.")
 
+@st.cache_data(ttl=1800)
+def fetch_spikepanel_surge_tickers(window="24h"):
+    """
+    Fetch the ranked list of tickers from SpikePanel's '热议' (Hot Discussion)
+    page: https://spikepanel.com/surge
+
+    window: "latest" | "24h" | "7d" | "30d" — maps to the tabs on the page.
+    Returns a list of up to 20 tickers, in the same rank order shown on
+    the page (rank #1 first).
+    """
+    url = "https://spikepanel.com/surge"
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        html = resp.text
+    except Exception as e:
+        st.warning(f"SpikePanel fetch error: {e}")
+        return []
+
+    # Every stock card links to /ticker/{SYMBOL}?from=surge — this pattern
+    # is stable regardless of CSS/markup changes, and both the main list
+    # and the compact re-render on the page use the same href, so we
+    # dedupe while preserving first-seen (i.e. rank) order.
+    matches = re.findall(r'/ticker/([A-Z][A-Z0-9\.\-]{0,6})\?from=surge', html)
+
+    seen = set()
+    tickers = []
+    for raw_sym in matches:
+        sym = normalize_ticker(raw_sym)
+        if sym and sym not in seen:
+            seen.add(sym)
+            tickers.append(sym)
+
+    # Page shows exactly 20 ranked stocks — trim defensively in case the
+    # dedupe above ever lets extra unrelated /ticker/ links slip through.
+    return tickers[:20]
+
+spikepanel_tickers = fetch_spikepanel_surge_tickers()
+
+st.markdown(f"#### 🧵 X.com ({len(spikepanel_tickers)})")
+
+if spikepanel_tickers:
+    badges_html = "<div style='display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;'>"
+    for sym in spikepanel_tickers:
+        badges_html += (
+            f"<span style='display:inline-block; padding:2px 6px; border:1px solid #444; "
+            f"border-radius:4px; background-color:#1e1e1e; color:#eee; font-size:12px; "
+            f"white-space:nowrap;'>{sym}</span>"
+        )
+    badges_html += "</div>"
+    st.markdown(badges_html, unsafe_allow_html=True)
+else:
+    st.info("No spike panel tickers found.")
+
 st.markdown("---")
 
 ticker_dfs_all_industries, benchmark_df_all_industries = timed(
@@ -9927,63 +9991,3 @@ if isinstance(globals().get("value_trap_hist", None), pd.DataFrame) and not valu
 else:
     st.caption("**Value Trap Count** — no data")
 
-@st.cache_data(ttl=1800)
-def fetch_spikepanel_surge_tickers(window="24h"):
-    """
-    Fetch the ranked list of tickers from SpikePanel's '热议' (Hot Discussion)
-    page: https://spikepanel.com/surge
-
-    window: "latest" | "24h" | "7d" | "30d" — maps to the tabs on the page.
-    Returns a list of up to 20 tickers, in the same rank order shown on
-    the page (rank #1 first).
-    """
-    url = "https://spikepanel.com/surge"
-
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
-        "Accept-Language": "en-US,en;q=0.9",
-    }
-
-    try:
-        resp = requests.get(url, headers=headers, timeout=15)
-        resp.raise_for_status()
-        html = resp.text
-    except Exception as e:
-        st.warning(f"SpikePanel fetch error: {e}")
-        return []
-
-    # Every stock card links to /ticker/{SYMBOL}?from=surge — this pattern
-    # is stable regardless of CSS/markup changes, and both the main list
-    # and the compact re-render on the page use the same href, so we
-    # dedupe while preserving first-seen (i.e. rank) order.
-    matches = re.findall(r'/ticker/([A-Z][A-Z0-9\.\-]{0,6})\?from=surge', html)
-
-    seen = set()
-    tickers = []
-    for raw_sym in matches:
-        sym = normalize_ticker(raw_sym)
-        if sym and sym not in seen:
-            seen.add(sym)
-            tickers.append(sym)
-
-    # Page shows exactly 20 ranked stocks — trim defensively in case the
-    # dedupe above ever lets extra unrelated /ticker/ links slip through.
-    return tickers[:20]
-
-spikepanel_tickers = fetch_spikepanel_surge_tickers()
-if spikepanel_tickers:
-    badges_html = "<div style='display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;'>"
-    for sym in spikepanel_tickers:
-        badges_html += (
-            f"<span style='display:inline-block; padding:2px 6px; border:1px solid #444; "
-            f"border-radius:4px; background-color:#1e1e1e; color:#eee; font-size:12px; "
-            f"white-space:nowrap;'>{sym}</span>"
-        )
-    badges_html += "</div>"
-    st.markdown(badges_html, unsafe_allow_html=True)
-else:
-    st.info("No spike panel tickers found.")
