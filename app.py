@@ -8767,7 +8767,7 @@ if trending_today:
 else:
     st.info("Quant Sentiment: no trending data available right now.")
 
-st.markdown("---")
+#st.markdown("---")
 
 @st.cache_data(ttl=1800)
 def fetch_reddit_mentions_apewisdom(stocks_tuple, filter_type="wallstreetbets"):
