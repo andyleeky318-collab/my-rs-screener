@@ -8886,8 +8886,8 @@ else:
     st.markdown(html_reddit, unsafe_allow_html=True)
     st.write("")
 
-    with st.expander("Full table"):
-        st.dataframe(reddit_df, use_container_width=False, width=500, hide_index=True)
+    # with st.expander("Full table"):
+    #     st.dataframe(reddit_df, use_container_width=False, width=500, hide_index=True)
 
     # # ── Common tickers between Quant Sentiment (trending) and Reddit ──
     # common_syms = sorted(set(trending_today) & set(reddit_df_display["Ticker"]))
