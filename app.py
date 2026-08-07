@@ -5812,6 +5812,11 @@ else:
                 "Leaders": st.column_config.Column()
             }
         )
+    st.markdown(
+        "<style>div[data-testid='stMetricLabel']{font-size:11px !important;}"
+        "div[data-testid='stMetricValue']{font-size:16px !important;}</style>",
+        unsafe_allow_html=True
+    )
     with col_metrics:
         st.metric("Total Leaders", len(leader_list))
         st.metric("Blue Dots", len([s for s in leader_rs_nh_matches if s != 'SPY']))
