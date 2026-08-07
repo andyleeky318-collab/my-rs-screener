@@ -3771,7 +3771,7 @@ if all_data:
 
     botak_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"🔥 Botak Cluster "
+        f"🧑‍🦲 Botak Cluster "
         f"<span style='color:#00FF00;'>({len(botak_industry_tickers)} industries, {len(all_botak_tickers)} tickers)</span>"
         f"</div>"
     )
@@ -5016,8 +5016,8 @@ if email_content_stocks or email_content_removed:
 
         if sym in ath_list:
             up_logo = "<span style='color:#FF4B4B; margin-right:4px; font-weight:bold;'>▲</span>"
-        elif is_positive_today:
-            up_logo = "<span style='color:#00FF00; margin-right:4px; font-weight:bold;'>▲</span>"
+        #elif is_positive_today:
+        #    up_logo = "<span style='color:#00FF00; margin-right:4px; font-weight:bold;'>▲</span>"
         else:
             up_logo = ""
 
@@ -7117,7 +7117,7 @@ with st.spinner("Scanning for Two Botak History..."):
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
 two_botak_count_color = "#FF6B6B" if len(b_list) == 0 else "inherit"
 st.markdown(
-    f"<h4>🔥 Two Botak = Short term Group burst <span style='color:{two_botak_count_color}; font-weight:bold;'>({len(b_list)})</span></h4>",
+    f"<h4>🧑‍🦲 Two Botak = Short term Group burst <span style='color:{two_botak_count_color}; font-weight:bold;'>({len(b_list)})</span></h4>",
     unsafe_allow_html=True
 )
 if b_list or b_yest:
@@ -8889,22 +8889,22 @@ else:
     with st.expander("Full table"):
         st.dataframe(reddit_df, use_container_width=False, width=500, hide_index=True)
 
-    # ── Common tickers between Quant Sentiment (trending) and Reddit ──
-    common_syms = sorted(set(trending_today) & set(reddit_df_display["Ticker"]))
-    st.markdown(
-        f"**🔗 In Common: {len(common_syms)}**"
-    )
-    if common_syms:
-        common_html = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
-        for sym in common_syms:
-            common_html += (
-                f'<div class="ticker-badge" style="background:#1E1E1E; border:1px solid #444; color:#FFFFFF; font-weight:bold;">'
-                f'<span>{sym}</span></div>'
-            )
-        common_html += "</div>"
-        st.markdown(common_html, unsafe_allow_html=True)
-    else:
-        st.info("No overlap between trending and Reddit lists.")
+    # # ── Common tickers between Quant Sentiment (trending) and Reddit ──
+    # common_syms = sorted(set(trending_today) & set(reddit_df_display["Ticker"]))
+    # st.markdown(
+    #     f"**🔗 In Common: {len(common_syms)}**"
+    # )
+    # if common_syms:
+    #     common_html = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+    #     for sym in common_syms:
+    #         common_html += (
+    #             f'<div class="ticker-badge" style="background:#1E1E1E; border:1px solid #444; color:#FFFFFF; font-weight:bold;">'
+    #             f'<span>{sym}</span></div>'
+    #         )
+    #     common_html += "</div>"
+    #     st.markdown(common_html, unsafe_allow_html=True)
+    # else:
+    #     st.info("No overlap between trending and Reddit lists.")
 
 st.markdown("---")
 
@@ -9975,4 +9975,15 @@ def fetch_spikepanel_surge_tickers(window="24h"):
     return tickers[:20]
 
 spikepanel_tickers = fetch_spikepanel_surge_tickers()
-st.write(spikepanel_tickers)
+if spikepanel_tickers:
+    badges_html = "<div style='display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;'>"
+    for sym in spikepanel_tickers:
+        badges_html += (
+            f"<span style='display:inline-block; padding:2px 6px; border:1px solid #444; "
+            f"border-radius:4px; background-color:#1e1e1e; color:#eee; font-size:12px; "
+            f"white-space:nowrap;'>{sym}</span>"
+        )
+    badges_html += "</div>"
+    st.markdown(badges_html, unsafe_allow_html=True)
+else:
+    st.info("No spike panel tickers found.")
