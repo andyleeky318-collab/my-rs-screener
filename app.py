@@ -7562,6 +7562,77 @@ if not volatility_hist.empty:
         use_container_width=True
     )
 
+#st.markdown("<br>", unsafe_allow_html=True) # Spacer
+st.markdown("---")
+
+# --- 6. VALUE TRAP (Full Horizontal Row Below PowerTrend Not Extended) ---
+value_trap_count_color = "#FF6B6B" if len(vt_list) == 0 else "inherit"
+st.markdown(
+    f"<h4>⚠️ Value Trap = MAG7 & MOAT <span style='color:{value_trap_count_color}; font-weight:bold;'>({len(vt_list)})</span></h4>",
+    unsafe_allow_html=True
+)
+if vt_list or vt_yest:
+    html_vt = ""
+    vt_yest_set = set(vt_yest)
+    current_vt_tickers = {item[0] if isinstance(item, tuple) else item for item in vt_list}
+    for item in vt_list:
+        sym = item[0] if isinstance(item, tuple) else item
+        atr_value = item[1] if isinstance(item, tuple) else None
+        suffix = f"{atr_value:.1f}x" if atr_value is not None else ""
+        html_vt += setup_badge(sym, is_new=(sym not in vt_yest_set), extra_suffix=suffix)
+    
+    # Process and append removed stocks
+    removed_vt = [sym for sym in vt_yest if sym not in current_vt_tickers]
+    for sym in sorted(removed_vt):
+        html_vt += f'<div class="ticker-badge removed-badge">{sym}</div>'
+        
+    st.markdown(html_vt, unsafe_allow_html=True)
+
+    vt_syms = [item[0] if isinstance(item, tuple) else item for item in vt_list]
+    render_group_ai_insight(
+        vt_syms,
+        "Value Trap",
+        "value_trap",
+        extra_note="price is roughly -4x ATR below its 50-day moving average, suggesting deep extension to the downside rather than genuine value"
+    )
+else:
+    st.info("No active setups discovered.")
+
+with st.spinner("Scanning for Value Trap History..."):
+    value_trap_hist = timed("compute_value_trap_history", compute_value_trap_history, stocks_tuple, ticker_dfs_shared)
+
+st.write("")
+if not value_trap_hist.empty:
+    chart_df_vt = value_trap_hist.copy()
+
+    today_vt = chart_df_vt["Value Trap Count"].iloc[-1]
+    max_vt   = chart_df_vt["Value Trap Count"].max()
+
+    # Default: every bar blue
+    chart_df_vt["Bar_Color"] = "#29B5E8"
+
+    # NEW: statistical outliers (>=2 std dev above mean) turn red
+    mean_vt = chart_df_vt["Value Trap Count"].mean()
+    std_vt  = chart_df_vt["Value Trap Count"].std(ddof=1)
+    if std_vt and std_vt > 0:
+        z_scores_vt = (chart_df_vt["Value Trap Count"] - mean_vt) / std_vt
+    else:
+        z_scores_vt = pd.Series(0, index=chart_df_vt.index)
+    chart_df_vt.loc[z_scores_vt >= 2, "Bar_Color"] = "#FF4B4B"
+
+    # Only the LATEST bar turns red, and only if it's also the highest
+    # value across the whole 60-day window (ties count as "highest" too)
+    if today_vt == max_vt:
+        chart_df_vt.iloc[-1, chart_df_vt.columns.get_loc("Bar_Color")] = "#FF4B4B"
+
+    st.bar_chart(
+        data=chart_df_vt,
+        x="Date",
+        y="Value Trap Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
+
 # ============================================================
 # CHANGE OF CHARACTER (scoreUp20) — Composite Score Δ≥20 Scan
 # Ported from TradingView "Score" indicator's scoreUp20 signal.
@@ -8067,76 +8138,6 @@ if not biggest_move_hist.empty:
         use_container_width=True
     )
 
-#st.markdown("<br>", unsafe_allow_html=True) # Spacer
-st.markdown("---")
-
-# --- 6. VALUE TRAP (Full Horizontal Row Below PowerTrend Not Extended) ---
-value_trap_count_color = "#FF6B6B" if len(vt_list) == 0 else "inherit"
-st.markdown(
-    f"<h4>⚠️ Value Trap = MAG7 & MOAT <span style='color:{value_trap_count_color}; font-weight:bold;'>({len(vt_list)})</span></h4>",
-    unsafe_allow_html=True
-)
-if vt_list or vt_yest:
-    html_vt = ""
-    vt_yest_set = set(vt_yest)
-    current_vt_tickers = {item[0] if isinstance(item, tuple) else item for item in vt_list}
-    for item in vt_list:
-        sym = item[0] if isinstance(item, tuple) else item
-        atr_value = item[1] if isinstance(item, tuple) else None
-        suffix = f"{atr_value:.1f}x" if atr_value is not None else ""
-        html_vt += setup_badge(sym, is_new=(sym not in vt_yest_set), extra_suffix=suffix)
-    
-    # Process and append removed stocks
-    removed_vt = [sym for sym in vt_yest if sym not in current_vt_tickers]
-    for sym in sorted(removed_vt):
-        html_vt += f'<div class="ticker-badge removed-badge">{sym}</div>'
-        
-    st.markdown(html_vt, unsafe_allow_html=True)
-
-    vt_syms = [item[0] if isinstance(item, tuple) else item for item in vt_list]
-    render_group_ai_insight(
-        vt_syms,
-        "Value Trap",
-        "value_trap",
-        extra_note="price is roughly -4x ATR below its 50-day moving average, suggesting deep extension to the downside rather than genuine value"
-    )
-else:
-    st.info("No active setups discovered.")
-
-with st.spinner("Scanning for Value Trap History..."):
-    value_trap_hist = timed("compute_value_trap_history", compute_value_trap_history, stocks_tuple, ticker_dfs_shared)
-
-st.write("")
-if not value_trap_hist.empty:
-    chart_df_vt = value_trap_hist.copy()
-
-    today_vt = chart_df_vt["Value Trap Count"].iloc[-1]
-    max_vt   = chart_df_vt["Value Trap Count"].max()
-
-    # Default: every bar blue
-    chart_df_vt["Bar_Color"] = "#29B5E8"
-
-    # NEW: statistical outliers (>=2 std dev above mean) turn red
-    mean_vt = chart_df_vt["Value Trap Count"].mean()
-    std_vt  = chart_df_vt["Value Trap Count"].std(ddof=1)
-    if std_vt and std_vt > 0:
-        z_scores_vt = (chart_df_vt["Value Trap Count"] - mean_vt) / std_vt
-    else:
-        z_scores_vt = pd.Series(0, index=chart_df_vt.index)
-    chart_df_vt.loc[z_scores_vt >= 2, "Bar_Color"] = "#FF4B4B"
-
-    # Only the LATEST bar turns red, and only if it's also the highest
-    # value across the whole 60-day window (ties count as "highest" too)
-    if today_vt == max_vt:
-        chart_df_vt.iloc[-1, chart_df_vt.columns.get_loc("Bar_Color")] = "#FF4B4B"
-
-    st.bar_chart(
-        data=chart_df_vt,
-        x="Date",
-        y="Value Trap Count",
-        color="Bar_Color",
-        use_container_width=True
-    )
 
 #st.markdown(html_e2, unsafe_allow_html=True)
 
@@ -9817,7 +9818,7 @@ if isinstance(globals().get("historical_df", None), pd.DataFrame) and not histor
     _chart_df_min["20D MA"] = _chart_df_min["Minervini Count"].rolling(window=20, min_periods=1).mean().round(1)
     _ma_color = globals().get("status_color", "#FF4B4B")
     _render_multi_line_chart(
-        "Minervini Count", _chart_df_min, "Date",
+        "MM Count", _chart_df_min, "Date",
         [("Minervini Count", "#1f77b4"), ("20D MA", _ma_color)],
         height=_NARROW_HEIGHT, days=_compare_days,
         show_legend=False
@@ -9860,12 +9861,6 @@ else:
 
 st.markdown("---")
 
-# ── 9. Volatility (z-score + max-only highlight) ────────────────────────────
-if isinstance(globals().get("volatility_hist", None), pd.DataFrame) and not volatility_hist.empty:
-    _colors = _zscore_outlier_colors(volatility_hist["Volatility Count"], check_max=True, check_min=False)
-    _render_bar_chart("Volatility Count", volatility_hist, "Date", "Volatility Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
-else:
-    st.caption("**Volatility Count** — no data")
 
 # ── 14. Breakdown of Character (z-score + max-only highlight) ───────────────
 if isinstance(globals().get("boc_hist", None), pd.DataFrame) and not boc_hist.empty:
@@ -9880,6 +9875,13 @@ if isinstance(globals().get("biggest_move_hist", None), pd.DataFrame) and not bi
     _render_bar_chart("Biggest Down Count", biggest_move_hist, "Date", "Biggest Down Count", _colors_down, height=_NARROW_HEIGHT, days=_compare_days)
 else:
     st.caption("**Biggest Down Count** — no data")
+
+# ── 9. Volatility (z-score + max-only highlight) ────────────────────────────
+if isinstance(globals().get("volatility_hist", None), pd.DataFrame) and not volatility_hist.empty:
+    _colors = _zscore_outlier_colors(volatility_hist["Volatility Count"], check_max=True, check_min=False)
+    _render_bar_chart("Volatility Count", volatility_hist, "Date", "Volatility Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**Volatility Count** — no data")
 
 # ── 8. Value Trap (z-score + max-only highlight) ────────────────────────────
 if isinstance(globals().get("value_trap_hist", None), pd.DataFrame) and not value_trap_hist.empty:
@@ -9908,15 +9910,6 @@ if isinstance(globals().get("gapper_hist", None), pd.DataFrame) and not gapper_h
 else:
     st.caption("**Gapper Count** — no data")
 
-# ── 7. PowerTrend (z-score + max/min highlight) ─────────────────────────────
-if isinstance(globals().get("powertrend_hist", None), pd.DataFrame) and not powertrend_hist.empty:
-    _colors = _zscore_outlier_colors(powertrend_hist["PowerTrend Count"], check_max=True, check_min=True)
-    _render_bar_chart("PowerTrend Count", powertrend_hist, "Date", "PowerTrend Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
-else:
-    st.caption("**PowerTrend Count** — no data")
-
-
-
 # ── 12. Early Bull (z-score + max-only highlight) ───────────────────────────
 if isinstance(globals().get("early_bull_hist", None), pd.DataFrame) and not early_bull_hist.empty:
     _colors = _zscore_outlier_colors(early_bull_hist["Early Bull Count"], check_max=True, check_min=False)
@@ -9939,6 +9932,13 @@ if isinstance(globals().get("engulf_hist", None), pd.DataFrame) and not engulf_h
     _render_bar_chart("3x Engulfing Count", engulf_hist, "Date", "3x Engulfing Count", _colors_3x, height=_NARROW_HEIGHT, days=_compare_days)
 else:
     st.caption("**2x/3x Engulfing Count** — no data")
+
+# ── 7. PowerTrend (z-score + max/min highlight) ─────────────────────────────
+if isinstance(globals().get("powertrend_hist", None), pd.DataFrame) and not powertrend_hist.empty:
+    _colors = _zscore_outlier_colors(powertrend_hist["PowerTrend Count"], check_max=True, check_min=True)
+    _render_bar_chart("PowerTrend Count", powertrend_hist, "Date", "PowerTrend Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**PowerTrend Count** — no data")
 
 # ── 16. Setup Avg Rank (bespoke: lime=overall best, red=today-if-best) ─────
 # This is the one that needed the gap fix — category x-axis + bargap=0 below
