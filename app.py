@@ -700,47 +700,6 @@ for sym in LIME_STOCKS:
         "is_2m_high": bool(c_today >= df_sym['Close'].max())   # NEW
     })
 
-@st.cache_data(ttl=1800)
-def _call_cerebras_insight(prompt_text):
-    """Cerebras (OpenAI-compatible) call for the Lime Theme 1D/1W/1M insight."""
-    cerebras_key = st.secrets.get("CEREBRAS_API_KEY")
-    if not cerebras_key:
-        return "Add CEREBRAS_API_KEY to secrets.toml to enable this insight."
-
-    try:
-        from openai import OpenAI as OpenAIClient
-        client = OpenAIClient(api_key=cerebras_key, base_url="https://api.cerebras.ai/v1")
-    except Exception as e:
-        return f"Insight unavailable ({str(e)[:80]})"
-
-    # Try known current model IDs in order; first one that works wins.
-    candidate_models = [
-        "llama-3.3-70b",
-        "llama3.1-8b",
-        "llama-4-scout-17b-16e-instruct",
-        "qwen-3-32b",
-        "gpt-oss-120b",
-    ]
-
-    last_err = ""
-    for model_id in candidate_models:
-        try:
-            completion = client.chat.completions.create(
-                model=model_id,
-                messages=[
-                    {"role": "system", "content": "You are a concise market analyst."},
-                    {"role": "user", "content": prompt_text},
-                ],
-                max_tokens=150,
-                temperature=0.4,
-            )
-            return completion.choices[0].message.content.strip()
-        except Exception as e:
-            last_err = str(e)
-            continue
-
-    return f"Insight unavailable (no valid model — last error: {last_err[:80]})"
-
 if lime_perf_rows:
 
     two_month_high_syms = {r["sym"] for r in lime_perf_rows if r.get("is_2m_high")}
@@ -763,26 +722,6 @@ if lime_perf_rows:
     rows_1d = sorted(lime_perf_rows, key=lambda x: -x["pct"])
     rows_1w = sorted([r for r in lime_perf_rows if r["pct_1w"] is not None], key=lambda x: -x["pct_1w"])
     rows_1m = sorted([r for r in lime_perf_rows if r["pct_1m"] is not None], key=lambda x: -x["pct_1m"])
-
-    # ── AI insight (Cerebras) — built from the same 1D/1W/1M leaders/laggards ──
-    _lime_top_1d = ", ".join(f"{r['sym']} {r['pct']:+.1f}%" for r in rows_1d[:5])
-    _lime_bot_1d = ", ".join(f"{r['sym']} {r['pct']:+.1f}%" for r in rows_1d[-5:])
-    _lime_top_1w = ", ".join(f"{r['sym']} {r['pct_1w']:+.1f}%" for r in rows_1w[:5])
-    _lime_top_1m = ", ".join(f"{r['sym']} {r['pct_1m']:+.1f}%" for r in rows_1m[:5])
-
-    _lime_insight_prompt = f"""You are a concise market analyst. Below is today's performance snapshot for a basket of major sector/theme ETFs across three timeframes.
-
-Daily leaders: {_lime_top_1d}
-Daily laggards: {_lime_bot_1d}
-1-Week leaders: {_lime_top_1w}
-1-Month leaders (dominant theme): {_lime_top_1m}
-
-In 2-3 short sentences (max 45 words total), state which theme/sector is leading right now, whether daily momentum agrees or diverges with the monthly leader, and one tactical note. No bullet points, no markdown, plain text only."""
-
-    _lime_insight_text = _call_cerebras_insight(_lime_insight_prompt)
-    _lime_insight_html = (
-        _lime_insight_text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    )
 
     max_abs_1d = max(abs(r["pct"])     for r in rows_1d) or 1
     max_abs_1w = max(abs(r["pct_1w"])  for r in rows_1w) or 1
@@ -965,25 +904,20 @@ In 2-3 short sentences (max 45 words total), state which theme/sector is leading
     """
 
     html_out = f"""
-    <div style="background:#0e1117; border-radius:6px; display:flex; align-items:flex-start; gap:16px; padding:8px;">
+    <div style="background:#0e1117; border-radius:6px;">
     <svg xmlns="http://www.w3.org/2000/svg"
         width="{SVG_W}" height="{SVG_H}"
-        style="display:block; flex-shrink:0;">
+        style="display:block;">
         {pattern_defs}
         {headers_html}
         {lines_html}
         {cols_html}
     </svg>
-    <div style="flex:1; min-width:180px; max-width:320px; padding-left:16px; border-left:1px solid #333;
-                font-family:'Source Sans Pro',sans-serif; font-size:12px; line-height:1.5; color:#cccccc;">
-        <div style="font-size:10px; font-weight:700; letter-spacing:1px; color:#888888; margin-bottom:6px;">🤖 AI INSIGHT</div>
-        {_lime_insight_html}
-    </div>
     </div>
     {js}
     """
 
-    st.components.v1.html(html_out, height=max(SVG_H, 140) + 40, scrolling=False)
+    st.components.v1.html(html_out, height=SVG_H + 24, scrolling=False)
 else:
     st.info("No Lime Stocks performance data available.")
 
