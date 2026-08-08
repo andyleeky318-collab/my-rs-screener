@@ -5015,7 +5015,7 @@ if email_content_stocks or email_content_removed:
     for sym, is_new_addition, is_positive_today in sorted(email_content_stocks, key=lambda x: x[0]):
 
         if sym in ath_list:
-            up_logo = "<span style='color:#FF4B4B; margin-right:4px; font-weight:bold;'>▲</span>"
+            up_logo = "<span style='color:#00FF00; margin-right:4px; font-weight:bold;'>▲</span>"#FF4B4B
         #elif is_positive_today:
         #    up_logo = "<span style='color:#00FF00; margin-right:4px; font-weight:bold;'>▲</span>"
         else:
