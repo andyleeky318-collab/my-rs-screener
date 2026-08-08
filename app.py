@@ -4310,7 +4310,7 @@ def compute_value_trap_history(stocks_list, _ticker_dfs):
                 atr_mult2 = atr_mult2.replace([np.inf, -np.inf], np.nan)
                 atr_mult  = (atr_mult2.fillna(0) * 10).astype(int) / 10
 
-                cond = (atr_mult < -4) & (close >= 20)
+                cond = (atr_mult <= -4) & (close >= 20)
                 all_series.append(cond.astype(int))
             except Exception:
                 continue
