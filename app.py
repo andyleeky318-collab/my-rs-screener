@@ -9983,7 +9983,7 @@ if isinstance(_setup_avgrank_hist, pd.DataFrame) and not _setup_avgrank_hist.emp
         yaxis=dict(title="Rank", showgrid=True, gridcolor="rgba(120,120,120,0.12)", tickfont=dict(size=8, color="#666666")),
         yaxis2=dict(title="Setup", overlaying="y", side="right", showgrid=False, tickfont=dict(size=8, color="#666666")),
         legend=dict(font=dict(size=8), orientation="h", yanchor="bottom", y=1.0, x=0.01),
-        showlegend=True,
+        showlegend=False,
     )
     st.plotly_chart(_fig_setup, use_container_width=True, config={"displayModeBar": False})
 else:
