@@ -10064,5 +10064,137 @@ else:
 
 st.markdown("---")
 
+# ==============================================================================
+# UNUSUAL VOLUME — HVE (Highest Volume Ever) / HVQ (Highest Volume Quarter) / HVM (Highest Volume Month)
+# Read-only: reuses ticker_dfs_shared (already fetched, ~2y history) and
+# KNOWN_STOCKS. Does not touch any existing variable or function.
+# ==============================================================================
+st.markdown("---")
+st.markdown("#### 📊 Unusual Volume")
+
+@st.cache_data(ttl=3600)
+def compute_unusual_volume(stocks_list, ticker_dfs, min_price=20, min_volume=100000):
+    """
+    For each ticker, flag today's bar if today's volume is the highest ever
+    (HVE), highest in the trailing ~1 quarter / 63 trading days (HVQ), or
+    highest in the trailing ~1 month / 21 trading days (HVM).
+    HVE implies HVQ implies HVM, so a ticker is tagged with the STRONGEST
+    flag it qualifies for (HVE > HVQ > HVM), not all three.
+    Returns: dict of {"HVE": [...], "HVQ": [...], "HVM": [...]} — sorted lists,
+    plus a dict of ticker -> today's volume for display.
+    """
+    hve_list, hvq_list, hvm_list = [], [], []
+    vol_map = {}
+
+    for ticker in stocks_list:
+        try:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < 22:
+                continue
+
+            close = df['Close']
+            vol   = df['Volume']
+
+            today_close = close.iloc[-1]
+            today_vol   = vol.iloc[-1]
+
+            if pd.isna(today_close) or pd.isna(today_vol):
+                continue
+            if today_close < min_price or today_vol < min_volume:
+                continue
+
+            # Highest Volume Ever (entire available history, excludes current bar for the "prior max" check)
+            hve_prior_max = vol.iloc[:-1].max() if len(vol) > 1 else 0
+            is_hve = today_vol >= hve_prior_max
+
+            # Highest Volume Quarter (trailing 63 trading days, excludes current bar)
+            hvq_window = vol.iloc[-64:-1] if len(vol) >= 64 else vol.iloc[:-1]
+            hvq_prior_max = hvq_window.max() if len(hvq_window) > 0 else 0
+            is_hvq = today_vol >= hvq_prior_max
+
+            # Highest Volume Month (trailing 21 trading days, excludes current bar)
+            hvm_window = vol.iloc[-22:-1] if len(vol) >= 22 else vol.iloc[:-1]
+            hvm_prior_max = hvm_window.max() if len(hvm_window) > 0 else 0
+            is_hvm = today_vol >= hvm_prior_max
+
+            vol_map[ticker] = int(today_vol)
+
+            if is_hve:
+                hve_list.append(ticker)
+            elif is_hvq:
+                hvq_list.append(ticker)
+            elif is_hvm:
+                hvm_list.append(ticker)
+
+        except Exception:
+            continue
+
+    return {
+        "HVE": sorted(hve_list),
+        "HVQ": sorted(hvq_list),
+        "HVM": sorted(hvm_list),
+    }, vol_map
 
 
+def _format_volume(v):
+    if v >= 1_000_000:
+        return f"{v/1_000_000:.1f}M"
+    if v >= 1_000:
+        return f"{v/1_000:.0f}K"
+    return str(v)
+
+
+with st.spinner("Scanning for unusual volume..."):
+    unusual_vol_results, unusual_vol_map = timed(
+        "compute_unusual_volume",
+        compute_unusual_volume,
+        stocks_tuple, ticker_dfs_shared
+    )
+
+hve_syms = unusual_vol_results["HVE"]
+hvq_syms = unusual_vol_results["HVQ"]
+hvm_syms = unusual_vol_results["HVM"]
+total_unusual_vol = len(hve_syms) + len(hvq_syms) + len(hvm_syms)
+
+st.markdown(f"#### 📊 Unusual Volume ({total_unusual_vol})")
+
+def _render_volume_badges(sym_list, vol_map, badge_color_style):
+    if not sym_list:
+        st.info("None today.")
+        return
+    html_v = ""
+    for sym in sym_list:
+        vol_str = _format_volume(vol_map.get(sym, 0))
+        if sym in LIME_STOCKS1:
+            html_v += (
+                f'<div class="ticker-badge lime-badge">'
+                f'<span class="ticker-name" style="color:#000000;font-weight:bold;">{sym}</span>'
+                f'<span class="ticker-rs" style="color:#000000;font-weight:bold;margin-left:5px;">{vol_str}</span>'
+                f'</div>'
+            )
+        elif sym in KNOWN_STOCKS:
+            html_v += (
+                f'<div class="ticker-badge" style="{badge_color_style}">'
+                f'<span class="ticker-name" style="color:#111111;font-weight:bold;">{sym}</span>'
+                f'<span class="ticker-rs" style="color:#333333;font-weight:bold;margin-left:5px;">{vol_str}</span>'
+                f'</div>'
+            )
+        else:
+            html_v += (
+                f'<div class="ticker-badge">'
+                f'<span class="ticker-name">{sym}</span>'
+                f'<span class="ticker-rs">{vol_str}</span>'
+                f'</div>'
+            )
+    st.markdown(html_v, unsafe_allow_html=True)
+
+st.markdown(f"**🔴 HVE — Highest Volume Ever ({len(hve_syms)})**")
+_render_volume_badges(hve_syms, unusual_vol_map, "background-color:#FF6B6B;border:1px solid #CC0000;")
+
+st.write("")
+st.markdown(f"**🟠 HVQ — Highest Volume Quarter ({len(hvq_syms)})**")
+_render_volume_badges(hvq_syms, unusual_vol_map, "background-color:#FFB84D;border:1px solid #CC7A00;")
+
+st.write("")
+st.markdown(f"**🟡 HVM — Highest Volume Month ({len(hvm_syms)})**")
+_render_volume_badges(hvm_syms, unusual_vol_map, "background-color:#FFE066;border:1px solid #B8860B;")
