@@ -10069,9 +10069,6 @@ st.markdown("---")
 # Read-only: reuses ticker_dfs_shared (already fetched, ~2y history) and
 # KNOWN_STOCKS. Does not touch any existing variable or function.
 # ==============================================================================
-st.markdown("---")
-st.markdown("#### 📊 Unusual Volume")
-
 @st.cache_data(ttl=3600)
 def compute_unusual_volume(stocks_list, ticker_dfs, min_price=20, min_volume=100000):
     """
@@ -10198,3 +10195,164 @@ _render_volume_badges(hvq_syms, unusual_vol_map, "background-color:#FFB84D;borde
 st.write("")
 st.markdown(f"**🟡 HVM — Highest Volume Month ({len(hvm_syms)})**")
 _render_volume_badges(hvm_syms, unusual_vol_map, "background-color:#FFE066;border:1px solid #B8860B;")
+
+# ==============================================================================
+# IBD "STOCK MARKET TODAY" — TICKER EXTRACTION FROM LATEST YOUTUBE VIDEO
+# Read-only scrape of IBD's YouTube Streams tab. Skips videos whose title
+# doesn't contain "Stock Market Today", extracts tickers from the first
+# matching (latest) video. Does not touch any existing variable/function.
+# ==============================================================================
+
+IBD_STREAMS_URL = "https://www.youtube.com/@investorsbusinessdaily/streams"
+
+# Common all-caps words to exclude from the fallback ticker scan
+_TICKER_STOPWORDS = {
+    "IBD", "ETF", "ETFS", "CEO", "CFO", "USA", "US", "AI", "IPO", "GDP",
+    "FED", "SEC", "NYSE", "NASDAQ", "PE", "EPS", "ATH", "ATR", "RS",
+    "MA", "SMA", "EMA", "TV", "YOY", "QOQ", "S&P", "DOW",
+}
+
+def _extract_tickers_from_ibd_title(title):
+    """
+    Primary: capture comma-separated ALL-CAPS tickers immediately before a
+    common IBD trigger phrase ('In Focus', 'Near Buy Point', etc.), matching
+    the "GH, FCX, SPHR In Focus | Stock Market Today" pattern.
+    Fallback: scan for standalone 1-5 letter all-caps tokens, stopword-filtered.
+    """
+    if not title:
+        return []
+
+    trigger_phrases = [
+        r"In Focus", r"Near Buy Points?", r"Buy Points?", r"Eyed",
+        r"On Watch", r"In Play", r"Flash(?:es)? Buy Signal",
+    ]
+    trigger_pattern = "|".join(trigger_phrases)
+
+    match = re.search(
+        r"([A-Z][A-Z0-9\.\-]{0,5}(?:\s*,\s*[A-Z][A-Z0-9\.\-]{0,5}){0,6})\s+(?:" + trigger_pattern + r")",
+        title,
+    )
+
+    if match:
+        candidates = [t.strip() for t in match.group(1).split(",")]
+    else:
+        candidates = re.findall(r"\b[A-Z]{1,5}\b", title)
+
+    tickers, seen = [], set()
+    for tok in candidates:
+        tok = tok.strip().upper()
+        if not tok or tok in _TICKER_STOPWORDS or tok in seen:
+            continue
+        if not re.fullmatch(r"[A-Z]{1,5}", tok):
+            continue
+        seen.add(tok)
+        tickers.append(tok)
+
+    return tickers
+
+
+@st.cache_data(ttl=1800)
+def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=20):
+    """
+    Fetch IBD's Streams tab, find the latest video whose title contains
+    'Stock Market Today' (skipping any that don't), and return its tickers.
+    """
+    import json
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    try:
+        resp = requests.get(IBD_STREAMS_URL, headers=headers, timeout=15)
+        resp.raise_for_status()
+        html = resp.text
+    except Exception as e:
+        return {"error": f"Fetch error: {e}"}
+
+    match = re.search(r"var ytInitialData\s*=\s*(\{.*?\});</script>", html)
+    if not match:
+        match = re.search(r'ytInitialData"\]\s*=\s*(\{.*?\});', html)
+    if not match:
+        return {"error": "Could not locate ytInitialData on page (YouTube layout may have changed)."}
+
+    try:
+        data = json.loads(match.group(1))
+    except Exception as e:
+        return {"error": f"JSON parse error: {e}"}
+
+    videos = []
+
+    def _walk(node):
+        if isinstance(node, dict):
+            if "videoRenderer" in node:
+                vr = node["videoRenderer"]
+                vid = vr.get("videoId")
+                title_runs = vr.get("title", {}).get("runs", [])
+                title_text = "".join(r.get("text", "") for r in title_runs)
+                if vid and title_text:
+                    videos.append({"videoId": vid, "title": title_text})
+            for v in node.values():
+                _walk(v)
+        elif isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(data)
+
+    if not videos:
+        return {"error": "No videos found on streams page."}
+
+    for video in videos[:max_videos_to_scan]:
+        title = video["title"]
+        if "stock market today" in title.lower():
+            return {
+                "tickers": _extract_tickers_from_ibd_title(title),
+                "title": title,
+                "video_id": video["videoId"],
+                "video_url": f"https://www.youtube.com/watch?v={video['videoId']}",
+            }
+
+    return {"error": "No recent video with 'Stock Market Today' in title found."}
+
+
+# ── Render section ────────────────────────────────────────────────────────
+st.markdown("---")
+st.markdown("#### 🎥 IBD Stock Market Today — Tickers In Focus")
+
+with st.spinner("Checking IBD's latest Stock Market Today video..."):
+    ibd_result = timed(
+        "fetch_ibd_stock_market_today_tickers",
+        fetch_ibd_stock_market_today_tickers,
+    )
+
+if ibd_result.get("error"):
+    st.info(f"Unable to fetch IBD video data — {ibd_result['error']}")
+else:
+    st.markdown(f"**[{ibd_result['title']}]({ibd_result['video_url']})**")
+
+    tickers_found = ibd_result.get("tickers", [])
+    if tickers_found:
+        html_ibd = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+        for sym in tickers_found:
+            if sym in LIME_STOCKS1:
+                html_ibd += (
+                    f'<div class="ticker-badge lime-badge">'
+                    f'<span style="color:#000000;font-weight:bold;">{sym}</span></div>'
+                )
+            elif sym in KNOWN_STOCKS:
+                html_ibd += (
+                    f'<div class="ticker-badge new-pattern-badge">'
+                    f'<span style="color:#111111;font-weight:bold;">{sym}</span></div>'
+                )
+            else:
+                html_ibd += f'<div class="ticker-badge">{sym}</div>'
+        html_ibd += "</div>"
+        st.markdown(html_ibd, unsafe_allow_html=True)
+    else:
+        st.info("No tickers could be extracted from the title.")
