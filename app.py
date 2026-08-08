@@ -6064,125 +6064,6 @@ if not tml_hist.empty:
         use_container_width=True
     )
 
-#st.markdown("<br>", unsafe_allow_html=True) # Spacer
-st.markdown("---")
-
-# ── RS NEW HIGH BEFORE PRICE ─────────────────────────────────────────────────
-@st.cache_data(ttl=3600)
-def compute_rs_nh_b4_price(stocks_list, ticker_dfs, benchmark_df_input):
-    """
-    Pine Script port of rs_nh_b4_price:
-    RS is at a 20-bar high BUT price high is NOT yet at its 20-bar high.
-    Signals RS leading price — early breakout precursor.
-    """
-    today_matches = []
-    yest_matches  = []
-
-    for ticker in stocks_list:
-        try:
-            df = ticker_dfs.get(ticker)
-            if df is None or len(df) < 25:
-                continue
-
-            close_s = df['Close']
-            high_s  = df['High']
-
-            # Align with benchmark
-            rs = close_s / benchmark_df_input['Close']
-            rs = rs.dropna()
-            if len(rs) < 22:
-                continue
-
-            sma50_s  = close_s.rolling(50).mean()
-            sma200_s = close_s.rolling(200).mean()
-
-            # ── TODAY (idx = -1) ──────────────────────────────────────────
-            rs_20h    = rs.rolling(20).max()
-            price_20h = high_s.rolling(20).max()
-
-            rs_today      = rs.iloc[-1]
-            rs_20h_today  = rs_20h.iloc[-1]
-            ph_20h_today  = price_20h.iloc[-1]
-            h_today       = high_s.iloc[-1]
-            c_today       = close_s.iloc[-1]
-            sma50_today   = sma50_s.iloc[-1]
-            sma200_today  = sma200_s.iloc[-1]
-
-            cond_today = (
-                (not pd.isna(rs_20h_today)) and
-                (rs_today == rs_20h_today) and
-                (h_today < ph_20h_today) and
-                (c_today >= 20) and
-                (c_today >= sma200_today or c_today >= sma50_today)
-            )
-            if cond_today:
-                today_matches.append(ticker)
-
-            # ── YESTERDAY (idx = -2) ─────────────────────────────────────
-            rs_yest     = rs.iloc[-2]
-            rs_20h_yest = rs_20h.iloc[-2]
-            ph_20h_yest = price_20h.iloc[-2]
-            h_yest      = high_s.iloc[-2]
-            c_yest      = close_s.iloc[-2]
-            sma50_yest  = sma50_s.iloc[-2]
-            sma200_yest = sma200_s.iloc[-2]
-
-            cond_yest = (
-                (not pd.isna(rs_20h_yest)) and
-                (rs_yest == rs_20h_yest) and
-                (h_yest < ph_20h_yest) and
-                (c_yest >= 20) and
-                (c_yest >= sma200_yest or c_yest >= sma50_yest)
-            )
-            if cond_yest:
-                yest_matches.append(ticker)
-
-        except Exception:
-            continue
-
-    return sorted(today_matches), sorted(yest_matches)
-
-
-with st.spinner("Scanning RS New High Before Price..."):
-    rs_nh_b4_today, rs_nh_b4_yest = timed(
-        "compute_rs_nh_b4_price",
-        compute_rs_nh_b4_price,
-        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
-    )
-
-# st.markdown("---")
-st.markdown(f"#### 🔵 RS NH B4 Price = Opportunity ({len(rs_nh_b4_today)})")
-
-if rs_nh_b4_today or rs_nh_b4_yest:
-    # ── NEW: map to industries for top-20 glow check ──
-    rsnh_industry_counts, rsnh_ticker_industry = build_leader_industry_map(rs_nh_b4_today, INDUSTRIES)
-
-    html_rsnh = ""
-    for sym in rs_nh_b4_today:
-        industries = rsnh_ticker_industry.get(sym, [])
-        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
-        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
-        glow_style = (
-            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
-            if is_top20_industry else ""
-        )
-        html_rsnh += setup_badge(sym, is_new=(sym not in rs_nh_b4_yest), extra_style=glow_style)
-
-    removed_rsnh = [sym for sym in rs_nh_b4_yest if sym not in rs_nh_b4_today]
-    for sym in removed_rsnh:
-        html_rsnh += f'<div class="ticker-badge removed-badge">{sym}</div>'
-
-    st.markdown(html_rsnh, unsafe_allow_html=True)
-
-    render_group_ai_insight(
-        rs_nh_b4_today,
-        "RS New High Before Price (opportunity)",
-        "rs_nh_b4_price",
-        extra_note="the stock's relative strength vs the S&P 500 just hit a 20-day high, but the stock's own price high has not yet reached its 20-day high — RS is leading price, often an early breakout precursor"
-    )
-else:
-    st.info("No active setups discovered.")
-
 st.markdown("---")
 
 # --- 2. TIGHT PPP (Full Horizontal Row Below Two Botak) ---
@@ -6326,6 +6207,125 @@ if ppp_list or ppp_yest:
                     import streamlit.components.v1 as components
                     components.html(chart_html, height=CHART_SIZE + 32, scrolling=False)
 
+else:
+    st.info("No active setups discovered.")
+
+#st.markdown("<br>", unsafe_allow_html=True) # Spacer
+st.markdown("---")
+
+# ── RS NEW HIGH BEFORE PRICE ─────────────────────────────────────────────────
+@st.cache_data(ttl=3600)
+def compute_rs_nh_b4_price(stocks_list, ticker_dfs, benchmark_df_input):
+    """
+    Pine Script port of rs_nh_b4_price:
+    RS is at a 20-bar high BUT price high is NOT yet at its 20-bar high.
+    Signals RS leading price — early breakout precursor.
+    """
+    today_matches = []
+    yest_matches  = []
+
+    for ticker in stocks_list:
+        try:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < 25:
+                continue
+
+            close_s = df['Close']
+            high_s  = df['High']
+
+            # Align with benchmark
+            rs = close_s / benchmark_df_input['Close']
+            rs = rs.dropna()
+            if len(rs) < 22:
+                continue
+
+            sma50_s  = close_s.rolling(50).mean()
+            sma200_s = close_s.rolling(200).mean()
+
+            # ── TODAY (idx = -1) ──────────────────────────────────────────
+            rs_20h    = rs.rolling(20).max()
+            price_20h = high_s.rolling(20).max()
+
+            rs_today      = rs.iloc[-1]
+            rs_20h_today  = rs_20h.iloc[-1]
+            ph_20h_today  = price_20h.iloc[-1]
+            h_today       = high_s.iloc[-1]
+            c_today       = close_s.iloc[-1]
+            sma50_today   = sma50_s.iloc[-1]
+            sma200_today  = sma200_s.iloc[-1]
+
+            cond_today = (
+                (not pd.isna(rs_20h_today)) and
+                (rs_today == rs_20h_today) and
+                (h_today < ph_20h_today) and
+                (c_today >= 20) and
+                (c_today >= sma200_today or c_today >= sma50_today)
+            )
+            if cond_today:
+                today_matches.append(ticker)
+
+            # ── YESTERDAY (idx = -2) ─────────────────────────────────────
+            rs_yest     = rs.iloc[-2]
+            rs_20h_yest = rs_20h.iloc[-2]
+            ph_20h_yest = price_20h.iloc[-2]
+            h_yest      = high_s.iloc[-2]
+            c_yest      = close_s.iloc[-2]
+            sma50_yest  = sma50_s.iloc[-2]
+            sma200_yest = sma200_s.iloc[-2]
+
+            cond_yest = (
+                (not pd.isna(rs_20h_yest)) and
+                (rs_yest == rs_20h_yest) and
+                (h_yest < ph_20h_yest) and
+                (c_yest >= 20) and
+                (c_yest >= sma200_yest or c_yest >= sma50_yest)
+            )
+            if cond_yest:
+                yest_matches.append(ticker)
+
+        except Exception:
+            continue
+
+    return sorted(today_matches), sorted(yest_matches)
+
+
+with st.spinner("Scanning RS New High Before Price..."):
+    rs_nh_b4_today, rs_nh_b4_yest = timed(
+        "compute_rs_nh_b4_price",
+        compute_rs_nh_b4_price,
+        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
+    )
+
+# st.markdown("---")
+st.markdown(f"#### 🔵 RS NH B4 Price = Opportunity ({len(rs_nh_b4_today)})")
+
+if rs_nh_b4_today or rs_nh_b4_yest:
+    # ── NEW: map to industries for top-20 glow check ──
+    rsnh_industry_counts, rsnh_ticker_industry = build_leader_industry_map(rs_nh_b4_today, INDUSTRIES)
+
+    html_rsnh = ""
+    for sym in rs_nh_b4_today:
+        industries = rsnh_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+            if is_top20_industry else ""
+        )
+        html_rsnh += setup_badge(sym, is_new=(sym not in rs_nh_b4_yest), extra_style=glow_style)
+
+    removed_rsnh = [sym for sym in rs_nh_b4_yest if sym not in rs_nh_b4_today]
+    for sym in removed_rsnh:
+        html_rsnh += f'<div class="ticker-badge removed-badge">{sym}</div>'
+
+    st.markdown(html_rsnh, unsafe_allow_html=True)
+
+    render_group_ai_insight(
+        rs_nh_b4_today,
+        "RS New High Before Price (opportunity)",
+        "rs_nh_b4_price",
+        extra_note="the stock's relative strength vs the S&P 500 just hit a 20-day high, but the stock's own price high has not yet reached its 20-day high — RS is leading price, often an early breakout precursor"
+    )
 else:
     st.info("No active setups discovered.")
 
@@ -9533,8 +9533,8 @@ SECTION_DEFINITIONS = {
     "Minervini":          set(sym for sym, _, _ in globals().get("email_content_stocks", [])),
     "RS Leader":          set(globals().get("leader_list", [])),
     "TML":                set(globals().get("tml_list", [])),
+    "PPP":                set(globals().get("ppp_list", [])),    
     "RS NH B4 Price":     set(globals().get("rs_nh_b4_today", [])),
-    "PPP":                set(globals().get("ppp_list", [])),
     "Gapper":             set(globals().get("gapper_list", [])),          # short form
     "Early Bull":         set(globals().get("early_bull_list", [])),
     "Two Botak":          set(globals().get("b_list", [])),
