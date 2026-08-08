@@ -10409,6 +10409,9 @@ else:
 IBD_STOCK_OF_DAY_URL = "https://www.investors.com/category/research/ibd-stock-of-the-day/"
 
 
+
+
+
 def _extract_tickers_from_ibd_sotd_text(text_blob, restrict_to_known=None):
     """
     Extract candidate tickers from a block of text using three patterns,
@@ -10416,8 +10419,7 @@ def _extract_tickers_from_ibd_sotd_text(text_blob, restrict_to_known=None):
       1. Cashtag: $NVDA
       2. Exchange-prefixed: (NASDAQ:NVDA) / (NYSE:NVDA)
       3. Whitelist match: any all-caps 1-5 letter token that also appears
-         in restrict_to_known (your KNOWN_STOCKS universe) — safest fallback,
-         avoids false positives from generic all-caps words.
+         in restrict_to_known (your KNOWN_STOCKS universe).
     Returns a de-duplicated, order-preserved list.
     """
     if not text_blob:
@@ -10425,21 +10427,18 @@ def _extract_tickers_from_ibd_sotd_text(text_blob, restrict_to_known=None):
 
     tickers, seen = [], set()
 
-    # 1. Cashtags
     for m in re.finditer(r"\$([A-Z]{1,5})\b", text_blob):
         tok = m.group(1).upper()
         if tok not in seen:
             seen.add(tok)
             tickers.append(tok)
 
-    # 2. Exchange-prefixed
     for m in re.finditer(r"\((?:NASDAQ|NYSE|NYSEARCA|AMEX)\s*:\s*([A-Z]{1,5})\)", text_blob):
         tok = m.group(1).upper()
         if tok not in seen:
             seen.add(tok)
             tickers.append(tok)
 
-    # 3. Whitelist fallback against your known universe
     if restrict_to_known:
         for m in re.finditer(r"\b[A-Z]{1,5}\b", text_blob):
             tok = m.group(0).upper()
@@ -10450,13 +10449,119 @@ def _extract_tickers_from_ibd_sotd_text(text_blob, restrict_to_known=None):
     return tickers
 
 
+def _extract_company_name_from_ibd_title(title):
+    """
+    Extract the subject company name from an IBD 'Stock Of The Day' title
+    when no explicit ticker is present, e.g.:
+      "How Okta, IBD Stock Of The Day, Is Targeting..." -> "Okta"
+      "Guardant Health, Thursday's Stock Of The Day, Spikes After..." -> "Guardant Health"
+      "IBD Stock Of The Day: Nvidia Breaks Out" -> "Nvidia"
+    Returns None if no pattern matches.
+    """
+    if not title:
+        return None
+
+    # "<optional How >Company Name, [Day's ]IBD Stock Of The Day, ..."
+    m = re.search(
+        r"^(?:How\s+)?(.+?),\s*(?:\w+(?:'s)?\s+)?(?:IBD\s+)?Stock\s+Of\s+The\s+Day\b",
+        title,
+        re.IGNORECASE,
+    )
+    if m and m.group(1).strip():
+        return m.group(1).strip()
+
+    # "IBD Stock Of The Day: Company Name ..."
+    m = re.search(
+        r"(?:IBD\s+)?Stock\s+Of\s+The\s+Day\s*:\s*(.+?)(?:\s+Stock\b|,|$)",
+        title,
+        re.IGNORECASE,
+    )
+    if m and m.group(1).strip():
+        return m.group(1).strip()
+
+    return None
+
+
+def _extract_company_name_from_ibd_url(url):
+    """
+    Fallback: guess a company name from the investors.com URL slug, e.g.
+    '.../okta-stock-cybersecurity-...' -> 'okta'
+    '.../guardant-health-stock-buy-point-...' -> 'guardant health'
+    """
+    if not url:
+        return None
+    m = re.search(r"ibd-stock-of-the-day/([a-z0-9\-]+)-stock-", url, re.IGNORECASE)
+    if not m:
+        return None
+    slug = m.group(1).replace("-", " ").strip()
+    return slug if slug else None
+
+
+@st.cache_data(ttl=86400)
+def _resolve_company_name_to_ticker(company_name, known_universe_tuple=None):
+    """
+    Resolve a company name (e.g. 'Okta', 'Guardant Health') to its stock
+    ticker via Yahoo Finance's public search endpoint. Cached 24h since
+    name->ticker mappings rarely change. Prefers a match already in
+    known_universe_tuple (your KNOWN_STOCKS) if one is present.
+    """
+    if not company_name:
+        return None
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+    }
+
+    try:
+        resp = requests.get(
+            "https://query1.finance.yahoo.com/v1/finance/search",
+            params={"q": company_name, "quotesCount": 6, "newsCount": 0},
+            headers=headers,
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        return None
+
+    quotes = data.get("quotes", []) if isinstance(data, dict) else []
+    if not quotes:
+        return None
+
+    known_set = set(known_universe_tuple) if known_universe_tuple else set()
+    candidates = []
+    for q in quotes:
+        symbol = q.get("symbol", "")
+        quote_type = q.get("quoteType", "")
+        if not symbol or quote_type != "EQUITY":
+            continue
+        if "." in symbol:
+            continue  # skip foreign/secondary listings like OKTA.MX
+        candidates.append(symbol.upper())
+
+    if not candidates:
+        return None
+
+    for c in candidates:
+        if c in known_set:
+            return c
+
+    return candidates[0]
+
+
 @st.cache_data(ttl=3600)
 def fetch_ibd_stock_of_the_day(known_universe_tuple, max_articles=10):
     """
     Fetch investors.com's IBD Stock Of The Day category page and extract
-    tickers from recent article titles/snippets.
-    Returns {"articles": [{"title":..., "url":..., "tickers":[...]}], "error": None}
-    or {"error": "..."} on failure.
+    tickers from recent article titles. If no direct ticker is present in
+    the title (common — IBD often writes the company name instead), falls
+    back to extracting the company name and resolving it to a ticker via
+    Yahoo Finance search.
+    Returns {"articles": [...], "error": None} or {"error": "...", "articles": []}.
     """
     headers = {
         "User-Agent": (
@@ -10477,10 +10582,6 @@ def fetch_ibd_stock_of_the_day(known_universe_tuple, max_articles=10):
 
     known_set = set(known_universe_tuple)
 
-    # Extract article blocks: look for <a> tags with href pointing to an
-    # investors.com article, paired with their link text as the title.
-    # Investors.com article URLs consistently look like:
-    #   https://www.investors.com/research/ibd-stock-of-the-day/....
     article_pattern = re.compile(
         r'<a[^>]+href="(https://www\.investors\.com/[^"]*ibd-stock-of-the-day[^"]*)"[^>]*>(.*?)</a>',
         re.IGNORECASE | re.DOTALL,
@@ -10495,26 +10596,37 @@ def fetch_ibd_stock_of_the_day(known_universe_tuple, max_articles=10):
         raw_title = re.sub(r"\s+", " ", raw_title)
 
         if not raw_title or len(raw_title) < 10:
-            continue  # skip nav/thumbnail links with no real title text
+            continue
         if url in seen_urls:
             continue
         seen_urls.add(url)
 
         tickers = _extract_tickers_from_ibd_sotd_text(raw_title, restrict_to_known=known_set)
-        articles.append({"title": raw_title, "url": url, "tickers": tickers})
+        resolved_via = None
+
+        if not tickers:
+            company_name = (
+                _extract_company_name_from_ibd_title(raw_title)
+                or _extract_company_name_from_ibd_url(url)
+            )
+            if company_name:
+                resolved_ticker = _resolve_company_name_to_ticker(company_name, known_universe_tuple)
+                if resolved_ticker:
+                    tickers = [resolved_ticker]
+                    resolved_via = f"name match: '{company_name}'"
+
+        articles.append({"title": raw_title, "url": url, "tickers": tickers, "resolved_via": resolved_via})
 
         if len(articles) >= max_articles:
             break
 
     if not articles:
-        # Fallback: whole-page regex scan for any cashtags/exchange tickers,
-        # in case the article-link pattern above didn't match this layout.
         page_tickers = _extract_tickers_from_ibd_sotd_text(html, restrict_to_known=known_set)
         if page_tickers:
             return {
                 "error": None,
                 "articles": [{"title": "(page-wide scan — no article titles matched)",
-                              "url": IBD_STOCK_OF_DAY_URL, "tickers": page_tickers}],
+                              "url": IBD_STOCK_OF_DAY_URL, "tickers": page_tickers, "resolved_via": None}],
             }
         return {"error": "No articles or tickers found — page layout may have changed or request was blocked.",
                 "articles": []}
