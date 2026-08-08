@@ -10166,21 +10166,21 @@ def _render_volume_badges(sym_list, vol_map, badge_color_style):
             html_v += (
                 f'<div class="ticker-badge lime-badge">'
                 f'<span class="ticker-name" style="color:#000000;font-weight:bold;">{sym}</span>'
-                f'<span class="ticker-rs" style="color:#000000;font-weight:bold;margin-left:5px;">{vol_str}</span>'
+                #f'<span class="ticker-rs" style="color:#000000;font-weight:bold;margin-left:5px;">{vol_str}</span>'
                 f'</div>'
             )
         elif sym in KNOWN_STOCKS:
             html_v += (
                 f'<div class="ticker-badge" style="{badge_color_style}">'
                 f'<span class="ticker-name" style="color:#111111;font-weight:bold;">{sym}</span>'
-                f'<span class="ticker-rs" style="color:#333333;font-weight:bold;margin-left:5px;">{vol_str}</span>'
+                #f'<span class="ticker-rs" style="color:#333333;font-weight:bold;margin-left:5px;">{vol_str}</span>'
                 f'</div>'
             )
         else:
             html_v += (
                 f'<div class="ticker-badge">'
                 f'<span class="ticker-name">{sym}</span>'
-                f'<span class="ticker-rs">{vol_str}</span>'
+                #f'<span class="ticker-rs">{vol_str}</span>'
                 f'</div>'
             )
     st.markdown(html_v, unsafe_allow_html=True)
@@ -10256,6 +10256,9 @@ def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=20):
     """
     Fetch IBD's Streams tab, find the latest video whose title contains
     'Stock Market Today' (skipping any that don't), and return its tickers.
+    Uses a JSON walk first, then falls back to a raw-HTML regex scan if the
+    JSON walk finds nothing (YouTube's tab data is sometimes lazy-loaded
+    and only the grid skeleton is present in the initial JSON).
     """
     import json
 
@@ -10275,38 +10278,67 @@ def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=20):
     except Exception as e:
         return {"error": f"Fetch error: {e}"}
 
-    match = re.search(r"var ytInitialData\s*=\s*(\{.*?\});</script>", html)
-    if not match:
-        match = re.search(r'ytInitialData"\]\s*=\s*(\{.*?\});', html)
-    if not match:
-        return {"error": "Could not locate ytInitialData on page (YouTube layout may have changed)."}
-
-    try:
-        data = json.loads(match.group(1))
-    except Exception as e:
-        return {"error": f"JSON parse error: {e}"}
-
     videos = []
+    seen_ids = set()
 
-    def _walk(node):
-        if isinstance(node, dict):
-            if "videoRenderer" in node:
-                vr = node["videoRenderer"]
-                vid = vr.get("videoId")
-                title_runs = vr.get("title", {}).get("runs", [])
-                title_text = "".join(r.get("text", "") for r in title_runs)
-                if vid and title_text:
-                    videos.append({"videoId": vid, "title": title_text})
-            for v in node.values():
-                _walk(v)
-        elif isinstance(node, list):
-            for item in node:
-                _walk(item)
+    # ── Attempt 1: parse ytInitialData JSON and walk it ────────────────────
+    match = re.search(r"var ytInitialData\s*=\s*(\{.*?\});\s*</script>", html, re.DOTALL)
+    if not match:
+        match = re.search(r'ytInitialData"\]\s*=\s*(\{.*?\});', html, re.DOTALL)
 
-    _walk(data)
+    if match:
+        try:
+            data = json.loads(match.group(1))
+
+            RENDERER_KEYS = (
+                "videoRenderer", "gridVideoRenderer", "compactVideoRenderer",
+                "playlistVideoRenderer", "reelItemRenderer",
+            )
+
+            def _walk(node):
+                if isinstance(node, dict):
+                    for key in RENDERER_KEYS:
+                        if key in node:
+                            vr = node[key]
+                            vid = vr.get("videoId")
+                            title_runs = vr.get("title", {}).get("runs", [])
+                            if not title_runs and "headline" in vr:
+                                title_runs = vr.get("headline", {}).get("runs", [])
+                            title_text = "".join(r.get("text", "") for r in title_runs)
+                            if vid and title_text and vid not in seen_ids:
+                                seen_ids.add(vid)
+                                videos.append({"videoId": vid, "title": title_text})
+                    for v in node.values():
+                        _walk(v)
+                elif isinstance(node, list):
+                    for item in node:
+                        _walk(item)
+
+            _walk(data)
+        except Exception:
+            pass  # fall through to regex fallback below
+
+    # ── Attempt 2: raw-HTML regex fallback (works even if JSON walk found nothing) ──
+    if not videos:
+        pattern = re.compile(
+            r'"videoId":"([a-zA-Z0-9_-]{11})".{0,800}?"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"',
+            re.DOTALL,
+        )
+        for m in pattern.finditer(html):
+            vid, title_raw = m.group(1), m.group(2)
+            if vid in seen_ids:
+                continue
+            seen_ids.add(vid)
+            # Unescape common JSON escapes (\", \\, \/, \n, \uXXXX)
+            try:
+                title_text = json.loads(f'"{title_raw}"')
+            except Exception:
+                title_text = title_raw.replace('\\"', '"').replace("\\/", "/")
+            if title_text:
+                videos.append({"videoId": vid, "title": title_text})
 
     if not videos:
-        return {"error": "No videos found on streams page."}
+        return {"error": "No videos found on streams page (YouTube layout may have changed)."}
 
     for video in videos[:max_videos_to_scan]:
         title = video["title"]
