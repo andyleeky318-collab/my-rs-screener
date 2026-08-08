@@ -2962,7 +2962,7 @@ SECTOR_KEYWORDS = {
     "Crypto": "#FF69B4", "Gold": "#FF69B4", "Broker": "#FF69B4", "Brokerage": "#FF69B4", "Rail": "#FF69B4", "railroads": "#FF69B4", 
     "Rails": "#FF69B4", "finance": "#FF69B4", "metals": "#FF69B4", "Payment Processing": "#FF69B4", 
     "travel": "#FF69B4", "airline": "#FF69B4", "fintech": "#FF69B4", "uranium": "#FF69B4", "mega-cap": "#FF69B4",
-    "apparel": "#FF69B4", "risk-on": "#FF69B4", "risk-off": "#FF69B4", 
+    "apparel": "#FF69B4", "risk-on": "#FF69B4", "risk-off": "#FF69B4", "New Highs": "#FF69B4", "New Lows": "#FF69B4", 
 }
 
 def format_ai_analysis_text(text, tickers=None, industries=None):
