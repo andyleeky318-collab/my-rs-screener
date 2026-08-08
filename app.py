@@ -10204,58 +10204,14 @@ _render_volume_badges(hvm_syms, unusual_vol_map, "background-color:#FFE066;borde
 # ==============================================================================
 
 IBD_CHANNEL_HANDLE_URL = "https://www.youtube.com/@investorsbusinessdaily"
-IBD_STREAMS_URL = "https://www.youtube.com/@investorsbusinessdaily/streams"  # kept as fallback
-
-# Common all-caps words to exclude from the fallback ticker scan
-_TICKER_STOPWORDS = {
-    "IBD", "ETF", "ETFS", "CEO", "CFO", "USA", "US", "AI", "IPO", "GDP",
-    "FED", "SEC", "NYSE", "NASDAQ", "PE", "EPS", "ATH", "ATR", "RS",
-    "MA", "SMA", "EMA", "TV", "YOY", "QOQ", "S&P", "DOW",
-}
-
-def _extract_tickers_from_ibd_title(title):
-    """
-    Primary: capture comma-separated ALL-CAPS tickers immediately before a
-    common IBD trigger phrase ('In Focus', 'Near Buy Point', etc.), matching
-    the "GH, FCX, SPHR In Focus | Stock Market Today" pattern.
-    Fallback: scan for standalone 1-5 letter all-caps tokens, stopword-filtered.
-    """
-    if not title:
-        return []
-
-    trigger_phrases = [
-        r"In Focus", r"Near Buy Points?", r"Buy Points?", r"Eyed",
-        r"On Watch", r"In Play", r"Flash(?:es)? Buy Signal",
-    ]
-    trigger_pattern = "|".join(trigger_phrases)
-
-    match = re.search(
-        r"([A-Z][A-Z0-9\.\-]{0,5}(?:\s*,\s*[A-Z][A-Z0-9\.\-]{0,5}){0,6})\s+(?:" + trigger_pattern + r")",
-        title,
-    )
-
-    if match:
-        candidates = [t.strip() for t in match.group(1).split(",")]
-    else:
-        candidates = re.findall(r"\b[A-Z]{1,5}\b", title)
-
-    tickers, seen = [], set()
-    for tok in candidates:
-        tok = tok.strip().upper()
-        if not tok or tok in _TICKER_STOPWORDS or tok in seen:
-            continue
-        if not re.fullmatch(r"[A-Z]{1,5}", tok):
-            continue
-        seen.add(tok)
-        tickers.append(tok)
-
-    return tickers
+IBD_STREAMS_URL = "https://www.youtube.com/@investorsbusinessdaily/streams"
 
 
 @st.cache_data(ttl=86400)
 def _resolve_ibd_channel_id():
     """Resolve the stable UC... channel ID behind the @investorsbusinessdaily handle.
-    Cached for 24h since a channel's ID never changes."""
+    Tries multiple extraction patterns since YouTube's HTML varies by request context.
+    Cached 24h since a channel's ID never changes."""
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -10264,23 +10220,24 @@ def _resolve_ibd_channel_id():
         ),
         "Accept-Language": "en-US,en;q=0.9",
     }
-    try:
-        resp = requests.get(
-            IBD_CHANNEL_HANDLE_URL, headers=headers,
-            cookies={"CONSENT": "YES+1"}, timeout=15,
-        )
-        resp.raise_for_status()
-        html = resp.text
-    except Exception:
-        return None
 
-    match = re.search(r'"channelId":"(UC[a-zA-Z0-9_-]{22})"', html)
-    if match:
-        return match.group(1)
+    for url in (IBD_STREAMS_URL, IBD_CHANNEL_HANDLE_URL):
+        try:
+            resp = requests.get(url, headers=headers, cookies={"CONSENT": "YES+1"}, timeout=15)
+            resp.raise_for_status()
+            html = resp.text
+        except Exception:
+            continue
 
-    match = re.search(r'channel/(UC[a-zA-Z0-9_-]{22})', html)
-    if match:
-        return match.group(1)
+        for pattern in (
+            r'"channelId":"(UC[a-zA-Z0-9_-]{22})"',
+            r'"externalId":"(UC[a-zA-Z0-9_-]{22})"',
+            r'"browseId":"(UC[a-zA-Z0-9_-]{22})"',
+            r'channel/(UC[a-zA-Z0-9_-]{22})',
+        ):
+            m = re.search(pattern, html)
+            if m:
+                return m.group(1)
 
     return None
 
@@ -10288,9 +10245,9 @@ def _resolve_ibd_channel_id():
 @st.cache_data(ttl=1800)
 def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=25):
     """
-    Fetch IBD's latest uploads via YouTube's public RSS feed (stable XML,
-    no JS/consent-wall issues), find the latest video whose title contains
-    'Stock Market Today' (skipping any that don't), and return its tickers.
+    Fetch IBD's latest uploads via YouTube's public RSS feed, find the latest
+    video whose title contains 'Stock Market Today', and return its tickers.
+    Also returns the raw scanned titles for debugging if no match is found.
     """
     import xml.etree.ElementTree as ET
 
@@ -10308,16 +10265,16 @@ def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=25):
     }
 
     try:
-        resp = requests.get(rss_url, headers=headers, timeout=15)
+        resp = requests.get(rss_url, headers=headers, cookies={"CONSENT": "YES+1"}, timeout=15)
         resp.raise_for_status()
         xml_text = resp.text
     except Exception as e:
-        return {"error": f"RSS fetch error: {e}"}
+        return {"error": f"RSS fetch error: {e}", "channel_id": channel_id}
 
     try:
         root = ET.fromstring(xml_text)
     except Exception as e:
-        return {"error": f"RSS parse error: {e}"}
+        return {"error": f"RSS parse error: {e}", "channel_id": channel_id}
 
     ns = {
         "atom": "http://www.w3.org/2005/Atom",
@@ -10330,13 +10287,13 @@ def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=25):
         vid_el = entry.find("yt:videoId", ns)
         if title_el is None or vid_el is None:
             continue
-        title_text = title_el.text or ""
+        title_text = (title_el.text or "").strip()
         vid = vid_el.text or ""
         if title_text and vid:
             videos.append({"videoId": vid, "title": title_text})
 
     if not videos:
-        return {"error": "RSS feed returned no videos for this channel."}
+        return {"error": "RSS feed returned no videos.", "channel_id": channel_id}
 
     for video in videos[:max_videos_to_scan]:
         title = video["title"]
@@ -10346,10 +10303,14 @@ def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=25):
                 "title": title,
                 "video_id": video["videoId"],
                 "video_url": f"https://www.youtube.com/watch?v={video['videoId']}",
+                "channel_id": channel_id,
             }
 
-    return {"error": "No recent video with 'Stock Market Today' in title found (RSS only returns latest ~15 uploads)."}
-
+    return {
+        "error": "No recent video with 'Stock Market Today' in title found.",
+        "channel_id": channel_id,
+        "scanned_titles": [v["title"] for v in videos[:max_videos_to_scan]],
+    }
 
 # ── Render section ────────────────────────────────────────────────────────
 st.markdown("---")
@@ -10363,6 +10324,12 @@ with st.spinner("Checking IBD's latest Stock Market Today video..."):
 
 if ibd_result.get("error"):
     st.info(f"Unable to fetch IBD video data — {ibd_result['error']}")
+    if ibd_result.get("channel_id"):
+        st.caption(f"Resolved channel ID: `{ibd_result['channel_id']}`")
+    if ibd_result.get("scanned_titles"):
+        with st.expander("Debug: titles scanned from RSS feed"):
+            for t in ibd_result["scanned_titles"]:
+                st.write(f"- {t}")
 else:
     st.markdown(f"**[{ibd_result['title']}]({ibd_result['video_url']})**")
 
