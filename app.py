@@ -10605,7 +10605,7 @@ def _resolve_company_name_to_ticker(company_name, known_universe_tuple=None):
 
 
 @st.cache_data(ttl=3600)
-def fetch_ibd_stock_of_the_day(known_universe_tuple, max_articles=50):
+def fetch_ibd_stock_of_the_day(known_universe_tuple, max_articles=10):
     """
     Fetch investors.com's IBD Stock Of The Day category page and extract
     tickers from recent article titles. If no direct ticker is present,
