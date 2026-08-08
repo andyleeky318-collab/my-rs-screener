@@ -10185,15 +10185,15 @@ def _render_volume_badges(sym_list, vol_map, badge_color_style):
             )
     st.markdown(html_v, unsafe_allow_html=True)
 
-st.markdown(f"**🔴 HVE — Highest Volume Ever ({len(hve_syms)})**")
+st.markdown(f"**🔴 HVE ({len(hve_syms)})**")
 _render_volume_badges(hve_syms, unusual_vol_map, "background-color:#FF6B6B;border:1px solid #CC0000;")
 
 st.write("")
-st.markdown(f"**🟠 HVQ — Highest Volume Quarter ({len(hvq_syms)})**")
+st.markdown(f"**🟠 HVQ ({len(hvq_syms)})**")
 _render_volume_badges(hvq_syms, unusual_vol_map, "background-color:#FFB84D;border:1px solid #CC7A00;")
 
 st.write("")
-st.markdown(f"**🟡 HVM — Highest Volume Month ({len(hvm_syms)})**")
+st.markdown(f"**🟡 HVM ({len(hvm_syms)})**")
 _render_volume_badges(hvm_syms, unusual_vol_map, "background-color:#FFE066;border:1px solid #B8860B;")
 
 # ==============================================================================
