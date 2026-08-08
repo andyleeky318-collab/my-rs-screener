@@ -7565,21 +7565,92 @@ if not volatility_hist.empty:
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
 
+@st.cache_data(ttl=86400)
+def fetch_wide_moat_tickers(tickers_tuple):
+    """
+    Approximate 'wide moat' flag using FMP fundamental data.
+    FMP has no direct moat field, so this proxies durable competitive
+    advantage via sustained high returns on capital:
+      - Avg ROE >= 15% and Avg ROIC >= 12% over available annual years
+      - No more than 1 negative-ROE year, with at least 3 years of data
+    On ANY failure (missing key, bad response, ticker not covered,
+    malformed data) that ticker is silently skipped — never flagged,
+    never raises. Returns a set of tickers considered wide-moat.
+    """
+    fmp_key = st.secrets.get("FMP_API_KEY")
+    moat_set = set()
+
+    if not fmp_key or not tickers_tuple:
+        return moat_set
+
+    for ticker in tickers_tuple:
+        try:
+            resp = requests.get(
+                f"https://financialmodelingprep.com/api/v3/key-metrics/{ticker}",
+                params={"period": "annual", "limit": 10, "apikey": fmp_key},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            if not data or not isinstance(data, list):
+                continue
+
+            roe_vals = [
+                d.get("roe") for d in data
+                if isinstance(d, dict) and isinstance(d.get("roe"), (int, float))
+            ]
+            roic_vals = [
+                d.get("roic") for d in data
+                if isinstance(d, dict) and isinstance(d.get("roic"), (int, float))
+            ]
+
+            if len(roe_vals) < 3:
+                continue
+
+            avg_roe = sum(roe_vals) / len(roe_vals)
+            avg_roic = (sum(roic_vals) / len(roic_vals)) if roic_vals else 0
+            negative_years = sum(1 for r in roe_vals if r < 0)
+
+            if avg_roe >= 0.15 and avg_roic >= 0.12 and negative_years <= 1:
+                moat_set.add(ticker)
+
+        except Exception:
+            # Fallback: treat as not-wide-moat, never error out
+            continue
+
+    return moat_set
+
 # --- 6. VALUE TRAP (Full Horizontal Row Below PowerTrend Not Extended) ---
 value_trap_count_color = "#FF6B6B" if len(vt_list) == 0 else "inherit"
 st.markdown(
     f"<h4>⚠️ Value Trap = MAG7 & MOAT <span style='color:{value_trap_count_color}; font-weight:bold;'>({len(vt_list)})</span></h4>",
     unsafe_allow_html=True
 )
+
 if vt_list or vt_yest:
     html_vt = ""
     vt_yest_set = set(vt_yest)
     current_vt_tickers = {item[0] if isinstance(item, tuple) else item for item in vt_list}
+
+    # NEW: check wide-moat status for today's Value Trap tickers only
+    vt_syms_for_moat = tuple(sorted(current_vt_tickers))
+    with st.spinner("Checking wide-moat status..."):
+        wide_moat_tickers = timed(
+            "fetch_wide_moat_tickers",
+            fetch_wide_moat_tickers,
+            vt_syms_for_moat
+        )
+
     for item in vt_list:
         sym = item[0] if isinstance(item, tuple) else item
         atr_value = item[1] if isinstance(item, tuple) else None
         suffix = f"{atr_value:.1f}x" if atr_value is not None else ""
-        html_vt += setup_badge(sym, is_new=(sym not in vt_yest_set), extra_suffix=suffix)
+        moat_glow = (
+            "box-shadow:0 0 8px 2px #FF0000; border:1px solid #FF0000;"
+            if sym in wide_moat_tickers else ""
+        )
+        html_vt += setup_badge(sym, is_new=(sym not in vt_yest_set), extra_suffix=suffix, extra_style=moat_glow)
     
     # Process and append removed stocks
     removed_vt = [sym for sym in vt_yest if sym not in current_vt_tickers]
