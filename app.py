@@ -1202,7 +1202,7 @@ for i, (label, val) in enumerate(zip(bucket_order, vals)):
 
     # Bucket label below
     label_y = SVG_H - 6
-    display_label = "B" if label == "0" else label
+    display_label = "" if label == "0" else label
     labels_svg += (
         f'<text x="{cx:.1f}" y="{label_y}" '
         f'text-anchor="middle" font-size="8" '
@@ -3705,9 +3705,9 @@ if all_data:
             )
             dist_html += (
                 f"<div style='margin-bottom:5px;'>"
-                f"<span style='color:#FF4B4B; font-weight:bold; font-size:12px; margin-right:6px;'>#{rank}</span>"
-                f"<span style='color:#FF4B4B; font-weight:bold; font-size:13px;'>{industry}</span>"
-                f"<span style='margin-left:6px;'>{ticker_badges}</span>"
+                f"<span style='color:#FF4B4B; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
+                f"<span style='color:#FF4B4B; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;'>{industry}</span>"
+                f"<span>{ticker_badges}</span>"
                 f"</div>"
             )
     st.markdown(dist_html, unsafe_allow_html=True)
@@ -3748,9 +3748,9 @@ if all_data:
             )
             engulf_html += (
                 f"<div style='margin-bottom:5px;'>"
-                f"<span style='color:#FFFF00; font-weight:bold; font-size:12px; margin-right:6px;'>#{rank}</span>"
-                f"<span style='color:#FFFF00; font-weight:bold; font-size:13px;'>{industry}</span>"
-                f"<span style='margin-left:6px;'>{ticker_badges}</span>"
+                f"<span style='color:#FFFF00; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
+                f"<span style='color:#FFFF00; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;'>{industry}</span>"
+                f"<span>{ticker_badges}</span>"
                 f"</div>"
             )
     st.markdown(engulf_html, unsafe_allow_html=True)
@@ -3788,7 +3788,7 @@ if all_data:
             )
             botak_html += (
                 f"<div style='margin-bottom:5px;'>"
-                f"<span style='color:#00FF00; font-weight:bold; font-size:12px; margin-right:6px;'>#{rank}</span>"
+                f"<span style='color:#00FF00; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
                 f"<span style='color:#00FF00; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;'>{industry}</span>"
                 f"<span>{ticker_badges}</span>"
                 f"</div>"
