@@ -10203,7 +10203,8 @@ _render_volume_badges(hvm_syms, unusual_vol_map, "background-color:#FFE066;borde
 # matching (latest) video. Does not touch any existing variable/function.
 # ==============================================================================
 
-IBD_STREAMS_URL = "https://www.youtube.com/@investorsbusinessdaily/streams"
+IBD_CHANNEL_HANDLE_URL = "https://www.youtube.com/@investorsbusinessdaily"
+IBD_STREAMS_URL = "https://www.youtube.com/@investorsbusinessdaily/streams"  # kept as fallback
 
 # Common all-caps words to exclude from the fallback ticker scan
 _TICKER_STOPWORDS = {
@@ -10251,17 +10252,10 @@ def _extract_tickers_from_ibd_title(title):
     return tickers
 
 
-@st.cache_data(ttl=1800)
-def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=20):
-    """
-    Fetch IBD's Streams tab, find the latest video whose title contains
-    'Stock Market Today' (skipping any that don't), and return its tickers.
-    Uses a JSON walk first, then falls back to a raw-HTML regex scan if the
-    JSON walk finds nothing (YouTube's tab data is sometimes lazy-loaded
-    and only the grid skeleton is present in the initial JSON).
-    """
-    import json
-
+@st.cache_data(ttl=86400)
+def _resolve_ibd_channel_id():
+    """Resolve the stable UC... channel ID behind the @investorsbusinessdaily handle.
+    Cached for 24h since a channel's ID never changes."""
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -10270,75 +10264,79 @@ def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=20):
         ),
         "Accept-Language": "en-US,en;q=0.9",
     }
-
     try:
-        resp = requests.get(IBD_STREAMS_URL, headers=headers, timeout=15)
+        resp = requests.get(
+            IBD_CHANNEL_HANDLE_URL, headers=headers,
+            cookies={"CONSENT": "YES+1"}, timeout=15,
+        )
         resp.raise_for_status()
         html = resp.text
+    except Exception:
+        return None
+
+    match = re.search(r'"channelId":"(UC[a-zA-Z0-9_-]{22})"', html)
+    if match:
+        return match.group(1)
+
+    match = re.search(r'channel/(UC[a-zA-Z0-9_-]{22})', html)
+    if match:
+        return match.group(1)
+
+    return None
+
+
+@st.cache_data(ttl=1800)
+def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=25):
+    """
+    Fetch IBD's latest uploads via YouTube's public RSS feed (stable XML,
+    no JS/consent-wall issues), find the latest video whose title contains
+    'Stock Market Today' (skipping any that don't), and return its tickers.
+    """
+    import xml.etree.ElementTree as ET
+
+    channel_id = _resolve_ibd_channel_id()
+    if not channel_id:
+        return {"error": "Could not resolve IBD's YouTube channel ID."}
+
+    rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+    }
+
+    try:
+        resp = requests.get(rss_url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        xml_text = resp.text
     except Exception as e:
-        return {"error": f"Fetch error: {e}"}
+        return {"error": f"RSS fetch error: {e}"}
+
+    try:
+        root = ET.fromstring(xml_text)
+    except Exception as e:
+        return {"error": f"RSS parse error: {e}"}
+
+    ns = {
+        "atom": "http://www.w3.org/2005/Atom",
+        "yt": "http://www.youtube.com/xml/schemas/2015",
+    }
 
     videos = []
-    seen_ids = set()
-
-    # ── Attempt 1: parse ytInitialData JSON and walk it ────────────────────
-    match = re.search(r"var ytInitialData\s*=\s*(\{.*?\});\s*</script>", html, re.DOTALL)
-    if not match:
-        match = re.search(r'ytInitialData"\]\s*=\s*(\{.*?\});', html, re.DOTALL)
-
-    if match:
-        try:
-            data = json.loads(match.group(1))
-
-            RENDERER_KEYS = (
-                "videoRenderer", "gridVideoRenderer", "compactVideoRenderer",
-                "playlistVideoRenderer", "reelItemRenderer",
-            )
-
-            def _walk(node):
-                if isinstance(node, dict):
-                    for key in RENDERER_KEYS:
-                        if key in node:
-                            vr = node[key]
-                            vid = vr.get("videoId")
-                            title_runs = vr.get("title", {}).get("runs", [])
-                            if not title_runs and "headline" in vr:
-                                title_runs = vr.get("headline", {}).get("runs", [])
-                            title_text = "".join(r.get("text", "") for r in title_runs)
-                            if vid and title_text and vid not in seen_ids:
-                                seen_ids.add(vid)
-                                videos.append({"videoId": vid, "title": title_text})
-                    for v in node.values():
-                        _walk(v)
-                elif isinstance(node, list):
-                    for item in node:
-                        _walk(item)
-
-            _walk(data)
-        except Exception:
-            pass  # fall through to regex fallback below
-
-    # ── Attempt 2: raw-HTML regex fallback (works even if JSON walk found nothing) ──
-    if not videos:
-        pattern = re.compile(
-            r'"videoId":"([a-zA-Z0-9_-]{11})".{0,800}?"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.)*)"',
-            re.DOTALL,
-        )
-        for m in pattern.finditer(html):
-            vid, title_raw = m.group(1), m.group(2)
-            if vid in seen_ids:
-                continue
-            seen_ids.add(vid)
-            # Unescape common JSON escapes (\", \\, \/, \n, \uXXXX)
-            try:
-                title_text = json.loads(f'"{title_raw}"')
-            except Exception:
-                title_text = title_raw.replace('\\"', '"').replace("\\/", "/")
-            if title_text:
-                videos.append({"videoId": vid, "title": title_text})
+    for entry in root.findall("atom:entry", ns):
+        title_el = entry.find("atom:title", ns)
+        vid_el = entry.find("yt:videoId", ns)
+        if title_el is None or vid_el is None:
+            continue
+        title_text = title_el.text or ""
+        vid = vid_el.text or ""
+        if title_text and vid:
+            videos.append({"videoId": vid, "title": title_text})
 
     if not videos:
-        return {"error": "No videos found on streams page (YouTube layout may have changed)."}
+        return {"error": "RSS feed returned no videos for this channel."}
 
     for video in videos[:max_videos_to_scan]:
         title = video["title"]
@@ -10350,7 +10348,7 @@ def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=20):
                 "video_url": f"https://www.youtube.com/watch?v={video['videoId']}",
             }
 
-    return {"error": "No recent video with 'Stock Market Today' in title found."}
+    return {"error": "No recent video with 'Stock Market Today' in title found (RSS only returns latest ~15 uploads)."}
 
 
 # ── Render section ────────────────────────────────────────────────────────
