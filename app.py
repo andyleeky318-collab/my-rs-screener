@@ -3789,8 +3789,8 @@ if all_data:
             botak_html += (
                 f"<div style='margin-bottom:5px;'>"
                 f"<span style='color:#00FF00; font-weight:bold; font-size:12px; margin-right:6px;'>#{rank}</span>"
-                f"<span style='color:#00FF00; font-weight:bold; font-size:13px;'>{industry}</span>"
-                f"<span style='margin-left:6px;'>{ticker_badges}</span>"
+                f"<span style='color:#00FF00; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;'>{industry}</span>"
+                f"<span>{ticker_badges}</span>"
                 f"</div>"
             )
     st.markdown(botak_html, unsafe_allow_html=True)
