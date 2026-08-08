@@ -706,21 +706,40 @@ def _call_cerebras_insight(prompt_text):
     cerebras_key = st.secrets.get("CEREBRAS_API_KEY")
     if not cerebras_key:
         return "Add CEREBRAS_API_KEY to secrets.toml to enable this insight."
+
     try:
         from openai import OpenAI as OpenAIClient
         client = OpenAIClient(api_key=cerebras_key, base_url="https://api.cerebras.ai/v1")
-        completion = client.chat.completions.create(
-            model="llama-3.3-70b",
-            messages=[
-                {"role": "system", "content": "You are a concise market analyst."},
-                {"role": "user", "content": prompt_text},
-            ],
-            max_tokens=150,
-            temperature=0.4,
-        )
-        return completion.choices[0].message.content.strip()
     except Exception as e:
         return f"Insight unavailable ({str(e)[:80]})"
+
+    # Try known current model IDs in order; first one that works wins.
+    candidate_models = [
+        "llama-3.3-70b",
+        "llama3.1-8b",
+        "llama-4-scout-17b-16e-instruct",
+        "qwen-3-32b",
+        "gpt-oss-120b",
+    ]
+
+    last_err = ""
+    for model_id in candidate_models:
+        try:
+            completion = client.chat.completions.create(
+                model=model_id,
+                messages=[
+                    {"role": "system", "content": "You are a concise market analyst."},
+                    {"role": "user", "content": prompt_text},
+                ],
+                max_tokens=150,
+                temperature=0.4,
+            )
+            return completion.choices[0].message.content.strip()
+        except Exception as e:
+            last_err = str(e)
+            continue
+
+    return f"Insight unavailable (no valid model — last error: {last_err[:80]})"
 
 if lime_perf_rows:
 
