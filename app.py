@@ -10358,7 +10358,7 @@ def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=25):
 
 # ── Render section ────────────────────────────────────────────────────────
 st.markdown("---")
-st.markdown("#### 🎓 IBD")
+st.markdown("#### 🎓 IBD (Youtube Live)")
 
 with st.spinner("Checking IBD's latest Stock Market Today video..."):
     ibd_result = timed(
@@ -10605,7 +10605,7 @@ def _resolve_company_name_to_ticker(company_name, known_universe_tuple=None):
 
 
 @st.cache_data(ttl=3600)
-def fetch_ibd_stock_of_the_day(known_universe_tuple, max_articles=10):
+def fetch_ibd_stock_of_the_day(known_universe_tuple, max_articles=50):
     """
     Fetch investors.com's IBD Stock Of The Day category page and extract
     tickers from recent article titles. If no direct ticker is present,
@@ -10686,7 +10686,7 @@ def fetch_ibd_stock_of_the_day(known_universe_tuple, max_articles=10):
 
 # ── Render section ────────────────────────────────────────────────────────
 st.markdown("---")
-st.markdown("#### 🎓 IBD Stock Of The Day")
+st.markdown("#### 🎓 IBD (Stock Of The Day)")
 
 with st.spinner("Fetching IBD Stock Of The Day..."):
     ibd_sotd_result = timed(
