@@ -8841,7 +8841,7 @@ else:
 
 #st.markdown("---")
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=3600)
 def fetch_reddit_mentions_apewisdom(stocks_tuple, filter_type="wallstreetbets"):
     """
     filter_type options: 'all-stocks', 'wallstreetbets', 'stocks', 'investing', 'options', etc.
@@ -8978,7 +8978,7 @@ else:
     # else:
     #     st.info("No overlap between trending and Reddit lists.")
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=3600)
 def fetch_spikepanel_surge_tickers(window="24h"):
     """
     Fetch the ranked list of tickers from SpikePanel's '热议' (Hot Discussion)
@@ -10286,7 +10286,7 @@ def _resolve_ibd_channel_id():
     return None
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=3600)
 def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=25):
     """
     Fetch IBD's latest uploads via YouTube's public RSS feed, find the latest
@@ -10722,6 +10722,8 @@ else:
         st.markdown(html_sotd, unsafe_allow_html=True)
     else:
         st.info("No tickers extracted from recent articles.")
+
+    st.write("")
 
     with st.expander(f"Source articles ({len(ibd_sotd_result['articles'])})"):
         for art in ibd_sotd_result["articles"]:
