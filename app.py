@@ -10358,7 +10358,7 @@ def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=25):
 
 # ── Render section ────────────────────────────────────────────────────────
 st.markdown("---")
-st.markdown("#### 🎥 IBD Stock Market Today — Tickers In Focus")
+st.markdown("#### 🎓 IBD")
 
 with st.spinner("Checking IBD's latest Stock Market Today video..."):
     ibd_result = timed(
