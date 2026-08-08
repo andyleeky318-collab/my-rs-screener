@@ -8063,7 +8063,7 @@ with col_up:
         html_up += "</div>"
         st.markdown(html_up, unsafe_allow_html=True)
     else:
-        st.info("None today.")
+        st.info("None")
 
 with col_down:
     #st.markdown(f"**🔴 Biggest Down Day ({len(biggest_down_today)})**")
@@ -8079,7 +8079,7 @@ with col_down:
         html_down += "</div>"
         st.markdown(html_down, unsafe_allow_html=True)
     else:
-        st.info("None today.")
+        st.info("None")
 
 @st.cache_data(ttl=3600)
 def compute_biggest_move_history(stocks_list, ticker_dfs):
@@ -8209,6 +8209,137 @@ if not biggest_move_hist.empty:
         use_container_width=True
     )
 
+# ==============================================================================
+# UNUSUAL VOLUME — HVE (Highest Volume Ever) / HVQ (Highest Volume Quarter) / HVM (Highest Volume Month)
+# Read-only: reuses ticker_dfs_shared (already fetched, ~2y history) and
+# KNOWN_STOCKS. Does not touch any existing variable or function.
+# ==============================================================================
+@st.cache_data(ttl=3600)
+def compute_unusual_volume(stocks_list, ticker_dfs, min_price=20, min_volume=100000):
+    """
+    For each ticker, flag today's bar if today's volume is the highest ever
+    (HVE), highest in the trailing ~1 quarter / 63 trading days (HVQ), or
+    highest in the trailing ~1 month / 21 trading days (HVM).
+    HVE implies HVQ implies HVM, so a ticker is tagged with the STRONGEST
+    flag it qualifies for (HVE > HVQ > HVM), not all three.
+    Returns: dict of {"HVE": [...], "HVQ": [...], "HVM": [...]} — sorted lists,
+    plus a dict of ticker -> today's volume for display.
+    """
+    hve_list, hvq_list, hvm_list = [], [], []
+    vol_map = {}
+
+    for ticker in stocks_list:
+        try:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < 22:
+                continue
+
+            close = df['Close']
+            vol   = df['Volume']
+
+            today_close = close.iloc[-1]
+            today_vol   = vol.iloc[-1]
+
+            if pd.isna(today_close) or pd.isna(today_vol):
+                continue
+            if today_close < min_price or today_vol < min_volume:
+                continue
+
+            # Highest Volume Ever (entire available history, excludes current bar for the "prior max" check)
+            hve_prior_max = vol.iloc[:-1].max() if len(vol) > 1 else 0
+            is_hve = today_vol >= hve_prior_max
+
+            # Highest Volume Quarter (trailing 63 trading days, excludes current bar)
+            hvq_window = vol.iloc[-64:-1] if len(vol) >= 64 else vol.iloc[:-1]
+            hvq_prior_max = hvq_window.max() if len(hvq_window) > 0 else 0
+            is_hvq = today_vol >= hvq_prior_max
+
+            # Highest Volume Month (trailing 21 trading days, excludes current bar)
+            hvm_window = vol.iloc[-22:-1] if len(vol) >= 22 else vol.iloc[:-1]
+            hvm_prior_max = hvm_window.max() if len(hvm_window) > 0 else 0
+            is_hvm = today_vol >= hvm_prior_max
+
+            vol_map[ticker] = int(today_vol)
+
+            if is_hve:
+                hve_list.append(ticker)
+            elif is_hvq:
+                hvq_list.append(ticker)
+            elif is_hvm:
+                hvm_list.append(ticker)
+
+        except Exception:
+            continue
+
+    return {
+        "HVE": sorted(hve_list),
+        "HVQ": sorted(hvq_list),
+        "HVM": sorted(hvm_list),
+    }, vol_map
+
+
+def _format_volume(v):
+    if v >= 1_000_000:
+        return f"{v/1_000_000:.1f}M"
+    if v >= 1_000:
+        return f"{v/1_000:.0f}K"
+    return str(v)
+
+
+with st.spinner("Scanning for unusual volume..."):
+    unusual_vol_results, unusual_vol_map = timed(
+        "compute_unusual_volume",
+        compute_unusual_volume,
+        stocks_tuple, ticker_dfs_shared
+    )
+
+hve_syms = unusual_vol_results["HVE"]
+hvq_syms = unusual_vol_results["HVQ"]
+hvm_syms = unusual_vol_results["HVM"]
+total_unusual_vol = len(hve_syms) + len(hvq_syms) + len(hvm_syms)
+
+#st.markdown(f"#### 📊 Unusual Volume ({total_unusual_vol})")
+
+def _render_volume_badges(sym_list, vol_map, badge_color_style):
+    if not sym_list:
+        st.info("None")
+        return
+    html_v = ""
+    for sym in sym_list:
+        vol_str = _format_volume(vol_map.get(sym, 0))
+        if sym in LIME_STOCKS1:
+            html_v += (
+                f'<div class="ticker-badge lime-badge">'
+                f'<span class="ticker-name" style="color:#000000;font-weight:bold;">{sym}</span>'
+                #f'<span class="ticker-rs" style="color:#000000;font-weight:bold;margin-left:5px;">{vol_str}</span>'
+                f'</div>'
+            )
+        elif sym in KNOWN_STOCKS:
+            html_v += (
+                f'<div class="ticker-badge" style="{badge_color_style}">'
+                f'<span class="ticker-name" style="color:#111111;font-weight:bold;">{sym}</span>'
+                #f'<span class="ticker-rs" style="color:#333333;font-weight:bold;margin-left:5px;">{vol_str}</span>'
+                f'</div>'
+            )
+        else:
+            html_v += (
+                f'<div class="ticker-badge">'
+                f'<span class="ticker-name">{sym}</span>'
+                #f'<span class="ticker-rs">{vol_str}</span>'
+                f'</div>'
+            )
+    st.markdown(html_v, unsafe_allow_html=True)
+
+st.markdown(f"**🔴 HVE ({len(hve_syms)})**")
+_render_volume_badges(hve_syms, unusual_vol_map, "background-color:#FF6B6B;border:1px solid #CC0000;")
+
+st.write("")
+st.markdown(f"**🟠 HVQ ({len(hvq_syms)})**")
+_render_volume_badges(hvq_syms, unusual_vol_map, "background-color:#FFB84D;border:1px solid #CC7A00;")
+
+st.write("")
+st.markdown(f"**🟡 HVM ({len(hvm_syms)})**")
+_render_volume_badges(hvm_syms, unusual_vol_map, "background-color:#FFE066;border:1px solid #B8860B;")
 
 #st.markdown(html_e2, unsafe_allow_html=True)
 
@@ -9041,6 +9172,542 @@ if spikepanel_tickers:
     st.markdown(badges_html, unsafe_allow_html=True)
 else:
     st.info("No spike panel tickers found.")
+
+# ==============================================================================
+# IBD "STOCK MARKET TODAY" — TICKER EXTRACTION FROM LATEST YOUTUBE VIDEO
+# Read-only scrape of IBD's YouTube Streams tab. Skips videos whose title
+# doesn't contain "Stock Market Today", extracts tickers from the first
+# matching (latest) video. Does not touch any existing variable/function.
+# ==============================================================================
+
+IBD_CHANNEL_HANDLE_URL = "https://www.youtube.com/@investorsbusinessdaily"
+IBD_STREAMS_URL = "https://www.youtube.com/@investorsbusinessdaily/streams"
+
+# Common all-caps words to exclude from the fallback ticker scan
+_TICKER_STOPWORDS = {
+    "IBD", "ETF", "ETFS", "CEO", "CFO", "USA", "US", "AI", "IPO", "GDP",
+    "FED", "SEC", "NYSE", "NASDAQ", "PE", "EPS", "ATH", "ATR", "RS",
+    "MA", "SMA", "EMA", "TV", "YOY", "QOQ", "S&P", "DOW",
+}
+
+def _extract_tickers_from_ibd_title(title):
+    """
+    Primary: capture comma-separated ALL-CAPS tickers immediately before a
+    common IBD trigger phrase ('In Focus', 'Near Buy Point', etc.), matching
+    the "GH, FCX, SPHR In Focus | Stock Market Today" pattern.
+    Fallback: scan for standalone 1-5 letter all-caps tokens, stopword-filtered.
+    """
+    if not title:
+        return []
+
+    trigger_phrases = [
+        r"In Focus", r"Near Buy Points?", r"Buy Points?", r"Eyed",
+        r"On Watch", r"In Play", r"Flash(?:es)? Buy Signal",
+    ]
+    trigger_pattern = "|".join(trigger_phrases)
+
+    match = re.search(
+        r"([A-Z][A-Z0-9\.\-]{0,5}(?:\s*,\s*[A-Z][A-Z0-9\.\-]{0,5}){0,6})\s+(?:" + trigger_pattern + r")",
+        title,
+    )
+
+    if match:
+        candidates = [t.strip() for t in match.group(1).split(",")]
+    else:
+        candidates = re.findall(r"\b[A-Z]{1,5}\b", title)
+
+    tickers, seen = [], set()
+    for tok in candidates:
+        tok = tok.strip().upper()
+        if not tok or tok in _TICKER_STOPWORDS or tok in seen:
+            continue
+        if not re.fullmatch(r"[A-Z]{1,5}", tok):
+            continue
+        seen.add(tok)
+        tickers.append(tok)
+
+    return tickers
+
+@st.cache_data(ttl=86400)
+def _resolve_ibd_channel_id():
+    """Resolve the stable UC... channel ID behind the @investorsbusinessdaily handle.
+    Tries multiple extraction patterns since YouTube's HTML varies by request context.
+    Cached 24h since a channel's ID never changes."""
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    for url in (IBD_STREAMS_URL, IBD_CHANNEL_HANDLE_URL):
+        try:
+            resp = requests.get(url, headers=headers, cookies={"CONSENT": "YES+1"}, timeout=15)
+            resp.raise_for_status()
+            html = resp.text
+        except Exception:
+            continue
+
+        for pattern in (
+            r'"channelId":"(UC[a-zA-Z0-9_-]{22})"',
+            r'"externalId":"(UC[a-zA-Z0-9_-]{22})"',
+            r'"browseId":"(UC[a-zA-Z0-9_-]{22})"',
+            r'channel/(UC[a-zA-Z0-9_-]{22})',
+        ):
+            m = re.search(pattern, html)
+            if m:
+                return m.group(1)
+
+    return None
+
+
+@st.cache_data(ttl=3600)
+def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=25):
+    """
+    Fetch IBD's latest uploads via YouTube's public RSS feed, find the latest
+    video whose title contains 'Stock Market Today', and return its tickers.
+    Also returns the raw scanned titles for debugging if no match is found.
+    """
+    import xml.etree.ElementTree as ET
+
+    channel_id = _resolve_ibd_channel_id()
+    if not channel_id:
+        return {"error": "Could not resolve IBD's YouTube channel ID."}
+
+    rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+    }
+
+    try:
+        resp = requests.get(rss_url, headers=headers, cookies={"CONSENT": "YES+1"}, timeout=15)
+        resp.raise_for_status()
+        xml_text = resp.text
+    except Exception as e:
+        return {"error": f"RSS fetch error: {e}", "channel_id": channel_id}
+
+    try:
+        root = ET.fromstring(xml_text)
+    except Exception as e:
+        return {"error": f"RSS parse error: {e}", "channel_id": channel_id}
+
+    ns = {
+        "atom": "http://www.w3.org/2005/Atom",
+        "yt": "http://www.youtube.com/xml/schemas/2015",
+    }
+
+    videos = []
+    for entry in root.findall("atom:entry", ns):
+        title_el = entry.find("atom:title", ns)
+        vid_el = entry.find("yt:videoId", ns)
+        if title_el is None or vid_el is None:
+            continue
+        title_text = (title_el.text or "").strip()
+        vid = vid_el.text or ""
+        if title_text and vid:
+            videos.append({"videoId": vid, "title": title_text})
+
+    if not videos:
+        return {"error": "RSS feed returned no videos.", "channel_id": channel_id}
+
+    for video in videos[:max_videos_to_scan]:
+        title = video["title"]
+        if "stock market today" in title.lower():
+            return {
+                "tickers": _extract_tickers_from_ibd_title(title),
+                "title": title,
+                "video_id": video["videoId"],
+                "video_url": f"https://www.youtube.com/watch?v={video['videoId']}",
+                "channel_id": channel_id,
+            }
+
+    return {
+        "error": "No recent video with 'Stock Market Today' in title found.",
+        "channel_id": channel_id,
+        "scanned_titles": [v["title"] for v in videos[:max_videos_to_scan]],
+    }
+
+# ── Render section ────────────────────────────────────────────────────────
+#st.markdown("---")
+st.write("")
+st.markdown("#### 🎓 IBD (Youtube Live)")
+
+with st.spinner("Checking IBD's latest Stock Market Today video..."):
+    ibd_result = timed(
+        "fetch_ibd_stock_market_today_tickers",
+        fetch_ibd_stock_market_today_tickers,
+    )
+
+if ibd_result.get("error"):
+    st.info(f"Unable to fetch IBD video data — {ibd_result['error']}")
+    if ibd_result.get("channel_id"):
+        st.caption(f"Resolved channel ID: `{ibd_result['channel_id']}`")
+    if ibd_result.get("scanned_titles"):
+        with st.expander("Debug: titles scanned from RSS feed"):
+            for t in ibd_result["scanned_titles"]:
+                st.write(f"- {t}")
+else:
+    st.markdown(f"**[{ibd_result['title']}]({ibd_result['video_url']})**")
+
+    tickers_found = ibd_result.get("tickers", [])
+    if tickers_found:
+        html_ibd = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+        for sym in tickers_found:
+            if sym in LIME_STOCKS1:
+                html_ibd += (
+                    f'<div class="ticker-badge lime-badge">'
+                    f'<span style="color:#000000;font-weight:bold;">{sym}</span></div>'
+                )
+            elif sym in KNOWN_STOCKS:
+                html_ibd += (
+                    f'<div class="ticker-badge new-pattern-badge">'
+                    f'<span style="color:#111111;font-weight:bold;">{sym}</span></div>'
+                )
+            else:
+                html_ibd += f'<div class="ticker-badge">{sym}</div>'
+        html_ibd += "</div>"
+        st.markdown(html_ibd, unsafe_allow_html=True)
+    else:
+        st.info("No tickers could be extracted from the title.")
+
+# ==============================================================================
+# IBD STOCK OF THE DAY — TICKER EXTRACTION
+# Read-only scrape of investors.com's "IBD Stock Of The Day" category page.
+# Extracts tickers via cashtag ($XYZ), exchange-prefixed (NASDAQ:XYZ), and
+# KNOWN_STOCKS whitelist matching as a fallback. Does not touch any
+# existing variable/function.
+# ==============================================================================
+
+IBD_STOCK_OF_DAY_URL = "https://www.investors.com/category/research/ibd-stock-of-the-day/"
+
+# Tickers that are valid symbols but are also common English words/acronyms
+# that create false positives in title text (e.g. "AI" in "Artificial
+# Intelligence"). Extend this set freely — it's a display-level exclusion,
+# not extraction logic, so it never needs per-company hardcoding.
+IBD_SOTD_EXCLUDE_TICKERS = {"AI"}
+
+
+def _extract_tickers_from_ibd_sotd_text(text_blob, restrict_to_known=None):
+    """
+    Extract candidate tickers from a block of text using three patterns,
+    in priority order:
+      1. Cashtag: $NVDA
+      2. Exchange-prefixed: (NASDAQ:NVDA) / (NYSE:NVDA)
+      3. Whitelist match: any all-caps 1-5 letter token that also appears
+         in restrict_to_known (your KNOWN_STOCKS universe).
+    Applies IBD_SOTD_EXCLUDE_TICKERS as a final filter on all three.
+    Returns a de-duplicated, order-preserved list.
+    """
+    if not text_blob:
+        return []
+
+    tickers, seen = [], set()
+
+    for m in re.finditer(r"\$([A-Z]{1,5})\b", text_blob):
+        tok = m.group(1).upper()
+        if tok not in seen and tok not in IBD_SOTD_EXCLUDE_TICKERS:
+            seen.add(tok)
+            tickers.append(tok)
+
+    for m in re.finditer(r"\((?:NASDAQ|NYSE|NYSEARCA|AMEX)\s*:\s*([A-Z]{1,5})\)", text_blob):
+        tok = m.group(1).upper()
+        if tok not in seen and tok not in IBD_SOTD_EXCLUDE_TICKERS:
+            seen.add(tok)
+            tickers.append(tok)
+
+    if restrict_to_known:
+        for m in re.finditer(r"\b[A-Z]{1,5}\b", text_blob):
+            tok = m.group(0).upper()
+            if tok in restrict_to_known and tok not in seen and tok not in IBD_SOTD_EXCLUDE_TICKERS:
+                seen.add(tok)
+                tickers.append(tok)
+
+    return tickers
+
+
+def _extract_company_name_candidates_from_ibd_title(title):
+    """
+    Extract candidate company-name phrases from an IBD 'Stock Of The Day'
+    title, generically (no per-company hardcoding). Returns a list of
+    candidate phrases to try resolving, ordered most-to-least specific —
+    the resolver will try each one via progressive word-trimming.
+    """
+    if not title:
+        return []
+
+    candidates = []
+
+    # "<optional How >Company Name, [Day's ]IBD Stock Of The Day, ..."
+    m = re.search(
+        r"^(?:How\s+)?(.+?),\s*(?:\w+(?:'s)?\s+)?(?:IBD\s+)?Stock\s+Of\s+The\s+Day\b",
+        title,
+        re.IGNORECASE,
+    )
+    if m and m.group(1).strip():
+        candidates.append(m.group(1).strip())
+
+    # "IBD Stock Of The Day: Company Name Rises/Breaks Out/..."
+    m = re.search(
+        r"(?:IBD\s+)?Stock\s+Of\s+The\s+Day\s*:\s*(.+)$",
+        title,
+        re.IGNORECASE,
+    )
+    if m and m.group(1).strip():
+        candidates.append(m.group(1).strip())
+
+    return candidates
+
+
+def _progressive_word_trims(phrase, max_words=4):
+    """
+    Given a captured phrase (which may have trailing verbs/description
+    words glued on, e.g. 'Datadog Breaks Out Above Buy Point'), generate
+    progressively shorter leading-word candidates to try:
+      ['Datadog Breaks Out Above', 'Datadog Breaks Out', 'Datadog Breaks', 'Datadog']
+    Purely mechanical word-count trimming — no company-specific logic.
+    """
+    if not phrase:
+        return []
+    words = phrase.strip().split()
+    words = words[:max_words] if len(words) > max_words else words
+    out = []
+    for n in range(len(words), 0, -1):
+        out.append(" ".join(words[:n]))
+    return out
+
+
+def _extract_company_name_from_ibd_url(url):
+    """Fallback: guess a company name from the investors.com URL slug."""
+    if not url:
+        return None
+    m = re.search(r"ibd-stock-of-the-day/([a-z0-9\-]+)-stock-", url, re.IGNORECASE)
+    if not m:
+        return None
+    slug = m.group(1).replace("-", " ").strip()
+    return slug if slug else None
+
+
+@st.cache_data(ttl=86400)
+def _resolve_name_via_yahoo(name_candidate):
+    """Try resolving one name candidate to a ticker via Yahoo Finance search."""
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+    }
+    try:
+        resp = requests.get(
+            "https://query1.finance.yahoo.com/v1/finance/search",
+            params={"q": name_candidate, "quotesCount": 6, "newsCount": 0},
+            headers=headers,
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        return []
+
+    quotes = data.get("quotes", []) if isinstance(data, dict) else []
+    out = []
+    for q in quotes:
+        symbol = q.get("symbol", "")
+        if symbol and q.get("quoteType") == "EQUITY" and "." not in symbol:
+            out.append(symbol.upper())
+    return out
+
+
+@st.cache_data(ttl=86400)
+def _resolve_name_via_fmp(name_candidate):
+    """Fallback resolver: Financial Modeling Prep's ticker search (uses your existing FMP_API_KEY)."""
+    fmp_key = st.secrets.get("FMP_API_KEY")
+    if not fmp_key:
+        return []
+    try:
+        resp = requests.get(
+            "https://financialmodelingprep.com/api/v3/search",
+            params={"query": name_candidate, "limit": 6, "exchange": "NASDAQ,NYSE", "apikey": fmp_key},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+    out = []
+    for item in data:
+        symbol = item.get("symbol", "")
+        if symbol and "." not in symbol:
+            out.append(symbol.upper())
+    return out
+
+
+@st.cache_data(ttl=86400)
+def _resolve_company_name_to_ticker(company_name, known_universe_tuple=None):
+    """
+    Resolve a company name to its ticker, generically: tries progressively
+    shorter leading-word trims of the name (handles trailing description
+    words glued onto the captured phrase), across two independent resolvers
+    (Yahoo Finance, then FMP as fallback). Prefers a result already in
+    known_universe_tuple (your KNOWN_STOCKS) when multiple candidates exist.
+    Returns None if nothing resolves.
+    """
+    if not company_name:
+        return None
+
+    known_set = set(known_universe_tuple) if known_universe_tuple else set()
+    trims = _progressive_word_trims(company_name, max_words=4)
+
+    for trim in trims:
+        for resolver in (_resolve_name_via_yahoo, _resolve_name_via_fmp):
+            candidates = resolver(trim)
+            if not candidates:
+                continue
+            candidates = [c for c in candidates if c not in IBD_SOTD_EXCLUDE_TICKERS]
+            if not candidates:
+                continue
+            for c in candidates:
+                if c in known_set:
+                    return c
+            return candidates[0]
+
+    return None
+
+
+@st.cache_data(ttl=3600)
+def fetch_ibd_stock_of_the_day(known_universe_tuple, max_articles=10):
+    """
+    Fetch investors.com's IBD Stock Of The Day category page and extract
+    tickers from recent article titles. If no direct ticker is present,
+    falls back to extracting a company-name phrase and resolving it to a
+    ticker via progressive name-trimming across multiple resolvers.
+    """
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+
+    try:
+        resp = requests.get(IBD_STOCK_OF_DAY_URL, headers=headers, timeout=15)
+        resp.raise_for_status()
+        html = resp.text
+    except Exception as e:
+        return {"error": f"Fetch error: {e}", "articles": []}
+
+    known_set = set(known_universe_tuple)
+
+    article_pattern = re.compile(
+        r'<a[^>]+href="(https://www\.investors\.com/[^"]*ibd-stock-of-the-day[^"]*)"[^>]*>(.*?)</a>',
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    seen_urls = set()
+    articles = []
+
+    for m in article_pattern.finditer(html):
+        url = m.group(1)
+        raw_title = re.sub(r"<[^>]+>", "", m.group(2)).strip()
+        raw_title = re.sub(r"\s+", " ", raw_title)
+
+        if not raw_title or len(raw_title) < 10:
+            continue
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+
+        tickers = _extract_tickers_from_ibd_sotd_text(raw_title, restrict_to_known=known_set)
+        resolved_via = None
+
+        if not tickers:
+            name_candidates = _extract_company_name_candidates_from_ibd_title(raw_title)
+            url_fallback = _extract_company_name_from_ibd_url(url)
+            if url_fallback:
+                name_candidates.append(url_fallback)
+
+            for candidate in name_candidates:
+                resolved_ticker = _resolve_company_name_to_ticker(candidate, known_universe_tuple)
+                if resolved_ticker:
+                    tickers = [resolved_ticker]
+                    resolved_via = f"name match: '{candidate}'"
+                    break
+
+        articles.append({"title": raw_title, "url": url, "tickers": tickers, "resolved_via": resolved_via})
+
+        if len(articles) >= max_articles:
+            break
+
+    if not articles:
+        page_tickers = _extract_tickers_from_ibd_sotd_text(html, restrict_to_known=known_set)
+        if page_tickers:
+            return {
+                "error": None,
+                "articles": [{"title": "(page-wide scan — no article titles matched)",
+                              "url": IBD_STOCK_OF_DAY_URL, "tickers": page_tickers, "resolved_via": None}],
+            }
+        return {"error": "No articles or tickers found — page layout may have changed or request was blocked.",
+                "articles": []}
+
+    return {"error": None, "articles": articles}
+
+# ── Render section ────────────────────────────────────────────────────────
+#st.markdown("---")
+st.write("")
+st.markdown("#### 🎓 IBD (Stock Of The Day)")
+
+with st.spinner("Fetching IBD Stock Of The Day..."):
+    ibd_sotd_result = timed(
+        "fetch_ibd_stock_of_the_day",
+        fetch_ibd_stock_of_the_day,
+        tuple(KNOWN_STOCKS),
+    )
+
+if ibd_sotd_result.get("error"):
+    st.info(f"Unable to fetch IBD Stock Of The Day — {ibd_sotd_result['error']}")
+else:
+    all_sotd_tickers = []
+    for art in ibd_sotd_result["articles"]:
+        all_sotd_tickers.extend(art["tickers"])
+    all_sotd_tickers_unique = list(dict.fromkeys(all_sotd_tickers))
+
+    if all_sotd_tickers_unique:
+        html_sotd = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+        for sym in all_sotd_tickers_unique:
+            if sym in LIME_STOCKS1:
+                html_sotd += (
+                    f'<div class="ticker-badge lime-badge">'
+                    f'<span style="color:#000000;font-weight:bold;">{sym}</span></div>'
+                )
+            elif sym in KNOWN_STOCKS:
+                html_sotd += (
+                    f'<div class="ticker-badge new-pattern-badge">'
+                    f'<span style="color:#111111;font-weight:bold;">{sym}</span></div>'
+                )
+            else:
+                html_sotd += f'<div class="ticker-badge">{sym}</div>'
+        html_sotd += "</div>"
+        st.markdown(html_sotd, unsafe_allow_html=True)
+    else:
+        st.info("No tickers extracted from recent articles.")
+
+    st.write("")
+
+    with st.expander(f"Source articles ({len(ibd_sotd_result['articles'])})"):
+        for art in ibd_sotd_result["articles"]:
+            tick_str = ", ".join(art["tickers"]) if art["tickers"] else "—"
+            st.markdown(f"- [{art['title']}]({art['url']}) → **{tick_str}**")
 
 st.markdown("---")
 
@@ -10062,670 +10729,7 @@ if isinstance(_setup_avgrank_hist, pd.DataFrame) and not _setup_avgrank_hist.emp
 else:
     st.caption("**Setup Avg Rank** — no data")
 
-st.markdown("---")
+#st.markdown("---")
 
-# ==============================================================================
-# UNUSUAL VOLUME — HVE (Highest Volume Ever) / HVQ (Highest Volume Quarter) / HVM (Highest Volume Month)
-# Read-only: reuses ticker_dfs_shared (already fetched, ~2y history) and
-# KNOWN_STOCKS. Does not touch any existing variable or function.
-# ==============================================================================
-@st.cache_data(ttl=3600)
-def compute_unusual_volume(stocks_list, ticker_dfs, min_price=20, min_volume=100000):
-    """
-    For each ticker, flag today's bar if today's volume is the highest ever
-    (HVE), highest in the trailing ~1 quarter / 63 trading days (HVQ), or
-    highest in the trailing ~1 month / 21 trading days (HVM).
-    HVE implies HVQ implies HVM, so a ticker is tagged with the STRONGEST
-    flag it qualifies for (HVE > HVQ > HVM), not all three.
-    Returns: dict of {"HVE": [...], "HVQ": [...], "HVM": [...]} — sorted lists,
-    plus a dict of ticker -> today's volume for display.
-    """
-    hve_list, hvq_list, hvm_list = [], [], []
-    vol_map = {}
 
-    for ticker in stocks_list:
-        try:
-            df = ticker_dfs.get(ticker)
-            if df is None or len(df) < 22:
-                continue
 
-            close = df['Close']
-            vol   = df['Volume']
-
-            today_close = close.iloc[-1]
-            today_vol   = vol.iloc[-1]
-
-            if pd.isna(today_close) or pd.isna(today_vol):
-                continue
-            if today_close < min_price or today_vol < min_volume:
-                continue
-
-            # Highest Volume Ever (entire available history, excludes current bar for the "prior max" check)
-            hve_prior_max = vol.iloc[:-1].max() if len(vol) > 1 else 0
-            is_hve = today_vol >= hve_prior_max
-
-            # Highest Volume Quarter (trailing 63 trading days, excludes current bar)
-            hvq_window = vol.iloc[-64:-1] if len(vol) >= 64 else vol.iloc[:-1]
-            hvq_prior_max = hvq_window.max() if len(hvq_window) > 0 else 0
-            is_hvq = today_vol >= hvq_prior_max
-
-            # Highest Volume Month (trailing 21 trading days, excludes current bar)
-            hvm_window = vol.iloc[-22:-1] if len(vol) >= 22 else vol.iloc[:-1]
-            hvm_prior_max = hvm_window.max() if len(hvm_window) > 0 else 0
-            is_hvm = today_vol >= hvm_prior_max
-
-            vol_map[ticker] = int(today_vol)
-
-            if is_hve:
-                hve_list.append(ticker)
-            elif is_hvq:
-                hvq_list.append(ticker)
-            elif is_hvm:
-                hvm_list.append(ticker)
-
-        except Exception:
-            continue
-
-    return {
-        "HVE": sorted(hve_list),
-        "HVQ": sorted(hvq_list),
-        "HVM": sorted(hvm_list),
-    }, vol_map
-
-
-def _format_volume(v):
-    if v >= 1_000_000:
-        return f"{v/1_000_000:.1f}M"
-    if v >= 1_000:
-        return f"{v/1_000:.0f}K"
-    return str(v)
-
-
-with st.spinner("Scanning for unusual volume..."):
-    unusual_vol_results, unusual_vol_map = timed(
-        "compute_unusual_volume",
-        compute_unusual_volume,
-        stocks_tuple, ticker_dfs_shared
-    )
-
-hve_syms = unusual_vol_results["HVE"]
-hvq_syms = unusual_vol_results["HVQ"]
-hvm_syms = unusual_vol_results["HVM"]
-total_unusual_vol = len(hve_syms) + len(hvq_syms) + len(hvm_syms)
-
-st.markdown(f"#### 📊 Unusual Volume ({total_unusual_vol})")
-
-def _render_volume_badges(sym_list, vol_map, badge_color_style):
-    if not sym_list:
-        st.info("None today.")
-        return
-    html_v = ""
-    for sym in sym_list:
-        vol_str = _format_volume(vol_map.get(sym, 0))
-        if sym in LIME_STOCKS1:
-            html_v += (
-                f'<div class="ticker-badge lime-badge">'
-                f'<span class="ticker-name" style="color:#000000;font-weight:bold;">{sym}</span>'
-                #f'<span class="ticker-rs" style="color:#000000;font-weight:bold;margin-left:5px;">{vol_str}</span>'
-                f'</div>'
-            )
-        elif sym in KNOWN_STOCKS:
-            html_v += (
-                f'<div class="ticker-badge" style="{badge_color_style}">'
-                f'<span class="ticker-name" style="color:#111111;font-weight:bold;">{sym}</span>'
-                #f'<span class="ticker-rs" style="color:#333333;font-weight:bold;margin-left:5px;">{vol_str}</span>'
-                f'</div>'
-            )
-        else:
-            html_v += (
-                f'<div class="ticker-badge">'
-                f'<span class="ticker-name">{sym}</span>'
-                #f'<span class="ticker-rs">{vol_str}</span>'
-                f'</div>'
-            )
-    st.markdown(html_v, unsafe_allow_html=True)
-
-st.markdown(f"**🔴 HVE ({len(hve_syms)})**")
-_render_volume_badges(hve_syms, unusual_vol_map, "background-color:#FF6B6B;border:1px solid #CC0000;")
-
-st.write("")
-st.markdown(f"**🟠 HVQ ({len(hvq_syms)})**")
-_render_volume_badges(hvq_syms, unusual_vol_map, "background-color:#FFB84D;border:1px solid #CC7A00;")
-
-st.write("")
-st.markdown(f"**🟡 HVM ({len(hvm_syms)})**")
-_render_volume_badges(hvm_syms, unusual_vol_map, "background-color:#FFE066;border:1px solid #B8860B;")
-
-# ==============================================================================
-# IBD "STOCK MARKET TODAY" — TICKER EXTRACTION FROM LATEST YOUTUBE VIDEO
-# Read-only scrape of IBD's YouTube Streams tab. Skips videos whose title
-# doesn't contain "Stock Market Today", extracts tickers from the first
-# matching (latest) video. Does not touch any existing variable/function.
-# ==============================================================================
-
-IBD_CHANNEL_HANDLE_URL = "https://www.youtube.com/@investorsbusinessdaily"
-IBD_STREAMS_URL = "https://www.youtube.com/@investorsbusinessdaily/streams"
-
-# Common all-caps words to exclude from the fallback ticker scan
-_TICKER_STOPWORDS = {
-    "IBD", "ETF", "ETFS", "CEO", "CFO", "USA", "US", "AI", "IPO", "GDP",
-    "FED", "SEC", "NYSE", "NASDAQ", "PE", "EPS", "ATH", "ATR", "RS",
-    "MA", "SMA", "EMA", "TV", "YOY", "QOQ", "S&P", "DOW",
-}
-
-def _extract_tickers_from_ibd_title(title):
-    """
-    Primary: capture comma-separated ALL-CAPS tickers immediately before a
-    common IBD trigger phrase ('In Focus', 'Near Buy Point', etc.), matching
-    the "GH, FCX, SPHR In Focus | Stock Market Today" pattern.
-    Fallback: scan for standalone 1-5 letter all-caps tokens, stopword-filtered.
-    """
-    if not title:
-        return []
-
-    trigger_phrases = [
-        r"In Focus", r"Near Buy Points?", r"Buy Points?", r"Eyed",
-        r"On Watch", r"In Play", r"Flash(?:es)? Buy Signal",
-    ]
-    trigger_pattern = "|".join(trigger_phrases)
-
-    match = re.search(
-        r"([A-Z][A-Z0-9\.\-]{0,5}(?:\s*,\s*[A-Z][A-Z0-9\.\-]{0,5}){0,6})\s+(?:" + trigger_pattern + r")",
-        title,
-    )
-
-    if match:
-        candidates = [t.strip() for t in match.group(1).split(",")]
-    else:
-        candidates = re.findall(r"\b[A-Z]{1,5}\b", title)
-
-    tickers, seen = [], set()
-    for tok in candidates:
-        tok = tok.strip().upper()
-        if not tok or tok in _TICKER_STOPWORDS or tok in seen:
-            continue
-        if not re.fullmatch(r"[A-Z]{1,5}", tok):
-            continue
-        seen.add(tok)
-        tickers.append(tok)
-
-    return tickers
-
-@st.cache_data(ttl=86400)
-def _resolve_ibd_channel_id():
-    """Resolve the stable UC... channel ID behind the @investorsbusinessdaily handle.
-    Tries multiple extraction patterns since YouTube's HTML varies by request context.
-    Cached 24h since a channel's ID never changes."""
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
-        "Accept-Language": "en-US,en;q=0.9",
-    }
-
-    for url in (IBD_STREAMS_URL, IBD_CHANNEL_HANDLE_URL):
-        try:
-            resp = requests.get(url, headers=headers, cookies={"CONSENT": "YES+1"}, timeout=15)
-            resp.raise_for_status()
-            html = resp.text
-        except Exception:
-            continue
-
-        for pattern in (
-            r'"channelId":"(UC[a-zA-Z0-9_-]{22})"',
-            r'"externalId":"(UC[a-zA-Z0-9_-]{22})"',
-            r'"browseId":"(UC[a-zA-Z0-9_-]{22})"',
-            r'channel/(UC[a-zA-Z0-9_-]{22})',
-        ):
-            m = re.search(pattern, html)
-            if m:
-                return m.group(1)
-
-    return None
-
-
-@st.cache_data(ttl=3600)
-def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=25):
-    """
-    Fetch IBD's latest uploads via YouTube's public RSS feed, find the latest
-    video whose title contains 'Stock Market Today', and return its tickers.
-    Also returns the raw scanned titles for debugging if no match is found.
-    """
-    import xml.etree.ElementTree as ET
-
-    channel_id = _resolve_ibd_channel_id()
-    if not channel_id:
-        return {"error": "Could not resolve IBD's YouTube channel ID."}
-
-    rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
-    }
-
-    try:
-        resp = requests.get(rss_url, headers=headers, cookies={"CONSENT": "YES+1"}, timeout=15)
-        resp.raise_for_status()
-        xml_text = resp.text
-    except Exception as e:
-        return {"error": f"RSS fetch error: {e}", "channel_id": channel_id}
-
-    try:
-        root = ET.fromstring(xml_text)
-    except Exception as e:
-        return {"error": f"RSS parse error: {e}", "channel_id": channel_id}
-
-    ns = {
-        "atom": "http://www.w3.org/2005/Atom",
-        "yt": "http://www.youtube.com/xml/schemas/2015",
-    }
-
-    videos = []
-    for entry in root.findall("atom:entry", ns):
-        title_el = entry.find("atom:title", ns)
-        vid_el = entry.find("yt:videoId", ns)
-        if title_el is None or vid_el is None:
-            continue
-        title_text = (title_el.text or "").strip()
-        vid = vid_el.text or ""
-        if title_text and vid:
-            videos.append({"videoId": vid, "title": title_text})
-
-    if not videos:
-        return {"error": "RSS feed returned no videos.", "channel_id": channel_id}
-
-    for video in videos[:max_videos_to_scan]:
-        title = video["title"]
-        if "stock market today" in title.lower():
-            return {
-                "tickers": _extract_tickers_from_ibd_title(title),
-                "title": title,
-                "video_id": video["videoId"],
-                "video_url": f"https://www.youtube.com/watch?v={video['videoId']}",
-                "channel_id": channel_id,
-            }
-
-    return {
-        "error": "No recent video with 'Stock Market Today' in title found.",
-        "channel_id": channel_id,
-        "scanned_titles": [v["title"] for v in videos[:max_videos_to_scan]],
-    }
-
-# ── Render section ────────────────────────────────────────────────────────
-st.markdown("---")
-st.markdown("#### 🎓 IBD (Youtube Live)")
-
-with st.spinner("Checking IBD's latest Stock Market Today video..."):
-    ibd_result = timed(
-        "fetch_ibd_stock_market_today_tickers",
-        fetch_ibd_stock_market_today_tickers,
-    )
-
-if ibd_result.get("error"):
-    st.info(f"Unable to fetch IBD video data — {ibd_result['error']}")
-    if ibd_result.get("channel_id"):
-        st.caption(f"Resolved channel ID: `{ibd_result['channel_id']}`")
-    if ibd_result.get("scanned_titles"):
-        with st.expander("Debug: titles scanned from RSS feed"):
-            for t in ibd_result["scanned_titles"]:
-                st.write(f"- {t}")
-else:
-    st.markdown(f"**[{ibd_result['title']}]({ibd_result['video_url']})**")
-
-    tickers_found = ibd_result.get("tickers", [])
-    if tickers_found:
-        html_ibd = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
-        for sym in tickers_found:
-            if sym in LIME_STOCKS1:
-                html_ibd += (
-                    f'<div class="ticker-badge lime-badge">'
-                    f'<span style="color:#000000;font-weight:bold;">{sym}</span></div>'
-                )
-            elif sym in KNOWN_STOCKS:
-                html_ibd += (
-                    f'<div class="ticker-badge new-pattern-badge">'
-                    f'<span style="color:#111111;font-weight:bold;">{sym}</span></div>'
-                )
-            else:
-                html_ibd += f'<div class="ticker-badge">{sym}</div>'
-        html_ibd += "</div>"
-        st.markdown(html_ibd, unsafe_allow_html=True)
-    else:
-        st.info("No tickers could be extracted from the title.")
-
-# ==============================================================================
-# IBD STOCK OF THE DAY — TICKER EXTRACTION
-# Read-only scrape of investors.com's "IBD Stock Of The Day" category page.
-# Extracts tickers via cashtag ($XYZ), exchange-prefixed (NASDAQ:XYZ), and
-# KNOWN_STOCKS whitelist matching as a fallback. Does not touch any
-# existing variable/function.
-# ==============================================================================
-
-IBD_STOCK_OF_DAY_URL = "https://www.investors.com/category/research/ibd-stock-of-the-day/"
-
-# Tickers that are valid symbols but are also common English words/acronyms
-# that create false positives in title text (e.g. "AI" in "Artificial
-# Intelligence"). Extend this set freely — it's a display-level exclusion,
-# not extraction logic, so it never needs per-company hardcoding.
-IBD_SOTD_EXCLUDE_TICKERS = {"AI"}
-
-
-def _extract_tickers_from_ibd_sotd_text(text_blob, restrict_to_known=None):
-    """
-    Extract candidate tickers from a block of text using three patterns,
-    in priority order:
-      1. Cashtag: $NVDA
-      2. Exchange-prefixed: (NASDAQ:NVDA) / (NYSE:NVDA)
-      3. Whitelist match: any all-caps 1-5 letter token that also appears
-         in restrict_to_known (your KNOWN_STOCKS universe).
-    Applies IBD_SOTD_EXCLUDE_TICKERS as a final filter on all three.
-    Returns a de-duplicated, order-preserved list.
-    """
-    if not text_blob:
-        return []
-
-    tickers, seen = [], set()
-
-    for m in re.finditer(r"\$([A-Z]{1,5})\b", text_blob):
-        tok = m.group(1).upper()
-        if tok not in seen and tok not in IBD_SOTD_EXCLUDE_TICKERS:
-            seen.add(tok)
-            tickers.append(tok)
-
-    for m in re.finditer(r"\((?:NASDAQ|NYSE|NYSEARCA|AMEX)\s*:\s*([A-Z]{1,5})\)", text_blob):
-        tok = m.group(1).upper()
-        if tok not in seen and tok not in IBD_SOTD_EXCLUDE_TICKERS:
-            seen.add(tok)
-            tickers.append(tok)
-
-    if restrict_to_known:
-        for m in re.finditer(r"\b[A-Z]{1,5}\b", text_blob):
-            tok = m.group(0).upper()
-            if tok in restrict_to_known and tok not in seen and tok not in IBD_SOTD_EXCLUDE_TICKERS:
-                seen.add(tok)
-                tickers.append(tok)
-
-    return tickers
-
-
-def _extract_company_name_candidates_from_ibd_title(title):
-    """
-    Extract candidate company-name phrases from an IBD 'Stock Of The Day'
-    title, generically (no per-company hardcoding). Returns a list of
-    candidate phrases to try resolving, ordered most-to-least specific —
-    the resolver will try each one via progressive word-trimming.
-    """
-    if not title:
-        return []
-
-    candidates = []
-
-    # "<optional How >Company Name, [Day's ]IBD Stock Of The Day, ..."
-    m = re.search(
-        r"^(?:How\s+)?(.+?),\s*(?:\w+(?:'s)?\s+)?(?:IBD\s+)?Stock\s+Of\s+The\s+Day\b",
-        title,
-        re.IGNORECASE,
-    )
-    if m and m.group(1).strip():
-        candidates.append(m.group(1).strip())
-
-    # "IBD Stock Of The Day: Company Name Rises/Breaks Out/..."
-    m = re.search(
-        r"(?:IBD\s+)?Stock\s+Of\s+The\s+Day\s*:\s*(.+)$",
-        title,
-        re.IGNORECASE,
-    )
-    if m and m.group(1).strip():
-        candidates.append(m.group(1).strip())
-
-    return candidates
-
-
-def _progressive_word_trims(phrase, max_words=4):
-    """
-    Given a captured phrase (which may have trailing verbs/description
-    words glued on, e.g. 'Datadog Breaks Out Above Buy Point'), generate
-    progressively shorter leading-word candidates to try:
-      ['Datadog Breaks Out Above', 'Datadog Breaks Out', 'Datadog Breaks', 'Datadog']
-    Purely mechanical word-count trimming — no company-specific logic.
-    """
-    if not phrase:
-        return []
-    words = phrase.strip().split()
-    words = words[:max_words] if len(words) > max_words else words
-    out = []
-    for n in range(len(words), 0, -1):
-        out.append(" ".join(words[:n]))
-    return out
-
-
-def _extract_company_name_from_ibd_url(url):
-    """Fallback: guess a company name from the investors.com URL slug."""
-    if not url:
-        return None
-    m = re.search(r"ibd-stock-of-the-day/([a-z0-9\-]+)-stock-", url, re.IGNORECASE)
-    if not m:
-        return None
-    slug = m.group(1).replace("-", " ").strip()
-    return slug if slug else None
-
-
-@st.cache_data(ttl=86400)
-def _resolve_name_via_yahoo(name_candidate):
-    """Try resolving one name candidate to a ticker via Yahoo Finance search."""
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
-    }
-    try:
-        resp = requests.get(
-            "https://query1.finance.yahoo.com/v1/finance/search",
-            params={"q": name_candidate, "quotesCount": 6, "newsCount": 0},
-            headers=headers,
-            timeout=10,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception:
-        return []
-
-    quotes = data.get("quotes", []) if isinstance(data, dict) else []
-    out = []
-    for q in quotes:
-        symbol = q.get("symbol", "")
-        if symbol and q.get("quoteType") == "EQUITY" and "." not in symbol:
-            out.append(symbol.upper())
-    return out
-
-
-@st.cache_data(ttl=86400)
-def _resolve_name_via_fmp(name_candidate):
-    """Fallback resolver: Financial Modeling Prep's ticker search (uses your existing FMP_API_KEY)."""
-    fmp_key = st.secrets.get("FMP_API_KEY")
-    if not fmp_key:
-        return []
-    try:
-        resp = requests.get(
-            "https://financialmodelingprep.com/api/v3/search",
-            params={"query": name_candidate, "limit": 6, "exchange": "NASDAQ,NYSE", "apikey": fmp_key},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception:
-        return []
-    if not isinstance(data, list):
-        return []
-    out = []
-    for item in data:
-        symbol = item.get("symbol", "")
-        if symbol and "." not in symbol:
-            out.append(symbol.upper())
-    return out
-
-
-@st.cache_data(ttl=86400)
-def _resolve_company_name_to_ticker(company_name, known_universe_tuple=None):
-    """
-    Resolve a company name to its ticker, generically: tries progressively
-    shorter leading-word trims of the name (handles trailing description
-    words glued onto the captured phrase), across two independent resolvers
-    (Yahoo Finance, then FMP as fallback). Prefers a result already in
-    known_universe_tuple (your KNOWN_STOCKS) when multiple candidates exist.
-    Returns None if nothing resolves.
-    """
-    if not company_name:
-        return None
-
-    known_set = set(known_universe_tuple) if known_universe_tuple else set()
-    trims = _progressive_word_trims(company_name, max_words=4)
-
-    for trim in trims:
-        for resolver in (_resolve_name_via_yahoo, _resolve_name_via_fmp):
-            candidates = resolver(trim)
-            if not candidates:
-                continue
-            candidates = [c for c in candidates if c not in IBD_SOTD_EXCLUDE_TICKERS]
-            if not candidates:
-                continue
-            for c in candidates:
-                if c in known_set:
-                    return c
-            return candidates[0]
-
-    return None
-
-
-@st.cache_data(ttl=3600)
-def fetch_ibd_stock_of_the_day(known_universe_tuple, max_articles=10):
-    """
-    Fetch investors.com's IBD Stock Of The Day category page and extract
-    tickers from recent article titles. If no direct ticker is present,
-    falls back to extracting a company-name phrase and resolving it to a
-    ticker via progressive name-trimming across multiple resolvers.
-    """
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    }
-
-    try:
-        resp = requests.get(IBD_STOCK_OF_DAY_URL, headers=headers, timeout=15)
-        resp.raise_for_status()
-        html = resp.text
-    except Exception as e:
-        return {"error": f"Fetch error: {e}", "articles": []}
-
-    known_set = set(known_universe_tuple)
-
-    article_pattern = re.compile(
-        r'<a[^>]+href="(https://www\.investors\.com/[^"]*ibd-stock-of-the-day[^"]*)"[^>]*>(.*?)</a>',
-        re.IGNORECASE | re.DOTALL,
-    )
-
-    seen_urls = set()
-    articles = []
-
-    for m in article_pattern.finditer(html):
-        url = m.group(1)
-        raw_title = re.sub(r"<[^>]+>", "", m.group(2)).strip()
-        raw_title = re.sub(r"\s+", " ", raw_title)
-
-        if not raw_title or len(raw_title) < 10:
-            continue
-        if url in seen_urls:
-            continue
-        seen_urls.add(url)
-
-        tickers = _extract_tickers_from_ibd_sotd_text(raw_title, restrict_to_known=known_set)
-        resolved_via = None
-
-        if not tickers:
-            name_candidates = _extract_company_name_candidates_from_ibd_title(raw_title)
-            url_fallback = _extract_company_name_from_ibd_url(url)
-            if url_fallback:
-                name_candidates.append(url_fallback)
-
-            for candidate in name_candidates:
-                resolved_ticker = _resolve_company_name_to_ticker(candidate, known_universe_tuple)
-                if resolved_ticker:
-                    tickers = [resolved_ticker]
-                    resolved_via = f"name match: '{candidate}'"
-                    break
-
-        articles.append({"title": raw_title, "url": url, "tickers": tickers, "resolved_via": resolved_via})
-
-        if len(articles) >= max_articles:
-            break
-
-    if not articles:
-        page_tickers = _extract_tickers_from_ibd_sotd_text(html, restrict_to_known=known_set)
-        if page_tickers:
-            return {
-                "error": None,
-                "articles": [{"title": "(page-wide scan — no article titles matched)",
-                              "url": IBD_STOCK_OF_DAY_URL, "tickers": page_tickers, "resolved_via": None}],
-            }
-        return {"error": "No articles or tickers found — page layout may have changed or request was blocked.",
-                "articles": []}
-
-    return {"error": None, "articles": articles}
-
-# ── Render section ────────────────────────────────────────────────────────
-st.markdown("---")
-st.markdown("#### 🎓 IBD (Stock Of The Day)")
-
-with st.spinner("Fetching IBD Stock Of The Day..."):
-    ibd_sotd_result = timed(
-        "fetch_ibd_stock_of_the_day",
-        fetch_ibd_stock_of_the_day,
-        tuple(KNOWN_STOCKS),
-    )
-
-if ibd_sotd_result.get("error"):
-    st.info(f"Unable to fetch IBD Stock Of The Day — {ibd_sotd_result['error']}")
-else:
-    all_sotd_tickers = []
-    for art in ibd_sotd_result["articles"]:
-        all_sotd_tickers.extend(art["tickers"])
-    all_sotd_tickers_unique = list(dict.fromkeys(all_sotd_tickers))
-
-    if all_sotd_tickers_unique:
-        html_sotd = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
-        for sym in all_sotd_tickers_unique:
-            if sym in LIME_STOCKS1:
-                html_sotd += (
-                    f'<div class="ticker-badge lime-badge">'
-                    f'<span style="color:#000000;font-weight:bold;">{sym}</span></div>'
-                )
-            elif sym in KNOWN_STOCKS:
-                html_sotd += (
-                    f'<div class="ticker-badge new-pattern-badge">'
-                    f'<span style="color:#111111;font-weight:bold;">{sym}</span></div>'
-                )
-            else:
-                html_sotd += f'<div class="ticker-badge">{sym}</div>'
-        html_sotd += "</div>"
-        st.markdown(html_sotd, unsafe_allow_html=True)
-    else:
-        st.info("No tickers extracted from recent articles.")
-
-    st.write("")
-
-    with st.expander(f"Source articles ({len(ibd_sotd_result['articles'])})"):
-        for art in ibd_sotd_result["articles"]:
-            tick_str = ", ".join(art["tickers"]) if art["tickers"] else "—"
-            st.markdown(f"- [{art['title']}]({art['url']}) → **{tick_str}**")
