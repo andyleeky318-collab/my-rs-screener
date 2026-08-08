@@ -10408,8 +10408,11 @@ else:
 
 IBD_STOCK_OF_DAY_URL = "https://www.investors.com/category/research/ibd-stock-of-the-day/"
 
-
-
+# Tickers that are valid symbols but are also common English words/acronyms
+# that create false positives in title text (e.g. "AI" in "Artificial
+# Intelligence"). Extend this set freely — it's a display-level exclusion,
+# not extraction logic, so it never needs per-company hardcoding.
+IBD_SOTD_EXCLUDE_TICKERS = {"AI"}
 
 
 def _extract_tickers_from_ibd_sotd_text(text_blob, restrict_to_known=None):
@@ -10420,6 +10423,7 @@ def _extract_tickers_from_ibd_sotd_text(text_blob, restrict_to_known=None):
       2. Exchange-prefixed: (NASDAQ:NVDA) / (NYSE:NVDA)
       3. Whitelist match: any all-caps 1-5 letter token that also appears
          in restrict_to_known (your KNOWN_STOCKS universe).
+    Applies IBD_SOTD_EXCLUDE_TICKERS as a final filter on all three.
     Returns a de-duplicated, order-preserved list.
     """
     if not text_blob:
@@ -10429,37 +10433,37 @@ def _extract_tickers_from_ibd_sotd_text(text_blob, restrict_to_known=None):
 
     for m in re.finditer(r"\$([A-Z]{1,5})\b", text_blob):
         tok = m.group(1).upper()
-        if tok not in seen:
+        if tok not in seen and tok not in IBD_SOTD_EXCLUDE_TICKERS:
             seen.add(tok)
             tickers.append(tok)
 
     for m in re.finditer(r"\((?:NASDAQ|NYSE|NYSEARCA|AMEX)\s*:\s*([A-Z]{1,5})\)", text_blob):
         tok = m.group(1).upper()
-        if tok not in seen:
+        if tok not in seen and tok not in IBD_SOTD_EXCLUDE_TICKERS:
             seen.add(tok)
             tickers.append(tok)
 
     if restrict_to_known:
         for m in re.finditer(r"\b[A-Z]{1,5}\b", text_blob):
             tok = m.group(0).upper()
-            if tok in restrict_to_known and tok not in seen:
+            if tok in restrict_to_known and tok not in seen and tok not in IBD_SOTD_EXCLUDE_TICKERS:
                 seen.add(tok)
                 tickers.append(tok)
 
     return tickers
 
 
-def _extract_company_name_from_ibd_title(title):
+def _extract_company_name_candidates_from_ibd_title(title):
     """
-    Extract the subject company name from an IBD 'Stock Of The Day' title
-    when no explicit ticker is present, e.g.:
-      "How Okta, IBD Stock Of The Day, Is Targeting..." -> "Okta"
-      "Guardant Health, Thursday's Stock Of The Day, Spikes After..." -> "Guardant Health"
-      "IBD Stock Of The Day: Nvidia Breaks Out" -> "Nvidia"
-    Returns None if no pattern matches.
+    Extract candidate company-name phrases from an IBD 'Stock Of The Day'
+    title, generically (no per-company hardcoding). Returns a list of
+    candidate phrases to try resolving, ordered most-to-least specific —
+    the resolver will try each one via progressive word-trimming.
     """
     if not title:
-        return None
+        return []
+
+    candidates = []
 
     # "<optional How >Company Name, [Day's ]IBD Stock Of The Day, ..."
     m = re.search(
@@ -10468,26 +10472,40 @@ def _extract_company_name_from_ibd_title(title):
         re.IGNORECASE,
     )
     if m and m.group(1).strip():
-        return m.group(1).strip()
+        candidates.append(m.group(1).strip())
 
-    # "IBD Stock Of The Day: Company Name ..."
+    # "IBD Stock Of The Day: Company Name Rises/Breaks Out/..."
     m = re.search(
-        r"(?:IBD\s+)?Stock\s+Of\s+The\s+Day\s*:\s*(.+?)(?:\s+Stock\b|,|$)",
+        r"(?:IBD\s+)?Stock\s+Of\s+The\s+Day\s*:\s*(.+)$",
         title,
         re.IGNORECASE,
     )
     if m and m.group(1).strip():
-        return m.group(1).strip()
+        candidates.append(m.group(1).strip())
 
-    return None
+    return candidates
+
+
+def _progressive_word_trims(phrase, max_words=4):
+    """
+    Given a captured phrase (which may have trailing verbs/description
+    words glued on, e.g. 'Datadog Breaks Out Above Buy Point'), generate
+    progressively shorter leading-word candidates to try:
+      ['Datadog Breaks Out Above', 'Datadog Breaks Out', 'Datadog Breaks', 'Datadog']
+    Purely mechanical word-count trimming — no company-specific logic.
+    """
+    if not phrase:
+        return []
+    words = phrase.strip().split()
+    words = words[:max_words] if len(words) > max_words else words
+    out = []
+    for n in range(len(words), 0, -1):
+        out.append(" ".join(words[:n]))
+    return out
 
 
 def _extract_company_name_from_ibd_url(url):
-    """
-    Fallback: guess a company name from the investors.com URL slug, e.g.
-    '.../okta-stock-cybersecurity-...' -> 'okta'
-    '.../guardant-health-stock-buy-point-...' -> 'guardant health'
-    """
+    """Fallback: guess a company name from the investors.com URL slug."""
     if not url:
         return None
     m = re.search(r"ibd-stock-of-the-day/([a-z0-9\-]+)-stock-", url, re.IGNORECASE)
@@ -10498,16 +10516,8 @@ def _extract_company_name_from_ibd_url(url):
 
 
 @st.cache_data(ttl=86400)
-def _resolve_company_name_to_ticker(company_name, known_universe_tuple=None):
-    """
-    Resolve a company name (e.g. 'Okta', 'Guardant Health') to its stock
-    ticker via Yahoo Finance's public search endpoint. Cached 24h since
-    name->ticker mappings rarely change. Prefers a match already in
-    known_universe_tuple (your KNOWN_STOCKS) if one is present.
-    """
-    if not company_name:
-        return None
-
+def _resolve_name_via_yahoo(name_candidate):
+    """Try resolving one name candidate to a ticker via Yahoo Finance search."""
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -10515,53 +10525,92 @@ def _resolve_company_name_to_ticker(company_name, known_universe_tuple=None):
             "Chrome/124.0.0.0 Safari/537.36"
         ),
     }
-
     try:
         resp = requests.get(
             "https://query1.finance.yahoo.com/v1/finance/search",
-            params={"q": company_name, "quotesCount": 6, "newsCount": 0},
+            params={"q": name_candidate, "quotesCount": 6, "newsCount": 0},
             headers=headers,
             timeout=10,
         )
         resp.raise_for_status()
         data = resp.json()
     except Exception:
-        return None
+        return []
 
     quotes = data.get("quotes", []) if isinstance(data, dict) else []
-    if not quotes:
+    out = []
+    for q in quotes:
+        symbol = q.get("symbol", "")
+        if symbol and q.get("quoteType") == "EQUITY" and "." not in symbol:
+            out.append(symbol.upper())
+    return out
+
+
+@st.cache_data(ttl=86400)
+def _resolve_name_via_fmp(name_candidate):
+    """Fallback resolver: Financial Modeling Prep's ticker search (uses your existing FMP_API_KEY)."""
+    fmp_key = st.secrets.get("FMP_API_KEY")
+    if not fmp_key:
+        return []
+    try:
+        resp = requests.get(
+            "https://financialmodelingprep.com/api/v3/search",
+            params={"query": name_candidate, "limit": 6, "exchange": "NASDAQ,NYSE", "apikey": fmp_key},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+    out = []
+    for item in data:
+        symbol = item.get("symbol", "")
+        if symbol and "." not in symbol:
+            out.append(symbol.upper())
+    return out
+
+
+@st.cache_data(ttl=86400)
+def _resolve_company_name_to_ticker(company_name, known_universe_tuple=None):
+    """
+    Resolve a company name to its ticker, generically: tries progressively
+    shorter leading-word trims of the name (handles trailing description
+    words glued onto the captured phrase), across two independent resolvers
+    (Yahoo Finance, then FMP as fallback). Prefers a result already in
+    known_universe_tuple (your KNOWN_STOCKS) when multiple candidates exist.
+    Returns None if nothing resolves.
+    """
+    if not company_name:
         return None
 
     known_set = set(known_universe_tuple) if known_universe_tuple else set()
-    candidates = []
-    for q in quotes:
-        symbol = q.get("symbol", "")
-        quote_type = q.get("quoteType", "")
-        if not symbol or quote_type != "EQUITY":
-            continue
-        if "." in symbol:
-            continue  # skip foreign/secondary listings like OKTA.MX
-        candidates.append(symbol.upper())
+    trims = _progressive_word_trims(company_name, max_words=4)
 
-    if not candidates:
-        return None
+    for trim in trims:
+        for resolver in (_resolve_name_via_yahoo, _resolve_name_via_fmp):
+            candidates = resolver(trim)
+            if not candidates:
+                continue
+            candidates = [c for c in candidates if c not in IBD_SOTD_EXCLUDE_TICKERS]
+            if not candidates:
+                continue
+            for c in candidates:
+                if c in known_set:
+                    return c
+            return candidates[0]
 
-    for c in candidates:
-        if c in known_set:
-            return c
-
-    return candidates[0]
+    return None
 
 
 @st.cache_data(ttl=3600)
 def fetch_ibd_stock_of_the_day(known_universe_tuple, max_articles=10):
     """
     Fetch investors.com's IBD Stock Of The Day category page and extract
-    tickers from recent article titles. If no direct ticker is present in
-    the title (common — IBD often writes the company name instead), falls
-    back to extracting the company name and resolving it to a ticker via
-    Yahoo Finance search.
-    Returns {"articles": [...], "error": None} or {"error": "...", "articles": []}.
+    tickers from recent article titles. If no direct ticker is present,
+    falls back to extracting a company-name phrase and resolving it to a
+    ticker via progressive name-trimming across multiple resolvers.
     """
     headers = {
         "User-Agent": (
@@ -10605,15 +10654,17 @@ def fetch_ibd_stock_of_the_day(known_universe_tuple, max_articles=10):
         resolved_via = None
 
         if not tickers:
-            company_name = (
-                _extract_company_name_from_ibd_title(raw_title)
-                or _extract_company_name_from_ibd_url(url)
-            )
-            if company_name:
-                resolved_ticker = _resolve_company_name_to_ticker(company_name, known_universe_tuple)
+            name_candidates = _extract_company_name_candidates_from_ibd_title(raw_title)
+            url_fallback = _extract_company_name_from_ibd_url(url)
+            if url_fallback:
+                name_candidates.append(url_fallback)
+
+            for candidate in name_candidates:
+                resolved_ticker = _resolve_company_name_to_ticker(candidate, known_universe_tuple)
                 if resolved_ticker:
                     tickers = [resolved_ticker]
-                    resolved_via = f"name match: '{company_name}'"
+                    resolved_via = f"name match: '{candidate}'"
+                    break
 
         articles.append({"title": raw_title, "url": url, "tickers": tickers, "resolved_via": resolved_via})
 
@@ -10632,7 +10683,6 @@ def fetch_ibd_stock_of_the_day(known_universe_tuple, max_articles=10):
                 "articles": []}
 
     return {"error": None, "articles": articles}
-
 
 # ── Render section ────────────────────────────────────────────────────────
 st.markdown("---")
