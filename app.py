@@ -9171,7 +9171,7 @@ if spikepanel_tickers:
     badges_html += "</div>"
     st.markdown(badges_html, unsafe_allow_html=True)
 else:
-    st.info("No spike panel tickers found.")
+    st.info("None")
 
 # ==============================================================================
 # IBD "STOCK MARKET TODAY" — TICKER EXTRACTION FROM LATEST YOUTUBE VIDEO
