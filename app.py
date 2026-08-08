@@ -10206,6 +10206,50 @@ _render_volume_badges(hvm_syms, unusual_vol_map, "background-color:#FFE066;borde
 IBD_CHANNEL_HANDLE_URL = "https://www.youtube.com/@investorsbusinessdaily"
 IBD_STREAMS_URL = "https://www.youtube.com/@investorsbusinessdaily/streams"
 
+# Common all-caps words to exclude from the fallback ticker scan
+_TICKER_STOPWORDS = {
+    "IBD", "ETF", "ETFS", "CEO", "CFO", "USA", "US", "AI", "IPO", "GDP",
+    "FED", "SEC", "NYSE", "NASDAQ", "PE", "EPS", "ATH", "ATR", "RS",
+    "MA", "SMA", "EMA", "TV", "YOY", "QOQ", "S&P", "DOW",
+}
+
+def _extract_tickers_from_ibd_title(title):
+    """
+    Primary: capture comma-separated ALL-CAPS tickers immediately before a
+    common IBD trigger phrase ('In Focus', 'Near Buy Point', etc.), matching
+    the "GH, FCX, SPHR In Focus | Stock Market Today" pattern.
+    Fallback: scan for standalone 1-5 letter all-caps tokens, stopword-filtered.
+    """
+    if not title:
+        return []
+
+    trigger_phrases = [
+        r"In Focus", r"Near Buy Points?", r"Buy Points?", r"Eyed",
+        r"On Watch", r"In Play", r"Flash(?:es)? Buy Signal",
+    ]
+    trigger_pattern = "|".join(trigger_phrases)
+
+    match = re.search(
+        r"([A-Z][A-Z0-9\.\-]{0,5}(?:\s*,\s*[A-Z][A-Z0-9\.\-]{0,5}){0,6})\s+(?:" + trigger_pattern + r")",
+        title,
+    )
+
+    if match:
+        candidates = [t.strip() for t in match.group(1).split(",")]
+    else:
+        candidates = re.findall(r"\b[A-Z]{1,5}\b", title)
+
+    tickers, seen = [], set()
+    for tok in candidates:
+        tok = tok.strip().upper()
+        if not tok or tok in _TICKER_STOPWORDS or tok in seen:
+            continue
+        if not re.fullmatch(r"[A-Z]{1,5}", tok):
+            continue
+        seen.add(tok)
+        tickers.append(tok)
+
+    return tickers
 
 @st.cache_data(ttl=86400)
 def _resolve_ibd_channel_id():
