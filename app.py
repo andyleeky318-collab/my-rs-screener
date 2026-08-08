@@ -10397,3 +10397,171 @@ else:
         st.markdown(html_ibd, unsafe_allow_html=True)
     else:
         st.info("No tickers could be extracted from the title.")
+
+# ==============================================================================
+# IBD STOCK OF THE DAY — TICKER EXTRACTION
+# Read-only scrape of investors.com's "IBD Stock Of The Day" category page.
+# Extracts tickers via cashtag ($XYZ), exchange-prefixed (NASDAQ:XYZ), and
+# KNOWN_STOCKS whitelist matching as a fallback. Does not touch any
+# existing variable/function.
+# ==============================================================================
+
+IBD_STOCK_OF_DAY_URL = "https://www.investors.com/category/research/ibd-stock-of-the-day/"
+
+
+def _extract_tickers_from_ibd_sotd_text(text_blob, restrict_to_known=None):
+    """
+    Extract candidate tickers from a block of text using three patterns,
+    in priority order:
+      1. Cashtag: $NVDA
+      2. Exchange-prefixed: (NASDAQ:NVDA) / (NYSE:NVDA)
+      3. Whitelist match: any all-caps 1-5 letter token that also appears
+         in restrict_to_known (your KNOWN_STOCKS universe) — safest fallback,
+         avoids false positives from generic all-caps words.
+    Returns a de-duplicated, order-preserved list.
+    """
+    if not text_blob:
+        return []
+
+    tickers, seen = [], set()
+
+    # 1. Cashtags
+    for m in re.finditer(r"\$([A-Z]{1,5})\b", text_blob):
+        tok = m.group(1).upper()
+        if tok not in seen:
+            seen.add(tok)
+            tickers.append(tok)
+
+    # 2. Exchange-prefixed
+    for m in re.finditer(r"\((?:NASDAQ|NYSE|NYSEARCA|AMEX)\s*:\s*([A-Z]{1,5})\)", text_blob):
+        tok = m.group(1).upper()
+        if tok not in seen:
+            seen.add(tok)
+            tickers.append(tok)
+
+    # 3. Whitelist fallback against your known universe
+    if restrict_to_known:
+        for m in re.finditer(r"\b[A-Z]{1,5}\b", text_blob):
+            tok = m.group(0).upper()
+            if tok in restrict_to_known and tok not in seen:
+                seen.add(tok)
+                tickers.append(tok)
+
+    return tickers
+
+
+@st.cache_data(ttl=3600)
+def fetch_ibd_stock_of_the_day(known_universe_tuple, max_articles=10):
+    """
+    Fetch investors.com's IBD Stock Of The Day category page and extract
+    tickers from recent article titles/snippets.
+    Returns {"articles": [{"title":..., "url":..., "tickers":[...]}], "error": None}
+    or {"error": "..."} on failure.
+    """
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+
+    try:
+        resp = requests.get(IBD_STOCK_OF_DAY_URL, headers=headers, timeout=15)
+        resp.raise_for_status()
+        html = resp.text
+    except Exception as e:
+        return {"error": f"Fetch error: {e}", "articles": []}
+
+    known_set = set(known_universe_tuple)
+
+    # Extract article blocks: look for <a> tags with href pointing to an
+    # investors.com article, paired with their link text as the title.
+    # Investors.com article URLs consistently look like:
+    #   https://www.investors.com/research/ibd-stock-of-the-day/....
+    article_pattern = re.compile(
+        r'<a[^>]+href="(https://www\.investors\.com/[^"]*ibd-stock-of-the-day[^"]*)"[^>]*>(.*?)</a>',
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    seen_urls = set()
+    articles = []
+
+    for m in article_pattern.finditer(html):
+        url = m.group(1)
+        raw_title = re.sub(r"<[^>]+>", "", m.group(2)).strip()
+        raw_title = re.sub(r"\s+", " ", raw_title)
+
+        if not raw_title or len(raw_title) < 10:
+            continue  # skip nav/thumbnail links with no real title text
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+
+        tickers = _extract_tickers_from_ibd_sotd_text(raw_title, restrict_to_known=known_set)
+        articles.append({"title": raw_title, "url": url, "tickers": tickers})
+
+        if len(articles) >= max_articles:
+            break
+
+    if not articles:
+        # Fallback: whole-page regex scan for any cashtags/exchange tickers,
+        # in case the article-link pattern above didn't match this layout.
+        page_tickers = _extract_tickers_from_ibd_sotd_text(html, restrict_to_known=known_set)
+        if page_tickers:
+            return {
+                "error": None,
+                "articles": [{"title": "(page-wide scan — no article titles matched)",
+                              "url": IBD_STOCK_OF_DAY_URL, "tickers": page_tickers}],
+            }
+        return {"error": "No articles or tickers found — page layout may have changed or request was blocked.",
+                "articles": []}
+
+    return {"error": None, "articles": articles}
+
+
+# ── Render section ────────────────────────────────────────────────────────
+st.markdown("---")
+st.markdown("#### 🎓 IBD Stock Of The Day")
+
+with st.spinner("Fetching IBD Stock Of The Day..."):
+    ibd_sotd_result = timed(
+        "fetch_ibd_stock_of_the_day",
+        fetch_ibd_stock_of_the_day,
+        tuple(KNOWN_STOCKS),
+    )
+
+if ibd_sotd_result.get("error"):
+    st.info(f"Unable to fetch IBD Stock Of The Day — {ibd_sotd_result['error']}")
+else:
+    all_sotd_tickers = []
+    for art in ibd_sotd_result["articles"]:
+        all_sotd_tickers.extend(art["tickers"])
+    all_sotd_tickers_unique = list(dict.fromkeys(all_sotd_tickers))
+
+    if all_sotd_tickers_unique:
+        html_sotd = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+        for sym in all_sotd_tickers_unique:
+            if sym in LIME_STOCKS1:
+                html_sotd += (
+                    f'<div class="ticker-badge lime-badge">'
+                    f'<span style="color:#000000;font-weight:bold;">{sym}</span></div>'
+                )
+            elif sym in KNOWN_STOCKS:
+                html_sotd += (
+                    f'<div class="ticker-badge new-pattern-badge">'
+                    f'<span style="color:#111111;font-weight:bold;">{sym}</span></div>'
+                )
+            else:
+                html_sotd += f'<div class="ticker-badge">{sym}</div>'
+        html_sotd += "</div>"
+        st.markdown(html_sotd, unsafe_allow_html=True)
+    else:
+        st.info("No tickers extracted from recent articles.")
+
+    with st.expander(f"Source articles ({len(ibd_sotd_result['articles'])})"):
+        for art in ibd_sotd_result["articles"]:
+            tick_str = ", ".join(art["tickers"]) if art["tickers"] else "—"
+            st.markdown(f"- [{art['title']}]({art['url']}) → **{tick_str}**")
