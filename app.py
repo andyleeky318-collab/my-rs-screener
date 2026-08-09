@@ -3443,11 +3443,11 @@ if all_data:
             if new_style_industry_table and ticker_sym not in KNOWN_STOCKS:  # NEW: new style hides non-KNOWN_STOCKS tickers
                 continue
             if ticker_sym in industry_vol_tickers.get(row["Industry"], []):
-                ticker_glow = "box-shadow:0 0 6px 2px #00FF00;"#SWAP
+                ticker_glow = "box-shadow:0 0 6px 2px #FF4B4B;"
             elif engulf_industry_count > 1 and ticker_sym in _engulf_today_set:
                 ticker_glow = "box-shadow:0 0 6px 2px #FFFF00;"
             elif botak_industry_count > 2 and ticker_sym in _botak_today_set:
-                ticker_glow = "box-shadow:0 0 6px 2px #FF4B4B;"#SWAP
+                ticker_glow = "box-shadow:0 0 6px 2px #00FF00;"
             else:
                 ticker_glow = ""
             rs_threshold = 70 if ticker_sym in LIME_STOCKS1 else 80
