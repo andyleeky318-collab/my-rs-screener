@@ -646,6 +646,115 @@ def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
     except Exception as e:
         return {}, {1: 0, 2: 0, 3: 0, 4: 0, 0: 0}, 0, []
 
+# ============================================================
+# PINE SCRIPT "Relative Strength Table" — 39-ticker RS panel
+# Methodology ported from the TradingView Pine indicator:
+# percentrank(price_ratio, length) for periods 5/21/63/126,
+# sorted by the 21-period RS (Pine default sort_key_options='P2').
+# ============================================================
+PINE_RS_TICKERS = [
+    'QQQ', 'QQQE', 'RSP', 'ITB', 'IWM', 'XLV', 'XLE', 'XLF', 'PBW', 'XLB',
+    'XLP', 'XLU', 'XLY', 'XLK', 'XLC', 'XLI', 'XTL', 'SMH', 'SLV', 'NLR',
+    'TAN', 'IBIT', 'JETS', 'GLD', 'COPX', 'UFO', 'KWEB', 'CIBR', 'IGV', 'USO',
+    'MAGS', 'ITA', 'IYT', 'IHI', 'XBI', 'LIT', 'WGMI', 'DRAM', 'REMX'
+]
+
+@st.cache_data(ttl=3600)
+def download_pine_rs_data(tickers_tuple, benchmark_symbol="SPY"):
+    all_symbols = list(tickers_tuple) + [benchmark_symbol]
+    raw = yf.download(all_symbols, period="9mo", interval="1d", progress=False, auto_adjust=True)
+    return raw['Close']
+
+def _percentrank_last(series, length):
+    """Pine ta.percentrank(source, length) for the latest bar only."""
+    if series is None or len(series) < length + 1:
+        return np.nan
+    window = series.iloc[-(length + 1):-1].values
+    current = series.iloc[-1]
+    if len(window) < length:
+        return np.nan
+    return round(float(np.sum(window < current)) / length * 100, 2)
+
+@st.cache_data(ttl=3600)
+def compute_pine_rs_table(tickers_tuple, benchmark_symbol="SPY"):
+    close_data = download_pine_rs_data(tickers_tuple, benchmark_symbol)
+    if benchmark_symbol not in close_data.columns:
+        return []
+    bench_close = close_data[benchmark_symbol].dropna()
+
+    rows = []
+    for t in tickers_tuple:
+        if t not in close_data.columns:
+            continue
+        close = close_data[t].dropna()
+        aligned_close, aligned_bench = close.align(bench_close, join='inner')
+        if aligned_close.empty:
+            continue
+        ratio = aligned_close / aligned_bench
+        rs5   = _percentrank_last(ratio, 5)
+        rs21  = _percentrank_last(ratio, 21)
+        rs63  = _percentrank_last(ratio, 63)
+        rs126 = _percentrank_last(ratio, 126)
+        vals = [v for v in [rs5, rs21, rs63, rs126] if not pd.isna(v)]
+        rs_avg = round(sum(vals) / len(vals), 2) if vals else np.nan
+        rows.append({"Ticker": t, "RS5": rs5, "RS21": rs21, "RS63": rs63, "RS126": rs126, "RSAvg": rs_avg})
+
+    # Sort descending by RS(21) — matches Pine default sort_key_options = 'P2'
+    rows.sort(key=lambda r: (r["RS21"] if not pd.isna(r["RS21"]) else -1), reverse=True)
+    return rows
+
+def render_pine_rs_table_html(rows, max_height):
+    if not rows:
+        return "<div style='color:#888;font-size:12px;'>No RS data available.</div>"
+
+    sector_etfs = {"XLE", "XLK", "XLY", "XLB", "XLF", "XLI", "XLC", "XLU", "XLV", "XLP"}
+    index_etfs  = {"QQQE", "QQQ", "RSP", "IWM", "SMH", "MAGS"}
+
+    def fmt(v):
+        return "-" if v is None or pd.isna(v) else f"{v:.2f}%"
+
+    header_html = (
+        "<tr>"
+        "<th style='padding:2px 6px;background:#ffffff;color:#000000;text-align:left;font-size:10.5px;border:1px solid #ccc;'></th>"
+        "<th style='padding:2px 6px;background:#ffffff;color:#000000;text-align:center;font-size:10.5px;border:1px solid #ccc;'>RS(5)</th>"
+        "<th style='padding:2px 6px;background:#0000ff;color:#ffffff;text-align:center;font-size:10.5px;border:1px solid #ccc;'>RS(21)*</th>"
+        "<th style='padding:2px 6px;background:#ffffff;color:#000000;text-align:center;font-size:10.5px;border:1px solid #ccc;'>RS(63)</th>"
+        "<th style='padding:2px 6px;background:#ffffff;color:#000000;text-align:center;font-size:10.5px;border:1px solid #ccc;'>RS(126)</th>"
+        "<th style='padding:2px 6px;background:#ffffff;color:#000000;text-align:center;font-size:10.5px;border:1px solid #ccc;'>Avg</th>"
+        "</tr>"
+    )
+
+    body_html = ""
+    n = len(rows)
+    for i, r in enumerate(rows):
+        sym = r["Ticker"]
+        # Precedence mirrors Pine's sequential table.cell() overwrite order:
+        # default -> last-row red -> sector aqua -> index yellow (last call wins)
+        name_bg, name_color = "#ffffff", "#000000"
+        if i == n - 1:
+            name_bg, name_color = "#ff0000", "#ffffff"
+        if sym in sector_etfs:
+            name_bg, name_color = "#00ffff", "#000000"
+        if sym in index_etfs:
+            name_bg, name_color = "#ffff00", "#ff0000"
+
+        body_html += (
+            f"<tr>"
+            f"<td style='padding:2px 6px;background:{name_bg};color:{name_color};text-align:left;font-size:10.5px;border:1px solid #ccc;font-weight:bold;white-space:nowrap;'>{sym}</td>"
+            f"<td style='padding:2px 6px;background:#ffffff;color:#000000;text-align:right;font-size:10.5px;border:1px solid #ccc;'>{fmt(r['RS5'])}</td>"
+            f"<td style='padding:2px 6px;background:#ffffff;color:#000000;text-align:right;font-size:10.5px;border:1px solid #ccc;'>{fmt(r['RS21'])}</td>"
+            f"<td style='padding:2px 6px;background:#ffffff;color:#000000;text-align:right;font-size:10.5px;border:1px solid #ccc;'>{fmt(r['RS63'])}</td>"
+            f"<td style='padding:2px 6px;background:#ffffff;color:#000000;text-align:right;font-size:10.5px;border:1px solid #ccc;'>{fmt(r['RS126'])}</td>"
+            f"<td style='padding:2px 6px;background:#ffffff;color:#000000;text-align:right;font-size:10.5px;border:1px solid #ccc;'>{fmt(r['RSAvg'])}</td>"
+            f"</tr>"
+        )
+
+    return (
+        f"<div style='max-height:{max_height}px; overflow-y:auto; border:1px solid #333; border-radius:4px;'>"
+        f"<table style='border-collapse:collapse; width:100%; background:#ffffff;'>"
+        f"<thead>{header_html}</thead><tbody>{body_html}</tbody></table></div>"
+    )
+
 # 3. Sidebar Inputs
 with st.sidebar:
     st.header("Settings")
@@ -919,7 +1028,12 @@ if lime_perf_rows:
     {js}
     """
 
-    st.components.v1.html(html_out, height=SVG_H + 24, scrolling=False)
+    col_lime_chart, col_pine_rs = st.columns([4, 1])  # NEW: right-side column for RS table
+    with col_lime_chart:
+        st.components.v1.html(html_out, height=SVG_H + 24, scrolling=False)
+    with col_pine_rs:  # NEW
+        pine_rs_rows = timed("compute_pine_rs_table", compute_pine_rs_table, tuple(PINE_RS_TICKERS))
+        st.markdown(render_pine_rs_table_html(pine_rs_rows, SVG_H), unsafe_allow_html=True)
 else:
     st.info("No Lime Stocks performance data available.")
 
