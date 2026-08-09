@@ -695,9 +695,7 @@ def compute_pine_rs_table(tickers_tuple, benchmark_symbol="SPY"):
         rs21  = _percentrank_last(ratio, 21)
         rs63  = _percentrank_last(ratio, 63)
         rs126 = _percentrank_last(ratio, 126)
-        vals = [v for v in [rs5, rs21, rs63, rs126] if not pd.isna(v)]
-        rs_avg = round(sum(vals) / len(vals), 2) if vals else np.nan
-        rows.append({"Ticker": t, "RS5": rs5, "RS21": rs21, "RS63": rs63, "RS126": rs126, "RSAvg": rs_avg})
+        rows.append({"Ticker": t, "RS5": rs5, "RS21": rs21, "RS63": rs63, "RS126": rs126})
 
     # Sort descending by RS(21) — matches Pine default sort_key_options = 'P2'
     rows.sort(key=lambda r: (r["RS21"] if not pd.isna(r["RS21"]) else -1), reverse=True)
@@ -705,7 +703,7 @@ def compute_pine_rs_table(tickers_tuple, benchmark_symbol="SPY"):
 
 def render_pine_rs_table_html(rows, max_height):
     if not rows:
-        return "<div style='color:#888;font-size:12px;'>No RS data available.</div>"
+        return "<div style='color:#888;font-size:11px;'>No RS data available.</div>"
 
     sector_etfs = {"XLE", "XLK", "XLY", "XLB", "XLF", "XLI", "XLC", "XLU", "XLV", "XLP"}
     index_etfs  = {"QQQE", "QQQ", "RSP", "IWM", "SMH", "MAGS"}
@@ -713,14 +711,19 @@ def render_pine_rs_table_html(rows, max_height):
     def fmt(v):
         return "-" if v is None or pd.isna(v) else f"{v:.2f}%"
 
+    def rs_cell_style(v):
+        base = "padding:1px 5px;text-align:right;font-size:9px;border:1px solid #ccc;white-space:nowrap;"
+        if v is not None and not pd.isna(v) and v > 70:
+            return base + "background:rgba(128,0,0,0.7);color:#ffffff;"
+        return base + "background:#ffffff;color:#000000;"
+
     header_html = (
         "<tr>"
-        "<th style='padding:2px 6px;background:#ffffff;color:#000000;text-align:left;font-size:10.5px;border:1px solid #ccc;'></th>"
-        "<th style='padding:2px 6px;background:#ffffff;color:#000000;text-align:center;font-size:10.5px;border:1px solid #ccc;'>RS(5)</th>"
-        "<th style='padding:2px 6px;background:#0000ff;color:#ffffff;text-align:center;font-size:10.5px;border:1px solid #ccc;'>RS(21)*</th>"
-        "<th style='padding:2px 6px;background:#ffffff;color:#000000;text-align:center;font-size:10.5px;border:1px solid #ccc;'>RS(63)</th>"
-        "<th style='padding:2px 6px;background:#ffffff;color:#000000;text-align:center;font-size:10.5px;border:1px solid #ccc;'>RS(126)</th>"
-        "<th style='padding:2px 6px;background:#ffffff;color:#000000;text-align:center;font-size:10.5px;border:1px solid #ccc;'>Avg</th>"
+        "<th style='padding:1px 5px;background:#ffffff;color:#000000;text-align:left;font-size:9px;border:1px solid #ccc;white-space:nowrap;'></th>"
+        "<th style='padding:1px 5px;background:#ffffff;color:#000000;text-align:center;font-size:9px;border:1px solid #ccc;white-space:nowrap;'>RS(5)</th>"
+        "<th style='padding:1px 5px;background:#0000ff;color:#ffffff;text-align:center;font-size:9px;border:1px solid #ccc;white-space:nowrap;'>RS(21)*</th>"
+        "<th style='padding:1px 5px;background:#ffffff;color:#000000;text-align:center;font-size:9px;border:1px solid #ccc;white-space:nowrap;'>RS(63)</th>"
+        "<th style='padding:1px 5px;background:#ffffff;color:#000000;text-align:center;font-size:9px;border:1px solid #ccc;white-space:nowrap;'>RS(126)</th>"
         "</tr>"
     )
 
@@ -728,8 +731,6 @@ def render_pine_rs_table_html(rows, max_height):
     n = len(rows)
     for i, r in enumerate(rows):
         sym = r["Ticker"]
-        # Precedence mirrors Pine's sequential table.cell() overwrite order:
-        # default -> last-row red -> sector aqua -> index yellow (last call wins)
         name_bg, name_color = "#ffffff", "#000000"
         if i == n - 1:
             name_bg, name_color = "#ff0000", "#ffffff"
@@ -740,18 +741,18 @@ def render_pine_rs_table_html(rows, max_height):
 
         body_html += (
             f"<tr>"
-            f"<td style='padding:2px 6px;background:{name_bg};color:{name_color};text-align:left;font-size:10.5px;border:1px solid #ccc;font-weight:bold;white-space:nowrap;'>{sym}</td>"
-            f"<td style='padding:2px 6px;background:#ffffff;color:#000000;text-align:right;font-size:10.5px;border:1px solid #ccc;'>{fmt(r['RS5'])}</td>"
-            f"<td style='padding:2px 6px;background:#ffffff;color:#000000;text-align:right;font-size:10.5px;border:1px solid #ccc;'>{fmt(r['RS21'])}</td>"
-            f"<td style='padding:2px 6px;background:#ffffff;color:#000000;text-align:right;font-size:10.5px;border:1px solid #ccc;'>{fmt(r['RS63'])}</td>"
-            f"<td style='padding:2px 6px;background:#ffffff;color:#000000;text-align:right;font-size:10.5px;border:1px solid #ccc;'>{fmt(r['RS126'])}</td>"
-            f"<td style='padding:2px 6px;background:#ffffff;color:#000000;text-align:right;font-size:10.5px;border:1px solid #ccc;'>{fmt(r['RSAvg'])}</td>"
+            f"<td style='padding:1px 5px;background:{name_bg};color:{name_color};text-align:left;font-size:9px;border:1px solid #ccc;font-weight:bold;white-space:nowrap;'>{sym}</td>"
+            f"<td style='{rs_cell_style(r['RS5'])}'>{fmt(r['RS5'])}</td>"
+            f"<td style='{rs_cell_style(r['RS21'])}'>{fmt(r['RS21'])}</td>"
+            f"<td style='{rs_cell_style(r['RS63'])}'>{fmt(r['RS63'])}</td>"
+            f"<td style='{rs_cell_style(r['RS126'])}'>{fmt(r['RS126'])}</td>"
             f"</tr>"
         )
 
     return (
-        f"<div style='max-height:{max_height}px; overflow-y:auto; border:1px solid #333; border-radius:4px;'>"
-        f"<table style='border-collapse:collapse; width:100%; background:#ffffff;'>"
+        f"<div style='overflow:visible; border:1px solid #333; border-radius:4px; "
+        f"width:max-content; margin-left:-25px;'>"
+        f"<table style='border-collapse:collapse; background:#ffffff;'>"
         f"<thead>{header_html}</thead><tbody>{body_html}</tbody></table></div>"
     )
 
