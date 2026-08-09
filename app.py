@@ -714,7 +714,7 @@ def render_pine_rs_table_html(rows, max_height):
     def rs_cell_style(v):
         base = "padding:1px 5px;text-align:right;font-size:9px;border:1px solid #ccc;white-space:nowrap;"
         if v is not None and not pd.isna(v) and v > 70:
-            return base + "background:rgba(110, 25, 25, 0.7);color:#ffffff;"
+            return base + "background:rgba(105, 35, 45, 0.7);color:#000000;"
         return base + "background:#ffffff;color:#000000;"
 
     header_html = (
