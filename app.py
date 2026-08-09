@@ -703,9 +703,9 @@ def compute_pine_rs_table(tickers_tuple, benchmark_symbol="SPY"):
     def _sort_key(r):
         return (
             r["RS21"]  if not pd.isna(r["RS21"])  else -1,
+            r["RS5"]   if not pd.isna(r["RS5"])   else -1,            
             r["RS63"]  if not pd.isna(r["RS63"])  else -1,
             r["RS126"] if not pd.isna(r["RS126"]) else -1,
-            r["RS5"]   if not pd.isna(r["RS5"])   else -1,
         )
 
     rows.sort(key=_sort_key, reverse=True)
