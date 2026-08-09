@@ -8327,46 +8327,34 @@ total_unusual_vol = len(hve_syms) + len(hvq_syms) + len(hvm_syms)
 
 #st.markdown(f"#### 📊 Unusual Volume ({total_unusual_vol})")
 
-def _render_volume_badges(sym_list, vol_map, badge_color_style):
+def _render_volume_badges(sym_list, vol_map):  # CHANGED: dropped badge_color_style param
     if not sym_list:
         st.info("None")
         return
+    vol_industry_counts, vol_ticker_industry = build_leader_industry_map(sym_list, INDUSTRIES)  # NEW
     html_v = ""
     for sym in sym_list:
-        vol_str = _format_volume(vol_map.get(sym, 0))
-        if sym in LIME_STOCKS1:
-            html_v += (
-                f'<div class="ticker-badge lime-badge">'
-                f'<span class="ticker-name" style="color:#000000;font-weight:bold;">{sym}</span>'
-                #f'<span class="ticker-rs" style="color:#000000;font-weight:bold;margin-left:5px;">{vol_str}</span>'
-                f'</div>'
-            )
-        elif sym in KNOWN_STOCKS:
-            html_v += (
-                f'<div class="ticker-badge" style="{badge_color_style}">'
-                f'<span class="ticker-name" style="color:#111111;font-weight:bold;">{sym}</span>'
-                #f'<span class="ticker-rs" style="color:#333333;font-weight:bold;margin-left:5px;">{vol_str}</span>'
-                f'</div>'
-            )
-        else:
-            html_v += (
-                f'<div class="ticker-badge">'
-                f'<span class="ticker-name">{sym}</span>'
-                #f'<span class="ticker-rs">{vol_str}</span>'
-                f'</div>'
-            )
+        # NEW: top-20 industry glow
+        industries = vol_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+            if is_top20_industry else ""
+        )
+        html_v += setup_badge(sym, extra_style=glow_style)  # CHANGED: base = precedence
     st.markdown(html_v, unsafe_allow_html=True)
 
 st.markdown(f"**🔴 HVE ({len(hve_syms)})**")
-_render_volume_badges(hve_syms, unusual_vol_map, "background-color:#FF6B6B;border:1px solid #CC0000;")
+_render_volume_badges(hve_syms, unusual_vol_map)  # CHANGED: removed style arg
 
 st.write("")
 st.markdown(f"**🟠 HVQ ({len(hvq_syms)})**")
-_render_volume_badges(hvq_syms, unusual_vol_map, "background-color:#FFB84D;border:1px solid #CC7A00;")
+_render_volume_badges(hvq_syms, unusual_vol_map)  # CHANGED: removed style arg
 
 st.write("")
 st.markdown(f"**🟡 HVM ({len(hvm_syms)})**")
-_render_volume_badges(hvm_syms, unusual_vol_map, "background-color:#FFE066;border:1px solid #B8860B;")
+_render_volume_badges(hvm_syms, unusual_vol_map)  # CHANGED: removed style arg
 
 #st.markdown(html_e2, unsafe_allow_html=True)
 
@@ -9384,20 +9372,19 @@ else:
 
     tickers_found = ibd_result.get("tickers", [])
     if tickers_found:
+        ibd_industry_counts, ibd_ticker_industry = build_leader_industry_map(tickers_found, INDUSTRIES)  # NEW
         html_ibd = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
         for sym in tickers_found:
-            if sym in LIME_STOCKS1:
-                html_ibd += (
-                    f'<div class="ticker-badge lime-badge">'
-                    f'<span style="color:#000000;font-weight:bold;">{sym}</span></div>'
-                )
-            elif sym in KNOWN_STOCKS:
-                html_ibd += (
-                    f'<div class="ticker-badge new-pattern-badge">'
-                    f'<span style="color:#111111;font-weight:bold;">{sym}</span></div>'
-                )
-            else:
-                html_ibd += f'<div class="ticker-badge">{sym}</div>'
+            # NEW: top-20 industry glow
+            industries = ibd_ticker_industry.get(sym, [])
+            ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+            is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+            glow_style = (
+                "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+                if is_top20_industry else ""
+            )
+            # setup_badge precedence: 50ma_bounce > aqua > purple > gold(known) > default
+            html_ibd += setup_badge(sym, is_new=(sym in KNOWN_STOCKS), extra_style=glow_style)  # CHANGED
         html_ibd += "</div>"
         st.markdown(html_ibd, unsafe_allow_html=True)
     else:
@@ -9710,20 +9697,18 @@ else:
     all_sotd_tickers_unique = list(dict.fromkeys(all_sotd_tickers))
 
     if all_sotd_tickers_unique:
+        sotd_industry_counts, sotd_ticker_industry = build_leader_industry_map(all_sotd_tickers_unique, INDUSTRIES)  # NEW
         html_sotd = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
         for sym in all_sotd_tickers_unique:
-            if sym in LIME_STOCKS1:
-                html_sotd += (
-                    f'<div class="ticker-badge lime-badge">'
-                    f'<span style="color:#000000;font-weight:bold;">{sym}</span></div>'
-                )
-            elif sym in KNOWN_STOCKS:
-                html_sotd += (
-                    f'<div class="ticker-badge new-pattern-badge">'
-                    f'<span style="color:#111111;font-weight:bold;">{sym}</span></div>'
-                )
-            else:
-                html_sotd += f'<div class="ticker-badge">{sym}</div>'
+            # NEW: top-20 industry glow
+            industries = sotd_ticker_industry.get(sym, [])
+            ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+            is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+            glow_style = (
+                "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+                if is_top20_industry else ""
+            )
+            html_sotd += setup_badge(sym, is_new=(sym in KNOWN_STOCKS), extra_style=glow_style)  # CHANGED
         html_sotd += "</div>"
         st.markdown(html_sotd, unsafe_allow_html=True)
     else:
