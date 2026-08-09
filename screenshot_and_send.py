@@ -153,8 +153,8 @@ SECTION_KEYWORDS = [
     #"Setup Quality",
     "Upcoming Earnings",
     "Lazy Table",
-    #"Lazy Charts",
-    "MM Count",
+    "Lazy Charts",
+    #"MM Count",
     "Stage 2 vs Stage 4",
     #"Unusual Volume",
 ]

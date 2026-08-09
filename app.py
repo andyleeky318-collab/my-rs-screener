@@ -138,7 +138,7 @@ INDUSTRIES = {
     'CMPTER-TECH SRVCS': ['PAYX', 'MSCI', 'VRSK', 'TYL', 'GDDY', 'J', 'FDS', 'AKAM', 'DBX', 'EXLS', 'KD', 'MARA', 'EEFT', 'DXC', 'CORZ', 'AVPT', 'ACN', 'CTSH', 'CDW', 'CACI', 'PSN', 'EPAM', 'DOX', 'KBR', 'GLOB', 'NSIT', 'SAIC', 'INOD'],
     'RETAIL-DPRTMNT STRS': ['DDS', 'M', 'KSS'],
     'RETAIL-DISCNT&VARI': ['DG', 'DLTR', 'FIVE', 'OLLI'],
-    'RETAIL-DRUG STORES': ['CVS', 'UNH', 'ELV', 'HUM'],
+    'RETAIL-DRUG STORES': ['IHF', 'CVS', 'UNH', 'ELV', 'HUM'],
     'UTILITY-ELCTRIC PWR': ['NEE', 'SO', 'CEG', 'DUK', 'AEP', 'SRE', 'D', 'VST', 'PEG', 'PCG', 'EXC', 'XEL', 'ED', 'EIX', 'WEC', 'ETR', 'DTE', 'FE', 'PPL', 'AEE', 'ES', 'CMS', 'NRG', 'CNP', 'LNT', 'EVRG', 'AES', 'PNW', 'OGE', 'IDA', 'POR', 'ORA', 'BKH', 'TXNM', 'NWE', 'MGEE'],
     'ELEC-POWER/EQPMT': ['GRID', 'ETN', 'GEV', 'AME', 'ROK', 'HUBB', 'RRX', 'GNRC', 'AYI', 'BDC', 'ENS', 'FLNC', 'SMR', 'ATKR', 'PBW', 'POWL', 'VICR', 'BE', 'ENVX', 'QS'],
     'TELCOM-FIBR OPTCS': ['XTL', 'FOTO', 'AAOI', 'COHR', 'CIEN', 'FN', 'LITE', 'AXTI'],
@@ -262,13 +262,13 @@ INDUSTRIES = {
     'ARGENTINA': ['ARGT', 'YPF', 'PAM', 'TGS', 'TEO', 'LOMA', 'CRESY', 'CEPU', 'BBAR', 'BMA', 'EDN', 'GGAL', 'IRS', 'SUPV'],
     'CANNABIS': ['MJ', 'CNBS', 'GRWG', 'MSOS', 'IIPR', 'CRON', 'HITI', 'SNDL', 'ACB', 'VFF', 'CGC', 'TLRY', 'OGI'],
     'DRONES': ['RDW', 'JOBY', 'UMAC', 'GD', 'TXT', 'ONDS', 'ACHR', 'DPRO', 'LHX', 'ESLT', 'AVAV', 'EH', 'KTOS', 'PRZO', 'RCAT', 'ZENA'],
-    'PRECIOUS METAL': ['GLD', 'SLV', 'PPLT', 'GDX', 'SIL', 'RGLD'],
+    'PRECIOUS METAL': ['GLD', 'SLV', 'PPLT', 'GDX', 'SIL', 'RGLD', 'PLTM', 'PALL'],
     'TRAVEL': ['ABNB', 'EXPE', 'BKNG'],
 }
 
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
-    'ESTC', 'PRU', 'RGEN', 'UBS', 'TRV', 'WEN', 'OKLO', 'IBB', 'Q', 'OUST', 'VPG', 'WOLF', 'NOK', 'HSBC', 'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
+    'PALL', 'PLTM', 'IHF', 'ESTC', 'PRU', 'RGEN', 'UBS', 'TRV', 'WEN', 'OKLO', 'IBB', 'Q', 'OUST', 'VPG', 'WOLF', 'NOK', 'HSBC', 'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
     'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EWY', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'OR', 
     'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
@@ -305,6 +305,7 @@ KNOWN_STOCKS = [
 # Ensure uniqueness
 KNOWN_STOCKS = list(set(KNOWN_STOCKS))
 
+#Solely for Deepvue
 LIME_STOCKS = [
     'CIBR', 'COPX', 'DRAM', 'GDX', 'IBIT', 'IGV', 'IHI',
     'IPAY', 'ITB', 'JETS', 'KRE', 'KWEB', 'LIT', 'MAGS',
@@ -314,7 +315,7 @@ LIME_STOCKS = [
 ]
 
 LIME_STOCKS1 = [
-    'CIBR', 'COPX', 'DRAM', 'GDX', 'IBIT', 'IGV', 'IHI', 'EWY',
+    'IHF', 'CIBR', 'COPX', 'DRAM', 'GDX', 'IBIT', 'IGV', 'IHI', 'EWY',
     'IPAY', 'ITB', 'JETS', 'KRE', 'KWEB', 'LIT', 'MAGS',
     'PBW', 'REMX', 'SHLD', 'SIL', 'SLX', 'SMH', 'TAN',
     'UFO', 'URA', 'USO', 'VTV', 'VUG', 'WGMI', 'XBI',
@@ -5994,7 +5995,7 @@ with st.spinner("Scanning for True Market Leaders (healthyPct >= 69.5%)..."):
 
 tml_count = len(tml_list)
 tml_count_color = "#FF4B4B" if tml_count == 0 else "#FFFFFF"
-st.markdown(f"#### 👑 True Market Leader = A+ Leader on weakness is a gift.(<span style='color:{tml_count_color};'>{tml_count}</span>)", unsafe_allow_html=True)
+st.markdown(f"#### 👑 True Market Leader = A+ Leader on weakness is a gift (<span style='color:{tml_count_color};'>{tml_count}</span>)", unsafe_allow_html=True)
 
 if tml_list or tml_yest:
     tml_industry_counts, tml_ticker_industry = build_leader_industry_map(tml_list, INDUSTRIES)
@@ -6005,7 +6006,7 @@ if tml_list or tml_yest:
         ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
         is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
         glow_style = (
-            "box-shadow:0 0 8px 2px #FFD700; border:1px solid #FFD700;"
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
             if is_top20_industry else ""
         )
         pct_val = tml_pct_map.get(sym, 0)
@@ -7122,12 +7123,18 @@ st.markdown(
 )
 if b_list or b_yest:
     html_b = ""
+    b_industry_counts, b_ticker_industry = build_leader_industry_map(b_list, INDUSTRIES)  # NEW
     for sym in b_list:
-        #cls = "new-pattern-badge" if sym not in b_yest else ""
-        #html_b += f'<div class="ticker-badge {cls}">{sym}</div>'
-        html_b += setup_badge(sym, is_new=(sym not in b_yest))
+        # NEW: top-20 industry glow
+        industries = b_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+            if is_top20_industry else ""
+        )
+        html_b += setup_badge(sym, is_new=(sym not in b_yest), extra_style=glow_style)  # CHANGED
     
-    # Process and append removed stocks
     removed_b = [sym for sym in b_yest if sym not in b_list]
     for sym in sorted(removed_b):
         html_b += f'<div class="ticker-badge removed-badge">{sym}</div>'
@@ -7210,21 +7217,26 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-if e2_list or e3_list or e2_yest or e3_yest:
-    if e2_list or e2_yest:
-        st.markdown(f"**2x Engulfing ({len(e2_list)}):**")
-        html_e2 = ""
-        for sym in e2_list:
-            #cls = "new-pattern-badge" if sym not in e2_yest else ""
-            #html_e2 += f'<div class="ticker-badge {cls}">{sym}</div>'
-            html_e2 += setup_badge(sym, is_new=(sym not in e2_yest))
+if e2_list or e2_yest:
+    st.markdown(f"**2x Engulfing ({len(e2_list)}):**")
+    html_e2 = ""
+    e2_industry_counts, e2_ticker_industry = build_leader_industry_map(e2_list, INDUSTRIES)  # NEW
+    for sym in e2_list:
+        # NEW: top-20 industry glow
+        industries = e2_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+            if is_top20_industry else ""
+        )
+        html_e2 += setup_badge(sym, is_new=(sym not in e2_yest), extra_style=glow_style)  # CHANGED
+    
+    removed_e2 = [sym for sym in e2_yest if sym not in e2_list]
+    for sym in sorted(removed_e2):
+        html_e2 += f'<div class="ticker-badge removed-badge">{sym}</div>'
         
-        # Process and append removed 2x engulfing stocks
-        removed_e2 = [sym for sym in e2_yest if sym not in e2_list]
-        for sym in sorted(removed_e2):
-            html_e2 += f'<div class="ticker-badge removed-badge">{sym}</div>'
-            
-        st.markdown(html_e2, unsafe_allow_html=True)
+    st.markdown(html_e2, unsafe_allow_html=True)
     
     # st.write("")
     # if len(e3_list) == 0 and len(e3_yest) == 0:
@@ -7275,26 +7287,29 @@ if not engulf_hist.empty:
     )
 
 if e3_list or e3_yest:
-    #st.write("")
     if len(e3_list) == 0 and len(e3_yest) == 0:
         st.markdown("**3x Engulfing (0):**")
-        #st.text("None") # Optional: explicit visual feedback for an empty scanner
     elif e3_list or e3_yest:
         st.markdown(f"<div style='margin-top:10px;'><b>3x Engulfing ({len(e3_list)}):</b></div>", unsafe_allow_html=True)
         html_e3 = ""
+        e3_industry_counts, e3_ticker_industry = build_leader_industry_map(e3_list, INDUSTRIES)  # NEW
         for sym in e3_list:
-            #cls = "new-pattern-badge" if sym not in e3_yest else ""
-            #html_e3 += f'<div class="ticker-badge {cls}">{sym}</div>'
-            html_e3 += setup_badge(sym, is_new=(sym not in e3_yest))
+            # NEW: top-20 industry glow
+            industries = e3_ticker_industry.get(sym, [])
+            ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+            is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+            glow_style = (
+                "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+                if is_top20_industry else ""
+            )
+            html_e3 += setup_badge(sym, is_new=(sym not in e3_yest), extra_style=glow_style)  # CHANGED
             
-        # Process and append removed 3x engulfing stocks
         removed_e3 = [sym for sym in e3_yest if sym not in e3_list]
         for sym in sorted(removed_e3):
             html_e3 += f'<div class="ticker-badge removed-badge">{sym}</div>'
             
         st.markdown(html_e3, unsafe_allow_html=True)
 else:
-    #st.info("No active setups discovered.")
     st.markdown("**3x Engulfing (0):**")
 
 if not engulf_hist.empty:
@@ -7345,14 +7360,22 @@ if pt_list or pt_yest:
     html_pt = ""
     pt_yest_set = set(pt_yest)
     current_pt_tickers = {item[0] if isinstance(item, tuple) else item for item in pt_list}
+    pt_industry_counts, pt_ticker_industry = build_leader_industry_map(sorted(current_pt_tickers), INDUSTRIES)  # NEW
     for item in pt_list:
         sym = item[0] if isinstance(item, tuple) else item
         atr_value = item[1] if isinstance(item, tuple) else None
         suffix = f"{atr_value:.1f}x" if atr_value is not None else ""
         suffix_color = "#00FF00" if (atr_value is not None and atr_value < 4) else "#888888"
-        html_pt += setup_badge(sym, is_new=(sym not in pt_yest_set), extra_suffix=suffix, extra_suffix_color=suffix_color)
+        # NEW: top-20 industry glow
+        industries = pt_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+            if is_top20_industry else ""
+        )
+        html_pt += setup_badge(sym, is_new=(sym not in pt_yest_set), extra_suffix=suffix, extra_suffix_color=suffix_color, extra_style=glow_style)  # CHANGED
     
-    # Process and append removed stocks
     removed_pt = [sym for sym in pt_yest if sym not in current_pt_tickers]
     for sym in sorted(removed_pt):
         html_pt += f'<div class="ticker-badge removed-badge">{sym}</div>'
@@ -7842,7 +7865,11 @@ with st.spinner("Scanning for Change / Breakdown of Character (Score Δ≥20)...
     )
 
 # ═══════════════════ CHANGE OF CHARACTER (Δ ≥ +20) ═══════════════════
-st.markdown(f"#### 🔀 Change of Character ({len(coc_today)})")
+st.markdown(
+    f"#### 🔀 Change of Character ({len(coc_today)}) "
+    f"<span style='color:#888; font-size:12px;'>[Grey out = 2x CoC]</span>",
+    unsafe_allow_html=True,
+)
 
 if coc_today or coc_yest:
     coc_industry_counts, coc_ticker_industry = build_leader_industry_map(coc_today, INDUSTRIES)
@@ -7853,7 +7880,7 @@ if coc_today or coc_yest:
         ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
         is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
         glow_style = (
-            "box-shadow:0 0 8px 2px #00FF00; border:1px solid #00FF00;"
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
             if is_top20_industry else ""
         )
         delta = coc_delta_map.get(sym, 0)
@@ -9056,7 +9083,7 @@ st.markdown(
         <img src="https://www.redditstatic.com/desktop2x/img/favicon/android-icon-192x192.png"
              style="width:24px; height:24px; vertical-align:middle;">
         <span style="font-size:1.5em; font-weight:600; color:#ffffff;">
-            Reddit ({len(reddit_df)})
+            Reddit
         </span>
     </div>
     """,
