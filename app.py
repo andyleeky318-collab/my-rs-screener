@@ -747,7 +747,7 @@ def render_pine_rs_table_html(rows, max_height):
         if sym in sector_etfs:
             name_bg, name_color = "#00ffff", "#000000"
         if sym in index_etfs:
-            name_bg, name_color = "#ffff00", "#ff0000"
+            name_bg, name_color = "#FFD700", "#ff0000"
 
         body_html += (
             f"<tr>"
