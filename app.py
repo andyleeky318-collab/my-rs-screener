@@ -656,6 +656,7 @@ with st.sidebar:
     show_ppp_charts = st.toggle("Show PPP Charts", value=False)
     show_gap_charts = st.toggle("Show Gap Charts", value=False)
     show_all_setups = st.toggle("Show All Setups (top-5)", value=True)
+    new_style_industry_table = st.toggle("Old/New Style", value=True)  # NEW: True = new style (KNOWN_STOCKS only), False = old style (all tickers, unchanged)
     
     if st.button("Refresh Deepvue Theme", use_container_width=True):
         # Clear the caches for BOTH functions so fresh data is requested
@@ -3439,6 +3440,8 @@ if all_data:
             ticker_sym = r["Ticker"]
             rs_score = r["RS Score"]
             ticker_price = item["Prices"].get(ticker_sym, 0)
+            if new_style_industry_table and ticker_sym not in KNOWN_STOCKS:  # NEW: new style hides non-KNOWN_STOCKS tickers
+                continue
             if ticker_sym in industry_vol_tickers.get(row["Industry"], []):
                 ticker_glow = "box-shadow:0 0 6px 2px #FF4B4B;"
             elif engulf_industry_count > 1 and ticker_sym in _engulf_today_set:
@@ -3512,6 +3515,8 @@ if all_data:
         # ================================
         cloud_21ema_html = ""
         sorted_cloud_21ema = sorted(item["Cloud21EMA"], key=lambda sym: rs_lookup.get(sym, 0), reverse=True)
+        if new_style_industry_table:  # NEW: new style hides non-KNOWN_STOCKS tickers
+            sorted_cloud_21ema = [s for s in sorted_cloud_21ema if s in KNOWN_STOCKS]
         top_5_cloud_21ema = sorted_cloud_21ema if show_all_setups else sorted_cloud_21ema[:5]
 
         for cloud_sym in top_5_cloud_21ema:
@@ -3545,6 +3550,8 @@ if all_data:
         # ================================
         cloud_wick_html = ""
         sorted_cloud_wick = sorted(item["CloudWick"], key=lambda sym: rs_lookup.get(sym, 0), reverse=True)
+        if new_style_industry_table:  # NEW: new style hides non-KNOWN_STOCKS tickers
+            sorted_cloud_wick = [s for s in sorted_cloud_wick if s in KNOWN_STOCKS]
         top_5_cloud_wick = sorted_cloud_wick if show_all_setups else sorted_cloud_wick[:5]
 
         for cloud_sym in top_5_cloud_wick:
@@ -3577,6 +3584,8 @@ if all_data:
         # ================================
         ma50_bounce_html = ""
         sorted_ma50_bounce = sorted(item["MA50Bounce"], key=lambda sym: rs_lookup.get(sym, 0), reverse=True)
+        if new_style_industry_table:  # NEW: new style hides non-KNOWN_STOCKS tickers
+            sorted_ma50_bounce = [s for s in sorted_ma50_bounce if s in KNOWN_STOCKS]
         top_5_ma50_bounce = sorted_ma50_bounce if show_all_setups else sorted_ma50_bounce[:5]
 
         for cloud_sym in top_5_ma50_bounce:
