@@ -10365,7 +10365,7 @@ if master_rows:
     section_cols = list(SECTION_DEFINITIONS.keys())
     extra_cols = ["Volatility", "Distribution"]  # appended at the very end, not counted
 
-    # Columns that should get a white divider line on their RIGHT edge,
+    # Columns that should get a divider line on their RIGHT edge,
     # marking the end of a logical group. No horizontal lines added.
     GROUP_DIVIDER_AFTER = {
         "TML",                 # ends: Minervini / RS Leader / True Market Leader
@@ -10377,6 +10377,7 @@ if master_rows:
     # is never subject to the table's border-collapse conflict resolution,
     # so it can't be swallowed by the leaked nth-child(7) red border rule.
     DIVIDER_STYLE = "box-shadow: inset -3px 0 0 0 #ffffff;"
+    TML_DIVIDER_STYLE = "box-shadow: inset -3px 0 0 0 #ff0000;"
     THICK_DIVIDER_STYLE = "box-shadow: inset -3px 0 0 0 #ffffff;"  # NEW: Count | Industry separator
 
     rows_html = ""
@@ -10390,7 +10391,7 @@ if master_rows:
             if row["Top20 Industry"] else ""
         )
         section_cells = "".join(
-            f"<td style='text-align:center;{DIVIDER_STYLE if col in GROUP_DIVIDER_AFTER else ''}'>"
+            f"<td style='text-align:center;{TML_DIVIDER_STYLE if col == 'TML' else DIVIDER_STYLE if col in GROUP_DIVIDER_AFTER else ''}'>"
             f"{'<span style=\"color:#00FF00;font-weight:bold;\">✔</span>' if row[col] else ''}"
             f"</td>"
             for col in section_cols
@@ -10412,7 +10413,7 @@ if master_rows:
 
     header_cells = "".join(
         f"<th style='text-align:center;font-size:11px;white-space:nowrap;padding:4px 6px;"
-        f"{DIVIDER_STYLE if col in GROUP_DIVIDER_AFTER else ''}'>{col}</th>"
+        f"{TML_DIVIDER_STYLE if col == 'TML' else DIVIDER_STYLE if col in GROUP_DIVIDER_AFTER else ''}'>{col}</th>"
         for col in section_cols
     )
     extra_header_cells = "".join(
