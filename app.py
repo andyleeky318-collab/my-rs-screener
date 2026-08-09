@@ -4756,7 +4756,7 @@ if quad_points:
     # ── Chart layout ──────────────────────────────────────────────────────────
     fig.update_layout(
         title=dict(
-            text="Industry RS — Weekly vs Monthly",
+            text="Industry RS — Weekly vs Monthly (Long Term)",
             x=0.5,
             xanchor="center",
             font=dict(size=16, color=quad_title_color),
@@ -4850,7 +4850,7 @@ if breadth_total > 0:
 
         st.markdown(
             f"<div style='padding:8px 0 4px; width:100%;'>"
-            f"<div style='text-align: center; font-size: 30px; font-weight: bold; color: #ffffff; margin-bottom: 18px;'>Stage</div>"
+            f"<div style='text-align: center; font-size: 30px; font-weight: bold; color: #ffffff; margin-bottom: 18px;'>Stage = Long Term</div>"
             f"<div style='width:100%;height:12px;display:flex;"
             f"overflow:hidden;border-radius:999px;'>{bar_segs}</div>"
             f"<div style='display:flex; width:100%; margin-top:10px;'>"
@@ -4938,6 +4938,7 @@ st.markdown(
         <span style="color:{pct_color}; font-weight:bold;">
             ({pct_above_ema200:.2f}%)
         </span>
+        <span style="color:#888; font-size:12px;">(Long term)</span>
     </h4>
     """,
     unsafe_allow_html=True
@@ -8447,7 +8448,11 @@ def download_all_industry_stocks_data(stocks_tuple, known_ticker_dfs):
 
 
 st.markdown("---")
-st.markdown(f"#### Pie Chart")
+st.markdown(
+    "#### Pie Chart "
+    "<span style='color:#888; font-size:12px;'>(Short term + Long term)</span>",
+    unsafe_allow_html=True,
+)
 
 def compute_rsi(close_series, period=14):
     """Standard Wilder's RSI."""
@@ -8572,7 +8577,11 @@ def _etf_pie_chart():
 timed("ETF Pie Chart", _etf_pie_chart)
 
 st.markdown("---")
-st.markdown(f"#### ETF Ratio")
+st.markdown(
+    "#### ETF Ratio "
+    "<span style='color:#888; font-size:12px;'>(Long term)</span>",
+    unsafe_allow_html=True,
+)
 
 def _relative_etf_ratios():
     ratio_pairs = (
