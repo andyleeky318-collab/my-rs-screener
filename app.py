@@ -722,18 +722,18 @@ def render_pine_rs_table_html(rows, max_height):
         return "-" if v is None or pd.isna(v) else f"{v:.2f}%"
 
     def rs_cell_style(v):
-        base = "padding:0px 4px;line-height:1.1;text-align:right;font-size:10px;border:1px solid #ccc;white-space:nowrap;"
+        base = "padding:1px 5px;text-align:right;font-size:9px;border:1px solid #ccc;white-space:nowrap;"
         if v is not None and not pd.isna(v) and v > 70:
             return base + "background:rgba(255, 183, 197, 0.8);color:#000000;"
         return base + "background:#ffffff;color:#000000;"
 
     header_html = (
         "<tr>"
-        "<th style='padding:0px 4px;line-height:1.1;background:#ffffff;color:#000000;text-align:left;font-size:10px;border:1px solid #ccc;white-space:nowrap;'></th>"
-        "<th style='padding:0px 4px;line-height:1.1;background:#ffffff;color:#000000;text-align:center;font-size:10px;border:1px solid #ccc;white-space:nowrap;'>RS(5)</th>"
-        "<th style='padding:0px 4px;line-height:1.1;background:#0000ff;color:#ffffff;text-align:center;font-size:10px;border:1px solid #ccc;white-space:nowrap;'>RS(21)*</th>"
-        "<th style='padding:0px 4px;line-height:1.1;background:#ffffff;color:#000000;text-align:center;font-size:10px;border:1px solid #ccc;white-space:nowrap;'>RS(63)</th>"
-        "<th style='padding:0px 4px;line-height:1.1;background:#ffffff;color:#000000;text-align:center;font-size:10px;border:1px solid #ccc;white-space:nowrap;'>RS(126)</th>"
+        "<th style='padding:1px 5px;background:#ffffff;color:#000000;text-align:left;font-size:9px;border:1px solid #ccc;white-space:nowrap;'></th>"
+        "<th style='padding:1px 5px;background:#ffffff;color:#000000;text-align:center;font-size:9px;border:1px solid #ccc;white-space:nowrap;'>RS(5)</th>"
+        "<th style='padding:1px 5px;background:#0000ff;color:#ffffff;text-align:center;font-size:9px;border:1px solid #ccc;white-space:nowrap;'>RS(21)*</th>"
+        "<th style='padding:1px 5px;background:#ffffff;color:#000000;text-align:center;font-size:9px;border:1px solid #ccc;white-space:nowrap;'>RS(63)</th>"
+        "<th style='padding:1px 5px;background:#ffffff;color:#000000;text-align:center;font-size:9px;border:1px solid #ccc;white-space:nowrap;'>RS(126)</th>"
         "</tr>"
     )
 
@@ -751,7 +751,7 @@ def render_pine_rs_table_html(rows, max_height):
 
         body_html += (
             f"<tr>"
-            f"<td style='padding:0px 4px;line-height:1.1;background:{name_bg};color:{name_color};text-align:left;font-size:10px;border:1px solid #ccc;font-weight:bold;white-space:nowrap;'>{sym}</td>"
+            f"<td style='padding:1px 5px;background:{name_bg};color:{name_color};text-align:left;font-size:9px;border:1px solid #ccc;font-weight:bold;white-space:nowrap;'>{sym}</td>"
             f"<td style='{rs_cell_style(r['RS5'])}'>{fmt(r['RS5'])}</td>"
             f"<td style='{rs_cell_style(r['RS21'])}'>{fmt(r['RS21'])}</td>"
             f"<td style='{rs_cell_style(r['RS63'])}'>{fmt(r['RS63'])}</td>"
