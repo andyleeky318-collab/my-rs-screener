@@ -654,7 +654,7 @@ def compute_breadth_and_stage(stocks_list, ticker_dfs, benchmark_df_input):
 # ============================================================
 PINE_RS_TICKERS = [
     'QQQ', 'QQQE', 'RSP', 'ITB', 'IWM', 'XLV', 'XLE', 'XLF', 'PBW', 'XLB',
-    'XLP', 'XLU', 'XLY', 'XLK', 'XLC', 'XLI', 'XTL', 'SMH', 'SLV', 'NLR',
+    'XLP', 'XLU', 'XLY', 'XLK', 'XLC', 'XLI', 'FOTO', 'SMH', 'SLV', 'NLR',
     'TAN', 'IBIT', 'JETS', 'GLD', 'COPX', 'UFO', 'KWEB', 'CIBR', 'IGV', 'USO',
     'MAGS', 'ITA', 'IYT', 'IHI', 'XBI', 'LIT', 'WGMI', 'DRAM', 'REMX'
 ]
