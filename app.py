@@ -3480,6 +3480,8 @@ if all_data:
         #cloud_html = "".join([f'<div class="ticker-badge cloud-badge">{c}</div>' for c in item["Cloud"]])
         cloud_html = ""
         sorted_cloud = sorted(item["Cloud"], key=lambda sym: rs_lookup.get(sym, 0), reverse=True)
+        if new_style_industry_table:  # NEW: new style hides non-KNOWN_STOCKS tickers
+            sorted_cloud = [s for s in sorted_cloud if s in KNOWN_STOCKS]
 
         # --- SLICE LOGIC: Slices the sorted array to isolate the top 5 items only ---
         top_5_cloud = sorted_cloud if show_all_setups else sorted_cloud[:5]
