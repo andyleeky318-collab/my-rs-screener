@@ -4850,7 +4850,7 @@ if breadth_total > 0:
 
         st.markdown(
             f"<div style='padding:8px 0 4px; width:100%;'>"
-            f"<div style='text-align: center; font-size: 30px; font-weight: bold; color: #ffffff; margin-bottom: 18px;'>Stage = Long Term</div>"
+            f"<div style='text-align: center; font-size: 30px; font-weight: bold; color: #ffffff; margin-bottom: 18px;'>Stage (Long Term)</div>"
             f"<div style='width:100%;height:12px;display:flex;"
             f"overflow:hidden;border-radius:999px;'>{bar_segs}</div>"
             f"<div style='display:flex; width:100%; margin-top:10px;'>"
@@ -7657,7 +7657,7 @@ def fetch_wide_moat_tickers(tickers_tuple):
     return moat_set
 
 # --- 6. VALUE TRAP (Full Horizontal Row Below PowerTrend Not Extended) ---
-value_trap_count_color = "#FF6B6B" if len(vt_list) == 0 else "inherit"
+value_trap_count_color = "#00FF00" if len(vt_list) == 0 else "inherit"
 st.markdown(
     f"<h4>⚠️ Value Trap = MAG7 & MOAT <span style='color:{value_trap_count_color}; font-weight:bold;'>({len(vt_list)})</span></h4>",
     unsafe_allow_html=True
@@ -9193,7 +9193,7 @@ def fetch_spikepanel_surge_tickers(window="24h"):
 
 spikepanel_tickers = fetch_spikepanel_surge_tickers()
 
-st.markdown(f"#### 🧵 X.com ({len(spikepanel_tickers)})")
+st.markdown(f"#### 🧵 X.com")#({len(spikepanel_tickers)})
 
 if spikepanel_tickers:
     badges_html = "<div style='display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;'>"
@@ -9371,7 +9371,11 @@ def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=25):
 # ── Render section ────────────────────────────────────────────────────────
 #st.markdown("---")
 st.write("")
-st.markdown("#### 🎓 IBD (Youtube Live)")
+st.markdown(
+    "#### 🎓 IBD "
+    "<span style='color:#888; font-size:12px;'>(Youtube Live)</span>",
+    unsafe_allow_html=True,
+)
 
 with st.spinner("Checking IBD's latest Stock Market Today video..."):
     ibd_result = timed(
@@ -9699,7 +9703,11 @@ def fetch_ibd_stock_of_the_day(known_universe_tuple, max_articles=10):
 # ── Render section ────────────────────────────────────────────────────────
 #st.markdown("---")
 st.write("")
-st.markdown("#### 🎓 IBD (Stock Of The Day)")
+st.markdown(
+    "#### 🎓 IBD "
+    "<span style='color:#888; font-size:12px;'>(Stock Of The Day)</span>",
+    unsafe_allow_html=True,
+)
 
 with st.spinner("Fetching IBD Stock Of The Day..."):
     ibd_sotd_result = timed(
@@ -10196,7 +10204,7 @@ with st.spinner("Fetching upcoming earnings..."):
     )
 
 total_week_count = len(weekly_earnings_df) if weekly_earnings_df is not None and not weekly_earnings_df.empty else 0
-week_label = f"{week_monday.strftime('%b %d')} – {week_friday.strftime('%b %d, %Y')}" if week_monday else ""
+week_label = f"{week_monday.strftime('%b %d')} – {week_friday.strftime('%b %d')}" if week_monday else ""
 st.markdown(f"#### 📅 Upcoming Earnings = {week_label} ({total_week_count})")
 
 earnings_gold_tickers = set(trending_today) | (
