@@ -697,8 +697,18 @@ def compute_pine_rs_table(tickers_tuple, benchmark_symbol="SPY"):
         rs126 = _percentrank_last(ratio, 126)
         rows.append({"Ticker": t, "RS5": rs5, "RS21": rs21, "RS63": rs63, "RS126": rs126})
 
-    # Sort descending by RS(21) — matches Pine default sort_key_options = 'P2'
-    rows.sort(key=lambda r: (r["RS21"] if not pd.isna(r["RS21"]) else -1), reverse=True)
+    # Sort descending by RS(21), tie-broken by RS63 -> RS126 -> RS5
+    # (fixes ties like SLV/NLR/GLD/COPX/IGV all at 100% RS21 — the one with
+    # stronger RS63/RS126/RS5 should rank higher, matching TradingView)
+    def _sort_key(r):
+        return (
+            r["RS21"]  if not pd.isna(r["RS21"])  else -1,
+            r["RS63"]  if not pd.isna(r["RS63"])  else -1,
+            r["RS126"] if not pd.isna(r["RS126"]) else -1,
+            r["RS5"]   if not pd.isna(r["RS5"])   else -1,
+        )
+
+    rows.sort(key=_sort_key, reverse=True)
     return rows
 
 def render_pine_rs_table_html(rows, max_height):
