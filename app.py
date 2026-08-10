@@ -3715,27 +3715,26 @@ if all_data:
             sorted_ma50_bounce = [s for s in sorted_ma50_bounce if s in KNOWN_STOCKS]
         top_5_ma50_bounce = sorted_ma50_bounce if show_all_setups else sorted_ma50_bounce[:5]
 
-        for idx, cloud_sym in enumerate(top_5_ma50_bounce):
+        for cloud_sym in top_5_ma50_bounce:
             cloud_rs = rs_lookup.get(cloud_sym, 0)
-            border_style = "border-bottom:3px solid #ffffff;" if idx == len(top_5_ma50_bounce) - 1 else ""
 
             if cloud_sym in LIME_STOCKS1:
                 ma50_bounce_html += (
-                    f'<div class="ticker-badge lime-badge" style="{border_style}">'
+                    f'<div class="ticker-badge lime-badge">'
                     f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{cloud_sym}</span>'
                     f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{cloud_rs:.0f}</span>'
                     f'</div>'
                 )
             elif cloud_sym in KNOWN_STOCKS:
                 ma50_bounce_html += (
-                    f'<div class="ticker-badge orange-badge" style="{border_style}">'
+                    f'<div class="ticker-badge orange-badge">'
                     f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{cloud_sym}</span>'
                     f'<span class="ticker-rs" style="color: #004d26; font-weight: bold;">{cloud_rs:.0f}</span>'
                     f'</div>'
                 )
             else:
                 ma50_bounce_html += (
-                    f'<div class="ticker-badge" style="{border_style}">'
+                    f'<div class="ticker-badge">'
                     f'<span class="ticker-name">{cloud_sym}</span>'
                     f'<span class="ticker-rs">{cloud_rs:.0f}</span>'
                     f'</div>'
@@ -7194,7 +7193,7 @@ if early_bull_no_filter_list:
             "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
             if is_top20_industry else ""
         )
-        text_color = "#378ADD" if sym in early_bull_set else None   # NEW
+        text_color = "#C71585" if sym in early_bull_set else None   # NEW
 
         html_eb_nf += setup_badge(sym, extra_style=glow_style, extra_text_color=text_color)
 
