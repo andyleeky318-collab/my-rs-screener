@@ -8716,6 +8716,7 @@ def _relative_etf_ratios():
         ("IWM", "QQQ"),
         ("VUG", "VTV"),
         ("RSP", "SPY"),
+        ("SMH", "IGV"),
     )
 
     #st.markdown("#### Relative ETF Ratios (1 Year)")
