@@ -10994,7 +10994,48 @@ if isinstance(_setup_avgrank_hist, pd.DataFrame) and not _setup_avgrank_hist.emp
 else:
     st.caption("**Setup Avg Rank** — no data")
 
-#st.markdown("---")
+st.markdown("---")
 
+st.markdown("---")
+st.markdown("#### 📅 Economic Calendar (This Week)")
 
+@st.cache_data(ttl=21600)
+def fetch_economic_calendar():
+    fmp_key = st.secrets.get("FMP_API_KEY")
+    if not fmp_key:
+        return pd.DataFrame()
+    today = datetime.date.today()
+    end = today + datetime.timedelta(days=7)
+    try:
+        resp = requests.get(
+            "https://financialmodelingprep.com/api/v3/economic_calendar",
+            params={"from": str(today), "to": str(end), "apikey": fmp_key},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return pd.DataFrame(data) if isinstance(data, list) else pd.DataFrame()
+    except Exception as e:
+        st.warning(f"Economic calendar fetch error: {e}")
+        return pd.DataFrame()
 
+econ_df = fetch_economic_calendar()
+
+ECON_KEYWORDS = [
+    "CPI", "PPI", "Nonfarm Payroll", "Nonfarm", "Michigan", "Consumer Sentiment",
+    "Fed Interest Rate", "FOMC", "Fed Funds", "Unemployment Rate",
+]
+
+if not econ_df.empty and "event" in econ_df.columns:
+    mask = econ_df["event"].str.contains("|".join(ECON_KEYWORDS), case=False, na=False)
+    if "country" in econ_df.columns:
+        mask &= econ_df["country"].isin(["US", "USD", "United States"])
+    filtered = econ_df[mask].sort_values("date").reset_index(drop=True)
+
+    if filtered.empty:
+        st.info("No major economic events this week.")
+    else:
+        show_cols = [c for c in ["date", "event", "previous", "estimate", "actual", "impact"] if c in filtered.columns]
+        st.dataframe(filtered[show_cols], use_container_width=True, hide_index=True)
+else:
+    st.info("Economic calendar data unavailable (check FMP_API_KEY / plan tier).")
