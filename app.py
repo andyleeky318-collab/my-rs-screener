@@ -8644,7 +8644,8 @@ def _etf_pie_chart():
                     hovertemplate='%{label}<br>Daily Change: %{text}<br>Size: %{value:.2f}B<extra></extra>'
                 )]
             )
-            fig.update_traces(textfont_size=11, pull=[0.02] * len(labels))
+            text_sizes = [12 if sym != 'XLB' else 11 for sym in labels]
+            fig.update_traces(textfont=dict(size=text_sizes), pull=[0.02] * len(labels))
 
             positive_count = sum(1 for change in etf_changes.values() if change > 0)
             fig.update_layout(
