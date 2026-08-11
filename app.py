@@ -11040,17 +11040,12 @@ ECON_KEYWORDS = [
 ]
 
 if not econ_df.empty and "event" in econ_df.columns:
-    # Filter for US events (USD)
-    mask = econ_df["country"].isin(["USD", "US", "United States"])
-    
-    # Filter for high impact or key economic keywords
-    keyword_mask = econ_df["event"].str.contains("|".join(ECON_KEYWORDS), case=False, na=False)
-    high_impact_mask = econ_df["impact"].str.lower() == "high"
-    
-    filtered = econ_df[mask & (keyword_mask | high_impact_mask)].sort_values("date").reset_index(drop=True)
+    # Filter strictly for US and High Impact events only
+    mask = econ_df["country"].isin(["USD", "US", "United States"]) & (econ_df["impact"].str.lower() == "high")
+    filtered = econ_df[mask].sort_values("date").reset_index(drop=True)
 
     if filtered.empty:
-        st.info("No major US economic events scheduled for this week.")
+        st.info("No high-impact US economic events scheduled for this week.")
     else:
         show_cols = [c for c in ["date", "event", "previous", "estimate", "actual", "impact"] if c in filtered.columns]
         st.dataframe(filtered[show_cols], use_container_width=True, hide_index=True)
