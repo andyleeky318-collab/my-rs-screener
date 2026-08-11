@@ -10439,6 +10439,63 @@ if not st.secrets.get("FINNHUB_API_KEY"):
 else:
     render_weekly_earnings_grid(weekly_earnings_df, week_monday, week_friday, gold_tickers=earnings_gold_tickers)
 
+st.markdown("---")
+st.markdown("#### 📅 Economic Calendar (This Week)")
+
+@st.cache_data(ttl=3600)  # Refresh hourly to catch new releases
+def fetch_economic_calendar():
+    # Free live JSON feed for the current week's economic calendar
+    url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        
+        if not isinstance(data, list):
+            return pd.DataFrame()
+            
+        records = []
+        for item in data:
+            raw_date = item.get("date", "")
+            # Extract date (YYYY-MM-DD)
+            formatted_date = raw_date[:10] if len(raw_date) >= 10 else raw_date
+            
+            records.append({
+                "date": formatted_date,
+                "event": item.get("title", ""),
+                "country": item.get("country", ""),
+                "previous": item.get("previous", "") or "-",
+                "estimate": item.get("forecast", "") or "-",
+                "actual": item.get("actual", "") or "-",
+                "impact": item.get("impact", "")
+            })
+            
+        return pd.DataFrame(records)
+    except Exception as e:
+        st.warning(f"Economic calendar fetch error: {e}")
+        return pd.DataFrame()
+
+econ_df = fetch_economic_calendar()
+
+ECON_KEYWORDS = [
+    "CPI", "PPI", "Nonfarm", "Payroll", "Michigan", "Sentiment",
+    "Fed", "FOMC", "Unemployment", "GDP", "Retail Sales", "PMI"
+]
+
+if not econ_df.empty and "event" in econ_df.columns:
+    # Filter strictly for US and High Impact events only
+    mask = econ_df["country"].isin(["USD", "US", "United States"]) & (econ_df["impact"].str.lower() == "high")
+    filtered = econ_df[mask].sort_values("date").reset_index(drop=True)
+
+    if filtered.empty:
+        st.info("No high-impact US economic events scheduled for this week.")
+    else:
+        show_cols = [c for c in ["date", "event", "previous", "estimate", "actual", "impact"] if c in filtered.columns]
+        st.dataframe(filtered[show_cols], use_container_width=True, hide_index=True)
+else:
+    st.info("Economic calendar data currently unavailable.")
 
 st.markdown("---")
 st.markdown("#### 🔎 Volatility Explanation Panel (Massive.com)")
@@ -10994,60 +11051,3 @@ if isinstance(_setup_avgrank_hist, pd.DataFrame) and not _setup_avgrank_hist.emp
 else:
     st.caption("**Setup Avg Rank** — no data")
 
-st.markdown("---")
-st.markdown("#### 📅 Economic Calendar (This Week)")
-
-@st.cache_data(ttl=3600)  # Refresh hourly to catch new releases
-def fetch_economic_calendar():
-    # Free live JSON feed for the current week's economic calendar
-    url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    
-    try:
-        resp = requests.get(url, headers=headers, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        
-        if not isinstance(data, list):
-            return pd.DataFrame()
-            
-        records = []
-        for item in data:
-            raw_date = item.get("date", "")
-            # Extract date (YYYY-MM-DD)
-            formatted_date = raw_date[:10] if len(raw_date) >= 10 else raw_date
-            
-            records.append({
-                "date": formatted_date,
-                "event": item.get("title", ""),
-                "country": item.get("country", ""),
-                "previous": item.get("previous", "") or "-",
-                "estimate": item.get("forecast", "") or "-",
-                "actual": item.get("actual", "") or "-",
-                "impact": item.get("impact", "")
-            })
-            
-        return pd.DataFrame(records)
-    except Exception as e:
-        st.warning(f"Economic calendar fetch error: {e}")
-        return pd.DataFrame()
-
-econ_df = fetch_economic_calendar()
-
-ECON_KEYWORDS = [
-    "CPI", "PPI", "Nonfarm", "Payroll", "Michigan", "Sentiment",
-    "Fed", "FOMC", "Unemployment", "GDP", "Retail Sales", "PMI"
-]
-
-if not econ_df.empty and "event" in econ_df.columns:
-    # Filter strictly for US and High Impact events only
-    mask = econ_df["country"].isin(["USD", "US", "United States"]) & (econ_df["impact"].str.lower() == "high")
-    filtered = econ_df[mask].sort_values("date").reset_index(drop=True)
-
-    if filtered.empty:
-        st.info("No high-impact US economic events scheduled for this week.")
-    else:
-        show_cols = [c for c in ["date", "event", "previous", "estimate", "actual", "impact"] if c in filtered.columns]
-        st.dataframe(filtered[show_cols], use_container_width=True, hide_index=True)
-else:
-    st.info("Economic calendar data currently unavailable.")
