@@ -10444,7 +10444,6 @@ st.markdown("#### 📅 Economic Calendar (This Week)")
 
 @st.cache_data(ttl=3600)  # Refresh hourly to catch new releases
 def fetch_economic_calendar():
-    # Free live JSON feed for the current week's economic calendar
     url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
     headers = {"User-Agent": "Mozilla/5.0"}
     
@@ -10459,8 +10458,11 @@ def fetch_economic_calendar():
         records = []
         for item in data:
             raw_date = item.get("date", "")
-            # Extract date (YYYY-MM-DD)
-            formatted_date = raw_date[:10] if len(raw_date) >= 10 else raw_date
+            try:
+                dt = datetime.date.fromisoformat(raw_date[:10])
+                formatted_date = dt.strftime("%Y-%m-%d (%A)")
+            except Exception:
+                formatted_date = raw_date[:10]
             
             records.append({
                 "date": formatted_date,
