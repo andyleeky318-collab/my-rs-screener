@@ -10997,206 +10997,62 @@ else:
 st.markdown("---")
 st.markdown("#### 📅 Economic Calendar (This Week)")
 
-# -------------------------------------------------------------------
-# Primary: FRED API (Federal Reserve Bank of St. Louis)
-# -------------------------------------------------------------------
-def _fetch_from_fred(api_key: str) -> pd.DataFrame:
-    """Fetches key macroeconomic series release dates & values via FRED."""
-    # Series IDs for major indicators
-    series_map = {
-        "CPI": "CPIAUCSL",
-        "PPI": "PPIACO",
-        "Unemployment Rate": "UNRATE",
-        "Fed Interest Rate": "FEDFUNDS",
-    }
-    today = datetime.date.today()
-    start_date = today - datetime.timedelta(days=30) # Capture latest release
-
-    records = []
-    for event_name, series_id in series_map.items():
-        url = "https://api.stlouisfed.org/fred/series/observations"
-        params = {
-            "series_id": series_id,
-            "api_key": api_key,
-            "file_type": "json",
-            "observation_start": str(start_date),
-            "sort_order": "desc",
-            "limit": 2
-        }
-        resp = requests.get(url, params=params, timeout=10)
-        if resp.status_code == 200:
-            obs = resp.json().get("observations", [])
-            if obs:
-                latest = obs[0]
-                prev = obs[1]["value"] if len(obs) > 1 else None
-                records.append({
-                    "date": latest.get("date"),
-                    "event": f"US {event_name}",
-                    "previous": prev,
-                    "estimate": None,
-                    "actual": latest.get("value"),
-                    "impact": "High",
-                    "country": "US"
-                })
-    return pd.DataFrame(records)
-
-
-# -------------------------------------------------------------------
-# Fallback 1: Alpha Vantage (Economic Indicators)
-# -------------------------------------------------------------------
-def _fetch_from_alpha_vantage(api_key: str) -> pd.DataFrame:
-    """Fetches monthly economic indicators (CPI/PPI) from Alpha Vantage."""
-    indicators = [("CPI", "CPI"), ("DURABLE_GOODS", "Durable Goods Orders")]
-    records = []
-    for function_id, label in indicators:
-        url = "https://www.alphavantage.co/query"
-        params = {
-            "function": function_id,
-            "interval": "monthly",
-            "apikey": api_key
-        }
-        resp = requests.get(url, params=params, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json().get("data", [])
-            if data:
-                latest = data[0]
-                prev = data[1]["value"] if len(data) > 1 else None
-                records.append({
-                    "date": latest.get("date"),
-                    "event": f"US {label}",
-                    "previous": prev,
-                    "estimate": None,
-                    "actual": latest.get("value"),
-                    "impact": "High",
-                    "country": "US"
-                })
-    return pd.DataFrame(records)
-
-
-# -------------------------------------------------------------------
-# Fallback 2: BLS API (U.S. Bureau of Labor Statistics)
-# -------------------------------------------------------------------
-def _fetch_from_bls(api_key: str) -> pd.DataFrame:
-    """Fetches latest CPI/PPI monthly indices directly from BLS."""
-    url = "https://api.bls.gov/publicAPI/v2/timeseries/data/"
-    headers = {"Content-Type": "application/json"}
-    payload = {
-        "seriesid": ["CUUR0000SA0", "WPSFD4"],  # CPI-U and PPI Finished Goods
-        "startyear": str(datetime.date.today().year - 1),
-        "endyear": str(datetime.date.today().year),
-        "registrationkey": api_key
-    }
-    resp = requests.post(url, json=payload, headers=headers, timeout=10)
-    records = []
-    if resp.status_code == 200:
-        series_data = resp.json().get("Results", {}).get("series", [])
-        for series in series_data:
-            sid = series.get("seriesID")
-            name = "US CPI" if sid == "CUUR0000SA0" else "US PPI"
-            item_data = series.get("data", [])
-            if item_data:
-                latest = item_data[0]
-                prev = item_data[1]["value"] if len(item_data) > 1 else None
-                records.append({
-                    "date": f"{latest.get('year')}-{latest.get('period')[1:]}-01",
-                    "event": name,
-                    "previous": prev,
-                    "estimate": None,
-                    "actual": latest.get("value"),
-                    "impact": "High",
-                    "country": "US"
-                })
-    return pd.DataFrame(records)
-
-
-# -------------------------------------------------------------------
-# Fallback 3: ForexFactory Free Public RSS/JSON Feed (No Key Required)
-# -------------------------------------------------------------------
-def _fetch_from_forexfactory() -> pd.DataFrame:
-    """Fetches real-time weekly economic calendar directly without needing an API Key."""
-    url = "https://nfp.ourwebpic.com/json/calendar.json"  # Public mirrored feed
-    resp = requests.get(url, timeout=10)
-    if resp.status_code == 200:
-        data = resp.json()
-        df = pd.DataFrame(data)
-        if not df.empty:
-            df = df.rename(columns={
-                "title": "event",
-                "country": "country",
-                "date": "date",
-                "impact": "impact",
-                "forecast": "estimate"
-            })
-            return df
-    return pd.DataFrame()
-
-
-# -------------------------------------------------------------------
-# Main Cached Orchestrator
-# -------------------------------------------------------------------
-@st.cache_data(ttl=21600)
+@st.cache_data(ttl=3600)  # Refresh hourly to catch new releases
 def fetch_economic_calendar():
-    # 1. Try FRED (Primary)
-    fred_key = st.secrets.get("FRED_API_KEY")
-    if fred_key:
-        try:
-            df = _fetch_from_fred(fred_key)
-            if not df.empty:
-                return df
-        except Exception as e:
-            st.warning(f"FRED fetch failed: {e}")
-
-    # 2. Fallback 1: Alpha Vantage
-    av_key = st.secrets.get("ALPHA_VANTAGE_API_KEY")
-    if av_key:
-        try:
-            df = _fetch_from_alpha_vantage(av_key)
-            if not df.empty:
-                return df
-        except Exception as e:
-            st.warning(f"Alpha Vantage fetch failed: {e}")
-
-    # 3. Fallback 2: BLS
-    bls_key = st.secrets.get("BLS_API_KEY")
-    if bls_key:
-        try:
-            df = _fetch_from_bls(bls_key)
-            if not df.empty:
-                return df
-        except Exception as e:
-            st.warning(f"BLS fetch failed: {e}")
-
-    # 4. Fallback 3: ForexFactory (No key required)
+    # Free live JSON feed for the current week's economic calendar
+    url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    
     try:
-        df = _fetch_from_forexfactory()
-        if not df.empty:
-            return df
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        
+        if not isinstance(data, list):
+            return pd.DataFrame()
+            
+        records = []
+        for item in data:
+            raw_date = item.get("date", "")
+            # Extract date (YYYY-MM-DD)
+            formatted_date = raw_date[:10] if len(raw_date) >= 10 else raw_date
+            
+            records.append({
+                "date": formatted_date,
+                "event": item.get("title", ""),
+                "country": item.get("country", ""),
+                "previous": item.get("previous", "") or "-",
+                "estimate": item.get("forecast", "") or "-",
+                "actual": item.get("actual", "") or "-",
+                "impact": item.get("impact", "")
+            })
+            
+        return pd.DataFrame(records)
     except Exception as e:
-        st.warning(f"ForexFactory calendar fetch failed: {e}")
+        st.warning(f"Economic calendar fetch error: {e}")
+        return pd.DataFrame()
 
-    return pd.DataFrame()
-
-
-# -------------------------------------------------------------------
-# Display Logic
-# -------------------------------------------------------------------
 econ_df = fetch_economic_calendar()
 
 ECON_KEYWORDS = [
-    "CPI", "PPI", "Nonfarm Payroll", "Nonfarm", "Michigan", "Consumer Sentiment",
-    "Fed Interest Rate", "FOMC", "Fed Funds", "Unemployment Rate",
+    "CPI", "PPI", "Nonfarm", "Payroll", "Michigan", "Sentiment",
+    "Fed", "FOMC", "Unemployment", "GDP", "Retail Sales", "PMI"
 ]
 
 if not econ_df.empty and "event" in econ_df.columns:
-    mask = econ_df["event"].str.contains("|".join(ECON_KEYWORDS), case=False, na=False)
-    if "country" in econ_df.columns:
-        mask &= econ_df["country"].isin(["US", "USD", "United States"])
-    filtered = econ_df[mask].sort_values("date").reset_index(drop=True)
+    # Filter for US events (USD)
+    mask = econ_df["country"].isin(["USD", "US", "United States"])
+    
+    # Filter for high impact or key economic keywords
+    keyword_mask = econ_df["event"].str.contains("|".join(ECON_KEYWORDS), case=False, na=False)
+    high_impact_mask = econ_df["impact"].str.lower() == "high"
+    
+    filtered = econ_df[mask & (keyword_mask | high_impact_mask)].sort_values("date").reset_index(drop=True)
 
     if filtered.empty:
-        st.info("No major economic events found.")
+        st.info("No major US economic events scheduled for this week.")
     else:
         show_cols = [c for c in ["date", "event", "previous", "estimate", "actual", "impact"] if c in filtered.columns]
         st.dataframe(filtered[show_cols], use_container_width=True, hide_index=True)
 else:
-    st.info("Economic calendar data unavailable across all sources.")
+    st.info("Economic calendar data currently unavailable.")
