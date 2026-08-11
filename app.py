@@ -10487,7 +10487,6 @@ ECON_KEYWORDS = [
 ]
 
 if not econ_df.empty and "event" in econ_df.columns:
-    # Filter strictly for US and High Impact events only
     mask = econ_df["country"].isin(["USD", "US", "United States"]) & (econ_df["impact"].str.lower() == "high")
     filtered = econ_df[mask].sort_values("date").reset_index(drop=True)
 
@@ -10495,7 +10494,28 @@ if not econ_df.empty and "event" in econ_df.columns:
         st.info("No high-impact US economic events scheduled for this week.")
     else:
         show_cols = [c for c in ["date", "event", "previous", "estimate", "actual", "impact"] if c in filtered.columns]
-        st.dataframe(filtered[show_cols], use_container_width=True, hide_index=True)
+        display_df = filtered[show_cols]
+
+        # Palette of soft background colors for distinct days (works on dark & light themes)
+        DAY_COLORS = [
+            "background-color: rgba(59, 130, 246, 0.25)",  # Soft Blue
+            "background-color: rgba(16, 185, 129, 0.25)",  # Soft Green
+            "background-color: rgba(168, 85, 247, 0.25)",  # Soft Purple
+            "background-color: rgba(245, 158, 11, 0.25)",  # Soft Amber
+            "background-color: rgba(236, 72, 153, 0.25)",  # Soft Pink
+        ]
+
+        # Map each unique date to a color from the palette
+        unique_dates = display_df["date"].unique()
+        color_map = {date: DAY_COLORS[i % len(DAY_COLORS)] for i, date in enumerate(unique_dates)}
+
+        # Apply row-by-row background styling
+        styled_df = display_df.style.apply(
+            lambda row: [color_map.get(row["date"], "")] * len(row), 
+            axis=1
+        )
+
+        st.dataframe(styled_df, use_container_width=True, hide_index=True)
 else:
     st.info("Economic calendar data currently unavailable.")
 
