@@ -723,7 +723,7 @@ def render_pine_rs_table_html(rows, max_height):
 
     def rs_cell_style(v):
         base = "padding:1px 5px;text-align:right;font-size:9px;border:1px solid #ccc;white-space:nowrap;"
-        if v is not None and not pd.isna(v) and v > 70:
+        if v is not None and not pd.isna(v) and v >= 80:
             return base + "background:rgba(255, 183, 197, 0.8);color:#000000;"
         return base + "background:#ffffff;color:#000000;"
 
@@ -3865,7 +3865,7 @@ if all_data:
 
     engulf_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"🐳 Engulfing Cluster "
+        f"🐳🐳 Engulfing Cluster "
         f"<span style='color:#FFFF00;'>({len(engulf_industry_tickers)} industries, {len(all_engulf_tickers)} tickers)</span>"
         f"</div>"
     )
@@ -3908,7 +3908,7 @@ if all_data:
 
     botak_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"🧑‍🦲 Botak Cluster "
+        f"🧑‍🦲🧑‍🦲🧑‍🦲 Botak Cluster "
         f"<span style='color:#00FF00;'>({len(botak_industry_tickers)} industries, {len(all_botak_tickers)} tickers)</span>"
         f"</div>"
     )
@@ -7193,9 +7193,9 @@ if early_bull_no_filter_list:
             "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
             if is_top20_industry else ""
         )
-        text_color = "#C71585" if sym in early_bull_set else None   # NEW
+        badge_style = "background:#C71585;" if sym in early_bull_set else ""
 
-        html_eb_nf += setup_badge(sym, extra_style=glow_style, extra_text_color=text_color)
+        html_eb_nf += setup_badge(sym, extra_style=glow_style + badge_style)
 
     st.markdown(html_eb_nf, unsafe_allow_html=True)
 
@@ -9390,6 +9390,101 @@ def _extract_tickers_from_ibd_title(title):
     return tickers
 
 @st.cache_data(ttl=86400)
+def _resolve_tickers_via_ai_from_title(title):
+    """Fallback: when the title uses full company names instead of tickers,
+    ask an AI to return ONLY the ticker symbols, comma-separated."""
+    if not title:
+        return []
+
+    prompt = (
+        "Extract all publicly traded US stock ticker symbols mentioned or implied "
+        "by company names in this video title. Respond with ONLY the ticker symbols, "
+        "comma-separated, uppercase, nothing else — no explanation, no extra words. "
+        f"If none can be identified, respond with an empty string.\n\nTitle: {title}"
+    )
+
+    def _parse(text):
+        if not text:
+            return []
+        tokens = re.split(r"[,\s]+", text.strip())
+        out, seen = [], set()
+        for tok in tokens:
+            tok = tok.strip().upper().strip(".")
+            if re.fullmatch(r"[A-Z]{1,5}", tok) and tok not in seen and tok not in _TICKER_STOPWORDS:
+                seen.add(tok)
+                out.append(tok)
+        return out
+
+    for gemini_key, gemini_model in [
+        (st.secrets.get("GEMINI_API_KEY"), "gemini-2.5-flash"),
+        (st.secrets.get("GEMINI_API_KEY_2"), "gemini-3.5-flash"),
+    ]:
+        if not gemini_key:
+            continue
+        try:
+            from google import genai as google_genai
+            client = google_genai.Client(api_key=gemini_key)
+            response = client.models.generate_content(model=gemini_model, contents=prompt)
+            tickers = _parse(response.text)
+            if tickers:
+                return tickers
+        except Exception:
+            continue
+
+    groq_key = st.secrets.get("GROQ_API_KEY")
+    if groq_key:
+        try:
+            from openai import OpenAI as OpenAIClient
+            groq_client = OpenAIClient(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
+            completion = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=100, temperature=0.1,
+            )
+            tickers = _parse(completion.choices[0].message.content)
+            if tickers:
+                return tickers
+        except Exception:
+            pass
+
+    openrouter_key = st.secrets.get("OPENROUTER_API_KEY")
+    if openrouter_key:
+        try:
+            from openai import OpenAI as OpenAIClient
+            or_client = OpenAIClient(
+                api_key=openrouter_key, base_url="https://openrouter.ai/api/v1",
+                default_headers={"HTTP-Referer": "https://your-app-name.streamlit.app", "X-Title": "Theme Tracker"},
+            )
+            completion = or_client.chat.completions.create(
+                model="meta-llama/llama-3.1-8b-instruct:free",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=100, temperature=0.1,
+            )
+            tickers = _parse(completion.choices[0].message.content)
+            if tickers:
+                return tickers
+        except Exception:
+            pass
+
+    github_token = st.secrets.get("GITHUB_MODELS_TOKEN")
+    if github_token:
+        try:
+            from openai import OpenAI as OpenAIClient
+            github_client = OpenAIClient(api_key=github_token, base_url="https://models.inference.ai.azure.com")
+            completion = github_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=100, temperature=0.1,
+            )
+            tickers = _parse(completion.choices[0].message.content)
+            if tickers:
+                return tickers
+        except Exception:
+            pass
+
+    return []
+
+@st.cache_data(ttl=86400)
 def _resolve_ibd_channel_id():
     """Resolve the stable UC... channel ID behind the @investorsbusinessdaily handle.
     Tries multiple extraction patterns since YouTube's HTML varies by request context.
@@ -9480,8 +9575,11 @@ def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=25):
     for video in videos[:max_videos_to_scan]:
         title = video["title"]
         if "stock market today" in title.lower():
+            tickers = _extract_tickers_from_ibd_title(title)
+            if not tickers:
+                tickers = _resolve_tickers_via_ai_from_title(title)
             return {
-                "tickers": _extract_tickers_from_ibd_title(title),
+                "tickers": tickers,
                 "title": title,
                 "video_id": video["videoId"],
                 "video_url": f"https://www.youtube.com/watch?v={video['videoId']}",
