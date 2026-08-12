@@ -9398,10 +9398,11 @@ def _resolve_tickers_via_ai_from_title(title):
         return []
 
     prompt = (
-        "Extract all publicly traded US stock ticker symbols mentioned or implied "
-        "by company names in this video title. Respond with ONLY the ticker symbols, "
-        "comma-separated, uppercase, nothing else — no explanation, no extra words. "
-        f"If none can be identified, respond with an empty string.\n\nTitle: {title}"
+        "Based on the YouTube video title below, give me the 3 stock tickers "
+        "which are most likely being referenced. Only output the stock "
+        "tickers separated by commas, nothing else — no explanation, no "
+        "extra words, no numbering.\n\n"
+        f"Title: {title}"
     )
 
     def _parse(text):
@@ -9576,9 +9577,9 @@ def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=25):
     for video in videos[:max_videos_to_scan]:
         title = video["title"]
         if "stock market today" in title.lower():
-            tickers = _extract_tickers_from_ibd_title(title)
+            tickers = _resolve_tickers_via_ai_from_title(title)   # AI first — handles company names + false-positive acronyms
             if not tickers:
-                tickers = _resolve_tickers_via_ai_from_title(title)
+                tickers = _extract_tickers_from_ibd_title(title)  # regex fallback only if every AI provider fails
             return {
                 "tickers": tickers,
                 "title": title,
