@@ -665,6 +665,14 @@ def download_pine_rs_data(tickers_tuple, benchmark_symbol="SPY"):
     raw = yf.download(all_symbols, period="9mo", interval="1d", progress=False, auto_adjust=True)
     return raw['Close']
 
+
+@st.cache_data(ttl=3600)
+def download_pine_rs_high_data(tickers_tuple, benchmark_symbol="SPY"):
+    all_symbols = list(tickers_tuple) + [benchmark_symbol]
+    raw = yf.download(all_symbols, period="1y", interval="1d", progress=False, auto_adjust=True)
+    return raw['High']
+
+
 def _percentrank_last(series, length):
     """Pine ta.percentrank(source, length) for the latest bar only."""
     if series is None or len(series) < length + 1:
@@ -675,9 +683,26 @@ def _percentrank_last(series, length):
         return np.nan
     return round(float(np.sum(window < current)) / length * 100, 2)
 
+
+def _is_latest_52w_high(high_series):
+    """Return True when the latest high is above any prior 52-week high."""
+    if high_series is None or len(high_series) < 2:
+        return False
+    s = pd.Series(high_series).dropna()
+    if s.empty or len(s) < 2:
+        return False
+    latest = float(s.iloc[-1])
+    lookback = s.iloc[-252:-1] if len(s) > 252 else s.iloc[:-1]
+    if lookback.empty:
+        return False
+    previous_high = float(lookback.max())
+    return latest > previous_high
+
+
 @st.cache_data(ttl=3600)
 def compute_pine_rs_table(tickers_tuple, benchmark_symbol="SPY"):
     close_data = download_pine_rs_data(tickers_tuple, benchmark_symbol)
+    high_data = download_pine_rs_high_data(tickers_tuple, benchmark_symbol)
     if benchmark_symbol not in close_data.columns:
         return []
     bench_close = close_data[benchmark_symbol].dropna()
@@ -687,6 +712,7 @@ def compute_pine_rs_table(tickers_tuple, benchmark_symbol="SPY"):
         if t not in close_data.columns:
             continue
         close = close_data[t].dropna()
+        high = high_data[t].dropna() if t in high_data.columns else close
         aligned_close, aligned_bench = close.align(bench_close, join='inner')
         if aligned_close.empty:
             continue
@@ -695,7 +721,14 @@ def compute_pine_rs_table(tickers_tuple, benchmark_symbol="SPY"):
         rs21  = _percentrank_last(ratio, 21)
         rs63  = _percentrank_last(ratio, 63)
         rs126 = _percentrank_last(ratio, 126)
-        rows.append({"Ticker": t, "RS5": rs5, "RS21": rs21, "RS63": rs63, "RS126": rs126})
+        rows.append({
+            "Ticker": t,
+            "RS5": rs5,
+            "RS21": rs21,
+            "RS63": rs63,
+            "RS126": rs126,
+            "Is52WHigh": _is_latest_52w_high(high),
+        })
 
     # Sort descending by RS(21), tie-broken by RS63 -> RS126 -> RS5
     # (fixes ties like SLV/NLR/GLD/COPX/IGV all at 100% RS21 — the one with
@@ -741,6 +774,7 @@ def render_pine_rs_table_html(rows, max_height):
     n = len(rows)
     for i, r in enumerate(rows):
         sym = r["Ticker"]
+        ticker_label = f"{sym}*" if r.get("Is52WHigh", False) else sym
         name_bg, name_color = "#ffffff", "#000000"
         if i == n - 1:
             name_bg, name_color = "#ff0000", "#ffffff"
@@ -751,7 +785,7 @@ def render_pine_rs_table_html(rows, max_height):
 
         body_html += (
             f"<tr>"
-            f"<td style='padding:1px 5px;background:{name_bg};color:{name_color};text-align:left;font-size:9px;border:1px solid #ccc;font-weight:bold;white-space:nowrap;'>{sym}</td>"
+            f"<td style='padding:1px 5px;background:{name_bg};color:{name_color};text-align:left;font-size:9px;border:1px solid #ccc;font-weight:bold;white-space:nowrap;'>{ticker_label}</td>"
             f"<td style='{rs_cell_style(r['RS5'])}'>{fmt(r['RS5'])}</td>"
             f"<td style='{rs_cell_style(r['RS21'])}'>{fmt(r['RS21'])}</td>"
             f"<td style='{rs_cell_style(r['RS63'])}'>{fmt(r['RS63'])}</td>"
@@ -3089,7 +3123,7 @@ SECTOR_KEYWORDS = {
     "Crypto": "#FF69B4", "Gold": "#FF69B4", "Broker": "#FF69B4", "Brokerage": "#FF69B4", "Rail": "#FF69B4", "railroads": "#FF69B4", 
     "Rails": "#FF69B4", "finance": "#FF69B4", "metals": "#FF69B4", "Payment Processing": "#FF69B4", 
     "travel": "#FF69B4", "airline": "#FF69B4", "fintech": "#FF69B4", "uranium": "#FF69B4", "mega-cap": "#FF69B4",
-    "apparel": "#FF69B4", "risk-on": "#FF69B4", "risk-off": "#FF69B4", "New Highs": "#FF69B4", "New Lows": "#FF69B4", 
+    "apparel": "#FF69B4", "risk-on": "#FF69B4", "risk-off": "#FF69B4", "New Highs": "#FF69B4", "New Lows": "#FF69B4", "biotechnology": "#FF69B4", 
 }
 
 def format_ai_analysis_text(text, tickers=None, industries=None):
