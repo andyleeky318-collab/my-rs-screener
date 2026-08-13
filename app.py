@@ -666,13 +666,6 @@ def download_pine_rs_data(tickers_tuple, benchmark_symbol="SPY"):
     return raw['Close']
 
 
-@st.cache_data(ttl=3600)
-def download_pine_rs_high_data(tickers_tuple, benchmark_symbol="SPY"):
-    all_symbols = list(tickers_tuple) + [benchmark_symbol]
-    raw = yf.download(all_symbols, period="1y", interval="1d", progress=False, auto_adjust=True)
-    return raw['High']
-
-
 def _percentrank_last(series, length):
     """Pine ta.percentrank(source, length) for the latest bar only."""
     if series is None or len(series) < length + 1:
@@ -684,25 +677,26 @@ def _percentrank_last(series, length):
     return round(float(np.sum(window < current)) / length * 100, 2)
 
 
-def _is_latest_52w_high(high_series):
-    """Return True when the latest high is above any prior 52-week high."""
-    if high_series is None or len(high_series) < 2:
+def _is_latest_close_above_52w_high(close_series, high_series):
+    """True only when the latest close exceeds the highest prior 52-week high."""
+    if close_series is None or high_series is None:
         return False
-    s = pd.Series(high_series).dropna()
-    if s.empty or len(s) < 2:
+    close = pd.Series(close_series).dropna()
+    high = pd.Series(high_series).dropna()
+    if close.empty or high.empty or len(close) < 2:
         return False
-    latest = float(s.iloc[-1])
-    lookback = s.iloc[-252:-1] if len(s) > 252 else s.iloc[:-1]
-    if lookback.empty:
+    latest_close = float(close.iloc[-1])
+    prior_highs = high.iloc[-252:-1] if len(high) > 252 else high.iloc[:-1]
+    if prior_highs.empty:
         return False
-    previous_high = float(lookback.max())
-    return latest > previous_high
+    previous_52w_high = float(prior_highs.max())
+    return latest_close > previous_52w_high
 
 
 @st.cache_data(ttl=3600)
 def compute_pine_rs_table(tickers_tuple, benchmark_symbol="SPY"):
     close_data = download_pine_rs_data(tickers_tuple, benchmark_symbol)
-    high_data = download_pine_rs_high_data(tickers_tuple, benchmark_symbol)
+    high_data = yf.download(list(tickers_tuple) + [benchmark_symbol], period="1y", interval="1d", progress=False, auto_adjust=True)['High']
     if benchmark_symbol not in close_data.columns:
         return []
     bench_close = close_data[benchmark_symbol].dropna()
@@ -727,7 +721,7 @@ def compute_pine_rs_table(tickers_tuple, benchmark_symbol="SPY"):
             "RS21": rs21,
             "RS63": rs63,
             "RS126": rs126,
-            "Is52WHigh": _is_latest_52w_high(high),
+            "Is52WHigh": _is_latest_close_above_52w_high(close, high),
         })
 
     # Sort descending by RS(21), tie-broken by RS63 -> RS126 -> RS5
