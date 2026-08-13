@@ -677,26 +677,24 @@ def _percentrank_last(series, length):
     return round(float(np.sum(window < current)) / length * 100, 2)
 
 
-def _is_latest_close_above_52w_high(close_series, high_series):
-    """True only when the latest close exceeds the highest prior 52-week high."""
-    if close_series is None or high_series is None:
+def _is_latest_close_above_52w_close(close_series):
+    """True only when the latest close exceeds the prior 52-week close."""
+    if close_series is None:
         return False
     close = pd.Series(close_series).dropna()
-    high = pd.Series(high_series).dropna()
-    if close.empty or high.empty or len(close) < 2:
+    if close.empty or len(close) < 2:
         return False
     latest_close = float(close.iloc[-1])
-    prior_highs = high.iloc[-252:-1] if len(high) > 252 else high.iloc[:-1]
-    if prior_highs.empty:
+    prior_closes = close.iloc[-253:-1] if len(close) > 253 else close.iloc[:-1]
+    if prior_closes.empty:
         return False
-    previous_52w_high = float(prior_highs.max())
-    return latest_close > previous_52w_high
+    previous_52w_close = float(prior_closes.max())
+    return latest_close > previous_52w_close
 
 
 @st.cache_data(ttl=3600)
 def compute_pine_rs_table(tickers_tuple, benchmark_symbol="SPY"):
     close_data = download_pine_rs_data(tickers_tuple, benchmark_symbol)
-    high_data = yf.download(list(tickers_tuple) + [benchmark_symbol], period="1y", interval="1d", progress=False, auto_adjust=True)['High']
     if benchmark_symbol not in close_data.columns:
         return []
     bench_close = close_data[benchmark_symbol].dropna()
@@ -706,7 +704,6 @@ def compute_pine_rs_table(tickers_tuple, benchmark_symbol="SPY"):
         if t not in close_data.columns:
             continue
         close = close_data[t].dropna()
-        high = high_data[t].dropna() if t in high_data.columns else close
         aligned_close, aligned_bench = close.align(bench_close, join='inner')
         if aligned_close.empty:
             continue
@@ -721,7 +718,7 @@ def compute_pine_rs_table(tickers_tuple, benchmark_symbol="SPY"):
             "RS21": rs21,
             "RS63": rs63,
             "RS126": rs126,
-            "Is52WHigh": _is_latest_close_above_52w_high(close, high),
+            "Is52WHigh": _is_latest_close_above_52w_close(close),
         })
 
     # Sort descending by RS(21), tie-broken by RS63 -> RS126 -> RS5
@@ -768,7 +765,7 @@ def render_pine_rs_table_html(rows, max_height):
     n = len(rows)
     for i, r in enumerate(rows):
         sym = r["Ticker"]
-        ticker_label = f"{sym}*" if r.get("Is52WHigh", False) else sym
+        ticker_label = f"{sym}**" if r.get("Is52WHigh", False) else sym
         name_bg, name_color = "#ffffff", "#000000"
         if i == n - 1:
             name_bg, name_color = "#ff0000", "#ffffff"
