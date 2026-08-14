@@ -11332,3 +11332,13 @@ else:
         margin=dict(l=40, r=40, t=50, b=30),
         plot_bgcolor="rgba(20,22,30,1)",
         paper_bgcolor="rgba(13,17,23,0)",
+        font=dict(color="#cccccc"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="center", x=0.5),
+        hovermode="x unified",
+    )
+    fig_pair.update_yaxes(range=[-1, 1], row=3, col=1, gridcolor="rgba(120,120,120,0.15)")
+    fig_pair.update_yaxes(gridcolor="rgba(120,120,120,0.15)", row=1, col=1)
+    fig_pair.update_yaxes(gridcolor="rgba(120,120,120,0.15)", row=2, col=1)
+    fig_pair.update_xaxes(showgrid=False)
+
+    st.plotly_chart(fig_pair, use_container_width=True)
