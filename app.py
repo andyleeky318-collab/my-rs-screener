@@ -5176,7 +5176,7 @@ def render_market_regime_gauge(value, title="Market Regime"):
             "axis": {
                 "range": [0, 100],
                 "tickmode": "array",
-                "tickvals": [0, 25, 40, 50, 60, 70, 100],
+                "tickvals": [0, 40, 50, 60, 70, 100],
                 "tickfont": {"size": 10, "color": "#888888"},
             },
             "bar": {"color": "rgba(0,0,0,0)"},  # hidden — needle replaces it visually
@@ -5201,7 +5201,7 @@ def render_market_regime_gauge(value, title="Market Regime"):
     # Pivot position, in FRACTION of the fixed figure size (paper coords).
     _PIVOT_X_FRAC = 0.5
     _PIVOT_Y_FRAC = 0.08
-    _NEEDLE_LEN_PX = 100   # needle length in pixels — tune this if it looks too short/long
+    _NEEDLE_LEN_PX = 140   # needle length in pixels — tune this if it looks too short/long
     _HUB_R_PX = 12
 
     pivot_x_px = _PIVOT_X_FRAC * _FIG_WIDTH
