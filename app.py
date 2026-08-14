@@ -5199,7 +5199,7 @@ def render_market_regime_gauge(value, title="Market Regime"):
     # Pivot position, in FRACTION of the fixed figure size (paper coords).
     _PIVOT_X_FRAC = 0.5
     _PIVOT_Y_FRAC = 0.08
-    _NEEDLE_LEN_PX = 140   # tune this until the tip touches the donut ring
+    _NEEDLE_LEN_PX = 180   # tune this until the tip touches the donut ring
     _HUB_R_PX = 12
 
     pivot_x_px = _PIVOT_X_FRAC * _FIG_WIDTH
