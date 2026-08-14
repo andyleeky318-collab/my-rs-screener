@@ -5212,7 +5212,7 @@ def render_market_regime_gauge(value, title="Market Regime"):
         type="line",
         x0=_NEEDLE_CX, y0=_NEEDLE_CY, x1=tip_x, y1=tip_y,
         xref="paper", yref="paper",
-        line=dict(color="#111111", width=4),
+        line=dict(color="#FFFFFF", width=4),
     )
 
     # Hub circle at the pivot
@@ -5222,7 +5222,7 @@ def render_market_regime_gauge(value, title="Market Regime"):
         x0=_NEEDLE_CX - _HUB_R, y0=_NEEDLE_CY - _HUB_R,
         x1=_NEEDLE_CX + _HUB_R, y1=_NEEDLE_CY + _HUB_R,
         xref="paper", yref="paper",
-        fillcolor="#111111", line=dict(color="#111111", width=0),
+        fillcolor="#FFFFFF", line=dict(color="#FFFFFF", width=0),
     )
 
     fig.update_layout(
