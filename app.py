@@ -5241,7 +5241,12 @@ def render_market_regime_gauge(value, title="Market Regime"):
         margin=dict(l=20, r=20, t=40, b=10),
         paper_bgcolor="rgba(13,17,23,0)",
         font=dict(color="#cccccc"),
-        title=dict(text=title, font=dict(size=13, color="#cccccc"), x=0.5, xanchor="center"),
+        title=dict(
+            text=f"<b><span style='color:{pct_color}'>{value:.0f}%</span></b>",
+            font=dict(size=24),
+            x=0.5,
+            xanchor="center",
+        ),
     )
     return fig
 
@@ -11459,572 +11464,617 @@ else:
 # what the options market is currently pricing in and where flow is stacked,
 # which is the honest and actually-supported use of this data.
 # ==============================================================================
+# st.markdown("---")
+# st.markdown("#### 🎯 NVDA Earnings Setup Dashboard")
+
+# @st.cache_data(ttl=900)
+# def fetch_chain_cboe_generic(symbol):
+#     """
+#     Generalized version of fetch_qqq_chain_cboe — same free, no-key CBOE
+#     delayed quotes feed, works for any optionable symbol.
+#     Returns (spot, DataFrame[expiry, right, strike, volume, open_interest, iv, delta, bid, ask]).
+#     """
+#     url = f"https://cdn.cboe.com/api/global/delayed_quotes/options/{symbol}.json"
+#     headers = {
+#         "User-Agent": (
+#             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+#             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+#         ),
+#         "Accept": "application/json",
+#     }
+#     try:
+#         resp = requests.get(url, headers=headers, timeout=15)
+#         resp.raise_for_status()
+#         payload = resp.json()
+#     except Exception as e:
+#         return None, pd.DataFrame({"error": [str(e)]})
+
+#     data = payload.get("data", {})
+#     spot = data.get("current_price")
+#     options = data.get("options", [])
+#     if not options or spot is None:
+#         return spot, pd.DataFrame()
+
+#     row_pattern = re.compile(rf"^{re.escape(symbol)}(\d{{6}})([CP])(\d{{8}})$")
+#     rows = []
+#     for opt in options:
+#         contract = opt.get("option", "")
+#         m = row_pattern.match(contract)
+#         if not m:
+#             continue
+#         exp_str, right, strike_str = m.groups()
+#         try:
+#             expiry = datetime.datetime.strptime(exp_str, "%y%m%d").date()
+#             strike = int(strike_str) / 1000.0
+#         except Exception:
+#             continue
+#         rows.append({
+#             "expiry": expiry,
+#             "right": "call" if right == "C" else "put",
+#             "strike": strike,
+#             "volume": opt.get("volume") or 0,
+#             "open_interest": opt.get("open_interest") or 0,
+#             "iv": opt.get("iv"),
+#             "delta": opt.get("delta"),
+#             "bid": opt.get("bid"),
+#             "ask": opt.get("ask"),
+#         })
+#     return spot, pd.DataFrame(rows)
+
+
+# def compute_earnings_options_setup(symbol, spot, chain_df, earnings_date):
+#     """
+#     Builds the earnings positioning summary:
+#       - Nearest expiry AFTER earnings_date (captures the earnings IV crush)
+#       - ATM straddle -> market-implied % move for that expiry
+#       - 25-delta-proxy skew (put IV - call IV) -> directional hedging bias
+#       - Put/Call volume & OI ratios -> flow positioning
+#       - Top OI "walls" (strikes with largest OI) -> potential pin/resistance levels
+#       - IV/HV ratio -> how rich the options are vs realized volatility (crush risk)
+#     """
+#     if chain_df is None or chain_df.empty or spot is None or earnings_date is None:
+#         return None
+
+#     chain_df = chain_df.copy()
+#     post_earnings = chain_df[chain_df["expiry"] >= earnings_date]
+#     if post_earnings.empty:
+#         return None
+
+#     target_expiry = post_earnings["expiry"].min()
+#     exp_df = chain_df[chain_df["expiry"] == target_expiry].copy()
+
+#     calls = exp_df[exp_df["right"] == "call"].copy()
+#     puts  = exp_df[exp_df["right"] == "put"].copy()
+#     if calls.empty or puts.empty:
+#         return None
+
+#     # ATM strike = closest to spot
+#     calls["dist"] = (calls["strike"] - spot).abs()
+#     puts["dist"]  = (puts["strike"] - spot).abs()
+#     atm_strike = calls.sort_values("dist")["strike"].iloc[0]
+
+#     atm_call = calls[calls["strike"] == atm_strike].sort_values("dist").iloc[0] if not calls.empty else None
+#     atm_put  = puts[puts["strike"] == atm_strike].sort_values("dist").iloc[0] if not puts.empty else None
+
+#     atm_call_mid = np.nanmean([atm_call["bid"], atm_call["ask"]]) if atm_call is not None else np.nan
+#     atm_put_mid  = np.nanmean([atm_put["bid"], atm_put["ask"]]) if atm_put is not None else np.nan
+#     straddle_price = (atm_call_mid or 0) + (atm_put_mid or 0)
+#     implied_move_pct = round((straddle_price / spot) * 100, 2) if straddle_price and spot else None
+
+#     atm_call_iv = atm_call["iv"] if atm_call is not None else np.nan
+#     atm_put_iv  = atm_put["iv"] if atm_put is not None else np.nan
+#     atm_iv = np.nanmean([atm_call_iv, atm_put_iv])
+#     atm_iv_pct = round(float(atm_iv) * 100, 1) if pd.notna(atm_iv) else None
+
+#     # ~10% OTM skew proxy (same approach as the QQQ block)
+#     put_otm_strike, call_otm_strike = spot * 0.90, spot * 1.10
+#     puts_otm = puts.assign(d_otm=(puts["strike"] - put_otm_strike).abs())
+#     calls_otm = calls.assign(d_otm=(calls["strike"] - call_otm_strike).abs())
+#     put_skew_iv = puts_otm.sort_values("d_otm")["iv"].iloc[0] if not puts_otm.empty else np.nan
+#     call_skew_iv = calls_otm.sort_values("d_otm")["iv"].iloc[0] if not calls_otm.empty else np.nan
+#     skew_pts = round((float(put_skew_iv) - float(call_skew_iv)) * 100, 2) if pd.notna(put_skew_iv) and pd.notna(call_skew_iv) else None
+
+#     call_volume = int(calls["volume"].sum())
+#     put_volume  = int(puts["volume"].sum())
+#     call_oi     = int(calls["open_interest"].sum())
+#     put_oi      = int(puts["open_interest"].sum())
+#     pc_vol_ratio = round(put_volume / call_volume, 2) if call_volume > 0 else None
+#     pc_oi_ratio  = round(put_oi / call_oi, 2) if call_oi > 0 else None
+
+#     # Top 5 OI strikes (potential pin/wall levels) across both sides
+#     oi_walls = (
+#         exp_df.groupby("strike")["open_interest"].sum()
+#         .sort_values(ascending=False)
+#         .head(5)
+#         .reset_index()
+#     )
+#     oi_walls_list = [
+#         {"strike": round(float(r.strike), 1), "oi": int(r.open_interest)}
+#         for r in oi_walls.itertuples()
+#     ]
+
+#     return {
+#         "expiry": target_expiry.isoformat(),
+#         "dte": (target_expiry - datetime.date.today()).days,
+#         "spot": round(float(spot), 2),
+#         "atm_strike": round(float(atm_strike), 1),
+#         "implied_move_pct": implied_move_pct,
+#         "atm_iv_pct": atm_iv_pct,
+#         "skew_pts": skew_pts,
+#         "call_volume": call_volume, "put_volume": put_volume,
+#         "call_oi": call_oi, "put_oi": put_oi,
+#         "pc_vol_ratio": pc_vol_ratio, "pc_oi_ratio": pc_oi_ratio,
+#         "oi_walls": oi_walls_list,
+#     }
+
+
+# def get_next_earnings_date(symbol, days_ahead=90):
+#     """Reuses your existing get_upcoming_earnings_finnhub — picks the nearest upcoming date."""
+#     rows = get_upcoming_earnings_finnhub(symbol, days_ahead=days_ahead)
+#     if not rows:
+#         return None
+#     dates = []
+#     for r in rows:
+#         d = r.get("date")
+#         if d:
+#             try:
+#                 dates.append(datetime.date.fromisoformat(d))
+#             except Exception:
+#                 continue
+#     return min(dates) if dates else None
+
+# def compute_realized_vol(close_series, window=20):
+#     """Annualized realized (historical) volatility from a price Close series.
+#     No new data fetch — operates on price history already loaded elsewhere
+#     (e.g. ticker_dfs_shared)."""
+#     if close_series is None or close_series.empty:
+#         return None
+#     ret = close_series.pct_change().dropna()
+#     if len(ret) < window:
+#         return None
+#     return round(float(ret.tail(window).std() * np.sqrt(252) * 100), 1)
+
+# _NVDA_SYM = "NVDA"
+
+# with st.spinner(f"Fetching {_NVDA_SYM} earnings date, options chain, and news/filings..."):
+#     nvda_earnings_date = timed("get_next_earnings_date", get_next_earnings_date, _NVDA_SYM)
+#     nvda_spot, nvda_chain_df = timed("fetch_chain_cboe_generic_nvda", fetch_chain_cboe_generic, _NVDA_SYM)
+#     nvda_news = timed("get_stock_news_nvda", get_stock_news, _NVDA_SYM, 5)
+#     nvda_filings = timed("get_recent_sec_filings_nvda", get_recent_sec_filings, _NVDA_SYM, 5)
+#     nvda_form4 = timed("get_form4_insider_nvda", get_form4_insider, _NVDA_SYM, 5)
+
+# if nvda_chain_df is None or nvda_chain_df.empty or "error" in nvda_chain_df.columns:
+#     err = nvda_chain_df["error"].iloc[0] if (nvda_chain_df is not None and "error" in nvda_chain_df.columns) else "no data"
+#     st.info(f"NVDA options data unavailable — {err}")
+# elif nvda_earnings_date is None:
+#     st.info("No upcoming NVDA earnings date found via Finnhub calendar. Add FINNHUB_API_KEY to secrets if missing.")
+# else:
+#     setup = compute_earnings_options_setup(_NVDA_SYM, nvda_spot, nvda_chain_df, nvda_earnings_date)
+
+#     if not setup:
+#         st.info("Could not compute NVDA earnings options setup from the chain.")
+#     else:
+#         nvda_close = ticker_dfs_shared.get("NVDA", pd.DataFrame()).get("Close", pd.Series(dtype=float))
+#         hv_20 = compute_realized_vol(nvda_close, 20) if not nvda_close.empty else None
+#         iv_hv_ratio = round(setup["atm_iv_pct"] / hv_20, 2) if (setup.get("atm_iv_pct") and hv_20) else None
+
+#         st.markdown(
+#             f"<div style='font-size:13px;color:#888;margin-bottom:8px;'>"
+#             f"Next earnings: <span style='color:#4ecdc4;font-weight:bold;'>{nvda_earnings_date.isoformat()}</span> "
+#             f"&nbsp;|&nbsp; First expiry after earnings: "
+#             f"<span style='color:#4ecdc4;font-weight:bold;'>{setup['expiry']}</span> ({setup['dte']}d)"
+#             f"</div>",
+#             unsafe_allow_html=True
+#         )
+
+#         def _metric_badge(label, value, color="#eeeeee"):
+#             return (
+#                 f'<div class="ticker-badge" style="min-width:120px;">'
+#                 f'<span style="color:#888;font-size:10px;display:block;">{label}</span>'
+#                 f'<span style="color:{color};font-weight:bold;font-size:14px;">{value}</span>'
+#                 f'</div>'
+#             )
+
+#         badges_html = "<div style='display:flex;flex-wrap:wrap;gap:8px;padding:6px 0;'>"
+#         badges_html += _metric_badge("Spot", f"${setup['spot']}")
+#         badges_html += _metric_badge("ATM Strike", setup["atm_strike"])
+#         if setup["implied_move_pct"] is not None:
+#             badges_html += _metric_badge("Implied Move", f"±{setup['implied_move_pct']}%", "#FFD700")
+#         if setup["atm_iv_pct"] is not None:
+#             badges_html += _metric_badge("ATM IV", f"{setup['atm_iv_pct']}%")
+#         if hv_20 is not None:
+#             badges_html += _metric_badge("20D HV", f"{hv_20}%")
+#         if iv_hv_ratio is not None:
+#             crush_color = "#FF4B4B" if iv_hv_ratio >= 1.8 else "#FFA500" if iv_hv_ratio >= 1.3 else "#00FF00"
+#             badges_html += _metric_badge("IV/HV (crush risk)", iv_hv_ratio, crush_color)
+#         if setup["skew_pts"] is not None:
+#             skew_color = "#FF4B4B" if setup["skew_pts"] > 3 else "#00FF00" if setup["skew_pts"] < -3 else "#eeeeee"
+#             skew_label = "put-hedge heavy" if setup["skew_pts"] > 3 else "call-skewed" if setup["skew_pts"] < -3 else "balanced"
+#             badges_html += _metric_badge("25d Skew (P-C)", f"{setup['skew_pts']}pts ({skew_label})", skew_color)
+#         badges_html += _metric_badge("P/C Volume", setup["pc_vol_ratio"] or "n/a")
+#         badges_html += _metric_badge("P/C OI", setup["pc_oi_ratio"] or "n/a")
+#         badges_html += "</div>"
+#         st.markdown(badges_html, unsafe_allow_html=True)
+
+#         # ── OI Walls (potential pin/resistance/support levels) ──
+#         if setup["oi_walls"]:
+#             st.markdown("**📍 Largest Open Interest Strikes (potential pin levels)**")
+#             walls_html = "<div style='display:flex;flex-wrap:wrap;gap:6px;padding:6px 0;'>"
+#             for w in setup["oi_walls"]:
+#                 above_below = "↑" if w["strike"] > setup["spot"] else "↓" if w["strike"] < setup["spot"] else "≈"
+#                 walls_html += (
+#                     f'<div class="ticker-badge">'
+#                     f'<span class="ticker-name">${w["strike"]} {above_below}</span>'
+#                     f'<span class="ticker-rs" style="margin-left:5px;">{w["oi"]:,} OI</span>'
+#                     f'</div>'
+#                 )
+#             walls_html += "</div>"
+#             st.markdown(walls_html, unsafe_allow_html=True)
+
+#         # ── Composite read (positioning-only, explicitly NOT a beat/miss call) ──
+#         signals = []
+#         if iv_hv_ratio is not None and iv_hv_ratio >= 1.8:
+#             signals.append("Options are pricing a large move relative to recent realized volatility (elevated IV crush risk post-earnings).")
+#         if setup["skew_pts"] is not None and setup["skew_pts"] > 3:
+#             signals.append("Put skew is elevated — the market is paying up for downside protection.")
+#         elif setup["skew_pts"] is not None and setup["skew_pts"] < -3:
+#             signals.append("Call skew is elevated — flow is leaning toward upside speculation/hedging.")
+#         if setup["pc_oi_ratio"] is not None and setup["pc_oi_ratio"] > 1.2:
+#             signals.append("Put open interest exceeds call open interest — net defensive positioning built up into earnings.")
+#         elif setup["pc_oi_ratio"] is not None and setup["pc_oi_ratio"] < 0.7:
+#             signals.append("Call open interest dominates — net bullish positioning built up into earnings.")
+
+#         if signals:
+#             sig_html = "<ul style='margin:6px 0 0 18px;padding:0;color:#e0e0e0;font-size:13px;'>"
+#             for s in signals:
+#                 sig_html += f"<li>{s}</li>"
+#             sig_html += "</ul>"
+#             st.markdown(sig_html, unsafe_allow_html=True)
+
+#         st.caption(
+#             "This reflects what the options market is currently pricing (expected move size, "
+#             "hedging skew, and positioning) — it is NOT a prediction of beat/miss or post-earnings "
+#             "direction. Free CBOE delayed quotes; verify with your broker before trading around earnings."
+#         )
+
+#         # ── Massive.com news / filings / insider context ──
+#         st.markdown("**📰 Recent News, Filings & Insider Activity (Massive.com)**")
+#         c_news, c_sec, c_form4 = st.columns(3)
+
+#         with c_news:
+#             st.markdown("*News*")
+#             if nvda_news:
+#                 for n in nvda_news[:5]:
+#                     title = n.get("title", "Untitled")
+#                     url = n.get("article_url") or n.get("url", "")
+#                     st.markdown(f"- [{title}]({url})" if url else f"- {title}")
+#             else:
+#                 st.caption("No recent news returned.")
+
+#         with c_sec:
+#             st.markdown("*SEC Filings*")
+#             if nvda_filings:
+#                 for f in nvda_filings[:5]:
+#                     st.markdown(f"- {f.get('form_type','?')} — {f.get('filing_date','?')}")
+#             else:
+#                 st.caption("No recent filings returned.")
+
+#         with c_form4:
+#             st.markdown("*Insider Activity (Form 4)*")
+#             if nvda_form4:
+#                 for f in nvda_form4[:5]:
+#                     st.markdown(
+#                         f"- {f.get('owner_name','Unknown')}: "
+#                         f"{f.get('transaction_type','?')} {f.get('shares','?')} shares "
+#                         f"({f.get('filing_date','?')})"
+#                     )
+#             else:
+#                 st.caption("No recent insider transactions returned.")
+
+#         if not st.secrets.get("MASSIVE_API_KEY"):
+#             st.info("Add MASSIVE_API_KEY to secrets.toml to populate news/filings/insider panels.")
+
+# # ==============================================================================
+# # 18. NVDA — PAST 8 EARNINGS: ACTUAL MOVE DISTRIBUTION vs CURRENT IMPLIED MOVE
+# # Read-only, additive. Reuses fetch_chain_cboe_generic / compute_realized_vol
+# # already defined above. Does not touch any other section.
+# # ==============================================================================
+# st.markdown("---")
+# st.markdown("#### 📊 NVDA — Last 8 Earnings: Actual Move vs Implied Move")
+
+# @st.cache_data(ttl=21600)
+# def fetch_historical_earnings_finnhub(ticker, years_back=3):
+#     """
+#     Pulls historical earnings dates (with bmo/amc/dmh timing) from Finnhub's
+#     calendar endpoint, spanning the past `years_back` years. Same endpoint
+#     used for upcoming earnings elsewhere — just queried with a past date range.
+#     """
+#     finnhub_key = st.secrets.get("FINNHUB_API_KEY")
+#     if not finnhub_key:
+#         return []
+
+#     today = datetime.date.today()
+#     start = today - datetime.timedelta(days=365 * years_back)
+
+#     try:
+#         resp = requests.get(
+#             "https://finnhub.io/api/v1/calendar/earnings",
+#             params={"from": str(start), "to": str(today), "symbol": ticker, "token": finnhub_key},
+#             timeout=15,
+#         )
+#         resp.raise_for_status()
+#         data = resp.json()
+#         rows = data.get("earningsCalendar", []) or []
+#     except Exception as e:
+#         st.warning(f"Finnhub historical earnings fetch error: {e}")
+#         return []
+
+#     parsed = []
+#     for r in rows:
+#         d = r.get("date")
+#         if not d:
+#             continue
+#         try:
+#             parsed.append({
+#                 "date": datetime.date.fromisoformat(d),
+#                 "hour": r.get("hour", "amc"),  # bmo / amc / dmh
+#                 "eps_actual": r.get("epsActual"),
+#                 "eps_estimate": r.get("epsEstimate"),
+#             })
+#         except Exception:
+#             continue
+
+#     parsed.sort(key=lambda x: x["date"], reverse=True)
+#     return parsed
+
+
+# @st.cache_data(ttl=21600)
+# def fetch_price_history_for_earnings(ticker, years_back=3):
+#     """
+#     Fresh yfinance download of daily close prices covering the earnings
+#     lookback window (kept independent of ticker_dfs_shared so this works
+#     even if NVDA isn't already loaded there, or its window is shorter).
+#     """
+#     try:
+#         df = yf.download(ticker, period=f"{years_back + 1}y", interval="1d",
+#                           progress=False, auto_adjust=True)
+#         if df.empty:
+#             return pd.DataFrame()
+#         df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
+#         return df[["Close"]].dropna()
+#     except Exception:
+#         return pd.DataFrame()
+
+
+# def compute_earnings_day_moves(earnings_list, price_df, max_events=8):
+#     """
+#     For each earnings event, determines the 'reaction day' close-to-close
+#     % move based on report timing:
+#       - bmo (before market open): report_date close vs prior trading day close
+#       - amc (after market close): next trading day close vs report_date close
+#       - dmh (during market hours, rare): treated like amc (next day close vs
+#         report day close) since the exact intraday timing is unknown from
+#         free data — flagged in the table as 'dmh (approx)'.
+#     Returns a DataFrame of the most recent `max_events` events with a valid
+#     computed move, most recent first.
+#     """
+#     if price_df is None or price_df.empty or not earnings_list:
+#         return pd.DataFrame()
+
+#     close = price_df["Close"]
+#     close.index = pd.to_datetime(close.index).tz_localize(None)
+#     trading_dates = close.index
+
+#     rows = []
+#     for ev in earnings_list:
+#         report_date = pd.Timestamp(ev["date"])
+#         hour = ev.get("hour", "amc")
+
+#         # Find the report date's position in the trading calendar (or the
+#         # next trading day if report_date itself wasn't a trading day)
+#         pos_candidates = trading_dates[trading_dates >= report_date]
+#         if pos_candidates.empty:
+#             continue
+#         report_trading_date = pos_candidates[0]
+#         report_idx = trading_dates.get_loc(report_trading_date)
+
+#         try:
+#             if hour == "bmo":
+#                 if report_idx < 1:
+#                     continue
+#                 prior_close = close.iloc[report_idx - 1]
+#                 react_close = close.iloc[report_idx]
+#                 react_date = trading_dates[report_idx]
+#                 timing_label = "Before Open"
+#             else:  # amc or dmh -> next trading day close vs report day close
+#                 if report_idx + 1 >= len(close):
+#                     continue
+#                 prior_close = close.iloc[report_idx]
+#                 react_close = close.iloc[report_idx + 1]
+#                 react_date = trading_dates[report_idx + 1]
+#                 timing_label = "After Close" if hour == "amc" else "During Hours (approx)"
+#         except Exception:
+#             continue
+
+#         if prior_close == 0 or pd.isna(prior_close) or pd.isna(react_close):
+#             continue
+
+#         move_pct = round(((react_close - prior_close) / prior_close) * 100, 2)
+
+#         rows.append({
+#             "Report Date": ev["date"].isoformat(),
+#             "Timing": timing_label,
+#             "Reaction Date": react_date.strftime("%Y-%m-%d"),
+#             "Actual Move %": move_pct,
+#             "EPS Actual": ev.get("eps_actual"),
+#             "EPS Estimate": ev.get("eps_estimate"),
+#         })
+
+#         if len(rows) >= max_events:
+#             break
+
+#     return pd.DataFrame(rows)
+
+
+# _NVDA_SYM_HIST = "NVDA"
+
+# with st.spinner("Fetching NVDA's past earnings dates and price reactions..."):
+#     nvda_hist_earnings = timed(
+#         "fetch_historical_earnings_finnhub", fetch_historical_earnings_finnhub, _NVDA_SYM_HIST, 3
+#     )
+#     nvda_price_hist = timed(
+#         "fetch_price_history_for_earnings", fetch_price_history_for_earnings, _NVDA_SYM_HIST, 3
+#     )
+
+# if not nvda_hist_earnings:
+#     st.info("No historical NVDA earnings dates returned by Finnhub. Check FINNHUB_API_KEY in secrets.")
+# elif nvda_price_hist.empty:
+#     st.info("Could not fetch NVDA price history for move calculation.")
+# else:
+#     moves_df = compute_earnings_day_moves(nvda_hist_earnings, nvda_price_hist, max_events=8)
+
+#     if moves_df.empty:
+#         st.info("Could not compute earnings-day moves from the available data.")
+#     else:
+#         # ── Pull current implied move for reference (reuses earlier logic) ──
+#         current_implied_move = None
+#         _nvda_spot_ref, _nvda_chain_ref = fetch_chain_cboe_generic(_NVDA_SYM_HIST)
+#         if _nvda_chain_ref is not None and not _nvda_chain_ref.empty and "error" not in _nvda_chain_ref.columns:
+#             _next_earn_date = get_next_earnings_date(_NVDA_SYM_HIST) if "get_next_earnings_date" in dir() else None
+#             if _next_earn_date is not None:
+#                 _setup_ref = compute_earnings_options_setup(_NVDA_SYM_HIST, _nvda_spot_ref, _nvda_chain_ref, _next_earn_date)
+#                 if _setup_ref:
+#                     current_implied_move = _setup_ref.get("implied_move_pct")
+
+#         # ── Stats ──
+#         moves = moves_df["Actual Move %"].astype(float)
+#         stat_mean = round(moves.mean(), 2)
+#         stat_median = round(moves.median(), 2)
+#         stat_std = round(moves.std(ddof=1), 2) if len(moves) > 1 else None
+#         stat_abs_mean = round(moves.abs().mean(), 2)
+#         stat_max_up = round(moves.max(), 2)
+#         stat_max_down = round(moves.min(), 2)
+#         win_rate = round((moves > 0).mean() * 100, 1)
+
+#         def _metric_badge(label, value, color="#eeeeee"):
+#             return (
+#                 f'<div class="ticker-badge" style="min-width:120px;">'
+#                 f'<span style="color:#888;font-size:10px;display:block;">{label}</span>'
+#                 f'<span style="color:{color};font-weight:bold;font-size:14px;">{value}</span>'
+#                 f'</div>'
+#             )
+
+#         badges_html = "<div style='display:flex;flex-wrap:wrap;gap:8px;padding:6px 0;'>"
+#         badges_html += _metric_badge("Mean Move", f"{stat_mean:+.2f}%", "#00FF00" if stat_mean > 0 else "#FF4B4B")
+#         badges_html += _metric_badge("Median Move", f"{stat_median:+.2f}%", "#00FF00" if stat_median > 0 else "#FF4B4B")
+#         badges_html += _metric_badge("Avg |Move|", f"{stat_abs_mean:.2f}%", "#FFD700")
+#         if stat_std is not None:
+#             badges_html += _metric_badge("Std Dev", f"{stat_std:.2f}%")
+#         badges_html += _metric_badge("Best Reaction", f"{stat_max_up:+.2f}%", "#00FF00")
+#         badges_html += _metric_badge("Worst Reaction", f"{stat_max_down:+.2f}%", "#FF4B4B")
+#         badges_html += _metric_badge("Win Rate (up moves)", f"{win_rate}%")
+#         if current_implied_move is not None:
+#             richness = "rich vs history" if current_implied_move > stat_abs_mean else "cheap vs history"
+#             richness_color = "#FF4B4B" if current_implied_move > stat_abs_mean else "#00FF00"
+#             badges_html += _metric_badge("Current Implied Move", f"±{current_implied_move}% ({richness})", richness_color)
+#         badges_html += "</div>"
+#         st.markdown(badges_html, unsafe_allow_html=True)
+
+#         # ── Histogram: actual moves per earnings event, implied move as reference line ──
+#         hist_df = moves_df.sort_values("Report Date").reset_index(drop=True)
+#         bar_colors = ["#00FF00" if m >= 0 else "#FF4B4B" for m in hist_df["Actual Move %"]]
+
+#         fig_earn = go.Figure()
+#         fig_earn.add_trace(go.Bar(
+#             x=hist_df["Report Date"],
+#             y=hist_df["Actual Move %"],
+#             marker_color=bar_colors,
+#             text=[f"{m:+.1f}%" for m in hist_df["Actual Move %"]],
+#             textposition="outside",
+#             name="Actual Move %",
+#         ))
+
+#         fig_earn.add_hline(y=stat_mean, line_dash="dash", line_color="#4ecdc4",
+#                             annotation_text=f"Mean {stat_mean:+.2f}%", annotation_position="top left")
+
+#         if current_implied_move is not None:
+#             fig_earn.add_hline(y=current_implied_move, line_dash="dot", line_color="#FFD700",
+#                                 annotation_text=f"Current Implied ±{current_implied_move}%",
+#                                 annotation_position="bottom left")
+#             fig_earn.add_hline(y=-current_implied_move, line_dash="dot", line_color="#FFD700")
+
+#         fig_earn.update_layout(
+#             title=dict(text="NVDA — Actual Post-Earnings Move (Last 8 Reports)", font=dict(size=13, color="#cccccc")),
+#             height=380,
+#             margin=dict(l=40, r=40, t=50, b=60),
+#             plot_bgcolor="rgba(20,22,30,1)",
+#             paper_bgcolor="rgba(13,17,23,0)",
+#             font=dict(color="#cccccc"),
+#             xaxis=dict(title="Report Date", type="category", tickfont=dict(size=10)),
+#             yaxis=dict(title="1-Day Move %", showgrid=True, gridcolor="rgba(120,120,120,0.15)"),
+#             showlegend=False,
+#         )
+#         st.plotly_chart(fig_earn, use_container_width=True)
+
+#         # ── Detail table ──
+#         st.markdown("**Event Detail**")
+#         st.dataframe(
+#             hist_df[["Report Date", "Timing", "Reaction Date", "Actual Move %", "EPS Actual", "EPS Estimate"]],
+#             use_container_width=True, hide_index=True,
+#             column_config={
+#                 "Actual Move %": st.column_config.NumberColumn(format="%.2f%%"),
+#             }
+#         )
+
+#         st.caption(
+#             "Historical implied move data isn't available from free sources, so only the CURRENT "
+#             "implied move (from today's option chain) is shown as a reference line — it reflects "
+#             "what's priced in for the NEXT report, not what was priced in for past ones. Use the "
+#             "comparison of current implied vs. historical average |move| as a rough 'rich vs cheap' "
+#             "read, not a prediction of direction or magnitude."
+#         )
+
+# ==============================================================================
+# 19. 10x ATR ABOVE MA50 — dollar distance from 50-day MA >= 10x ATR(14)
+# ==============================================================================
 st.markdown("---")
-st.markdown("#### 🎯 NVDA Earnings Setup Dashboard")
 
-@st.cache_data(ttl=900)
-def fetch_chain_cboe_generic(symbol):
-    """
-    Generalized version of fetch_qqq_chain_cboe — same free, no-key CBOE
-    delayed quotes feed, works for any optionable symbol.
-    Returns (spot, DataFrame[expiry, right, strike, volume, open_interest, iv, delta, bid, ask]).
-    """
-    url = f"https://cdn.cboe.com/api/global/delayed_quotes/options/{symbol}.json"
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        ),
-        "Accept": "application/json",
-    }
-    try:
-        resp = requests.get(url, headers=headers, timeout=15)
-        resp.raise_for_status()
-        payload = resp.json()
-    except Exception as e:
-        return None, pd.DataFrame({"error": [str(e)]})
-
-    data = payload.get("data", {})
-    spot = data.get("current_price")
-    options = data.get("options", [])
-    if not options or spot is None:
-        return spot, pd.DataFrame()
-
-    row_pattern = re.compile(rf"^{re.escape(symbol)}(\d{{6}})([CP])(\d{{8}})$")
-    rows = []
-    for opt in options:
-        contract = opt.get("option", "")
-        m = row_pattern.match(contract)
-        if not m:
-            continue
-        exp_str, right, strike_str = m.groups()
+@st.cache_data(ttl=3600)
+def compute_10x_atr_above_ma50(stocks_list, ticker_dfs):
+    matches = []
+    for ticker in stocks_list:
         try:
-            expiry = datetime.datetime.strptime(exp_str, "%y%m%d").date()
-            strike = int(strike_str) / 1000.0
-        except Exception:
-            continue
-        rows.append({
-            "expiry": expiry,
-            "right": "call" if right == "C" else "put",
-            "strike": strike,
-            "volume": opt.get("volume") or 0,
-            "open_interest": opt.get("open_interest") or 0,
-            "iv": opt.get("iv"),
-            "delta": opt.get("delta"),
-            "bid": opt.get("bid"),
-            "ask": opt.get("ask"),
-        })
-    return spot, pd.DataFrame(rows)
-
-
-def compute_earnings_options_setup(symbol, spot, chain_df, earnings_date):
-    """
-    Builds the earnings positioning summary:
-      - Nearest expiry AFTER earnings_date (captures the earnings IV crush)
-      - ATM straddle -> market-implied % move for that expiry
-      - 25-delta-proxy skew (put IV - call IV) -> directional hedging bias
-      - Put/Call volume & OI ratios -> flow positioning
-      - Top OI "walls" (strikes with largest OI) -> potential pin/resistance levels
-      - IV/HV ratio -> how rich the options are vs realized volatility (crush risk)
-    """
-    if chain_df is None or chain_df.empty or spot is None or earnings_date is None:
-        return None
-
-    chain_df = chain_df.copy()
-    post_earnings = chain_df[chain_df["expiry"] >= earnings_date]
-    if post_earnings.empty:
-        return None
-
-    target_expiry = post_earnings["expiry"].min()
-    exp_df = chain_df[chain_df["expiry"] == target_expiry].copy()
-
-    calls = exp_df[exp_df["right"] == "call"].copy()
-    puts  = exp_df[exp_df["right"] == "put"].copy()
-    if calls.empty or puts.empty:
-        return None
-
-    # ATM strike = closest to spot
-    calls["dist"] = (calls["strike"] - spot).abs()
-    puts["dist"]  = (puts["strike"] - spot).abs()
-    atm_strike = calls.sort_values("dist")["strike"].iloc[0]
-
-    atm_call = calls[calls["strike"] == atm_strike].sort_values("dist").iloc[0] if not calls.empty else None
-    atm_put  = puts[puts["strike"] == atm_strike].sort_values("dist").iloc[0] if not puts.empty else None
-
-    atm_call_mid = np.nanmean([atm_call["bid"], atm_call["ask"]]) if atm_call is not None else np.nan
-    atm_put_mid  = np.nanmean([atm_put["bid"], atm_put["ask"]]) if atm_put is not None else np.nan
-    straddle_price = (atm_call_mid or 0) + (atm_put_mid or 0)
-    implied_move_pct = round((straddle_price / spot) * 100, 2) if straddle_price and spot else None
-
-    atm_call_iv = atm_call["iv"] if atm_call is not None else np.nan
-    atm_put_iv  = atm_put["iv"] if atm_put is not None else np.nan
-    atm_iv = np.nanmean([atm_call_iv, atm_put_iv])
-    atm_iv_pct = round(float(atm_iv) * 100, 1) if pd.notna(atm_iv) else None
-
-    # ~10% OTM skew proxy (same approach as the QQQ block)
-    put_otm_strike, call_otm_strike = spot * 0.90, spot * 1.10
-    puts_otm = puts.assign(d_otm=(puts["strike"] - put_otm_strike).abs())
-    calls_otm = calls.assign(d_otm=(calls["strike"] - call_otm_strike).abs())
-    put_skew_iv = puts_otm.sort_values("d_otm")["iv"].iloc[0] if not puts_otm.empty else np.nan
-    call_skew_iv = calls_otm.sort_values("d_otm")["iv"].iloc[0] if not calls_otm.empty else np.nan
-    skew_pts = round((float(put_skew_iv) - float(call_skew_iv)) * 100, 2) if pd.notna(put_skew_iv) and pd.notna(call_skew_iv) else None
-
-    call_volume = int(calls["volume"].sum())
-    put_volume  = int(puts["volume"].sum())
-    call_oi     = int(calls["open_interest"].sum())
-    put_oi      = int(puts["open_interest"].sum())
-    pc_vol_ratio = round(put_volume / call_volume, 2) if call_volume > 0 else None
-    pc_oi_ratio  = round(put_oi / call_oi, 2) if call_oi > 0 else None
-
-    # Top 5 OI strikes (potential pin/wall levels) across both sides
-    oi_walls = (
-        exp_df.groupby("strike")["open_interest"].sum()
-        .sort_values(ascending=False)
-        .head(5)
-        .reset_index()
-    )
-    oi_walls_list = [
-        {"strike": round(float(r.strike), 1), "oi": int(r.open_interest)}
-        for r in oi_walls.itertuples()
-    ]
-
-    return {
-        "expiry": target_expiry.isoformat(),
-        "dte": (target_expiry - datetime.date.today()).days,
-        "spot": round(float(spot), 2),
-        "atm_strike": round(float(atm_strike), 1),
-        "implied_move_pct": implied_move_pct,
-        "atm_iv_pct": atm_iv_pct,
-        "skew_pts": skew_pts,
-        "call_volume": call_volume, "put_volume": put_volume,
-        "call_oi": call_oi, "put_oi": put_oi,
-        "pc_vol_ratio": pc_vol_ratio, "pc_oi_ratio": pc_oi_ratio,
-        "oi_walls": oi_walls_list,
-    }
-
-
-def get_next_earnings_date(symbol, days_ahead=90):
-    """Reuses your existing get_upcoming_earnings_finnhub — picks the nearest upcoming date."""
-    rows = get_upcoming_earnings_finnhub(symbol, days_ahead=days_ahead)
-    if not rows:
-        return None
-    dates = []
-    for r in rows:
-        d = r.get("date")
-        if d:
-            try:
-                dates.append(datetime.date.fromisoformat(d))
-            except Exception:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < 50:
                 continue
-    return min(dates) if dates else None
-
-def compute_realized_vol(close_series, window=20):
-    """Annualized realized (historical) volatility from a price Close series.
-    No new data fetch — operates on price history already loaded elsewhere
-    (e.g. ticker_dfs_shared)."""
-    if close_series is None or close_series.empty:
-        return None
-    ret = close_series.pct_change().dropna()
-    if len(ret) < window:
-        return None
-    return round(float(ret.tail(window).std() * np.sqrt(252) * 100), 1)
-
-_NVDA_SYM = "NVDA"
-
-with st.spinner(f"Fetching {_NVDA_SYM} earnings date, options chain, and news/filings..."):
-    nvda_earnings_date = timed("get_next_earnings_date", get_next_earnings_date, _NVDA_SYM)
-    nvda_spot, nvda_chain_df = timed("fetch_chain_cboe_generic_nvda", fetch_chain_cboe_generic, _NVDA_SYM)
-    nvda_news = timed("get_stock_news_nvda", get_stock_news, _NVDA_SYM, 5)
-    nvda_filings = timed("get_recent_sec_filings_nvda", get_recent_sec_filings, _NVDA_SYM, 5)
-    nvda_form4 = timed("get_form4_insider_nvda", get_form4_insider, _NVDA_SYM, 5)
-
-if nvda_chain_df is None or nvda_chain_df.empty or "error" in nvda_chain_df.columns:
-    err = nvda_chain_df["error"].iloc[0] if (nvda_chain_df is not None and "error" in nvda_chain_df.columns) else "no data"
-    st.info(f"NVDA options data unavailable — {err}")
-elif nvda_earnings_date is None:
-    st.info("No upcoming NVDA earnings date found via Finnhub calendar. Add FINNHUB_API_KEY to secrets if missing.")
-else:
-    setup = compute_earnings_options_setup(_NVDA_SYM, nvda_spot, nvda_chain_df, nvda_earnings_date)
-
-    if not setup:
-        st.info("Could not compute NVDA earnings options setup from the chain.")
-    else:
-        nvda_close = ticker_dfs_shared.get("NVDA", pd.DataFrame()).get("Close", pd.Series(dtype=float))
-        hv_20 = compute_realized_vol(nvda_close, 20) if not nvda_close.empty else None
-        iv_hv_ratio = round(setup["atm_iv_pct"] / hv_20, 2) if (setup.get("atm_iv_pct") and hv_20) else None
-
-        st.markdown(
-            f"<div style='font-size:13px;color:#888;margin-bottom:8px;'>"
-            f"Next earnings: <span style='color:#4ecdc4;font-weight:bold;'>{nvda_earnings_date.isoformat()}</span> "
-            f"&nbsp;|&nbsp; First expiry after earnings: "
-            f"<span style='color:#4ecdc4;font-weight:bold;'>{setup['expiry']}</span> ({setup['dte']}d)"
-            f"</div>",
-            unsafe_allow_html=True
-        )
-
-        def _metric_badge(label, value, color="#eeeeee"):
-            return (
-                f'<div class="ticker-badge" style="min-width:120px;">'
-                f'<span style="color:#888;font-size:10px;display:block;">{label}</span>'
-                f'<span style="color:{color};font-weight:bold;font-size:14px;">{value}</span>'
-                f'</div>'
-            )
-
-        badges_html = "<div style='display:flex;flex-wrap:wrap;gap:8px;padding:6px 0;'>"
-        badges_html += _metric_badge("Spot", f"${setup['spot']}")
-        badges_html += _metric_badge("ATM Strike", setup["atm_strike"])
-        if setup["implied_move_pct"] is not None:
-            badges_html += _metric_badge("Implied Move", f"±{setup['implied_move_pct']}%", "#FFD700")
-        if setup["atm_iv_pct"] is not None:
-            badges_html += _metric_badge("ATM IV", f"{setup['atm_iv_pct']}%")
-        if hv_20 is not None:
-            badges_html += _metric_badge("20D HV", f"{hv_20}%")
-        if iv_hv_ratio is not None:
-            crush_color = "#FF4B4B" if iv_hv_ratio >= 1.8 else "#FFA500" if iv_hv_ratio >= 1.3 else "#00FF00"
-            badges_html += _metric_badge("IV/HV (crush risk)", iv_hv_ratio, crush_color)
-        if setup["skew_pts"] is not None:
-            skew_color = "#FF4B4B" if setup["skew_pts"] > 3 else "#00FF00" if setup["skew_pts"] < -3 else "#eeeeee"
-            skew_label = "put-hedge heavy" if setup["skew_pts"] > 3 else "call-skewed" if setup["skew_pts"] < -3 else "balanced"
-            badges_html += _metric_badge("25d Skew (P-C)", f"{setup['skew_pts']}pts ({skew_label})", skew_color)
-        badges_html += _metric_badge("P/C Volume", setup["pc_vol_ratio"] or "n/a")
-        badges_html += _metric_badge("P/C OI", setup["pc_oi_ratio"] or "n/a")
-        badges_html += "</div>"
-        st.markdown(badges_html, unsafe_allow_html=True)
-
-        # ── OI Walls (potential pin/resistance/support levels) ──
-        if setup["oi_walls"]:
-            st.markdown("**📍 Largest Open Interest Strikes (potential pin levels)**")
-            walls_html = "<div style='display:flex;flex-wrap:wrap;gap:6px;padding:6px 0;'>"
-            for w in setup["oi_walls"]:
-                above_below = "↑" if w["strike"] > setup["spot"] else "↓" if w["strike"] < setup["spot"] else "≈"
-                walls_html += (
-                    f'<div class="ticker-badge">'
-                    f'<span class="ticker-name">${w["strike"]} {above_below}</span>'
-                    f'<span class="ticker-rs" style="margin-left:5px;">{w["oi"]:,} OI</span>'
-                    f'</div>'
-                )
-            walls_html += "</div>"
-            st.markdown(walls_html, unsafe_allow_html=True)
-
-        # ── Composite read (positioning-only, explicitly NOT a beat/miss call) ──
-        signals = []
-        if iv_hv_ratio is not None and iv_hv_ratio >= 1.8:
-            signals.append("Options are pricing a large move relative to recent realized volatility (elevated IV crush risk post-earnings).")
-        if setup["skew_pts"] is not None and setup["skew_pts"] > 3:
-            signals.append("Put skew is elevated — the market is paying up for downside protection.")
-        elif setup["skew_pts"] is not None and setup["skew_pts"] < -3:
-            signals.append("Call skew is elevated — flow is leaning toward upside speculation/hedging.")
-        if setup["pc_oi_ratio"] is not None and setup["pc_oi_ratio"] > 1.2:
-            signals.append("Put open interest exceeds call open interest — net defensive positioning built up into earnings.")
-        elif setup["pc_oi_ratio"] is not None and setup["pc_oi_ratio"] < 0.7:
-            signals.append("Call open interest dominates — net bullish positioning built up into earnings.")
-
-        if signals:
-            sig_html = "<ul style='margin:6px 0 0 18px;padding:0;color:#e0e0e0;font-size:13px;'>"
-            for s in signals:
-                sig_html += f"<li>{s}</li>"
-            sig_html += "</ul>"
-            st.markdown(sig_html, unsafe_allow_html=True)
-
-        st.caption(
-            "This reflects what the options market is currently pricing (expected move size, "
-            "hedging skew, and positioning) — it is NOT a prediction of beat/miss or post-earnings "
-            "direction. Free CBOE delayed quotes; verify with your broker before trading around earnings."
-        )
-
-        # ── Massive.com news / filings / insider context ──
-        st.markdown("**📰 Recent News, Filings & Insider Activity (Massive.com)**")
-        c_news, c_sec, c_form4 = st.columns(3)
-
-        with c_news:
-            st.markdown("*News*")
-            if nvda_news:
-                for n in nvda_news[:5]:
-                    title = n.get("title", "Untitled")
-                    url = n.get("article_url") or n.get("url", "")
-                    st.markdown(f"- [{title}]({url})" if url else f"- {title}")
-            else:
-                st.caption("No recent news returned.")
-
-        with c_sec:
-            st.markdown("*SEC Filings*")
-            if nvda_filings:
-                for f in nvda_filings[:5]:
-                    st.markdown(f"- {f.get('form_type','?')} — {f.get('filing_date','?')}")
-            else:
-                st.caption("No recent filings returned.")
-
-        with c_form4:
-            st.markdown("*Insider Activity (Form 4)*")
-            if nvda_form4:
-                for f in nvda_form4[:5]:
-                    st.markdown(
-                        f"- {f.get('owner_name','Unknown')}: "
-                        f"{f.get('transaction_type','?')} {f.get('shares','?')} shares "
-                        f"({f.get('filing_date','?')})"
-                    )
-            else:
-                st.caption("No recent insider transactions returned.")
-
-        if not st.secrets.get("MASSIVE_API_KEY"):
-            st.info("Add MASSIVE_API_KEY to secrets.toml to populate news/filings/insider panels.")
-
-# ==============================================================================
-# 18. NVDA — PAST 8 EARNINGS: ACTUAL MOVE DISTRIBUTION vs CURRENT IMPLIED MOVE
-# Read-only, additive. Reuses fetch_chain_cboe_generic / compute_realized_vol
-# already defined above. Does not touch any other section.
-# ==============================================================================
-st.markdown("---")
-st.markdown("#### 📊 NVDA — Last 8 Earnings: Actual Move vs Implied Move")
-
-@st.cache_data(ttl=21600)
-def fetch_historical_earnings_finnhub(ticker, years_back=3):
-    """
-    Pulls historical earnings dates (with bmo/amc/dmh timing) from Finnhub's
-    calendar endpoint, spanning the past `years_back` years. Same endpoint
-    used for upcoming earnings elsewhere — just queried with a past date range.
-    """
-    finnhub_key = st.secrets.get("FINNHUB_API_KEY")
-    if not finnhub_key:
-        return []
-
-    today = datetime.date.today()
-    start = today - datetime.timedelta(days=365 * years_back)
-
-    try:
-        resp = requests.get(
-            "https://finnhub.io/api/v1/calendar/earnings",
-            params={"from": str(start), "to": str(today), "symbol": ticker, "token": finnhub_key},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        rows = data.get("earningsCalendar", []) or []
-    except Exception as e:
-        st.warning(f"Finnhub historical earnings fetch error: {e}")
-        return []
-
-    parsed = []
-    for r in rows:
-        d = r.get("date")
-        if not d:
-            continue
-        try:
-            parsed.append({
-                "date": datetime.date.fromisoformat(d),
-                "hour": r.get("hour", "amc"),  # bmo / amc / dmh
-                "eps_actual": r.get("epsActual"),
-                "eps_estimate": r.get("epsEstimate"),
-            })
+            close, high, low = df['Close'], df['High'], df['Low']
+            sma50 = close.rolling(50).mean().iloc[-1]
+            tr = pd.concat([
+                high - low,
+                (high - close.shift(1)).abs(),
+                (low - close.shift(1)).abs()
+            ], axis=1).max(axis=1)
+            atr = tr.rolling(14).mean().iloc[-1]
+            c = close.iloc[-1]
+            if pd.isna(sma50) or pd.isna(atr) or atr <= 0:
+                continue
+            if (c - sma50) >= 10 * atr:
+                matches.append(ticker)
         except Exception:
             continue
+    return sorted(matches)
 
-    parsed.sort(key=lambda x: x["date"], reverse=True)
-    return parsed
+atr10_list = timed(
+    "compute_10x_atr_above_ma50",
+    compute_10x_atr_above_ma50,
+    stocks_tuple, ticker_dfs_shared
+)
 
-
-@st.cache_data(ttl=21600)
-def fetch_price_history_for_earnings(ticker, years_back=3):
-    """
-    Fresh yfinance download of daily close prices covering the earnings
-    lookback window (kept independent of ticker_dfs_shared so this works
-    even if NVDA isn't already loaded there, or its window is shorter).
-    """
-    try:
-        df = yf.download(ticker, period=f"{years_back + 1}y", interval="1d",
-                          progress=False, auto_adjust=True)
-        if df.empty:
-            return pd.DataFrame()
-        df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
-        return df[["Close"]].dropna()
-    except Exception:
-        return pd.DataFrame()
-
-
-def compute_earnings_day_moves(earnings_list, price_df, max_events=8):
-    """
-    For each earnings event, determines the 'reaction day' close-to-close
-    % move based on report timing:
-      - bmo (before market open): report_date close vs prior trading day close
-      - amc (after market close): next trading day close vs report_date close
-      - dmh (during market hours, rare): treated like amc (next day close vs
-        report day close) since the exact intraday timing is unknown from
-        free data — flagged in the table as 'dmh (approx)'.
-    Returns a DataFrame of the most recent `max_events` events with a valid
-    computed move, most recent first.
-    """
-    if price_df is None or price_df.empty or not earnings_list:
-        return pd.DataFrame()
-
-    close = price_df["Close"]
-    close.index = pd.to_datetime(close.index).tz_localize(None)
-    trading_dates = close.index
-
-    rows = []
-    for ev in earnings_list:
-        report_date = pd.Timestamp(ev["date"])
-        hour = ev.get("hour", "amc")
-
-        # Find the report date's position in the trading calendar (or the
-        # next trading day if report_date itself wasn't a trading day)
-        pos_candidates = trading_dates[trading_dates >= report_date]
-        if pos_candidates.empty:
-            continue
-        report_trading_date = pos_candidates[0]
-        report_idx = trading_dates.get_loc(report_trading_date)
-
-        try:
-            if hour == "bmo":
-                if report_idx < 1:
-                    continue
-                prior_close = close.iloc[report_idx - 1]
-                react_close = close.iloc[report_idx]
-                react_date = trading_dates[report_idx]
-                timing_label = "Before Open"
-            else:  # amc or dmh -> next trading day close vs report day close
-                if report_idx + 1 >= len(close):
-                    continue
-                prior_close = close.iloc[report_idx]
-                react_close = close.iloc[report_idx + 1]
-                react_date = trading_dates[report_idx + 1]
-                timing_label = "After Close" if hour == "amc" else "During Hours (approx)"
-        except Exception:
-            continue
-
-        if prior_close == 0 or pd.isna(prior_close) or pd.isna(react_close):
-            continue
-
-        move_pct = round(((react_close - prior_close) / prior_close) * 100, 2)
-
-        rows.append({
-            "Report Date": ev["date"].isoformat(),
-            "Timing": timing_label,
-            "Reaction Date": react_date.strftime("%Y-%m-%d"),
-            "Actual Move %": move_pct,
-            "EPS Actual": ev.get("eps_actual"),
-            "EPS Estimate": ev.get("eps_estimate"),
-        })
-
-        if len(rows) >= max_events:
-            break
-
-    return pd.DataFrame(rows)
-
-
-_NVDA_SYM_HIST = "NVDA"
-
-with st.spinner("Fetching NVDA's past earnings dates and price reactions..."):
-    nvda_hist_earnings = timed(
-        "fetch_historical_earnings_finnhub", fetch_historical_earnings_finnhub, _NVDA_SYM_HIST, 3
-    )
-    nvda_price_hist = timed(
-        "fetch_price_history_for_earnings", fetch_price_history_for_earnings, _NVDA_SYM_HIST, 3
-    )
-
-if not nvda_hist_earnings:
-    st.info("No historical NVDA earnings dates returned by Finnhub. Check FINNHUB_API_KEY in secrets.")
-elif nvda_price_hist.empty:
-    st.info("Could not fetch NVDA price history for move calculation.")
+st.markdown(f"#### 🚀 10x ATR Above MA50 ({len(atr10_list)})")
+if atr10_list:
+    html_atr10 = ""
+    for sym in atr10_list:
+        html_atr10 += setup_badge(sym)
+    st.markdown(html_atr10, unsafe_allow_html=True)
 else:
-    moves_df = compute_earnings_day_moves(nvda_hist_earnings, nvda_price_hist, max_events=8)
-
-    if moves_df.empty:
-        st.info("Could not compute earnings-day moves from the available data.")
-    else:
-        # ── Pull current implied move for reference (reuses earlier logic) ──
-        current_implied_move = None
-        _nvda_spot_ref, _nvda_chain_ref = fetch_chain_cboe_generic(_NVDA_SYM_HIST)
-        if _nvda_chain_ref is not None and not _nvda_chain_ref.empty and "error" not in _nvda_chain_ref.columns:
-            _next_earn_date = get_next_earnings_date(_NVDA_SYM_HIST) if "get_next_earnings_date" in dir() else None
-            if _next_earn_date is not None:
-                _setup_ref = compute_earnings_options_setup(_NVDA_SYM_HIST, _nvda_spot_ref, _nvda_chain_ref, _next_earn_date)
-                if _setup_ref:
-                    current_implied_move = _setup_ref.get("implied_move_pct")
-
-        # ── Stats ──
-        moves = moves_df["Actual Move %"].astype(float)
-        stat_mean = round(moves.mean(), 2)
-        stat_median = round(moves.median(), 2)
-        stat_std = round(moves.std(ddof=1), 2) if len(moves) > 1 else None
-        stat_abs_mean = round(moves.abs().mean(), 2)
-        stat_max_up = round(moves.max(), 2)
-        stat_max_down = round(moves.min(), 2)
-        win_rate = round((moves > 0).mean() * 100, 1)
-
-        def _metric_badge(label, value, color="#eeeeee"):
-            return (
-                f'<div class="ticker-badge" style="min-width:120px;">'
-                f'<span style="color:#888;font-size:10px;display:block;">{label}</span>'
-                f'<span style="color:{color};font-weight:bold;font-size:14px;">{value}</span>'
-                f'</div>'
-            )
-
-        badges_html = "<div style='display:flex;flex-wrap:wrap;gap:8px;padding:6px 0;'>"
-        badges_html += _metric_badge("Mean Move", f"{stat_mean:+.2f}%", "#00FF00" if stat_mean > 0 else "#FF4B4B")
-        badges_html += _metric_badge("Median Move", f"{stat_median:+.2f}%", "#00FF00" if stat_median > 0 else "#FF4B4B")
-        badges_html += _metric_badge("Avg |Move|", f"{stat_abs_mean:.2f}%", "#FFD700")
-        if stat_std is not None:
-            badges_html += _metric_badge("Std Dev", f"{stat_std:.2f}%")
-        badges_html += _metric_badge("Best Reaction", f"{stat_max_up:+.2f}%", "#00FF00")
-        badges_html += _metric_badge("Worst Reaction", f"{stat_max_down:+.2f}%", "#FF4B4B")
-        badges_html += _metric_badge("Win Rate (up moves)", f"{win_rate}%")
-        if current_implied_move is not None:
-            richness = "rich vs history" if current_implied_move > stat_abs_mean else "cheap vs history"
-            richness_color = "#FF4B4B" if current_implied_move > stat_abs_mean else "#00FF00"
-            badges_html += _metric_badge("Current Implied Move", f"±{current_implied_move}% ({richness})", richness_color)
-        badges_html += "</div>"
-        st.markdown(badges_html, unsafe_allow_html=True)
-
-        # ── Histogram: actual moves per earnings event, implied move as reference line ──
-        hist_df = moves_df.sort_values("Report Date").reset_index(drop=True)
-        bar_colors = ["#00FF00" if m >= 0 else "#FF4B4B" for m in hist_df["Actual Move %"]]
-
-        fig_earn = go.Figure()
-        fig_earn.add_trace(go.Bar(
-            x=hist_df["Report Date"],
-            y=hist_df["Actual Move %"],
-            marker_color=bar_colors,
-            text=[f"{m:+.1f}%" for m in hist_df["Actual Move %"]],
-            textposition="outside",
-            name="Actual Move %",
-        ))
-
-        fig_earn.add_hline(y=stat_mean, line_dash="dash", line_color="#4ecdc4",
-                            annotation_text=f"Mean {stat_mean:+.2f}%", annotation_position="top left")
-
-        if current_implied_move is not None:
-            fig_earn.add_hline(y=current_implied_move, line_dash="dot", line_color="#FFD700",
-                                annotation_text=f"Current Implied ±{current_implied_move}%",
-                                annotation_position="bottom left")
-            fig_earn.add_hline(y=-current_implied_move, line_dash="dot", line_color="#FFD700")
-
-        fig_earn.update_layout(
-            title=dict(text="NVDA — Actual Post-Earnings Move (Last 8 Reports)", font=dict(size=13, color="#cccccc")),
-            height=380,
-            margin=dict(l=40, r=40, t=50, b=60),
-            plot_bgcolor="rgba(20,22,30,1)",
-            paper_bgcolor="rgba(13,17,23,0)",
-            font=dict(color="#cccccc"),
-            xaxis=dict(title="Report Date", type="category", tickfont=dict(size=10)),
-            yaxis=dict(title="1-Day Move %", showgrid=True, gridcolor="rgba(120,120,120,0.15)"),
-            showlegend=False,
-        )
-        st.plotly_chart(fig_earn, use_container_width=True)
-
-        # ── Detail table ──
-        st.markdown("**Event Detail**")
-        st.dataframe(
-            hist_df[["Report Date", "Timing", "Reaction Date", "Actual Move %", "EPS Actual", "EPS Estimate"]],
-            use_container_width=True, hide_index=True,
-            column_config={
-                "Actual Move %": st.column_config.NumberColumn(format="%.2f%%"),
-            }
-        )
-
-        st.caption(
-            "Historical implied move data isn't available from free sources, so only the CURRENT "
-            "implied move (from today's option chain) is shown as a reference line — it reflects "
-            "what's priced in for the NEXT report, not what was priced in for past ones. Use the "
-            "comparison of current implied vs. historical average |move| as a rough 'rich vs cheap' "
-            "read, not a prediction of direction or magnitude."
-        )
+    st.info("No active setups discovered.")
