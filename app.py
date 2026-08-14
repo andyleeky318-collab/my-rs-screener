@@ -10103,11 +10103,11 @@ def send_telegram_text(text, bot_token, chat_id, parse_mode="HTML"):
 def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
                                industry_rank_map, all_data,
                                cloud21ema_all, cloudwick_all, ma50bounce_all,
-                               ticker_dfs_shared, leader_list=None, nan_ticker_count=0):
+                               ticker_dfs_shared, leader_list=None, tml_list=None, nan_ticker_count=0):
     if not global_setup_tickers:
         return None
 
-    leader_set = set(leader_list or [])
+    leader_set = set(leader_list or []) | set(tml_list or [])
 
     # Global RS lookup
     global_rs_lookup = {}
@@ -10198,6 +10198,7 @@ if in_send_window and st.session_state.get("telegram_setup_summary_sig") != setu
         global_setup_tickers, global_setup_ticker_groups, industry_rank_map,
         all_data, cloud21ema_all, cloudwick_all, ma50bounce_all, ticker_dfs_shared,
         leader_list=leader_list,
+        tml_list=tml_list,
         nan_ticker_count=len(_latest_nan_tickers),   # NEW
     )
     tg_token = st.secrets.get("TELEGRAM_BOT_TOKEN")
