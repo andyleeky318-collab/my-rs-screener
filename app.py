@@ -9147,6 +9147,23 @@ trending_yesterday, comparison_date = timed(
 )
 yesterday_set = set(trending_yesterday)
 
+# NEW: cross-section glow — ticker glows if it appears in >=2 of
+# {Quant Sentiment, Reddit top 30, X.com}. Fetches are cached, so this
+# doesn't add extra network cost — later calls in those sections reuse cache.
+_reddit_df_pre = fetch_reddit_mentions_apewisdom(stocks_tuple, "wallstreetbets")
+_reddit_top30_syms_pre = (
+    set(_reddit_df_pre[~_reddit_df_pre["Ticker"].isin(["SPY", "QQQ", "VOO"])].head(30)["Ticker"])
+    if not _reddit_df_pre.empty else set()
+)
+_spikepanel_syms_pre = set(fetch_spikepanel_surge_tickers())
+_quant_sentiment_syms_pre = set(trending_today)
+
+cross_section_glow_syms = {
+    sym for sym in (_quant_sentiment_syms_pre | _reddit_top30_syms_pre | _spikepanel_syms_pre)
+    if (sym in _quant_sentiment_syms_pre) + (sym in _reddit_top30_syms_pre) + (sym in _spikepanel_syms_pre) >= 2
+}
+CROSS_SECTION_GLOW_STYLE = "box-shadow:0 0 8px 2px #00FFFF; border:1px solid #00FFFF;"
+
 # ── Render section ────────────────────────────────────────────────────────────
 st.markdown("---")
 
@@ -9183,10 +9200,7 @@ if trending_today:
                 "background:#1e1e1e; border:1px solid #444; color:#FFFFFF; font-weight:bold;"
             )
 
-        glow_style = (
-            "box-shadow:0 0 8px 2px #FFD700;"
-            if sym not in KNOWN_STOCKS else ""
-        )
+        glow_style = CROSS_SECTION_GLOW_STYLE if sym in cross_section_glow_syms else ""
 
         qs_html += (
             f"<div style='display:inline-flex; align-items:center; gap:4px; "
@@ -9308,10 +9322,7 @@ else:
         delta_color = "#00FF00" if delta > 0 else "#FF4B4B" if delta < 0 else "#888888"
         delta_str = f"+{delta}" if delta > 0 else str(delta)
 
-        glow_style = (
-            "box-shadow:0 0 8px 2px #FFD700; border:1px solid #FFD700;"
-            if sym not in KNOWN_STOCKS else ""
-        )
+        glow_style = CROSS_SECTION_GLOW_STYLE if sym in cross_section_glow_syms else ""
 
         html_reddit += (
             f'<div class="ticker-badge" style="{glow_style}">'
@@ -9397,10 +9408,11 @@ st.markdown(f"#### 🧵 X.com")#({len(spikepanel_tickers)})
 if spikepanel_tickers:
     badges_html = "<div style='display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;'>"
     for sym in spikepanel_tickers:
+        glow_style = CROSS_SECTION_GLOW_STYLE if sym in cross_section_glow_syms else ""
         badges_html += (
             f"<span style='display:inline-block; padding:2px 6px; border:1px solid #444; "
             f"border-radius:4px; background-color:#1e1e1e; color:#eee; font-size:12px; "
-            f"white-space:nowrap;'>{sym}</span>"
+            f"white-space:nowrap; {glow_style}'>{sym}</span>"
         )
     badges_html += "</div>"
     st.markdown(badges_html, unsafe_allow_html=True)
