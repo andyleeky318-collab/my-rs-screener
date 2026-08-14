@@ -5146,16 +5146,86 @@ def highlight_current_regime(row):
 # 5. Apply the style and render via Streamlit dataframe (handles styling better than st.table)
 styled_df = df_regime.style.apply(highlight_current_regime, axis=1)
 
-st.dataframe(
-    styled_df,
-    use_container_width=False,
-    width=520,
-    hide_index=True,
-    column_config={
-        "Market Condition": st.column_config.Column(width=200),
-        "What to do": st.column_config.Column(width=300),
-    }
-)
+def render_market_regime_gauge(value, title="Market Regime"):
+    """
+    CNN Fear & Greed style gauge — diverging red -> yellow -> green bands,
+    matching the same color language as the -1 to +1 correlation chart
+    (RdYlGn), rescaled to the 0-100 % Above EMA200 metric.
+    Read-only, additive; does not modify any other chart or table.
+    """
+    value = max(0, min(100, value))
+
+    if value < 40:
+        needle_color = "#FF4B4B"
+    elif value < 60:
+        needle_color = "#FFA500"
+    else:
+        needle_color = "#00FF00"
+
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=value,
+        number={
+            "suffix": "%",
+            "font": {"size": 34, "color": "#ffffff"},
+        },
+        gauge={
+            "axis": {
+                "range": [0, 100],
+                "tickmode": "array",
+                "tickvals": [0, 25, 40, 50, 60, 70, 100],
+                "tickfont": {"size": 10, "color": "#888888"},
+            },
+            "bar": {"color": needle_color, "thickness": 0.28},
+            "bgcolor": "rgba(0,0,0,0)",
+            "borderwidth": 0,
+            "steps": [
+                {"range": [0, 40],  "color": "#FF6B6B"},   # Be cautious
+                {"range": [40, 50], "color": "#FFC98A"},   # Recovery attempt
+                {"range": [50, 60], "color": "#FFE699"},   # Market improving
+                {"range": [60, 70], "color": "#B7E4A5"},   # Good swing environment
+                {"range": [70, 100],"color": "#6FCF97"},   # Strong bull participation
+            ],
+            "threshold": {
+                "line": {"color": "#ffffff", "width": 3},
+                "thickness": 0.75,
+                "value": value,
+            },
+        },
+    ))
+
+    fig.update_layout(
+        height=260,
+        margin=dict(l=20, r=20, t=40, b=10),
+        paper_bgcolor="rgba(13,17,23,0)",
+        font=dict(color="#cccccc"),
+        title=dict(text=title, font=dict(size=13, color="#cccccc"), x=0.5, xanchor="center"),
+    )
+    return fig
+
+
+col_regime_table, col_regime_gauge = st.columns([1.1, 1])
+
+with col_regime_table:
+    st.dataframe(
+        styled_df,
+        use_container_width=False,
+        width=520,
+        hide_index=True,
+        column_config={
+            "Market Condition": st.column_config.Column(width=200),
+            "What to do": st.column_config.Column(width=300),
+        }
+    )
+
+with col_regime_gauge:
+    _regime_gauge_fig = timed(
+        "render_market_regime_gauge",
+        render_market_regime_gauge,
+        pct_above_ema200,
+        "% Above 200 EMA"
+    )
+    st.plotly_chart(_regime_gauge_fig, use_container_width=True)
 
 st.markdown("---")
 
@@ -8789,7 +8859,7 @@ def _relative_etf_ratios():
         ("IWM", "QQQ"),
         ("VUG", "VTV"),
         ("RSP", "SPY"),
-        ("SMH", "IGV"),
+        #("SMH", "IGV"),
     )
 
     #st.markdown("#### Relative ETF Ratios (1 Year)")
