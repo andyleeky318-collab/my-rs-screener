@@ -11449,3 +11449,312 @@ else:
 #     fig_pair.update_xaxes(showgrid=False)
 
 #     st.plotly_chart(fig_pair, use_container_width=True)
+
+# ==============================================================================
+# 17. NVDA EARNINGS SETUP — Options positioning (OI/Volume/IV/HV) + Massive.com
+# news/filings/insider signals. Read-only, additive.
+#
+# IMPORTANT: options data reveals market-implied MOVE SIZE and POSITIONING,
+# not earnings outcome. This does not predict beat/miss/direction — it shows
+# what the options market is currently pricing in and where flow is stacked,
+# which is the honest and actually-supported use of this data.
+# ==============================================================================
+st.markdown("---")
+st.markdown("#### 🎯 NVDA Earnings Setup Dashboard")
+
+@st.cache_data(ttl=900)
+def fetch_chain_cboe_generic(symbol):
+    """
+    Generalized version of fetch_qqq_chain_cboe — same free, no-key CBOE
+    delayed quotes feed, works for any optionable symbol.
+    Returns (spot, DataFrame[expiry, right, strike, volume, open_interest, iv, delta, bid, ask]).
+    """
+    url = f"https://cdn.cboe.com/api/global/delayed_quotes/options/{symbol}.json"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/json",
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        payload = resp.json()
+    except Exception as e:
+        return None, pd.DataFrame({"error": [str(e)]})
+
+    data = payload.get("data", {})
+    spot = data.get("current_price")
+    options = data.get("options", [])
+    if not options or spot is None:
+        return spot, pd.DataFrame()
+
+    row_pattern = re.compile(rf"^{re.escape(symbol)}(\d{{6}})([CP])(\d{{8}})$")
+    rows = []
+    for opt in options:
+        contract = opt.get("option", "")
+        m = row_pattern.match(contract)
+        if not m:
+            continue
+        exp_str, right, strike_str = m.groups()
+        try:
+            expiry = datetime.datetime.strptime(exp_str, "%y%m%d").date()
+            strike = int(strike_str) / 1000.0
+        except Exception:
+            continue
+        rows.append({
+            "expiry": expiry,
+            "right": "call" if right == "C" else "put",
+            "strike": strike,
+            "volume": opt.get("volume") or 0,
+            "open_interest": opt.get("open_interest") or 0,
+            "iv": opt.get("iv"),
+            "delta": opt.get("delta"),
+            "bid": opt.get("bid"),
+            "ask": opt.get("ask"),
+        })
+    return spot, pd.DataFrame(rows)
+
+
+def compute_earnings_options_setup(symbol, spot, chain_df, earnings_date):
+    """
+    Builds the earnings positioning summary:
+      - Nearest expiry AFTER earnings_date (captures the earnings IV crush)
+      - ATM straddle -> market-implied % move for that expiry
+      - 25-delta-proxy skew (put IV - call IV) -> directional hedging bias
+      - Put/Call volume & OI ratios -> flow positioning
+      - Top OI "walls" (strikes with largest OI) -> potential pin/resistance levels
+      - IV/HV ratio -> how rich the options are vs realized volatility (crush risk)
+    """
+    if chain_df is None or chain_df.empty or spot is None or earnings_date is None:
+        return None
+
+    chain_df = chain_df.copy()
+    post_earnings = chain_df[chain_df["expiry"] >= earnings_date]
+    if post_earnings.empty:
+        return None
+
+    target_expiry = post_earnings["expiry"].min()
+    exp_df = chain_df[chain_df["expiry"] == target_expiry].copy()
+
+    calls = exp_df[exp_df["right"] == "call"].copy()
+    puts  = exp_df[exp_df["right"] == "put"].copy()
+    if calls.empty or puts.empty:
+        return None
+
+    # ATM strike = closest to spot
+    calls["dist"] = (calls["strike"] - spot).abs()
+    puts["dist"]  = (puts["strike"] - spot).abs()
+    atm_strike = calls.sort_values("dist")["strike"].iloc[0]
+
+    atm_call = calls[calls["strike"] == atm_strike].sort_values("dist").iloc[0] if not calls.empty else None
+    atm_put  = puts[puts["strike"] == atm_strike].sort_values("dist").iloc[0] if not puts.empty else None
+
+    atm_call_mid = np.nanmean([atm_call["bid"], atm_call["ask"]]) if atm_call is not None else np.nan
+    atm_put_mid  = np.nanmean([atm_put["bid"], atm_put["ask"]]) if atm_put is not None else np.nan
+    straddle_price = (atm_call_mid or 0) + (atm_put_mid or 0)
+    implied_move_pct = round((straddle_price / spot) * 100, 2) if straddle_price and spot else None
+
+    atm_call_iv = atm_call["iv"] if atm_call is not None else np.nan
+    atm_put_iv  = atm_put["iv"] if atm_put is not None else np.nan
+    atm_iv = np.nanmean([atm_call_iv, atm_put_iv])
+    atm_iv_pct = round(float(atm_iv) * 100, 1) if pd.notna(atm_iv) else None
+
+    # ~10% OTM skew proxy (same approach as the QQQ block)
+    put_otm_strike, call_otm_strike = spot * 0.90, spot * 1.10
+    puts_otm = puts.assign(d_otm=(puts["strike"] - put_otm_strike).abs())
+    calls_otm = calls.assign(d_otm=(calls["strike"] - call_otm_strike).abs())
+    put_skew_iv = puts_otm.sort_values("d_otm")["iv"].iloc[0] if not puts_otm.empty else np.nan
+    call_skew_iv = calls_otm.sort_values("d_otm")["iv"].iloc[0] if not calls_otm.empty else np.nan
+    skew_pts = round((float(put_skew_iv) - float(call_skew_iv)) * 100, 2) if pd.notna(put_skew_iv) and pd.notna(call_skew_iv) else None
+
+    call_volume = int(calls["volume"].sum())
+    put_volume  = int(puts["volume"].sum())
+    call_oi     = int(calls["open_interest"].sum())
+    put_oi      = int(puts["open_interest"].sum())
+    pc_vol_ratio = round(put_volume / call_volume, 2) if call_volume > 0 else None
+    pc_oi_ratio  = round(put_oi / call_oi, 2) if call_oi > 0 else None
+
+    # Top 5 OI strikes (potential pin/wall levels) across both sides
+    oi_walls = (
+        exp_df.groupby("strike")["open_interest"].sum()
+        .sort_values(ascending=False)
+        .head(5)
+        .reset_index()
+    )
+    oi_walls_list = [
+        {"strike": round(float(r.strike), 1), "oi": int(r.open_interest)}
+        for r in oi_walls.itertuples()
+    ]
+
+    return {
+        "expiry": target_expiry.isoformat(),
+        "dte": (target_expiry - datetime.date.today()).days,
+        "spot": round(float(spot), 2),
+        "atm_strike": round(float(atm_strike), 1),
+        "implied_move_pct": implied_move_pct,
+        "atm_iv_pct": atm_iv_pct,
+        "skew_pts": skew_pts,
+        "call_volume": call_volume, "put_volume": put_volume,
+        "call_oi": call_oi, "put_oi": put_oi,
+        "pc_vol_ratio": pc_vol_ratio, "pc_oi_ratio": pc_oi_ratio,
+        "oi_walls": oi_walls_list,
+    }
+
+
+def get_next_earnings_date(symbol, days_ahead=90):
+    """Reuses your existing get_upcoming_earnings_finnhub — picks the nearest upcoming date."""
+    rows = get_upcoming_earnings_finnhub(symbol, days_ahead=days_ahead)
+    if not rows:
+        return None
+    dates = []
+    for r in rows:
+        d = r.get("date")
+        if d:
+            try:
+                dates.append(datetime.date.fromisoformat(d))
+            except Exception:
+                continue
+    return min(dates) if dates else None
+
+
+_NVDA_SYM = "NVDA"
+
+with st.spinner(f"Fetching {_NVDA_SYM} earnings date, options chain, and news/filings..."):
+    nvda_earnings_date = timed("get_next_earnings_date", get_next_earnings_date, _NVDA_SYM)
+    nvda_spot, nvda_chain_df = timed("fetch_chain_cboe_generic_nvda", fetch_chain_cboe_generic, _NVDA_SYM)
+    nvda_news = timed("get_stock_news_nvda", get_stock_news, _NVDA_SYM, 5)
+    nvda_filings = timed("get_recent_sec_filings_nvda", get_recent_sec_filings, _NVDA_SYM, 5)
+    nvda_form4 = timed("get_form4_insider_nvda", get_form4_insider, _NVDA_SYM, 5)
+
+if nvda_chain_df is None or nvda_chain_df.empty or "error" in nvda_chain_df.columns:
+    err = nvda_chain_df["error"].iloc[0] if (nvda_chain_df is not None and "error" in nvda_chain_df.columns) else "no data"
+    st.info(f"NVDA options data unavailable — {err}")
+elif nvda_earnings_date is None:
+    st.info("No upcoming NVDA earnings date found via Finnhub calendar. Add FINNHUB_API_KEY to secrets if missing.")
+else:
+    setup = compute_earnings_options_setup(_NVDA_SYM, nvda_spot, nvda_chain_df, nvda_earnings_date)
+
+    if not setup:
+        st.info("Could not compute NVDA earnings options setup from the chain.")
+    else:
+        nvda_close = ticker_dfs_shared.get("NVDA", pd.DataFrame()).get("Close", pd.Series(dtype=float))
+        hv_20 = compute_realized_vol(nvda_close, 20) if not nvda_close.empty else None
+        iv_hv_ratio = round(setup["atm_iv_pct"] / hv_20, 2) if (setup.get("atm_iv_pct") and hv_20) else None
+
+        st.markdown(
+            f"<div style='font-size:13px;color:#888;margin-bottom:8px;'>"
+            f"Next earnings: <span style='color:#4ecdc4;font-weight:bold;'>{nvda_earnings_date.isoformat()}</span> "
+            f"&nbsp;|&nbsp; First expiry after earnings: "
+            f"<span style='color:#4ecdc4;font-weight:bold;'>{setup['expiry']}</span> ({setup['dte']}d)"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+
+        def _metric_badge(label, value, color="#eeeeee"):
+            return (
+                f'<div class="ticker-badge" style="min-width:120px;">'
+                f'<span style="color:#888;font-size:10px;display:block;">{label}</span>'
+                f'<span style="color:{color};font-weight:bold;font-size:14px;">{value}</span>'
+                f'</div>'
+            )
+
+        badges_html = "<div style='display:flex;flex-wrap:wrap;gap:8px;padding:6px 0;'>"
+        badges_html += _metric_badge("Spot", f"${setup['spot']}")
+        badges_html += _metric_badge("ATM Strike", setup["atm_strike"])
+        if setup["implied_move_pct"] is not None:
+            badges_html += _metric_badge("Implied Move", f"±{setup['implied_move_pct']}%", "#FFD700")
+        if setup["atm_iv_pct"] is not None:
+            badges_html += _metric_badge("ATM IV", f"{setup['atm_iv_pct']}%")
+        if hv_20 is not None:
+            badges_html += _metric_badge("20D HV", f"{hv_20}%")
+        if iv_hv_ratio is not None:
+            crush_color = "#FF4B4B" if iv_hv_ratio >= 1.8 else "#FFA500" if iv_hv_ratio >= 1.3 else "#00FF00"
+            badges_html += _metric_badge("IV/HV (crush risk)", iv_hv_ratio, crush_color)
+        if setup["skew_pts"] is not None:
+            skew_color = "#FF4B4B" if setup["skew_pts"] > 3 else "#00FF00" if setup["skew_pts"] < -3 else "#eeeeee"
+            skew_label = "put-hedge heavy" if setup["skew_pts"] > 3 else "call-skewed" if setup["skew_pts"] < -3 else "balanced"
+            badges_html += _metric_badge("25d Skew (P-C)", f"{setup['skew_pts']}pts ({skew_label})", skew_color)
+        badges_html += _metric_badge("P/C Volume", setup["pc_vol_ratio"] or "n/a")
+        badges_html += _metric_badge("P/C OI", setup["pc_oi_ratio"] or "n/a")
+        badges_html += "</div>"
+        st.markdown(badges_html, unsafe_allow_html=True)
+
+        # ── OI Walls (potential pin/resistance/support levels) ──
+        if setup["oi_walls"]:
+            st.markdown("**📍 Largest Open Interest Strikes (potential pin levels)**")
+            walls_html = "<div style='display:flex;flex-wrap:wrap;gap:6px;padding:6px 0;'>"
+            for w in setup["oi_walls"]:
+                above_below = "↑" if w["strike"] > setup["spot"] else "↓" if w["strike"] < setup["spot"] else "≈"
+                walls_html += (
+                    f'<div class="ticker-badge">'
+                    f'<span class="ticker-name">${w["strike"]} {above_below}</span>'
+                    f'<span class="ticker-rs" style="margin-left:5px;">{w["oi"]:,} OI</span>'
+                    f'</div>'
+                )
+            walls_html += "</div>"
+            st.markdown(walls_html, unsafe_allow_html=True)
+
+        # ── Composite read (positioning-only, explicitly NOT a beat/miss call) ──
+        signals = []
+        if iv_hv_ratio is not None and iv_hv_ratio >= 1.8:
+            signals.append("Options are pricing a large move relative to recent realized volatility (elevated IV crush risk post-earnings).")
+        if setup["skew_pts"] is not None and setup["skew_pts"] > 3:
+            signals.append("Put skew is elevated — the market is paying up for downside protection.")
+        elif setup["skew_pts"] is not None and setup["skew_pts"] < -3:
+            signals.append("Call skew is elevated — flow is leaning toward upside speculation/hedging.")
+        if setup["pc_oi_ratio"] is not None and setup["pc_oi_ratio"] > 1.2:
+            signals.append("Put open interest exceeds call open interest — net defensive positioning built up into earnings.")
+        elif setup["pc_oi_ratio"] is not None and setup["pc_oi_ratio"] < 0.7:
+            signals.append("Call open interest dominates — net bullish positioning built up into earnings.")
+
+        if signals:
+            sig_html = "<ul style='margin:6px 0 0 18px;padding:0;color:#e0e0e0;font-size:13px;'>"
+            for s in signals:
+                sig_html += f"<li>{s}</li>"
+            sig_html += "</ul>"
+            st.markdown(sig_html, unsafe_allow_html=True)
+
+        st.caption(
+            "This reflects what the options market is currently pricing (expected move size, "
+            "hedging skew, and positioning) — it is NOT a prediction of beat/miss or post-earnings "
+            "direction. Free CBOE delayed quotes; verify with your broker before trading around earnings."
+        )
+
+        # ── Massive.com news / filings / insider context ──
+        st.markdown("**📰 Recent News, Filings & Insider Activity (Massive.com)**")
+        c_news, c_sec, c_form4 = st.columns(3)
+
+        with c_news:
+            st.markdown("*News*")
+            if nvda_news:
+                for n in nvda_news[:5]:
+                    title = n.get("title", "Untitled")
+                    url = n.get("article_url") or n.get("url", "")
+                    st.markdown(f"- [{title}]({url})" if url else f"- {title}")
+            else:
+                st.caption("No recent news returned.")
+
+        with c_sec:
+            st.markdown("*SEC Filings*")
+            if nvda_filings:
+                for f in nvda_filings[:5]:
+                    st.markdown(f"- {f.get('form_type','?')} — {f.get('filing_date','?')}")
+            else:
+                st.caption("No recent filings returned.")
+
+        with c_form4:
+            st.markdown("*Insider Activity (Form 4)*")
+            if nvda_form4:
+                for f in nvda_form4[:5]:
+                    st.markdown(
+                        f"- {f.get('owner_name','Unknown')}: "
+                        f"{f.get('transaction_type','?')} {f.get('shares','?')} shares "
+                        f"({f.get('filing_date','?')})"
+                    )
+            else:
+                st.caption("No recent insider transactions returned.")
+
+        if not st.secrets.get("MASSIVE_API_KEY"):
+            st.info("Add MASSIVE_API_KEY to secrets.toml to populate news/filings/insider panels.")
