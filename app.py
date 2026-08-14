@@ -5222,7 +5222,7 @@ def render_market_regime_gauge(value, title="Market Regime"):
         type="line",
         x0=pivot_x_frac, y0=pivot_y_frac, x1=tip_x_frac, y1=tip_y_frac,
         xref="paper", yref="paper",
-        line=dict(color=_NEEDLE_COLOR, width=4),
+        line=dict(color="#FFFFFF", width=4),
     )
 
     # Hub circle at the pivot (ellipse in fraction space so it renders as a
@@ -5232,7 +5232,7 @@ def render_market_regime_gauge(value, title="Market Regime"):
         x0=pivot_x_frac - hub_r_x_frac, y0=pivot_y_frac - hub_r_y_frac,
         x1=pivot_x_frac + hub_r_x_frac, y1=pivot_y_frac + hub_r_y_frac,
         xref="paper", yref="paper",
-        fillcolor=_NEEDLE_COLOR, line=dict(color=_NEEDLE_COLOR, width=0),
+        fillcolor="#FFFFFF", line=dict(color="#FFFFFF", width=0),
     )
 
     fig.update_layout(
