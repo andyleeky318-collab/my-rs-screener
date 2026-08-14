@@ -6502,6 +6502,9 @@ if gapper_list or gapper_yest:
     # ── NEW: map to industries for top-20 glow check ──
     gapper_industry_counts, gapper_ticker_industry = build_leader_industry_map(gapper_list, INDUSTRIES)
 
+    # NEW: quality-filter pass set for magenta background
+    gapper_quality_pass = compute_quality_filter_pass(tuple(gapper_list), ticker_dfs_shared)
+
     # ── Badge row ─────────────────────────────────────────────────────────
     html_g = ""
     for sym in gapper_list:
@@ -6512,11 +6515,8 @@ if gapper_list or gapper_yest:
             "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
             if is_top20_industry else ""
         )
-        html_g += setup_badge(sym, is_new=(sym not in gapper_yest), extra_style=glow_style)
-
-    removed_gapper = [sym for sym in gapper_yest if sym not in gapper_list]
-    for sym in sorted(removed_gapper):
-        html_g += f'<div class="ticker-badge removed-badge">{sym}</div>'
+        quality_style = "background:#C71585;" if sym in gapper_quality_pass else ""  # NEW
+        html_g += setup_badge(sym, is_new=(sym not in gapper_yest), extra_style=glow_style + quality_style)
 
     st.markdown(html_g, unsafe_allow_html=True)
 
@@ -7054,6 +7054,53 @@ def compute_early_bull_combined(stocks_list, ticker_dfs, benchmark_df_input):
             continue
 
     return sorted(filtered), sorted(unfiltered)
+
+@st.cache_data(ttl=3600)
+def compute_quality_filter_pass(stocks_list, ticker_dfs):
+    """
+    Returns the subset of stocks_list whose latest bar passes the
+    ADR%/ATR21_R/ATR50_R/EMA21-low-distance quality checks (same cond1-cond4
+    used in compute_early_bull_combined's filtered branch).
+    """
+    passing = set()
+    for ticker in stocks_list:
+        try:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < 50:
+                continue
+
+            close = df['Close']; high = df['High']; low = df['Low']
+
+            sma50 = close.rolling(50).mean()
+            ema21_close = close.ewm(span=21, adjust=False).mean()
+            ema21_low   = low.ewm(span=21, adjust=False).mean()
+
+            tr = pd.concat([
+                high - low,
+                (high - close.shift(1)).abs(),
+                (low - close.shift(1)).abs()
+            ], axis=1).max(axis=1)
+            atr = tr.rolling(14).mean()
+            atrPercent = (atr / close) * 100
+
+            atr21_R = (((close - ema21_close) / close) * 100) / (atrPercent + 1e-6)
+            atr50_R = (((close - sma50) / close) * 100) / (atrPercent + 1e-6)
+            emaDistPercent = ((close - ema21_low) / close) * 100
+
+            hl_ratio = high / low
+            adrPercent = 100 * (hl_ratio.rolling(20).mean() - 1)
+
+            cond1 = (adrPercent.iloc[-1] >= 2.45) and (adrPercent.iloc[-1] < 8.05)
+            cond2 = -0.5 <= atr21_R.iloc[-1] <= 1
+            cond3 = 0 <= atr50_R.iloc[-1] <= 3
+            cond4 = 0 < emaDistPercent.iloc[-1] <= 8
+
+            if cond1 and cond2 and cond3 and cond4:
+                passing.add(ticker)
+        except Exception:
+            continue
+
+    return passing
 
 @st.cache_data(ttl=3600)
 def compute_early_bull_history(stocks_list, ticker_dfs, benchmark_df_input):
