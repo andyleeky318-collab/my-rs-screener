@@ -9416,7 +9416,7 @@ if spikepanel_tickers:
         badges_html += (
             f"<span style='display:inline-block; padding:2px 6px; border:1px solid #444; "
             f"border-radius:4px; background-color:#1e1e1e; color:#eee; font-size:12px; "
-            f"white-space:nowrap; {glow_style}'>{sym}</span>"
+            f"font-weight:bold; white-space:nowrap; {glow_style}'>{sym}</span>"
         )
     badges_html += "</div>"
     st.markdown(badges_html, unsafe_allow_html=True)
