@@ -9279,7 +9279,7 @@ cross_section_glow_syms = {
     sym for sym in (_quant_sentiment_syms_pre | _reddit_top30_syms_pre | _spikepanel_syms_pre)
     if (sym in _quant_sentiment_syms_pre) + (sym in _reddit_top30_syms_pre) + (sym in _spikepanel_syms_pre) >= 2
 }
-CROSS_SECTION_GLOW_STYLE = "box-shadow:0 0 8px 2px #FFD700; border:1px solid #FFD700;"
+CROSS_SECTION_GLOW_STYLE = "box-shadow:0 0 8px 2px #00FFFF; border:1px solid #00FFFF;"
 
 # ── Render section ────────────────────────────────────────────────────────────
 st.markdown("---")
