@@ -5151,17 +5151,19 @@ def render_market_regime_gauge(value, title="Market Regime"):
     CNN Fear & Greed style gauge — diverging red -> yellow -> green bands,
     with a real needle drawn from the bottom-center pivot to the value
     (go.Indicator has no native needle, so it's overlaid manually via
-    fig.add_shape using polar coordinates in the gauge's domain).
+    fig.add_shape). Needle geometry is computed in pixel space using a
+    FIXED figure width/height, then converted to fractional paper
+    coordinates per-axis — this avoids angle distortion that occurs when
+    the plot area isn't square (e.g. a wide, short container).
     Read-only, additive; does not modify any other chart or table.
     """
     value = max(0, min(100, value))
 
-    if value < 40:
-        band_color = "#FF4B4B"
-    elif value < 60:
-        band_color = "#FFA500"
-    else:
-        band_color = "#00FF00"
+    # Fixed render size so the pixel-space needle math below stays accurate.
+    # Rendered with use_container_width=False at the call site — do not
+    # change one without the other.
+    _FIG_WIDTH  = 420
+    _FIG_HEIGHT = 260
 
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
@@ -5174,10 +5176,10 @@ def render_market_regime_gauge(value, title="Market Regime"):
             "axis": {
                 "range": [0, 100],
                 "tickmode": "array",
-                "tickvals": [0, 40, 50, 60, 70, 100],
+                "tickvals": [0, 25, 40, 50, 60, 70, 100],
                 "tickfont": {"size": 10, "color": "#888888"},
             },
-            "bar": {"color": "rgba(0,0,0,0)"},  # hide default bar — needle replaces it visually
+            "bar": {"color": "rgba(0,0,0,0)"},  # hidden — needle replaces it visually
             "bgcolor": "rgba(0,0,0,0)",
             "borderwidth": 0,
             "steps": [
@@ -5196,37 +5198,48 @@ def render_market_regime_gauge(value, title="Market Regime"):
     ))
 
     # ── Needle: bottom-center pivot -> value along the ring ──
-    # Tweak these three if the needle doesn't line up with your rendered gauge.
-    _NEEDLE_CX  = 0.5    # horizontal pivot (fraction of plot width, 0=left, 1=right)
-    _NEEDLE_CY  = 0.08   # vertical pivot (fraction of plot height, near bottom)
-    _NEEDLE_LEN = 0.42   # needle length as a fraction of plot size
+    # Pivot position, in FRACTION of the fixed figure size (paper coords).
+    _PIVOT_X_FRAC = 0.5
+    _PIVOT_Y_FRAC = 0.08
+    _NEEDLE_LEN_PX = 100   # needle length in pixels — tune this if it looks too short/long
+    _HUB_R_PX = 12
 
-    # value=0 -> needle points left (180°), value=100 -> needle points right (0°)
+    pivot_x_px = _PIVOT_X_FRAC * _FIG_WIDTH
+    pivot_y_px = _PIVOT_Y_FRAC * _FIG_HEIGHT
+
+    # value=0 -> needle points left (180deg), value=100 -> points right (0deg)
     angle_deg = 180 - (value / 100.0) * 180
     angle_rad = np.deg2rad(angle_deg)
 
-    tip_x = _NEEDLE_CX + _NEEDLE_LEN * np.cos(angle_rad)
-    tip_y = _NEEDLE_CY + _NEEDLE_LEN * np.sin(angle_rad)
+    tip_x_px = pivot_x_px + _NEEDLE_LEN_PX * np.cos(angle_rad)
+    tip_y_px = pivot_y_px + _NEEDLE_LEN_PX * np.sin(angle_rad)
+
+    # Convert pixel coords back to paper fractions, PER AXIS, using the
+    # fixed figure size — this is what keeps the angle undistorted.
+    pivot_x_frac, pivot_y_frac = pivot_x_px / _FIG_WIDTH, pivot_y_px / _FIG_HEIGHT
+    tip_x_frac, tip_y_frac = tip_x_px / _FIG_WIDTH, tip_y_px / _FIG_HEIGHT
+    hub_r_x_frac, hub_r_y_frac = _HUB_R_PX / _FIG_WIDTH, _HUB_R_PX / _FIG_HEIGHT
 
     fig.add_shape(
         type="line",
-        x0=_NEEDLE_CX, y0=_NEEDLE_CY, x1=tip_x, y1=tip_y,
+        x0=pivot_x_frac, y0=pivot_y_frac, x1=tip_x_frac, y1=tip_y_frac,
         xref="paper", yref="paper",
         line=dict(color="#FFFFFF", width=4),
     )
 
-    # Hub circle at the pivot
-    _HUB_R = 0.035
+    # Hub circle at the pivot (ellipse in fraction space so it renders as a
+    # visual circle despite unequal x/y pixel-per-fraction scaling)
     fig.add_shape(
         type="circle",
-        x0=_NEEDLE_CX - _HUB_R, y0=_NEEDLE_CY - _HUB_R,
-        x1=_NEEDLE_CX + _HUB_R, y1=_NEEDLE_CY + _HUB_R,
+        x0=pivot_x_frac - hub_r_x_frac, y0=pivot_y_frac - hub_r_y_frac,
+        x1=pivot_x_frac + hub_r_x_frac, y1=pivot_y_frac + hub_r_y_frac,
         xref="paper", yref="paper",
         fillcolor="#FFFFFF", line=dict(color="#FFFFFF", width=0),
     )
 
     fig.update_layout(
-        height=260,
+        width=_FIG_WIDTH,
+        height=_FIG_HEIGHT,
         margin=dict(l=20, r=20, t=40, b=10),
         paper_bgcolor="rgba(13,17,23,0)",
         font=dict(color="#cccccc"),
@@ -5256,7 +5269,7 @@ with col_regime_gauge:
         pct_above_ema200,
         "% Above 200 EMA"
     )
-    st.plotly_chart(_regime_gauge_fig, use_container_width=True)
+    st.plotly_chart(_regime_gauge_fig, use_container_width=False)
 
 st.markdown("---")
 
