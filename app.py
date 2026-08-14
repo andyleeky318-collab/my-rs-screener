@@ -11618,6 +11618,16 @@ def get_next_earnings_date(symbol, days_ahead=90):
                 continue
     return min(dates) if dates else None
 
+def compute_realized_vol(close_series, window=20):
+    """Annualized realized (historical) volatility from a price Close series.
+    No new data fetch — operates on price history already loaded elsewhere
+    (e.g. ticker_dfs_shared)."""
+    if close_series is None or close_series.empty:
+        return None
+    ret = close_series.pct_change().dropna()
+    if len(ret) < window:
+        return None
+    return round(float(ret.tail(window).std() * np.sqrt(252) * 100), 1)
 
 _NVDA_SYM = "NVDA"
 
