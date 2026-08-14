@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 import datetime
 import base64
 from zoneinfo import ZoneInfo
+from plotly.subplots import make_subplots
 
 GITHUB_API = "https://api.github.com"
 
@@ -11164,3 +11165,170 @@ if isinstance(_setup_avgrank_hist, pd.DataFrame) and not _setup_avgrank_hist.emp
 else:
     st.caption("**Setup Avg Rank** — no data")
 
+# ==============================================================================
+# 15. SMH vs IGV — RATIO + ROLLING CORRELATION ANALYSIS
+# Read-only, appended at the very bottom. Does not touch any existing logic.
+# ==============================================================================
+st.markdown("---")
+st.markdown("#### 🔗 SMH vs IGV — Ratio & Rolling Correlation")
+
+@st.cache_data(ttl=3600)
+def fetch_pair_close_series(sym_a, sym_b, _known_ticker_dfs, period="1y"):
+    """
+    Returns aligned (close_a, close_b) Series for sym_a/sym_b.
+    Reuses already-downloaded data from _known_ticker_dfs when available,
+    otherwise falls back to a fresh yf.download — never touches shared state.
+    """
+    close_a = None
+    close_b = None
+
+    if sym_a in _known_ticker_dfs:
+        close_a = _known_ticker_dfs[sym_a]['Close']
+    if sym_b in _known_ticker_dfs:
+        close_b = _known_ticker_dfs[sym_b]['Close']
+
+    missing = [s for s, c in [(sym_a, close_a), (sym_b, close_b)] if c is None]
+    if missing:
+        try:
+            raw = yf.download(missing, period=period, interval="1d", progress=False, auto_adjust=True)
+            if len(missing) == 1:
+                fetched_close = raw['Close']
+                if missing[0] == sym_a:
+                    close_a = fetched_close
+                else:
+                    close_b = fetched_close
+            else:
+                if close_a is None:
+                    close_a = raw['Close'][sym_a]
+                if close_b is None:
+                    close_b = raw['Close'][sym_b]
+        except Exception:
+            return None, None
+
+    if close_a is None or close_b is None:
+        return None, None
+
+    aligned_a, aligned_b = close_a.align(close_b, join="inner")
+    return aligned_a.dropna(), aligned_b.dropna()
+
+
+@st.cache_data(ttl=3600)
+def compute_pair_ratio_and_correlation(sym_a, sym_b, _known_ticker_dfs, corr_window=20, period="1y"):
+    """
+    Returns a DataFrame with columns: Date, Close_A, Close_B, Ratio, Correlation
+    (rolling Pearson correlation of daily % returns, window = corr_window).
+    """
+    close_a, close_b = fetch_pair_close_series(sym_a, sym_b, _known_ticker_dfs, period=period)
+    if close_a is None or close_b is None or close_a.empty or close_b.empty:
+        return pd.DataFrame()
+
+    ret_a = close_a.pct_change()
+    ret_b = close_b.pct_change()
+    rolling_corr = ret_a.rolling(window=corr_window).corr(ret_b)
+
+    ratio = close_a / close_b
+
+    df = pd.DataFrame({
+        "Date": close_a.index,
+        "Close_A": close_a.values,
+        "Close_B": close_b.values,
+        "Ratio": ratio.values,
+        "Correlation": rolling_corr.values,
+    }).dropna(subset=["Close_A", "Close_B"])
+
+    return df
+
+
+_PAIR_A, _PAIR_B = "SMH", "IGV"
+_CORR_WINDOW = 20
+
+with st.spinner(f"Computing {_PAIR_A}/{_PAIR_B} ratio & rolling correlation..."):
+    pair_df = timed(
+        "compute_pair_ratio_and_correlation",
+        compute_pair_ratio_and_correlation,
+        _PAIR_A, _PAIR_B, ticker_dfs_shared, _CORR_WINDOW, "1y"
+    )
+
+if pair_df.empty:
+    st.info(f"{_PAIR_A}/{_PAIR_B} data unavailable.")
+else:
+    latest_corr = pair_df["Correlation"].dropna().iloc[-1] if pair_df["Correlation"].notna().any() else None
+    latest_ratio = pair_df["Ratio"].iloc[-1]
+
+    if latest_corr is not None:
+        corr_color = "#00FF00" if latest_corr >= 0.5 else "#FFA500" if latest_corr >= 0 else "#FF4B4B"
+        corr_label = f"<span style='color:{corr_color}; font-weight:bold;'>{latest_corr:.2f}</span>"
+    else:
+        corr_label = "n/a"
+
+    st.markdown(
+        f"<div style='font-size:13px; color:#888; margin-bottom:6px;'>"
+        f"Latest Ratio ({_PAIR_A}/{_PAIR_B}): "
+        f"<span style='color:#4ecdc4; font-weight:bold;'>{latest_ratio:.3f}</span> &nbsp;|&nbsp; "
+        f"{_CORR_WINDOW}-Day Rolling Correlation: {corr_label}"
+        f"</div>",
+        unsafe_allow_html=True
+    )
+
+    plot_df = pair_df.tail(252).reset_index(drop=True)  # trailing ~1y trading days
+
+    # Normalize both prices to 100 at the start of the visible window for fair comparison
+    norm_a = (plot_df["Close_A"] / plot_df["Close_A"].iloc[0]) * 100
+    norm_b = (plot_df["Close_B"] / plot_df["Close_B"].iloc[0]) * 100
+
+    fig_pair = make_subplots(
+        rows=3, cols=1,
+        shared_xaxes=True,
+        row_heights=[0.45, 0.25, 0.30],
+        vertical_spacing=0.04,
+        subplot_titles=(
+            f"{_PAIR_A} vs {_PAIR_B} (Indexed to 100)",
+            f"Ratio ({_PAIR_A} / {_PAIR_B})",
+            f"{_CORR_WINDOW}-Day Rolling Correlation (-1 to +1)"
+        )
+    )
+
+    # Row 1: indexed price lines
+    fig_pair.add_trace(
+        go.Scatter(x=plot_df["Date"], y=norm_a, mode="lines", name=_PAIR_A,
+                    line=dict(color="#378ADD", width=1.6)),
+        row=1, col=1
+    )
+    fig_pair.add_trace(
+        go.Scatter(x=plot_df["Date"], y=norm_b, mode="lines", name=_PAIR_B,
+                    line=dict(color="#FF69B4", width=1.6)),
+        row=1, col=1
+    )
+
+    # Row 2: ratio line
+    fig_pair.add_trace(
+        go.Scatter(x=plot_df["Date"], y=plot_df["Ratio"], mode="lines", name="Ratio",
+                    line=dict(color="#4ecdc4", width=1.6), showlegend=False,
+                    fill="tozeroy", fillcolor="rgba(78,205,196,0.12)"),
+        row=2, col=1
+    )
+
+    # Row 3: rolling correlation as a diverging-color bar chart (-1 to +1)
+    corr_vals = plot_df["Correlation"].fillna(0)
+    fig_pair.add_trace(
+        go.Bar(
+            x=plot_df["Date"], y=corr_vals, name="Correlation",
+            marker=dict(
+                color=corr_vals,
+                colorscale="RdYlGn",
+                cmin=-1, cmax=1,
+                colorbar=dict(title="ρ", len=0.3, y=0.12, thickness=10),
+            ),
+            showlegend=False,
+        ),
+        row=3, col=1
+    )
+    fig_pair.add_hline(y=0, line_width=1, line_color="rgba(200,200,200,0.4)", row=3, col=1)
+    fig_pair.add_hline(y=1, line_width=1, line_dash="dot", line_color="rgba(0,255,0,0.3)", row=3, col=1)
+    fig_pair.add_hline(y=-1, line_width=1, line_dash="dot", line_color="rgba(255,0,0,0.3)", row=3, col=1)
+
+    fig_pair.update_layout(
+        height=720,
+        margin=dict(l=40, r=40, t=50, b=30),
+        plot_bgcolor="rgba(20,22,30,1)",
+        paper_bgcolor="rgba(13,17,23,0)",
