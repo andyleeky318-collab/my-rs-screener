@@ -5149,18 +5149,19 @@ styled_df = df_regime.style.apply(highlight_current_regime, axis=1)
 def render_market_regime_gauge(value, title="Market Regime"):
     """
     CNN Fear & Greed style gauge — diverging red -> yellow -> green bands,
-    matching the same color language as the -1 to +1 correlation chart
-    (RdYlGn), rescaled to the 0-100 % Above EMA200 metric.
+    with a real needle drawn from the bottom-center pivot to the value
+    (go.Indicator has no native needle, so it's overlaid manually via
+    fig.add_shape using polar coordinates in the gauge's domain).
     Read-only, additive; does not modify any other chart or table.
     """
     value = max(0, min(100, value))
 
     if value < 40:
-        needle_color = "#FF4B4B"
+        band_color = "#FF4B4B"
     elif value < 60:
-        needle_color = "#FFA500"
+        band_color = "#FFA500"
     else:
-        needle_color = "#00FF00"
+        band_color = "#00FF00"
 
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
@@ -5173,10 +5174,10 @@ def render_market_regime_gauge(value, title="Market Regime"):
             "axis": {
                 "range": [0, 100],
                 "tickmode": "array",
-                "tickvals": [0, 25, 40, 50, 60, 70, 100],
+                "tickvals": [0, 40, 50, 60, 70, 100],
                 "tickfont": {"size": 10, "color": "#888888"},
             },
-            "bar": {"color": needle_color, "thickness": 0.28},
+            "bar": {"color": "rgba(0,0,0,0)"},  # hide default bar — needle replaces it visually
             "bgcolor": "rgba(0,0,0,0)",
             "borderwidth": 0,
             "steps": [
@@ -5187,12 +5188,42 @@ def render_market_regime_gauge(value, title="Market Regime"):
                 {"range": [70, 100],"color": "#6FCF97"},   # Strong bull participation
             ],
             "threshold": {
-                "line": {"color": "#ffffff", "width": 3},
-                "thickness": 0.75,
+                "line": {"color": "rgba(0,0,0,0)", "width": 0},  # disabled — needle replaces this
+                "thickness": 0,
                 "value": value,
             },
         },
     ))
+
+    # ── Needle: bottom-center pivot -> value along the ring ──
+    # Tweak these three if the needle doesn't line up with your rendered gauge.
+    _NEEDLE_CX  = 0.5    # horizontal pivot (fraction of plot width, 0=left, 1=right)
+    _NEEDLE_CY  = 0.08   # vertical pivot (fraction of plot height, near bottom)
+    _NEEDLE_LEN = 0.42   # needle length as a fraction of plot size
+
+    # value=0 -> needle points left (180°), value=100 -> needle points right (0°)
+    angle_deg = 180 - (value / 100.0) * 180
+    angle_rad = np.deg2rad(angle_deg)
+
+    tip_x = _NEEDLE_CX + _NEEDLE_LEN * np.cos(angle_rad)
+    tip_y = _NEEDLE_CY + _NEEDLE_LEN * np.sin(angle_rad)
+
+    fig.add_shape(
+        type="line",
+        x0=_NEEDLE_CX, y0=_NEEDLE_CY, x1=tip_x, y1=tip_y,
+        xref="paper", yref="paper",
+        line=dict(color="#111111", width=4),
+    )
+
+    # Hub circle at the pivot
+    _HUB_R = 0.035
+    fig.add_shape(
+        type="circle",
+        x0=_NEEDLE_CX - _HUB_R, y0=_NEEDLE_CY - _HUB_R,
+        x1=_NEEDLE_CX + _HUB_R, y1=_NEEDLE_CY + _HUB_R,
+        xref="paper", yref="paper",
+        fillcolor="#111111", line=dict(color="#111111", width=0),
+    )
 
     fig.update_layout(
         height=260,
