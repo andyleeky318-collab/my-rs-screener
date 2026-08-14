@@ -6492,6 +6492,53 @@ if rs_nh_b4_today or rs_nh_b4_yest:
 else:
     st.info("No active setups discovered.")
 
+@st.cache_data(ttl=3600)
+def compute_quality_filter_pass(stocks_list, ticker_dfs):
+    """
+    Returns the subset of stocks_list whose latest bar passes the
+    ADR%/ATR21_R/ATR50_R/EMA21-low-distance quality checks (same cond1-cond4
+    used in compute_early_bull_combined's filtered branch).
+    """
+    passing = set()
+    for ticker in stocks_list:
+        try:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < 50:
+                continue
+
+            close = df['Close']; high = df['High']; low = df['Low']
+
+            sma50 = close.rolling(50).mean()
+            ema21_close = close.ewm(span=21, adjust=False).mean()
+            ema21_low   = low.ewm(span=21, adjust=False).mean()
+
+            tr = pd.concat([
+                high - low,
+                (high - close.shift(1)).abs(),
+                (low - close.shift(1)).abs()
+            ], axis=1).max(axis=1)
+            atr = tr.rolling(14).mean()
+            atrPercent = (atr / close) * 100
+
+            atr21_R = (((close - ema21_close) / close) * 100) / (atrPercent + 1e-6)
+            atr50_R = (((close - sma50) / close) * 100) / (atrPercent + 1e-6)
+            emaDistPercent = ((close - ema21_low) / close) * 100
+
+            hl_ratio = high / low
+            adrPercent = 100 * (hl_ratio.rolling(20).mean() - 1)
+
+            cond1 = (adrPercent.iloc[-1] >= 2.45) and (adrPercent.iloc[-1] < 8.05)
+            cond2 = -0.5 <= atr21_R.iloc[-1] <= 1
+            cond3 = 0 <= atr50_R.iloc[-1] <= 3
+            cond4 = 0 < emaDistPercent.iloc[-1] <= 8
+
+            if cond1 and cond2 and cond3 and cond4:
+                passing.add(ticker)
+        except Exception:
+            continue
+
+    return passing
+
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
 
@@ -7054,53 +7101,6 @@ def compute_early_bull_combined(stocks_list, ticker_dfs, benchmark_df_input):
             continue
 
     return sorted(filtered), sorted(unfiltered)
-
-@st.cache_data(ttl=3600)
-def compute_quality_filter_pass(stocks_list, ticker_dfs):
-    """
-    Returns the subset of stocks_list whose latest bar passes the
-    ADR%/ATR21_R/ATR50_R/EMA21-low-distance quality checks (same cond1-cond4
-    used in compute_early_bull_combined's filtered branch).
-    """
-    passing = set()
-    for ticker in stocks_list:
-        try:
-            df = ticker_dfs.get(ticker)
-            if df is None or len(df) < 50:
-                continue
-
-            close = df['Close']; high = df['High']; low = df['Low']
-
-            sma50 = close.rolling(50).mean()
-            ema21_close = close.ewm(span=21, adjust=False).mean()
-            ema21_low   = low.ewm(span=21, adjust=False).mean()
-
-            tr = pd.concat([
-                high - low,
-                (high - close.shift(1)).abs(),
-                (low - close.shift(1)).abs()
-            ], axis=1).max(axis=1)
-            atr = tr.rolling(14).mean()
-            atrPercent = (atr / close) * 100
-
-            atr21_R = (((close - ema21_close) / close) * 100) / (atrPercent + 1e-6)
-            atr50_R = (((close - sma50) / close) * 100) / (atrPercent + 1e-6)
-            emaDistPercent = ((close - ema21_low) / close) * 100
-
-            hl_ratio = high / low
-            adrPercent = 100 * (hl_ratio.rolling(20).mean() - 1)
-
-            cond1 = (adrPercent.iloc[-1] >= 2.45) and (adrPercent.iloc[-1] < 8.05)
-            cond2 = -0.5 <= atr21_R.iloc[-1] <= 1
-            cond3 = 0 <= atr50_R.iloc[-1] <= 3
-            cond4 = 0 < emaDistPercent.iloc[-1] <= 8
-
-            if cond1 and cond2 and cond3 and cond4:
-                passing.add(ticker)
-        except Exception:
-            continue
-
-    return passing
 
 @st.cache_data(ttl=3600)
 def compute_early_bull_history(stocks_list, ticker_dfs, benchmark_df_input):
