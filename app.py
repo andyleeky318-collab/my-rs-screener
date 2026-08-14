@@ -9147,6 +9147,123 @@ trending_yesterday, comparison_date = timed(
 )
 yesterday_set = set(trending_yesterday)
 
+@st.cache_data(ttl=3600)
+def fetch_reddit_mentions_apewisdom(stocks_tuple, filter_type="wallstreetbets"):
+    """
+    filter_type options: 'all-stocks', 'wallstreetbets', 'stocks', 'investing', 'options', etc.
+    Returns top mentioned tickers from the last 24h (all tickers, not just KNOWN_STOCKS).
+    """
+    def safe_int(v, default=0):
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return default
+
+    rows = []
+    page = 1
+
+    try:
+        while True:
+            resp = requests.get(
+                f"https://apewisdom.io/api/v1.0/filter/{filter_type}/page/{page}",
+                timeout=15,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            results = data.get("results", [])
+            if not results:
+                break
+
+            for r in results:
+                ticker = r.get("ticker")
+                if not ticker:
+                    continue
+                rows.append({
+                    "Ticker": ticker,
+                    "Rank": safe_int(r.get("rank")),
+                    "Mentions": safe_int(r.get("mentions")),
+                    "Mentions 24h Ago": safe_int(r.get("mentions_24h_ago")),
+                    "Upvotes": safe_int(r.get("upvotes")),
+                })
+
+            if page >= safe_int(data.get("pages"), 1):
+                break
+            page += 1
+
+    except Exception as e:
+        st.warning(f"ApeWisdom fetch error: {e}")
+        return pd.DataFrame()
+
+    if not rows:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(rows)
+    df["Ticker"] = df["Ticker"].apply(normalize_ticker)
+
+    # If normalization caused two rows to collapse onto the same
+    # ticker (e.g. both GOOG and GOOGL were trending separately),
+    # aggregate them into a single row instead of leaving duplicates:
+    # sum mention counts, keep the best (lowest) rank, sum upvotes.
+    df = (
+        df.groupby("Ticker", as_index=False)
+        .agg({
+            "Rank": "min",
+            "Mentions": "sum",
+            "Mentions 24h Ago": "sum",
+            "Upvotes": "sum",
+        })
+    )
+
+    df["Δ Mentions"] = df["Mentions"] - df["Mentions 24h Ago"]
+    return df.sort_values("Mentions", ascending=False).reset_index(drop=True)
+
+@st.cache_data(ttl=3600)
+def fetch_spikepanel_surge_tickers(window="24h"):
+    """
+    Fetch the ranked list of tickers from SpikePanel's '热议' (Hot Discussion)
+    page: https://spikepanel.com/surge
+
+    window: "latest" | "24h" | "7d" | "30d" — maps to the tabs on the page.
+    Returns a list of up to 20 tickers, in the same rank order shown on
+    the page (rank #1 first).
+    """
+    url = "https://spikepanel.com/surge"
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        html = resp.text
+    except Exception as e:
+        st.warning(f"SpikePanel fetch error: {e}")
+        return []
+
+    # Every stock card links to /ticker/{SYMBOL}?from=surge — this pattern
+    # is stable regardless of CSS/markup changes, and both the main list
+    # and the compact re-render on the page use the same href, so we
+    # dedupe while preserving first-seen (i.e. rank) order.
+    matches = re.findall(r'/ticker/([A-Z][A-Z0-9\.\-]{0,6})\?from=surge', html)
+
+    seen = set()
+    tickers = []
+    for raw_sym in matches:
+        sym = normalize_ticker(raw_sym)
+        if sym and sym not in seen:
+            seen.add(sym)
+            tickers.append(sym)
+
+    # Page shows exactly 20 ranked stocks — trim defensively in case the
+    # dedupe above ever lets extra unrelated /ticker/ links slip through.
+    return tickers[:20]
+
 # NEW: cross-section glow — ticker glows if it appears in >=2 of
 # {Quant Sentiment, Reddit top 30, X.com}. Fetches are cached, so this
 # doesn't add extra network cost — later calls in those sections reuse cache.
@@ -9220,75 +9337,7 @@ else:
 
 #st.markdown("---")
 
-@st.cache_data(ttl=3600)
-def fetch_reddit_mentions_apewisdom(stocks_tuple, filter_type="wallstreetbets"):
-    """
-    filter_type options: 'all-stocks', 'wallstreetbets', 'stocks', 'investing', 'options', etc.
-    Returns top mentioned tickers from the last 24h (all tickers, not just KNOWN_STOCKS).
-    """
-    def safe_int(v, default=0):
-        try:
-            return int(v)
-        except (TypeError, ValueError):
-            return default
 
-    rows = []
-    page = 1
-
-    try:
-        while True:
-            resp = requests.get(
-                f"https://apewisdom.io/api/v1.0/filter/{filter_type}/page/{page}",
-                timeout=15,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            results = data.get("results", [])
-            if not results:
-                break
-
-            for r in results:
-                ticker = r.get("ticker")
-                if not ticker:
-                    continue
-                rows.append({
-                    "Ticker": ticker,
-                    "Rank": safe_int(r.get("rank")),
-                    "Mentions": safe_int(r.get("mentions")),
-                    "Mentions 24h Ago": safe_int(r.get("mentions_24h_ago")),
-                    "Upvotes": safe_int(r.get("upvotes")),
-                })
-
-            if page >= safe_int(data.get("pages"), 1):
-                break
-            page += 1
-
-    except Exception as e:
-        st.warning(f"ApeWisdom fetch error: {e}")
-        return pd.DataFrame()
-
-    if not rows:
-        return pd.DataFrame()
-
-    df = pd.DataFrame(rows)
-    df["Ticker"] = df["Ticker"].apply(normalize_ticker)
-
-    # If normalization caused two rows to collapse onto the same
-    # ticker (e.g. both GOOG and GOOGL were trending separately),
-    # aggregate them into a single row instead of leaving duplicates:
-    # sum mention counts, keep the best (lowest) rank, sum upvotes.
-    df = (
-        df.groupby("Ticker", as_index=False)
-        .agg({
-            "Rank": "min",
-            "Mentions": "sum",
-            "Mentions 24h Ago": "sum",
-            "Upvotes": "sum",
-        })
-    )
-
-    df["Δ Mentions"] = df["Mentions"] - df["Mentions 24h Ago"]
-    return df.sort_values("Mentions", ascending=False).reset_index(drop=True)
 
 with st.spinner("Fetching Reddit sentiment..."):
     reddit_df = timed(
@@ -9354,52 +9403,7 @@ else:
     # else:
     #     st.info("No overlap between trending and Reddit lists.")
 
-@st.cache_data(ttl=3600)
-def fetch_spikepanel_surge_tickers(window="24h"):
-    """
-    Fetch the ranked list of tickers from SpikePanel's '热议' (Hot Discussion)
-    page: https://spikepanel.com/surge
 
-    window: "latest" | "24h" | "7d" | "30d" — maps to the tabs on the page.
-    Returns a list of up to 20 tickers, in the same rank order shown on
-    the page (rank #1 first).
-    """
-    url = "https://spikepanel.com/surge"
-
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        ),
-        "Accept-Language": "en-US,en;q=0.9",
-    }
-
-    try:
-        resp = requests.get(url, headers=headers, timeout=15)
-        resp.raise_for_status()
-        html = resp.text
-    except Exception as e:
-        st.warning(f"SpikePanel fetch error: {e}")
-        return []
-
-    # Every stock card links to /ticker/{SYMBOL}?from=surge — this pattern
-    # is stable regardless of CSS/markup changes, and both the main list
-    # and the compact re-render on the page use the same href, so we
-    # dedupe while preserving first-seen (i.e. rank) order.
-    matches = re.findall(r'/ticker/([A-Z][A-Z0-9\.\-]{0,6})\?from=surge', html)
-
-    seen = set()
-    tickers = []
-    for raw_sym in matches:
-        sym = normalize_ticker(raw_sym)
-        if sym and sym not in seen:
-            seen.add(sym)
-            tickers.append(sym)
-
-    # Page shows exactly 20 ranked stocks — trim defensively in case the
-    # dedupe above ever lets extra unrelated /ticker/ links slip through.
-    return tickers[:20]
 
 spikepanel_tickers = fetch_spikepanel_surge_tickers()
 
