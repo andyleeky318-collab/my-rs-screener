@@ -5166,12 +5166,8 @@ def render_market_regime_gauge(value, title="Market Regime"):
     _FIG_HEIGHT = 260
 
     fig = go.Figure(go.Indicator(
-        mode="gauge+number",
+        mode="gauge",  # number removed — no center readout
         value=value,
-        number={
-            "suffix": "%",
-            "font": {"size": 34, "color": "#ffffff"},
-        },
         gauge={
             "axis": {
                 "range": [0, 100],
@@ -5198,10 +5194,12 @@ def render_market_regime_gauge(value, title="Market Regime"):
     ))
 
     # ── Needle: bottom-center pivot -> value along the ring ──
+    _NEEDLE_COLOR = "rgba(78,205,196,0.12)"
+
     # Pivot position, in FRACTION of the fixed figure size (paper coords).
     _PIVOT_X_FRAC = 0.5
     _PIVOT_Y_FRAC = 0.08
-    _NEEDLE_LEN_PX = 180   # needle length in pixels — tune this if it looks too short/long
+    _NEEDLE_LEN_PX = 140   # tune this until the tip touches the donut ring
     _HUB_R_PX = 12
 
     pivot_x_px = _PIVOT_X_FRAC * _FIG_WIDTH
@@ -5224,7 +5222,7 @@ def render_market_regime_gauge(value, title="Market Regime"):
         type="line",
         x0=pivot_x_frac, y0=pivot_y_frac, x1=tip_x_frac, y1=tip_y_frac,
         xref="paper", yref="paper",
-        line=dict(color="#FFFFFF", width=4),
+        line=dict(color=_NEEDLE_COLOR, width=4),
     )
 
     # Hub circle at the pivot (ellipse in fraction space so it renders as a
@@ -5234,7 +5232,7 @@ def render_market_regime_gauge(value, title="Market Regime"):
         x0=pivot_x_frac - hub_r_x_frac, y0=pivot_y_frac - hub_r_y_frac,
         x1=pivot_x_frac + hub_r_x_frac, y1=pivot_y_frac + hub_r_y_frac,
         xref="paper", yref="paper",
-        fillcolor="#FFFFFF", line=dict(color="#FFFFFF", width=0),
+        fillcolor=_NEEDLE_COLOR, line=dict(color=_NEEDLE_COLOR, width=0),
     )
 
     fig.update_layout(
