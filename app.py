@@ -5086,7 +5086,7 @@ st.markdown(
     <h4>
         🧭 Market Regime
         <span style="color:{pct_color}; font-weight:bold;">
-            ({pct_above_ema200:.2f}%)
+            ({pct_above_ema200:.1f}%)
         </span>
         <span style="color:#888; font-size:12px;">(Long term)</span>
     </h4>
@@ -5242,7 +5242,7 @@ def render_market_regime_gauge(value, title="Market Regime"):
         paper_bgcolor="rgba(13,17,23,0)",
         font=dict(color="#cccccc"),
         title=dict(
-            text=f"<b><span style='color:{pct_color}'>{value:.0f}%</span></b>",
+            text=f"<b><span style='color:{pct_color}'>{value:.1f}%</span></b>",
             font=dict(size=24),
             x=0.5,
             xanchor="center",
