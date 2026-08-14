@@ -11768,3 +11768,263 @@ else:
 
         if not st.secrets.get("MASSIVE_API_KEY"):
             st.info("Add MASSIVE_API_KEY to secrets.toml to populate news/filings/insider panels.")
+
+# ==============================================================================
+# 18. NVDA — PAST 8 EARNINGS: ACTUAL MOVE DISTRIBUTION vs CURRENT IMPLIED MOVE
+# Read-only, additive. Reuses fetch_chain_cboe_generic / compute_realized_vol
+# already defined above. Does not touch any other section.
+# ==============================================================================
+st.markdown("---")
+st.markdown("#### 📊 NVDA — Last 8 Earnings: Actual Move vs Implied Move")
+
+@st.cache_data(ttl=21600)
+def fetch_historical_earnings_finnhub(ticker, years_back=3):
+    """
+    Pulls historical earnings dates (with bmo/amc/dmh timing) from Finnhub's
+    calendar endpoint, spanning the past `years_back` years. Same endpoint
+    used for upcoming earnings elsewhere — just queried with a past date range.
+    """
+    finnhub_key = st.secrets.get("FINNHUB_API_KEY")
+    if not finnhub_key:
+        return []
+
+    today = datetime.date.today()
+    start = today - datetime.timedelta(days=365 * years_back)
+
+    try:
+        resp = requests.get(
+            "https://finnhub.io/api/v1/calendar/earnings",
+            params={"from": str(start), "to": str(today), "symbol": ticker, "token": finnhub_key},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        rows = data.get("earningsCalendar", []) or []
+    except Exception as e:
+        st.warning(f"Finnhub historical earnings fetch error: {e}")
+        return []
+
+    parsed = []
+    for r in rows:
+        d = r.get("date")
+        if not d:
+            continue
+        try:
+            parsed.append({
+                "date": datetime.date.fromisoformat(d),
+                "hour": r.get("hour", "amc"),  # bmo / amc / dmh
+                "eps_actual": r.get("epsActual"),
+                "eps_estimate": r.get("epsEstimate"),
+            })
+        except Exception:
+            continue
+
+    parsed.sort(key=lambda x: x["date"], reverse=True)
+    return parsed
+
+
+@st.cache_data(ttl=21600)
+def fetch_price_history_for_earnings(ticker, years_back=3):
+    """
+    Fresh yfinance download of daily close prices covering the earnings
+    lookback window (kept independent of ticker_dfs_shared so this works
+    even if NVDA isn't already loaded there, or its window is shorter).
+    """
+    try:
+        df = yf.download(ticker, period=f"{years_back + 1}y", interval="1d",
+                          progress=False, auto_adjust=True)
+        if df.empty:
+            return pd.DataFrame()
+        df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
+        return df[["Close"]].dropna()
+    except Exception:
+        return pd.DataFrame()
+
+
+def compute_earnings_day_moves(earnings_list, price_df, max_events=8):
+    """
+    For each earnings event, determines the 'reaction day' close-to-close
+    % move based on report timing:
+      - bmo (before market open): report_date close vs prior trading day close
+      - amc (after market close): next trading day close vs report_date close
+      - dmh (during market hours, rare): treated like amc (next day close vs
+        report day close) since the exact intraday timing is unknown from
+        free data — flagged in the table as 'dmh (approx)'.
+    Returns a DataFrame of the most recent `max_events` events with a valid
+    computed move, most recent first.
+    """
+    if price_df is None or price_df.empty or not earnings_list:
+        return pd.DataFrame()
+
+    close = price_df["Close"]
+    close.index = pd.to_datetime(close.index).tz_localize(None)
+    trading_dates = close.index
+
+    rows = []
+    for ev in earnings_list:
+        report_date = pd.Timestamp(ev["date"])
+        hour = ev.get("hour", "amc")
+
+        # Find the report date's position in the trading calendar (or the
+        # next trading day if report_date itself wasn't a trading day)
+        pos_candidates = trading_dates[trading_dates >= report_date]
+        if pos_candidates.empty:
+            continue
+        report_trading_date = pos_candidates[0]
+        report_idx = trading_dates.get_loc(report_trading_date)
+
+        try:
+            if hour == "bmo":
+                if report_idx < 1:
+                    continue
+                prior_close = close.iloc[report_idx - 1]
+                react_close = close.iloc[report_idx]
+                react_date = trading_dates[report_idx]
+                timing_label = "Before Open"
+            else:  # amc or dmh -> next trading day close vs report day close
+                if report_idx + 1 >= len(close):
+                    continue
+                prior_close = close.iloc[report_idx]
+                react_close = close.iloc[report_idx + 1]
+                react_date = trading_dates[report_idx + 1]
+                timing_label = "After Close" if hour == "amc" else "During Hours (approx)"
+        except Exception:
+            continue
+
+        if prior_close == 0 or pd.isna(prior_close) or pd.isna(react_close):
+            continue
+
+        move_pct = round(((react_close - prior_close) / prior_close) * 100, 2)
+
+        rows.append({
+            "Report Date": ev["date"].isoformat(),
+            "Timing": timing_label,
+            "Reaction Date": react_date.strftime("%Y-%m-%d"),
+            "Actual Move %": move_pct,
+            "EPS Actual": ev.get("eps_actual"),
+            "EPS Estimate": ev.get("eps_estimate"),
+        })
+
+        if len(rows) >= max_events:
+            break
+
+    return pd.DataFrame(rows)
+
+
+_NVDA_SYM_HIST = "NVDA"
+
+with st.spinner("Fetching NVDA's past earnings dates and price reactions..."):
+    nvda_hist_earnings = timed(
+        "fetch_historical_earnings_finnhub", fetch_historical_earnings_finnhub, _NVDA_SYM_HIST, 3
+    )
+    nvda_price_hist = timed(
+        "fetch_price_history_for_earnings", fetch_price_history_for_earnings, _NVDA_SYM_HIST, 3
+    )
+
+if not nvda_hist_earnings:
+    st.info("No historical NVDA earnings dates returned by Finnhub. Check FINNHUB_API_KEY in secrets.")
+elif nvda_price_hist.empty:
+    st.info("Could not fetch NVDA price history for move calculation.")
+else:
+    moves_df = compute_earnings_day_moves(nvda_hist_earnings, nvda_price_hist, max_events=8)
+
+    if moves_df.empty:
+        st.info("Could not compute earnings-day moves from the available data.")
+    else:
+        # ── Pull current implied move for reference (reuses earlier logic) ──
+        current_implied_move = None
+        _nvda_spot_ref, _nvda_chain_ref = fetch_chain_cboe_generic(_NVDA_SYM_HIST)
+        if _nvda_chain_ref is not None and not _nvda_chain_ref.empty and "error" not in _nvda_chain_ref.columns:
+            _next_earn_date = get_next_earnings_date(_NVDA_SYM_HIST) if "get_next_earnings_date" in dir() else None
+            if _next_earn_date is not None:
+                _setup_ref = compute_earnings_options_setup(_NVDA_SYM_HIST, _nvda_spot_ref, _nvda_chain_ref, _next_earn_date)
+                if _setup_ref:
+                    current_implied_move = _setup_ref.get("implied_move_pct")
+
+        # ── Stats ──
+        moves = moves_df["Actual Move %"].astype(float)
+        stat_mean = round(moves.mean(), 2)
+        stat_median = round(moves.median(), 2)
+        stat_std = round(moves.std(ddof=1), 2) if len(moves) > 1 else None
+        stat_abs_mean = round(moves.abs().mean(), 2)
+        stat_max_up = round(moves.max(), 2)
+        stat_max_down = round(moves.min(), 2)
+        win_rate = round((moves > 0).mean() * 100, 1)
+
+        def _metric_badge(label, value, color="#eeeeee"):
+            return (
+                f'<div class="ticker-badge" style="min-width:120px;">'
+                f'<span style="color:#888;font-size:10px;display:block;">{label}</span>'
+                f'<span style="color:{color};font-weight:bold;font-size:14px;">{value}</span>'
+                f'</div>'
+            )
+
+        badges_html = "<div style='display:flex;flex-wrap:wrap;gap:8px;padding:6px 0;'>"
+        badges_html += _metric_badge("Mean Move", f"{stat_mean:+.2f}%", "#00FF00" if stat_mean > 0 else "#FF4B4B")
+        badges_html += _metric_badge("Median Move", f"{stat_median:+.2f}%", "#00FF00" if stat_median > 0 else "#FF4B4B")
+        badges_html += _metric_badge("Avg |Move|", f"{stat_abs_mean:.2f}%", "#FFD700")
+        if stat_std is not None:
+            badges_html += _metric_badge("Std Dev", f"{stat_std:.2f}%")
+        badges_html += _metric_badge("Best Reaction", f"{stat_max_up:+.2f}%", "#00FF00")
+        badges_html += _metric_badge("Worst Reaction", f"{stat_max_down:+.2f}%", "#FF4B4B")
+        badges_html += _metric_badge("Win Rate (up moves)", f"{win_rate}%")
+        if current_implied_move is not None:
+            richness = "rich vs history" if current_implied_move > stat_abs_mean else "cheap vs history"
+            richness_color = "#FF4B4B" if current_implied_move > stat_abs_mean else "#00FF00"
+            badges_html += _metric_badge("Current Implied Move", f"±{current_implied_move}% ({richness})", richness_color)
+        badges_html += "</div>"
+        st.markdown(badges_html, unsafe_allow_html=True)
+
+        # ── Histogram: actual moves per earnings event, implied move as reference line ──
+        hist_df = moves_df.sort_values("Report Date").reset_index(drop=True)
+        bar_colors = ["#00FF00" if m >= 0 else "#FF4B4B" for m in hist_df["Actual Move %"]]
+
+        fig_earn = go.Figure()
+        fig_earn.add_trace(go.Bar(
+            x=hist_df["Report Date"],
+            y=hist_df["Actual Move %"],
+            marker_color=bar_colors,
+            text=[f"{m:+.1f}%" for m in hist_df["Actual Move %"]],
+            textposition="outside",
+            name="Actual Move %",
+        ))
+
+        fig_earn.add_hline(y=stat_mean, line_dash="dash", line_color="#4ecdc4",
+                            annotation_text=f"Mean {stat_mean:+.2f}%", annotation_position="top left")
+
+        if current_implied_move is not None:
+            fig_earn.add_hline(y=current_implied_move, line_dash="dot", line_color="#FFD700",
+                                annotation_text=f"Current Implied ±{current_implied_move}%",
+                                annotation_position="bottom left")
+            fig_earn.add_hline(y=-current_implied_move, line_dash="dot", line_color="#FFD700")
+
+        fig_earn.update_layout(
+            title=dict(text="NVDA — Actual Post-Earnings Move (Last 8 Reports)", font=dict(size=13, color="#cccccc")),
+            height=380,
+            margin=dict(l=40, r=40, t=50, b=60),
+            plot_bgcolor="rgba(20,22,30,1)",
+            paper_bgcolor="rgba(13,17,23,0)",
+            font=dict(color="#cccccc"),
+            xaxis=dict(title="Report Date", type="category", tickfont=dict(size=10)),
+            yaxis=dict(title="1-Day Move %", showgrid=True, gridcolor="rgba(120,120,120,0.15)"),
+            showlegend=False,
+        )
+        st.plotly_chart(fig_earn, use_container_width=True)
+
+        # ── Detail table ──
+        st.markdown("**Event Detail**")
+        st.dataframe(
+            hist_df[["Report Date", "Timing", "Reaction Date", "Actual Move %", "EPS Actual", "EPS Estimate"]],
+            use_container_width=True, hide_index=True,
+            column_config={
+                "Actual Move %": st.column_config.NumberColumn(format="%.2f%%"),
+            }
+        )
+
+        st.caption(
+            "Historical implied move data isn't available from free sources, so only the CURRENT "
+            "implied move (from today's option chain) is shown as a reference line — it reflects "
+            "what's priced in for the NEXT report, not what was priced in for past ones. Use the "
+            "comparison of current implied vs. historical average |move| as a rough 'rich vs cheap' "
+            "read, not a prediction of direction or magnitude."
+        )
