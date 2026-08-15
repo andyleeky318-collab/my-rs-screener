@@ -9423,6 +9423,12 @@ if trending_today:
             badge_style = (
                 "background:#FFD700; border:1px solid #B8860B; color:#111111; font-weight:bold;"
             )
+        elif sym in ma50bounce_all:
+            badge_style = "background:#FFE5CC; border:1px solid #FFA500; color:#000000; font-weight:bold;"
+        elif sym in cloudwick_all:
+            badge_style = "background:#99e6e6; border:1px solid #99e6e6; color:#000000; font-weight:bold;"
+        elif sym in cloud21ema_all:
+            badge_style = "background:#c084fc; border:1px solid #c084fc; color:#000000; font-weight:bold;"
         # elif sym in LIME_STOCKS:
         #     badge_style = (
         #         "background:#00FF00; border:1px solid #009900; color:#000000; font-weight:bold;"
@@ -9490,11 +9496,21 @@ else:
         delta_color = "#00FF00" if delta > 0 else "#FF4B4B" if delta < 0 else "#888888"
         delta_str = f"+{delta}" if delta > 0 else str(delta)
 
+        # NEW: setup badge coloring (50ma_bounce > 21ema_wick > 21ema_cloud)
+        if sym in ma50bounce_all:
+            badge_style, text_color = "background:#FFE5CC; border:1px solid #FFA500;", "#111111"
+        elif sym in cloudwick_all:
+            badge_style, text_color = "background:#99e6e6; border:1px solid #99e6e6;", "#000000"
+        elif sym in cloud21ema_all:
+            badge_style, text_color = "background:#c084fc; border:1px solid #c084fc;", "#000000"
+        else:
+            badge_style, text_color = "", "#ffffff"
+
         glow_style = CROSS_SECTION_GLOW_STYLE if sym in cross_section_glow_syms else ""
 
         html_reddit += (
-            f'<div class="ticker-badge" style="{glow_style}">'
-            f'<span class="ticker-name">{sym}</span>'
+            f'<div class="ticker-badge" style="{badge_style}{glow_style}">'
+            f'<span class="ticker-name" style="color:{text_color};">{sym}</span>'
             f'<span class="ticker-rs" style="color:#378ADD;">{row["Mentions"]} </span>'
             f'<span style="color:{delta_color}; margin-left:5px; font-size:12px;">({delta_str})</span>'
             f'</div>'
@@ -9531,10 +9547,20 @@ st.markdown(f"#### 🧵 X.com")#({len(spikepanel_tickers)})
 if spikepanel_tickers:
     badges_html = "<div style='display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;'>"
     for sym in spikepanel_tickers:
+        # NEW: setup badge coloring (50ma_bounce > 21ema_wick > 21ema_cloud)
+        if sym in ma50bounce_all:
+            badge_bg, badge_border, badge_color = "#FFE5CC", "#FFA500", "#111111"
+        elif sym in cloudwick_all:
+            badge_bg, badge_border, badge_color = "#99e6e6", "#99e6e6", "#000000"
+        elif sym in cloud21ema_all:
+            badge_bg, badge_border, badge_color = "#c084fc", "#c084fc", "#000000"
+        else:
+            badge_bg, badge_border, badge_color = "#1e1e1e", "#444", "#eee"
+
         glow_style = CROSS_SECTION_GLOW_STYLE if sym in cross_section_glow_syms else ""
         badges_html += (
-            f"<span style='display:inline-block; padding:2px 6px; border:1px solid #444; "
-            f"border-radius:4px; background-color:#1e1e1e; color:#eee; font-size:12px; "
+            f"<span style='display:inline-block; padding:2px 6px; border:1px solid {badge_border}; "
+            f"border-radius:4px; background-color:{badge_bg}; color:{badge_color}; font-size:12px; "
             f"font-weight:bold; white-space:nowrap; {glow_style}'>{sym}</span>"
         )
     badges_html += "</div>"
