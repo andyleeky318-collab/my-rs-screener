@@ -12130,83 +12130,90 @@ if atr10_list:
 else:
     st.info("None.")
 
+
 # ==============================================================================
-# 20. SECTOR STRENGTH HEATMAP — QOG-style 0-100 strength grid, frozen sector header
-# Read-only, additive. Reuses ticker_dfs_shared / benchmark_df_shared / rs_length
-# already computed earlier in the script — no new network calls.
+# 20. SECTOR STRENGTH HEATMAP — cross-sectional rank (display) +
+# absolute-return money-flow coloring (so a broad bear market shows all red)
 # ==============================================================================
 st.markdown("---")
 st.markdown("#### 🌡️ Sector Strength Heatmap")
 
-SECTOR_ETFS_HEATMAP = ["XLK", "XLV", "XLF", "XLE", "XLI", "XLY", "XLP", "XLC", "XLU", "XLB"]
-HEATMAP_DAYS = 60  # ~3 trading months — matches other historical charts on this dashboard
+SECTOR_ETFS_HEATMAP = ["XLK", "XLV", "XLF", "XLC", "XLY", "XLE", "XLI", "XLB", "XLP", "XLU"]
+HEATMAP_DAYS = 60
+HEATMAP_RETURN_LENGTH = 21  # ~1 month price return, used as the money-flow proxy
 
 @st.cache_data(ttl=3600)
-def compute_sector_heatmap_df(sector_etfs, _ticker_dfs, _benchmark_df, length=90, days=60):
+def compute_sector_heatmap_df_v2(sector_etfs, _ticker_dfs, length=21, days=60):
     """
-    Same normalized-RS formula used elsewhere in this dashboard
-    (get_rs_and_cloud_data_cached / compute_setup_avgrank_history), evaluated
-    across the FULL time series per sector ETF instead of just the latest bar.
+    Two parallel grids, same shape:
+      - rank_wide: cross-sectional percentile rank (0-100) of each sector's
+        `length`-day return vs the OTHER sectors on that SAME day. This is
+        the number displayed in each cell.
+      - ret_wide: each sector's raw absolute `length`-day % return. This
+        drives cell COLOR — so if every sector's absolute return is
+        negative (broad selloff), every cell renders red regardless of
+        how the ranks shake out among them.
     """
-    bench_close = _benchmark_df['Close']
-    score_series = {}
-
+    returns = {}
     for etf in sector_etfs:
         df = _ticker_dfs.get(etf)
         if df is None:
             continue
-        close, bench = df['Close'].align(bench_close, join='inner')
-        rs = close / bench
-        hh = rs.rolling(window=length).max()
-        ll = rs.rolling(window=length).min()
-        denom = hh - ll
-        raw = ((99 - 1) * (rs - ll) / denom.replace(0, np.nan)) + 1
-        score_series[etf] = raw.apply(lambda x: int(x) if pd.notna(x) else np.nan)
+        returns[etf] = df['Close'].pct_change(length) * 100
 
-    if not score_series:
-        return pd.DataFrame()
+    if not returns:
+        return pd.DataFrame(), pd.DataFrame()
 
-    wide = pd.DataFrame(score_series).dropna(how='all').tail(days)
-    wide = wide.iloc[::-1]  # most recent date first, matching the QOG image
-    wide.index = pd.to_datetime(wide.index).strftime("%y-%m-%d")
-    wide = wide.reset_index().rename(columns={"index": "Date"})
-    return wide
+    ret_wide = pd.DataFrame(returns).dropna(how='all').tail(days)
+    rank_wide = ret_wide.rank(axis=1, pct=True) * 100
 
-heatmap_df = timed(
-    "compute_sector_heatmap_df",
-    compute_sector_heatmap_df,
-    SECTOR_ETFS_HEATMAP, ticker_dfs_shared, benchmark_df_shared, rs_length, HEATMAP_DAYS
+    ret_wide = ret_wide.iloc[::-1]
+    rank_wide = rank_wide.iloc[::-1]
+
+    ret_wide.index = pd.to_datetime(ret_wide.index).strftime("%y-%m-%d")
+    rank_wide.index = ret_wide.index
+
+    ret_wide = ret_wide.reset_index().rename(columns={"index": "Date"})
+    rank_wide = rank_wide.reset_index().rename(columns={"index": "Date"})
+    return rank_wide, ret_wide
+
+rank_df, ret_df = timed(
+    "compute_sector_heatmap_df_v2",
+    compute_sector_heatmap_df_v2,
+    SECTOR_ETFS_HEATMAP, ticker_dfs_shared, HEATMAP_RETURN_LENGTH, HEATMAP_DAYS
 )
 
-def _heatmap_cell_color(val):
-    if pd.isna(val):
+def _heatmap_cell_color_v2(ret_val, cap=8.0):
+    """Color = absolute-return money-flow direction, NOT the cross-sectional rank."""
+    if pd.isna(ret_val):
         return "background-color:#1a1a1a;color:#555;"
-    v = float(val)
-    if v >= 50:
-        alpha = min((v - 50) / 50, 1.0)
+    r = float(ret_val)
+    alpha = min(abs(r) / cap, 1.0)
+    if r >= 0:
         return f"background-color:rgba(0,200,120,{0.15 + alpha * 0.75:.2f});color:#ffffff;"
-    else:
-        alpha = min((50 - v) / 50, 1.0)
-        return f"background-color:rgba(220,60,60,{0.15 + alpha * 0.75:.2f});color:#ffffff;"
+    return f"background-color:rgba(220,60,60,{0.15 + alpha * 0.75:.2f});color:#ffffff;"
 
-if heatmap_df.empty:
+if rank_df.empty:
     st.info("Sector heatmap data unavailable.")
 else:
     header_cells = "".join(
         f"<th style='position:sticky;top:0;background:#111;color:#eee;padding:6px 10px;"
         f"text-align:center;font-size:12px;border:1px solid #333;z-index:2;'>{col}</th>"
-        for col in heatmap_df.columns
+        for col in rank_df.columns
     )
     body_rows = ""
-    for _, row in heatmap_df.iterrows():
+    for i in range(len(rank_df)):
+        rank_row = rank_df.iloc[i]
+        ret_row = ret_df.iloc[i]
         cells = (
             f"<td style='position:sticky;left:0;background:#111;color:#eee;padding:5px 8px;"
-            f"font-size:11px;border:1px solid #333;white-space:nowrap;z-index:1;'>{row['Date']}</td>"
+            f"font-size:11px;border:1px solid #333;white-space:nowrap;z-index:1;'>{rank_row['Date']}</td>"
         )
-        for col in heatmap_df.columns[1:]:
-            val = row[col]
-            style = _heatmap_cell_color(val)
-            display_val = "" if pd.isna(val) else f"{int(val)}"
+        for col in rank_df.columns[1:]:
+            rank_val = rank_row[col]
+            ret_val = ret_row[col]
+            style = _heatmap_cell_color_v2(ret_val)
+            display_val = "" if pd.isna(rank_val) else f"{int(rank_val)}"
             cells += (
                 f"<td style='{style}padding:5px 8px;text-align:center;"
                 f"font-size:12px;border:1px solid #333;'>{display_val}</td>"
