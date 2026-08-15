@@ -802,6 +802,7 @@ with st.sidebar:
     show_gap_charts = st.toggle("Show Gap Charts", value=False)
     show_all_setups = st.toggle("Show All Setups (top-5)", value=True)
     new_style_industry_table = st.toggle("Old/New Style", value=True)  # NEW: True = new style (KNOWN_STOCKS only), False = old style (all tickers, unchanged)
+    traffic_light_mode = st.toggle("Traffic Light", value=True)  # NEW
     
     if st.button("Refresh Deepvue Theme", use_container_width=True):
         # Clear the caches for BOTH functions so fresh data is requested
@@ -3516,13 +3517,6 @@ if all_data:
     table { width:100%; border-collapse: collapse; }
     th { padding: 4px 8px !important; background-color: #1f77b4; color: white; font-size: 13px; }
     td { padding: 2px 8px !important; border-bottom: 1px solid #333; font-size: 13px; }
-    th:nth-child(3), td:nth-child(3),
-    th:nth-child(6), td:nth-child(6) {
-        border-right: 3px solid #ffffff;
-    }
-    th:nth-child(8), td:nth-child(8) {
-        border-right: 3px solid #ff0000;
-    }
     tbody tr:nth-child(21) td {
         border-top: 3px solid #ff0000;
     }
@@ -3574,15 +3568,57 @@ if all_data:
             all_data, ticker_dfs_shared, benchmark_df_shared, rs_length
         )
 
-    table_html = """<table>
+    if traffic_light_mode:
+        delta_t_col, tickers_col = 4, 6
+    else:
+        delta_t_col, tickers_col = 6, 7
+
+    st.markdown(f"""
+    <style>
+    th:nth-child(3), td:nth-child(3),
+    th:nth-child({delta_t_col}), td:nth-child({delta_t_col}) {{
+        border-right: 3px solid #ffffff;
+    }}
+    th:nth-child({tickers_col}), td:nth-child({tickers_col}) {{
+        border-right: 3px solid #ff0000;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+
+    if traffic_light_mode:
+        metric_headers = (
+            '<th style="text-align: center; width: 60px;">Trend</th>'            
+            '<th style="text-align: center; width: 40px;">△T</th>'
+        )
+    else:
+        metric_headers = (
+            '<th style="text-align: center; width: 40px;">1W</th>'
+            '<th style="text-align: center; width: 40px;">1M</th>'
+            '<th style="text-align: center; width: 40px;">△T</th>'
+        )
+
+    # table_html = """<table>
+    # <thead><tr>
+    # <th style="text-align: center; width: 30px;">#</th>
+    # <th style="text-align: center;">Industry</th>
+    # <th style="text-align: center; width: 40px;">RS</th>
+    # <th style="text-align: center; width: 40px;">1W</th>
+    # <th style="text-align: center; width: 40px;">1M</th>
+    # <th style="text-align: center; width: 40px;">△T</th>
+    # <th style="text-align: center; width: 60px;">Trend</th>   <!-- NEW -->
+    # <th style="text-align: center; width: 400px;">Tickers (RS > 80)</th>
+    # <th style="text-align: center; width: 250px;">21ema_Valid</th>
+    # <th style="text-align: center; width: 170px;">21ema_Cloud</th>
+    # <th style="text-align: center; width: 170px;">21ema_Wick</th>
+    # <th style="text-align: center; width: 170px;">50ma_Bounce</th>
+    # </tr></thead><tbody>"""
+
+    table_html = f"""<table>
     <thead><tr>
     <th style="text-align: center; width: 30px;">#</th>
     <th style="text-align: center;">Industry</th>
     <th style="text-align: center; width: 40px;">RS</th>
-    <th style="text-align: center; width: 40px;">1W</th>
-    <th style="text-align: center; width: 40px;">1M</th>
-    <th style="text-align: center; width: 40px;">△T</th>
-    <th style="text-align: center; width: 60px;">Trend</th>   <!-- NEW -->
+    {metric_headers}
     <th style="text-align: center; width: 400px;">Tickers (RS > 80)</th>
     <th style="text-align: center; width: 250px;">21ema_Valid</th>
     <th style="text-align: center; width: 170px;">21ema_Cloud</th>
