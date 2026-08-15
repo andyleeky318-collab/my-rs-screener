@@ -3569,7 +3569,7 @@ if all_data:
         )
 
     if traffic_light_mode:
-        delta_t_col, tickers_col = 4, 6
+        delta_t_col, tickers_col = 5, 6
     else:
         delta_t_col, tickers_col = 6, 7
 
@@ -3879,14 +3879,23 @@ if all_data:
             else "#ffffff"
         )
         
+        if traffic_light_mode:
+            metric_cells = (
+                f'<td style="text-align: center; vertical-align: middle;">{roc_str}</td>'
+                f'<td style="text-align: center; white-space:nowrap;">{industry_trend_map.get(row["Industry"], "")}</td>'
+            )
+        else:
+            metric_cells = (
+                f'<td style="text-align: center; vertical-align: middle;">{rank_str}</td>'
+                f'<td style="text-align: center; vertical-align: middle;">{rank_str_1m}</td>'
+                f'<td style="text-align: center; vertical-align: middle;">{roc_str}</td>'
+            )
+
         table_html += f"""<tr style="background-color: {bg_color};">
         <td style="text-align: center; color: {num_color}; font-weight: bold;">{row_num}</td>
         <td style="font-weight: bold; color: {industry_name_color};">{row['Industry']}</td>
         <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{row['Group RS']:.1f}</td>
-        <td style="text-align: center; vertical-align: middle;">{rank_str}</td>
-        <td style="text-align: center; vertical-align: middle;">{rank_str_1m}</td>
-        <td style="text-align: center; vertical-align: middle;">{roc_str}</td>
-        <td style="text-align: center; white-space:nowrap;">{industry_trend_map.get(row['Industry'], '')}</td>
+        {metric_cells}
         <td>{ticker_html}</td>
         <td>{cloud_html}</td>
         <td>{cloud_21ema_html}</td>
