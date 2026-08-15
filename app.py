@@ -12091,7 +12091,7 @@ atr10_list = timed(
 
 count_color = "#ff4b4b" if len(atr10_list) >= 10 else "#e0e0e0"
 st.markdown(
-    f"#### 🚀 10x ATR Above MA50 - <span style='color:{count_color};'>{len(atr10_list)}</span>",
+    f"#### 🚀 10x ATR Above MA50 <span style='color:{count_color};'>({len(atr10_list)})</span>",
     unsafe_allow_html=True,
 )
 if atr10_list:
