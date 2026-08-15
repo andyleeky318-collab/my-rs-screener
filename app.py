@@ -3850,8 +3850,7 @@ if all_data:
         <td style="text-align: center; vertical-align: middle;">{rank_str}</td>
         <td style="text-align: center; vertical-align: middle;">{rank_str_1m}</td>
         <td style="text-align: center; vertical-align: middle;">{roc_str}</td>
-        <td style="text-align: center; white-space:nowrap;">{industry_trend_map.get(row['Industry'], '')}</td>  <!-- NEW -->
-        <td>{ticker_html}</td>
+        <td style="text-align: center; white-space:nowrap;">{industry_trend_map.get(row['Industry'], '')}</td>
         <td>{ticker_html}</td>
         <td>{cloud_html}</td>
         <td>{cloud_21ema_html}</td>
