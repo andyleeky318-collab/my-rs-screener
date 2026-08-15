@@ -754,10 +754,10 @@ def render_pine_rs_table_html(rows, max_height):
     header_html = (
         "<tr>"
         "<th style='padding:1px 5px;background:#ffffff;color:#000000;text-align:left;font-size:9px;border:1px solid #ccc;white-space:nowrap;'></th>"
-        "<th style='padding:1px 5px;background:#ffffff;color:#000000;text-align:center;font-size:9px;border:1px solid #ccc;white-space:nowrap;'>RS(5)</th>"
-        "<th style='padding:1px 5px;background:#0000ff;color:#ffffff;text-align:center;font-size:9px;border:1px solid #ccc;white-space:nowrap;'>RS(21)*</th>"
-        "<th style='padding:1px 5px;background:#ffffff;color:#000000;text-align:center;font-size:9px;border:1px solid #ccc;white-space:nowrap;'>RS(63)</th>"
-        "<th style='padding:1px 5px;background:#ffffff;color:#000000;text-align:center;font-size:9px;border:1px solid #ccc;white-space:nowrap;'>RS(126)</th>"
+        "<th style='padding:1px 5px;background:#ffffff;color:#000000;text-align:center;font-size:9px;border:1px solid #ccc;white-space:nowrap;'>RS (5)</th>"
+        "<th style='padding:1px 5px;background:#0000ff;color:#ffffff;text-align:center;font-size:9px;border:1px solid #ccc;white-space:nowrap;'>RS (21)*</th>"
+        "<th style='padding:1px 5px;background:#ffffff;color:#000000;text-align:center;font-size:9px;border:1px solid #ccc;white-space:nowrap;'>RS (63)</th>"
+        "<th style='padding:1px 5px;background:#ffffff;color:#000000;text-align:center;font-size:9px;border:1px solid #ccc;white-space:nowrap;'>RS (126)</th>"
         "</tr>"
     )
 
@@ -901,8 +901,10 @@ if lime_perf_rows:
             f'letter-spacing="1">{label}</text>'
         )
 
+    sgt_now_str = datetime.datetime.now(ZoneInfo("Asia/Singapore")).strftime("%Y-%m-%d %H:%M")
+
     headers_html = (
-        col_header(X0_1d, "DAILY") +
+        col_header(X0_1d, f"DAILY ({sgt_now_str})") +
         col_header(X0_1w, "1 WEEK (Developing)") +
         col_header(X0_1m, "1 MONTH (Leading Theme)")
     )
@@ -9547,8 +9549,9 @@ else:
 # matching (latest) video. Does not touch any existing variable/function.
 # ==============================================================================
 
-IBD_CHANNEL_HANDLE_URL = "https://www.youtube.com/@investorsbusinessdaily"
-IBD_STREAMS_URL = "https://www.youtube.com/@investorsbusinessdaily/streams"
+# 1) Update the constant (was using the @handle URL)
+IBD_CHANNEL_HANDLE_URL = "https://www.youtube.com/investorsbusinessdaily/streams"
+IBD_STREAMS_URL = "https://www.youtube.com/investorsbusinessdaily/streams"
 
 # Common all-caps words to exclude from the fallback ticker scan
 _TICKER_STOPWORDS = {
@@ -9731,15 +9734,10 @@ def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=25):
     """
     Fetch IBD's latest uploads via YouTube's public RSS feed, find the latest
     video whose title contains 'Stock Market Today', and return its tickers.
-    Also returns the raw scanned titles for debugging if no match is found.
     """
     import xml.etree.ElementTree as ET
 
     channel_id = _resolve_ibd_channel_id()
-    if not channel_id:
-        return {"error": "Could not resolve IBD's YouTube channel ID."}
-
-    rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -9748,43 +9746,56 @@ def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=25):
         ),
     }
 
-    try:
-        resp = requests.get(rss_url, headers=headers, cookies={"CONSENT": "YES+1"}, timeout=15)
-        resp.raise_for_status()
-        xml_text = resp.text
-    except Exception as e:
-        return {"error": f"RSS fetch error: {e}", "channel_id": channel_id}
-
-    try:
-        root = ET.fromstring(xml_text)
-    except Exception as e:
-        return {"error": f"RSS parse error: {e}", "channel_id": channel_id}
-
-    ns = {
-        "atom": "http://www.w3.org/2005/Atom",
-        "yt": "http://www.youtube.com/xml/schemas/2015",
-    }
-
     videos = []
-    for entry in root.findall("atom:entry", ns):
-        title_el = entry.find("atom:title", ns)
-        vid_el = entry.find("yt:videoId", ns)
-        if title_el is None or vid_el is None:
-            continue
-        title_text = (title_el.text or "").strip()
-        vid = vid_el.text or ""
-        if title_text and vid:
-            videos.append({"videoId": vid, "title": title_text})
+
+    # Try RSS first if we have a channel_id
+    if channel_id:
+        rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+        try:
+            resp = requests.get(rss_url, headers=headers, cookies={"CONSENT": "YES+1"}, timeout=15)
+            if resp.status_code == 200:
+                root = ET.fromstring(resp.text)
+                ns = {
+                    "atom": "http://www.w3.org/2005/Atom",
+                    "yt": "http://www.youtube.com/xml/schemas/2015",
+                }
+                for entry in root.findall("atom:entry", ns):
+                    title_el = entry.find("atom:title", ns)
+                    vid_el = entry.find("yt:videoId", ns)
+                    if title_el is not None and vid_el is not None:
+                        t = (title_el.text or "").strip()
+                        v = vid_el.text or ""
+                        if t and v:
+                            videos.append({"videoId": v, "title": t})
+        except Exception:
+            pass
+
+    # NEW: RSS gave nothing (wrong/stale channel_id, 404, etc.) — scrape the
+    # streams page directly for video titles/ids instead of trusting the id.
+    if not videos:
+        try:
+            resp = requests.get(IBD_STREAMS_URL, headers=headers, cookies={"CONSENT": "YES+1"}, timeout=15)
+            resp.raise_for_status()
+            html = resp.text
+            for m in re.finditer(
+                r'"videoId":"([a-zA-Z0-9_-]{11})".*?"title":\{"runs":\[\{"text":"([^"]+)"',
+                html
+            ):
+                vid, t = m.group(1), m.group(2)
+                if t and vid:
+                    videos.append({"videoId": vid, "title": t})
+        except Exception as e:
+            return {"error": f"Streams page fetch error: {e}", "channel_id": channel_id}
 
     if not videos:
-        return {"error": "RSS feed returned no videos.", "channel_id": channel_id}
+        return {"error": "No videos found via RSS or streams page scrape.", "channel_id": channel_id}
 
     for video in videos[:max_videos_to_scan]:
         title = video["title"]
         if "stock market today" in title.lower():
-            tickers = _resolve_tickers_via_ai_from_title(title)   # AI first — handles company names + false-positive acronyms
+            tickers = _resolve_tickers_via_ai_from_title(title)
             if not tickers:
-                tickers = _extract_tickers_from_ibd_title(title)  # regex fallback only if every AI provider fails
+                tickers = _extract_tickers_from_ibd_title(title)
             return {
                 "tickers": tickers,
                 "title": title,
@@ -10670,10 +10681,12 @@ def fetch_economic_calendar():
                 dt = datetime.date.fromisoformat(raw_date[:10])
                 formatted_date = dt.strftime("%Y-%m-%d (%A)")
             except Exception:
+                dt = None
                 formatted_date = raw_date[:10]
             
             records.append({
                 "date": formatted_date,
+                "raw_date": dt,               # NEW — plain date object for filtering
                 "event": item.get("title", ""),
                 "country": item.get("country", ""),
                 "previous": item.get("previous", "") or "-",
@@ -10695,7 +10708,13 @@ ECON_KEYWORDS = [
 ]
 
 if not econ_df.empty and "event" in econ_df.columns:
-    mask = econ_df["country"].isin(["USD", "US", "United States"]) & (econ_df["impact"].str.lower() == "high")
+    mask = (
+        econ_df["country"].isin(["USD", "US", "United States"])
+        & (econ_df["impact"].str.lower() == "high")
+        & econ_df["raw_date"].notna()
+        & (econ_df["raw_date"] >= week_monday)   # NEW — same window as Upcoming Earnings
+        & (econ_df["raw_date"] <= week_friday)   # NEW
+    )
     filtered = econ_df[mask].sort_values("date").reset_index(drop=True)
 
     if filtered.empty:
@@ -12070,7 +12089,7 @@ atr10_list = timed(
     stocks_tuple, ticker_dfs_shared
 )
 
-st.markdown(f"#### 🚀 10x ATR Above MA50 ({len(atr10_list)})")
+st.markdown(f"#### 🚀 10x ATR Above MA50 - 10 tickers are risk ({len(atr10_list)})")
 if atr10_list:
     html_atr10 = ""
     for sym in atr10_list:
