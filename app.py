@@ -12126,4 +12126,97 @@ if atr10_list:
         html_atr10 += setup_badge(sym)
     st.markdown(html_atr10, unsafe_allow_html=True)
 else:
-    st.info("No active setups discovered.")
+    st.info("None.")
+
+# ==============================================================================
+# 20. SECTOR STRENGTH HEATMAP — QOG-style 0-100 strength grid, frozen sector header
+# Read-only, additive. Reuses ticker_dfs_shared / benchmark_df_shared / rs_length
+# already computed earlier in the script — no new network calls.
+# ==============================================================================
+st.markdown("---")
+st.markdown("#### 🌡️ Sector Strength Heatmap")
+
+SECTOR_ETFS_HEATMAP = ["XLK", "XLV", "XLF", "XLE", "XLI", "XLY", "XLP", "XLC", "XLU", "XLB"]
+HEATMAP_DAYS = 60  # ~3 trading months — matches other historical charts on this dashboard
+
+@st.cache_data(ttl=3600)
+def compute_sector_heatmap_df(sector_etfs, _ticker_dfs, _benchmark_df, length=90, days=60):
+    """
+    Same normalized-RS formula used elsewhere in this dashboard
+    (get_rs_and_cloud_data_cached / compute_setup_avgrank_history), evaluated
+    across the FULL time series per sector ETF instead of just the latest bar.
+    """
+    bench_close = _benchmark_df['Close']
+    score_series = {}
+
+    for etf in sector_etfs:
+        df = _ticker_dfs.get(etf)
+        if df is None:
+            continue
+        close, bench = df['Close'].align(bench_close, join='inner')
+        rs = close / bench
+        hh = rs.rolling(window=length).max()
+        ll = rs.rolling(window=length).min()
+        denom = hh - ll
+        raw = ((99 - 1) * (rs - ll) / denom.replace(0, np.nan)) + 1
+        score_series[etf] = raw.apply(lambda x: int(x) if pd.notna(x) else np.nan)
+
+    if not score_series:
+        return pd.DataFrame()
+
+    wide = pd.DataFrame(score_series).dropna(how='all').tail(days)
+    wide = wide.iloc[::-1]  # most recent date first, matching the QOG image
+    wide.index = pd.to_datetime(wide.index).strftime("%y-%m-%d")
+    wide = wide.reset_index().rename(columns={"index": "Date"})
+    return wide
+
+heatmap_df = timed(
+    "compute_sector_heatmap_df",
+    compute_sector_heatmap_df,
+    SECTOR_ETFS_HEATMAP, ticker_dfs_shared, benchmark_df_shared, rs_length, HEATMAP_DAYS
+)
+
+def _heatmap_cell_color(val):
+    if pd.isna(val):
+        return "background-color:#1a1a1a;color:#555;"
+    v = float(val)
+    if v >= 50:
+        alpha = min((v - 50) / 50, 1.0)
+        return f"background-color:rgba(0,200,120,{0.15 + alpha * 0.75:.2f});color:#ffffff;"
+    else:
+        alpha = min((50 - v) / 50, 1.0)
+        return f"background-color:rgba(220,60,60,{0.15 + alpha * 0.75:.2f});color:#ffffff;"
+
+if heatmap_df.empty:
+    st.info("Sector heatmap data unavailable.")
+else:
+    header_cells = "".join(
+        f"<th style='position:sticky;top:0;background:#111;color:#eee;padding:6px 10px;"
+        f"text-align:center;font-size:12px;border:1px solid #333;z-index:2;'>{col}</th>"
+        for col in heatmap_df.columns
+    )
+    body_rows = ""
+    for _, row in heatmap_df.iterrows():
+        cells = (
+            f"<td style='position:sticky;left:0;background:#111;color:#eee;padding:5px 8px;"
+            f"font-size:11px;border:1px solid #333;white-space:nowrap;z-index:1;'>{row['Date']}</td>"
+        )
+        for col in heatmap_df.columns[1:]:
+            val = row[col]
+            style = _heatmap_cell_color(val)
+            display_val = "" if pd.isna(val) else f"{int(val)}"
+            cells += (
+                f"<td style='{style}padding:5px 8px;text-align:center;"
+                f"font-size:12px;border:1px solid #333;'>{display_val}</td>"
+            )
+        body_rows += f"<tr>{cells}</tr>"
+
+    heatmap_html = f"""
+    <div style="max-height:600px; overflow-y:auto; overflow-x:auto; border-radius:6px;">
+    <table style="border-collapse:collapse; width:100%;">
+    <thead><tr>{header_cells}</tr></thead>
+    <tbody>{body_rows}</tbody>
+    </table>
+    </div>
+    """
+    st.markdown(heatmap_html, unsafe_allow_html=True)
