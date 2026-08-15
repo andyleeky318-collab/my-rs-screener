@@ -3520,7 +3520,7 @@ if all_data:
     th:nth-child(6), td:nth-child(6) {
         border-right: 3px solid #ffffff;
     }
-    th:nth-child(7), td:nth-child(7) {
+    th:nth-child(8), td:nth-child(8) {
         border-right: 3px solid #ff0000;
     }
     tbody tr:nth-child(21) td {
