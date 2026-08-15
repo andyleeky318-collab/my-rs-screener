@@ -10251,6 +10251,8 @@ if not setup_avgrank_hist.empty:
 
     bar_colors = ["#29B5E8"] * len(chart_df_rank)
     bar_colors[chart_df_rank.index.get_loc(min_idx)] = "#90EE90"  # overall lowest bar (best rank)
+    second_min_idx = chart_df_rank["Avg Rank"].nsmallest(2).index[-1]  # NEW: 2nd lowest bar
+    bar_colors[chart_df_rank.index.get_loc(second_min_idx)] = "#90EE90"  # NEW: same green
     if today_rank == min_rank:
         bar_colors[-1] = "#FF4B4B"  # today is also the lowest
 
