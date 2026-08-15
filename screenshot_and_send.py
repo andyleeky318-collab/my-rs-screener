@@ -157,6 +157,7 @@ SECTION_KEYWORDS = [
     #"MM Count",
     "Stage 2 vs Stage 4",
     #"Unusual Volume",
+    "Sector Strength Heatmap",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the

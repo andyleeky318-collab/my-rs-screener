@@ -3337,6 +3337,65 @@ def render_ai_points_table(raw_text, tickers=None, industries=None):
     )
     st.markdown(table_html, unsafe_allow_html=True)
 
+@st.cache_data(ttl=3600)
+def compute_industry_rs_trend_emoji(all_data_snapshot, ticker_dfs_all, benchmark_df_all, rs_length, top_n=5, ema_len=21):
+    """Mirrors Pine's rsTrendEmoji: EMA(grpAvg RS, 21) sampled at bars-ago
+    offsets [20,15,10,5,0] -> 4-char 🟢/🔴 trend string per industry."""
+    try:
+        if not ticker_dfs_all or not all_data_snapshot:
+            return {}
+
+        bench_close = benchmark_df_all['Close']
+        industry_tickers_map = {
+            item["Industry"]: list(INDUSTRIES.get(item["Industry"], []))
+            for item in all_data_snapshot
+        }
+
+        trend_map = {}
+        for industry, tickers_in_group in industry_tickers_map.items():
+            ticker_scores_list = []
+            for sym in tickers_in_group:
+                df = ticker_dfs_all.get(sym)
+                if df is None or len(df) < rs_length + ema_len + 21:
+                    continue
+                aligned, bench_aligned = df['Close'].align(bench_close, join='inner')
+                if len(aligned) < rs_length:
+                    continue
+                rs_ratio = aligned / bench_aligned
+                hh = rs_ratio.rolling(window=rs_length).max()
+                ll = rs_ratio.rolling(window=rs_length).min()
+                denom = hh - ll
+                raw = ((99 - 1) * (rs_ratio - ll) / denom.replace(0, np.nan)) + 1
+                score = raw.apply(lambda x: int(x) if pd.notna(x) else 0)
+                ticker_scores_list.append(score)
+
+            if not ticker_scores_list:
+                continue
+
+            scores_df = pd.concat(ticker_scores_list, axis=1).fillna(0)
+
+            def top_n_mean(row):
+                vals = sorted(row.dropna().values, reverse=True)
+                top = vals[:top_n]
+                return sum(top) / len(top) if top else 0
+
+            grp_rs_series = scores_df.apply(top_n_mean, axis=1)
+            rs_ky = grp_rs_series.ewm(span=ema_len, adjust=False).mean()
+
+            if len(rs_ky) < 21:
+                continue
+
+            v20, v15, v10, v5, v0 = rs_ky.iloc[-21], rs_ky.iloc[-16], rs_ky.iloc[-11], rs_ky.iloc[-6], rs_ky.iloc[-1]
+            e1 = "🟢" if v15 > v20 else "🔴"
+            e2 = "🟢" if v10 > v15 else "🔴"
+            e3 = "🟢" if v5  > v10 else "🔴"
+            e4 = "🟢" if v0  > v5  else "🔴"
+            trend_map[industry] = f"{e1}{e2}{e3}{e4}"
+
+        return trend_map
+    except Exception:
+        return {}
+
 # 6. Compact Display Logic
 if all_data:
     df_main = pd.DataFrame([{"Industry": item["Industry"], "Group RS": item["Group RS"], "Group RS Prev": item["Group RS Prev"], "Group RS 1M": item["Group RS 1M"], "Group RS 3D": item["Group RS 3D"]} for item in all_data])
@@ -3508,6 +3567,13 @@ if all_data:
     #         )
     # ─────────────────────────────────────────────────────────────────────
 
+    with st.spinner("Computing RS trend arrows..."):
+        industry_trend_map = timed(
+            "compute_industry_rs_trend_emoji",
+            compute_industry_rs_trend_emoji,
+            all_data, ticker_dfs_shared, benchmark_df_shared, rs_length
+        )
+
     table_html = """<table>
     <thead><tr>
     <th style="text-align: center; width: 30px;">#</th>
@@ -3516,6 +3582,7 @@ if all_data:
     <th style="text-align: center; width: 40px;">1W</th>
     <th style="text-align: center; width: 40px;">1M</th>
     <th style="text-align: center; width: 40px;">△T</th>
+    <th style="text-align: center; width: 60px;">Trend</th>   <!-- NEW -->
     <th style="text-align: center; width: 400px;">Tickers (RS > 80)</th>
     <th style="text-align: center; width: 250px;">21ema_Valid</th>
     <th style="text-align: center; width: 170px;">21ema_Cloud</th>
@@ -3783,6 +3850,8 @@ if all_data:
         <td style="text-align: center; vertical-align: middle;">{rank_str}</td>
         <td style="text-align: center; vertical-align: middle;">{rank_str_1m}</td>
         <td style="text-align: center; vertical-align: middle;">{roc_str}</td>
+        <td style="text-align: center; white-space:nowrap;">{industry_trend_map.get(row['Industry'], '')}</td>  <!-- NEW -->
+        <td>{ticker_html}</td>
         <td>{ticker_html}</td>
         <td>{cloud_html}</td>
         <td>{cloud_21ema_html}</td>
