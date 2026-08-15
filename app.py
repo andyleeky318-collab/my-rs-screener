@@ -10387,7 +10387,7 @@ def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
     separator_inserted = False
     for r in rows:
         if not separator_inserted and r["rank"] > 20:
-            lines.append("----------")
+            lines.append("------------------------------")
             separator_inserted = True
 
         setup_str = ",".join(r["setups"])
