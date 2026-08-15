@@ -3587,8 +3587,8 @@ if all_data:
 
     if traffic_light_mode:
         metric_headers = (
-            '<th style="text-align: center; width: 60px;">Trend</th>'            
             '<th style="text-align: center; width: 40px;">△T</th>'
+            '<th style="text-align: center; width: 60px;">Trend</th>'
         )
     else:
         metric_headers = (
