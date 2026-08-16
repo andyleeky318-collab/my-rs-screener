@@ -12368,11 +12368,13 @@ else:
         "text-align:center;font-size:12px;border:1px solid #333;z-index:2;'>Date</th>"
     )
 
+    EXTRA_BORDER = {"XLC": "border-left:3px solid #ffffff;", "XLY": "border-right:3px solid #ffffff;", "XLB": "border-right:3px solid #ffffff;"}
+
     header_cells += "".join(
         f"<th style='position:sticky;top:0;background:#111;"
         f"color:{'#FF4B4B' if sector_dist_triggered.get(col, False) else '#eee'};"
         f"padding:6px 10px;text-align:center;font-size:12px;"
-        f"border:1px solid #333;z-index:2;'>{col}</th>"
+        f"border:1px solid #333;{EXTRA_BORDER.get(col,'')}z-index:2;'>{col}</th>"
         for col in rank_df.columns[1:]
     )
     body_rows = ""
@@ -12388,13 +12390,9 @@ else:
             ret_val = ret_row[col]
             style = _heatmap_cell_color_v2(ret_val)
             display_val = "" if pd.isna(rank_val) else f"{int(rank_val)}"
-            border = "border-left:3px solid white;" if col == "XLC" else \
-                        "border-right:3px solid white;" if col == "XLY" else ""
             cells += (
-                f"<td style='{style}{border}"
-                f"padding:5px 8px;text-align:center;"
-                f"font-size:12px;border-top:1px solid #333;border-bottom:1px solid #333;"
-                f"border-left:1px solid #333;border-right:1px solid #333;'>{display_val}</td>"
+                f"<td style='{style}padding:5px 8px;text-align:center;"
+                f"font-size:12px;border:1px solid #333;{EXTRA_BORDER.get(col,'')}'>{display_val}</td>"
             )
         body_rows += f"<tr>{cells}</tr>"
 
