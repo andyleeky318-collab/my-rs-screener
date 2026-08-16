@@ -12361,66 +12361,256 @@ else:
 st.markdown("---")
 
 @st.cache_data(ttl=3600)
-def compute_spy_distribution_days():
-    # Fetch 6 months of data to ensure we have enough history to track the 25-trading-day lifespans
+def compute_market_distribution_days(ticker, dist_threshold=-0.2):
+    # Fetch 2 months of data to ensure enough history
+    # to track the 25-trading-day distribution-day lifespan
     df = yf.download(
-        "SPY", period="2mo", interval="1d", progress=False, auto_adjust=True
+        ticker,
+        period="2mo",
+        interval="1d",
+        progress=False,
+        auto_adjust=True
     )
-    df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
 
-    # Ensure open, high, low, close, and volume are available
-    df = df[["Open", "High", "Low", "Close", "Volume"]].dropna()
+    df.columns = [
+        c[0] if isinstance(c, tuple) else c
+        for c in df.columns
+    ]
 
-    # 1. Calculate basic changes
+    # Ensure required columns are available
+    df = df[
+        ["Open", "High", "Low", "Close", "Volume"]
+    ].dropna()
+
+    # 1. Calculate daily percentage change
     df["Pct_Chg"] = df["Close"].pct_change() * 100
-    df["Vol_Higher"] = df["Volume"] > df["Volume"].shift(1)
 
-    # 2. Identify ALL distribution days (Price drop >= 0.2% on higher volume)
-    # Optional: Add stalling logic if you want to be ultra-strict with IBD rules
-    df["Is_Dist_Day"] = (df["Pct_Chg"] <= -0.2) & df["Vol_Higher"]
+    # 2. Volume must be higher than previous trading day
+    df["Vol_Higher"] = (
+        df["Volume"] > df["Volume"].shift(1)
+    )
+
+    # 3. Identify distribution days
+    #
+    # SPY / IWM:
+    #   Close down >= 0.2% on higher volume
+    #
+    # QQQ / SMH:
+    #   Close down >= 0.3% on higher volume
+    #
+    df["Is_Dist_Day"] = (
+        (df["Pct_Chg"] <= dist_threshold)
+        & df["Vol_Higher"]
+    )
 
     active_distribution_days = []
 
-    # 3. Loop through history to apply expiration and 5% cancellation rules
-    # We look at potential distribution days that occurred within the last few months
+    # 4. Get all potential distribution days
     potential_dist_df = df[df["Is_Dist_Day"]]
 
     for dist_date, dist_row in potential_dist_df.iterrows():
+
         dist_close = dist_row["Close"]
 
-        # Get all trading rows *after* the distribution day
+        # Get all trading rows starting from the
+        # distribution day
         subsequent_df = df.loc[dist_date:]
 
-        # Rule 1: Expire after 25 trading sessions
-        # If the number of trading days since this event exceeds 25, it's naturally dead
+        # ------------------------------------------------
+        # Rule 1:
+        # Distribution day expires after 25 trading days
+        # ------------------------------------------------
         trading_days_elapsed = len(subsequent_df) - 1
+
         if trading_days_elapsed >= 25:
             continue
 
-        # Rule 2: Cancel if SPY closes 5% or more above this specific day's close
+        # ------------------------------------------------
+        # Rule 2:
+        # Cancel distribution day if ETF closes
+        # 5% or more above the distribution-day close
+        # ------------------------------------------------
         max_close_since = subsequent_df["Close"].max()
-        pct_gain_since = ((max_close_since - dist_close) / dist_close) * 100
+
+        pct_gain_since = (
+            (max_close_since - dist_close)
+            / dist_close
+        ) * 100
 
         if pct_gain_since >= 5.0:
-            continue  # Wiped out by strong market accumulation
+            continue
 
-        # If it survived both checks, it is currently an active distribution day
-        active_distribution_days.append(dist_date.strftime("%Y-%m-%d"))
+        # Distribution day is still active
+        active_distribution_days.append(
+            dist_date.strftime("%Y-%m-%d")
+        )
 
     return len(active_distribution_days), active_distribution_days
 
-dist_count, dist_dates = timed("compute_spy_distribution_days", compute_spy_distribution_days)
 
-triggered = dist_count >= 5
-status_color = "#FF4B4B" if triggered else "#00FF00"
-status_text = "TRIGGERED — elevated correction risk, skip new breakouts" if triggered else "Not Triggered"
+# ============================================================
+# SPY
+# Distribution threshold = -0.2%
+# ============================================================
+
+spy_dist_count, spy_dist_dates = timed(
+    "compute_spy_distribution_days",
+    lambda: compute_market_distribution_days(
+        "SPY",
+        dist_threshold=-0.2
+    )
+)
+
+spy_triggered = spy_dist_count >= 5
+
+spy_status_color = (
+    "#FF4B4B"
+    if spy_triggered
+    else "#00FF00"
+)
+
+spy_status_text = (
+    "TRIGGERED — elevated correction risk, skip new breakouts"
+    if spy_triggered
+    else "Not Triggered"
+)
 
 st.markdown(
-    f"#### 🚨 SPY Distribution Days ({dist_count}/25) — "
-    f"<span style='color:{status_color};font-weight:bold;'>{status_text}</span>",
+    f"#### 🚨 SPY Distribution Days ({spy_dist_count}/25) — "
+    f"<span style='color:{spy_status_color};font-weight:bold;'>"
+    f"{spy_status_text}</span>",
     unsafe_allow_html=True,
 )
-if dist_dates:
-    st.markdown(", ".join(dist_dates))
+
+if spy_dist_dates:
+    st.markdown(", ".join(spy_dist_dates))
 else:
-    st.info("No distribution days in the trailing 25 sessions.")
+    st.info(
+        "No SPY distribution days in the trailing 25 sessions."
+    )
+
+
+# ============================================================
+# QQQ
+# Stricter threshold = -0.3%
+# ============================================================
+
+qqq_dist_count, qqq_dist_dates = timed(
+    "compute_qqq_distribution_days",
+    lambda: compute_market_distribution_days(
+        "QQQ",
+        dist_threshold=-0.3
+    )
+)
+
+qqq_triggered = qqq_dist_count >= 5
+
+qqq_status_color = (
+    "#FF4B4B"
+    if qqq_triggered
+    else "#00FF00"
+)
+
+qqq_status_text = (
+    "TRIGGERED — elevated correction risk, skip new breakouts"
+    if qqq_triggered
+    else "Not Triggered"
+)
+
+st.markdown(
+    f"#### 🚨 QQQ Distribution Days ({qqq_dist_count}/25) — "
+    f"<span style='color:{qqq_status_color};font-weight:bold;'>"
+    f"{qqq_status_text}</span>",
+    unsafe_allow_html=True,
+)
+
+if qqq_dist_dates:
+    st.markdown(", ".join(qqq_dist_dates))
+else:
+    st.info(
+        "No QQQ distribution days in the trailing 25 sessions."
+    )
+
+
+# ============================================================
+# SMH
+# Stricter threshold = -0.3%
+# ============================================================
+
+smh_dist_count, smh_dist_dates = timed(
+    "compute_smh_distribution_days",
+    lambda: compute_market_distribution_days(
+        "SMH",
+        dist_threshold=-0.3
+    )
+)
+
+smh_triggered = smh_dist_count >= 5
+
+smh_status_color = (
+    "#FF4B4B"
+    if smh_triggered
+    else "#00FF00"
+)
+
+smh_status_text = (
+    "TRIGGERED — elevated correction risk, skip new breakouts"
+    if smh_triggered
+    else "Not Triggered"
+)
+
+st.markdown(
+    f"#### 🚨 SMH Distribution Days ({smh_dist_count}/25) — "
+    f"<span style='color:{smh_status_color};font-weight:bold;'>"
+    f"{smh_status_text}</span>",
+    unsafe_allow_html=True,
+)
+
+if smh_dist_dates:
+    st.markdown(", ".join(smh_dist_dates))
+else:
+    st.info(
+        "No SMH distribution days in the trailing 25 sessions."
+    )
+
+
+# ============================================================
+# IWM
+# Distribution threshold = -0.2%
+# ============================================================
+
+iwm_dist_count, iwm_dist_dates = timed(
+    "compute_iwm_distribution_days",
+    lambda: compute_market_distribution_days(
+        "IWM",
+        dist_threshold=-0.2
+    )
+)
+
+iwm_triggered = iwm_dist_count >= 5
+
+iwm_status_color = (
+    "#FF4B4B"
+    if iwm_triggered
+    else "#00FF00"
+)
+
+iwm_status_text = (
+    "TRIGGERED — elevated correction risk, skip new breakouts"
+    if iwm_triggered
+    else "Not Triggered"
+)
+
+st.markdown(
+    f"#### 🚨 IWM Distribution Days ({iwm_dist_count}/25) — "
+    f"<span style='color:{iwm_status_color};font-weight:bold;'>"
+    f"{iwm_status_text}</span>",
+    unsafe_allow_html=True,
+)
+
+if iwm_dist_dates:
+    st.markdown(", ".join(iwm_dist_dates))
+else:
+    st.info(
+        "No IWM distribution days in the trailing 25 sessions."
+    )
