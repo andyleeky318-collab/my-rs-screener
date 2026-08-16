@@ -12263,6 +12263,46 @@ else:
 st.markdown("---")
 st.markdown("#### 🌡️ Sector Strength Heatmap")
 
+@st.cache_data(ttl=3600)
+def get_sector_distribution_status(sector_etfs):
+    result = {}
+
+    for ticker in sector_etfs:
+        df = yf.download(
+            ticker, period="2mo", interval="1d",
+            progress=False, auto_adjust=True
+        )
+        df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
+        df = df[["Close", "Volume"]].dropna()
+
+        df["Pct_Chg"] = df["Close"].pct_change() * 100
+        df["Vol_Higher"] = df["Volume"] > df["Volume"].shift(1)
+        df["Is_Dist"] = (df["Pct_Chg"] <= -0.2) & df["Vol_Higher"]
+
+        count = 0
+
+        for date, row in df[df["Is_Dist"]].iterrows():
+            subsequent = df.loc[date:]
+
+            if len(subsequent) - 1 >= 25:
+                continue
+
+            if ((subsequent["Close"].max() - row["Close"]) / row["Close"]) * 100 >= 5:
+                continue
+
+            count += 1
+
+        result[ticker] = count >= 5
+
+    return result
+
+
+sector_dist_triggered = timed(
+    "get_sector_distribution_status",
+    get_sector_distribution_status,
+    SECTOR_ETFS_HEATMAP
+)
+
 SECTOR_ETFS_HEATMAP = ["XLK", "XLV", "XLF", "XLC", "XLY", "XLE", "XLI", "XLB", "XLP", "XLU"]
 HEATMAP_DAYS = 60
 HEATMAP_RETURN_LENGTH = 21  # ~1 month price return, used as the money-flow proxy
@@ -12321,10 +12361,17 @@ def _heatmap_cell_color_v2(ret_val, cap=8.0):
 if rank_df.empty:
     st.info("Sector heatmap data unavailable.")
 else:
-    header_cells = "".join(
-        f"<th style='position:sticky;top:0;background:#111;color:#eee;padding:6px 10px;"
-        f"text-align:center;font-size:12px;border:1px solid #333;z-index:2;'>{col}</th>"
-        for col in rank_df.columns
+    header_cells = (
+        "<th style='position:sticky;top:0;background:#111;color:#eee;padding:6px 10px;"
+        "text-align:center;font-size:12px;border:1px solid #333;z-index:2;'>Date</th>"
+    )
+
+    header_cells += "".join(
+        f"<th style='position:sticky;top:0;background:#111;"
+        f"color:{'#FF4B4B' if sector_dist_triggered.get(col, False) else '#eee'};"
+        f"padding:6px 10px;text-align:center;font-size:12px;"
+        f"border:1px solid #333;z-index:2;'>{col}</th>"
+        for col in rank_df.columns[1:]
     )
     body_rows = ""
     for i in range(len(rank_df)):
