@@ -2852,11 +2852,48 @@ def compute_industry_vol_flags(industries_dict, _ticker_dfs):
             industry_vol_tickers[industry] = qualifying_tickers
 
     return flagged_industries, industry_vol_tickers
+@st.cache_data(ttl=3600)
+def compute_industry_volume_flags(industries_dict, _ticker_dfs):
+    """
+    For each industry, count how many tickers have today's Volume above
+    their own 50-day average Volume. Flags industries with >=3 qualifiers.
+    """
+    flagged_industries = set()
+    industry_volume_tickers = {}
+
+    for industry, tickers in industries_dict.items():
+        qualifying_tickers = []
+        for ticker in tickers:
+            try:
+                df = _ticker_dfs.get(ticker)
+                if df is None or len(df) < 50:
+                    continue
+                vol = df['Volume']
+                avg_vol50 = vol.rolling(50).mean().iloc[-1]
+                if pd.isna(avg_vol50) or avg_vol50 <= 0:
+                    continue
+                if vol.iloc[-1] > avg_vol50:
+                    qualifying_tickers.append(ticker)
+            except Exception:
+                continue
+
+        if len(qualifying_tickers) >= 3:
+            flagged_industries.add(industry)
+            industry_volume_tickers[industry] = qualifying_tickers
+
+    return flagged_industries, industry_volume_tickers
 
 with st.spinner("Computing industry volatility flags..."):
     vol_flagged_industries, industry_vol_tickers = timed(
         "compute_industry_vol_flags",
         compute_industry_vol_flags,
+        INDUSTRIES, ticker_dfs_shared
+    )
+
+with st.spinner("Computing industry volume flags..."):
+    vol_flagged_industries_volume, industry_volume_tickers = timed(
+        "compute_industry_volume_flags",
+        compute_industry_volume_flags,
         INDUSTRIES, ticker_dfs_shared
     )
 
@@ -3988,6 +4025,41 @@ if all_data:
                 f"</div>"
             )
     st.markdown(dist_html, unsafe_allow_html=True)
+
+    # ── Volume Cluster summary (industries with >=3 volume-above-50MA tickers) ──
+    all_volume_tickers = set()
+    for tickers_list in industry_volume_tickers.values():
+        all_volume_tickers.update(tickers_list)
+    total_volume_ticker_count = len(all_volume_tickers)
+
+    volume_html = (
+        f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
+        f"📊 Volume Cluster "
+        f"<span style='color:#29B5E8;'>({len(vol_flagged_industries_volume)} industries, {total_volume_ticker_count} tickers)</span>"
+        f"</div>"
+    )
+    if vol_flagged_industries_volume:
+        sorted_flagged_volume = sorted(
+            vol_flagged_industries_volume,
+            key=lambda ind: industry_rank_map.get(ind, 9999)
+        )
+        for industry in sorted_flagged_volume:
+            rank = industry_rank_map.get(industry, "-")
+            tickers_for_ind = sorted(industry_volume_tickers.get(industry, []))
+            ticker_badges = "".join(
+                f'<span style="display:inline-block;margin:1px 3px;padding:1px 5px;'
+                f'border:1px solid #1a4d66;border-radius:3px;font-size:11px;'
+                f'background-color:#0f2733;color:#66CCFF;font-weight:600;">{t}</span>'
+                for t in tickers_for_ind
+            )
+            volume_html += (
+                f"<div style='margin-bottom:5px;'>"
+                f"<span style='color:#29B5E8; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
+                f"<span style='color:#29B5E8; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;'>{industry}</span>"
+                f"<span>{ticker_badges}</span>"
+                f"</div>"
+            )
+    st.markdown(volume_html, unsafe_allow_html=True)
 
     # ── Engulfing summary (industries with >1 bullish-engulfing-today ticker) ──
     engulf_industry_tickers = {}
