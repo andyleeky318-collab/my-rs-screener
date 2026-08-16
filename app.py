@@ -12342,3 +12342,35 @@ else:
     </div>
     """
     st.markdown(heatmap_html, unsafe_allow_html=True)
+
+# ==============================================================================
+# 21. SPY DISTRIBUTION DAY COUNT — 5+ in trailing 25 sessions = elevated risk
+# ==============================================================================
+st.markdown("---")
+
+@st.cache_data(ttl=3600)
+def compute_spy_distribution_days(lookback=25):
+    df = yf.download("SPY", period="3mo", interval="1d", progress=False, auto_adjust=True)
+    df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
+    df = df[["Close", "Volume"]].dropna()
+    pct_chg = df["Close"].pct_change() * 100
+    is_dist = (pct_chg <= -0.2) & (df["Volume"] > df["Volume"].shift(1))
+    recent = is_dist.tail(lookback)
+    dist_dates = recent[recent].index.strftime("%Y-%m-%d").tolist()
+    return int(recent.sum()), dist_dates
+
+dist_count, dist_dates = timed("compute_spy_distribution_days", compute_spy_distribution_days)
+
+triggered = dist_count >= 5
+status_color = "#FF4B4B" if triggered else "#00FF00"
+status_text = "TRIGGERED — elevated correction risk, skip new breakouts" if triggered else "Not Triggered"
+
+st.markdown(
+    f"#### 🚨 SPY Distribution Days ({dist_count}/25) — "
+    f"<span style='color:{status_color};font-weight:bold;'>{status_text}</span>",
+    unsafe_allow_html=True,
+)
+if dist_dates:
+    st.markdown(", ".join(dist_dates))
+else:
+    st.info("No distribution days in the trailing 25 sessions.")
