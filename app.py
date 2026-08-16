@@ -11071,7 +11071,19 @@ if master_rows:
     rows_html = ""
     for row_num, row in enumerate(master_rows, start=1):
         bg = "#262730" if row_num % 2 == 0 else "#0e1117"
-        ticker_color = "#FF4B4B" if (row["Volatility"] or row["Distribution"]) else ("#00FF00" if row["Ticker"] in _lime_stocks1_safe else "#ffffff")
+        #ticker_color = "#FF4B4B" if (row["Volatility"] or row["Distribution"]) else ("#00FF00" if row["Ticker"] in _lime_stocks1_safe else "#ffffff")
+        
+        if row["50ma_bounce"]:
+            ticker_color = "#FFA500"   # same as orange-badge in RS industry table
+        elif row["21ema_wick"]:
+            ticker_color = "#99e6e6"   # same as aqua-badge
+        elif row["21ema_cloud"]:
+            ticker_color = "#c084fc"   # same as purple-badge
+        elif row["21ema_valid"]:
+            ticker_color = "#FF69B4"   # same as the Cloud/pink badge
+        else:
+            ticker_color = "#FF4B4B" if (row["Volatility"] or row["Distribution"]) else ("#00FF00" if row["Ticker"] in _lime_stocks1_safe else "#ffffff")
+
         no_ema_setup = not (row["21ema_valid"] or row["21ema_cloud"] or row["21ema_wick"] or row["50ma_bounce"])  # NEW
         ticker_style = f"font-weight:bold;color:{ticker_color};white-space:nowrap;" + ("text-decoration:line-through;" if no_ema_setup else "")  # NEW
         top20_mark = (
@@ -12241,7 +12253,7 @@ if atr10_list:
         html_atr10 += setup_badge(sym)
     st.markdown(html_atr10, unsafe_allow_html=True)
 else:
-    st.info("None.")
+    st.info("None")
 
 
 # ==============================================================================
@@ -12349,15 +12361,53 @@ else:
 st.markdown("---")
 
 @st.cache_data(ttl=3600)
-def compute_spy_distribution_days(lookback=25):
-    df = yf.download("SPY", period="3mo", interval="1d", progress=False, auto_adjust=True)
+def compute_spy_distribution_days():
+    # Fetch 6 months of data to ensure we have enough history to track the 25-trading-day lifespans
+    df = yf.download(
+        "SPY", period="2mo", interval="1d", progress=False, auto_adjust=True
+    )
     df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
-    df = df[["Close", "Volume"]].dropna()
-    pct_chg = df["Close"].pct_change() * 100
-    is_dist = (pct_chg <= -0.2) & (df["Volume"] > df["Volume"].shift(1))
-    recent = is_dist.tail(lookback)
-    dist_dates = recent[recent].index.strftime("%Y-%m-%d").tolist()
-    return int(recent.sum()), dist_dates
+
+    # Ensure open, high, low, close, and volume are available
+    df = df[["Open", "High", "Low", "Close", "Volume"]].dropna()
+
+    # 1. Calculate basic changes
+    df["Pct_Chg"] = df["Close"].pct_change() * 100
+    df["Vol_Higher"] = df["Volume"] > df["Volume"].shift(1)
+
+    # 2. Identify ALL distribution days (Price drop >= 0.2% on higher volume)
+    # Optional: Add stalling logic if you want to be ultra-strict with IBD rules
+    df["Is_Dist_Day"] = (df["Pct_Chg"] <= -0.2) & df["Vol_Higher"]
+
+    active_distribution_days = []
+
+    # 3. Loop through history to apply expiration and 5% cancellation rules
+    # We look at potential distribution days that occurred within the last few months
+    potential_dist_df = df[df["Is_Dist_Day"]]
+
+    for dist_date, dist_row in potential_dist_df.iterrows():
+        dist_close = dist_row["Close"]
+
+        # Get all trading rows *after* the distribution day
+        subsequent_df = df.loc[dist_date:]
+
+        # Rule 1: Expire after 25 trading sessions
+        # If the number of trading days since this event exceeds 25, it's naturally dead
+        trading_days_elapsed = len(subsequent_df) - 1
+        if trading_days_elapsed >= 25:
+            continue
+
+        # Rule 2: Cancel if SPY closes 5% or more above this specific day's close
+        max_close_since = subsequent_df["Close"].max()
+        pct_gain_since = ((max_close_since - dist_close) / dist_close) * 100
+
+        if pct_gain_since >= 5.0:
+            continue  # Wiped out by strong market accumulation
+
+        # If it survived both checks, it is currently an active distribution day
+        active_distribution_days.append(dist_date.strftime("%Y-%m-%d"))
+
+    return len(active_distribution_days), active_distribution_days
 
 dist_count, dist_dates = timed("compute_spy_distribution_days", compute_spy_distribution_days)
 
