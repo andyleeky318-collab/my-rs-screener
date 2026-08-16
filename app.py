@@ -4011,8 +4011,8 @@ if all_data:
 
     dist_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"📉 Distribution Cluster "
-        f"<span style='color:#FF4B4B;'>({len(vol_flagged_industries)} industries, {total_vol_ticker_count} tickers)</span>"
+        f"📉📉📉 Distribution Cluster "
+        #f"<span style='color:#FF4B4B;'>({len(vol_flagged_industries)} industries, {total_vol_ticker_count} tickers)</span>"
         f"</div>"
     )
     if vol_flagged_industries:
@@ -4047,8 +4047,8 @@ if all_data:
 
     volume_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"📊 Volume Cluster "
-        f"<span style='color:#29B5E8;'>({len(vol_flagged_industries_volume)} industries, {total_volume_ticker_count} tickers)</span>"
+        f"📊📊📊 Volume Cluster "
+        #f"<span style='color:#29B5E8;'>({len(vol_flagged_industries_volume)} industries, {total_volume_ticker_count} tickers)</span>"
         f"</div>"
     )
     if vol_flagged_industries_volume:
@@ -4091,7 +4091,7 @@ if all_data:
     engulf_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
         f"🐳🐳 Engulfing Cluster "
-        f"<span style='color:#FFFF00;'>({len(engulf_industry_tickers)} industries, {len(all_engulf_tickers)} tickers)</span>"
+        #f"<span style='color:#FFFF00;'>({len(engulf_industry_tickers)} industries, {len(all_engulf_tickers)} tickers)</span>"
         f"</div>"
     )
     if engulf_industry_tickers:
@@ -4134,7 +4134,7 @@ if all_data:
     botak_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
         f"🧑‍🦲🧑‍🦲🧑‍🦲 Botak Cluster "
-        f"<span style='color:#00FF00;'>({len(botak_industry_tickers)} industries, {len(all_botak_tickers)} tickers)</span>"
+        #f"<span style='color:#00FF00;'>({len(botak_industry_tickers)} industries, {len(all_botak_tickers)} tickers)</span>"
         f"</div>"
     )
     if botak_industry_tickers:
