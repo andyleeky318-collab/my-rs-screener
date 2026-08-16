@@ -2852,11 +2852,13 @@ def compute_industry_vol_flags(industries_dict, _ticker_dfs):
             industry_vol_tickers[industry] = qualifying_tickers
 
     return flagged_industries, industry_vol_tickers
+
 @st.cache_data(ttl=3600)
 def compute_industry_volume_flags(industries_dict, _ticker_dfs):
     """
     For each industry, count how many tickers have today's Volume above
-    their own 50-day average Volume. Flags industries with >=3 qualifiers.
+    their own 50-day average Volume AND a positive daily price change.
+    Flags industries with >=3 qualifiers.
     """
     flagged_industries = set()
     industry_volume_tickers = {}
@@ -2866,13 +2868,24 @@ def compute_industry_volume_flags(industries_dict, _ticker_dfs):
         for ticker in tickers:
             try:
                 df = _ticker_dfs.get(ticker)
-                if df is None or len(df) < 50:
+                if df is None or len(df) < 51:
                     continue
                 vol = df['Volume']
+                close = df['Close']
+
                 avg_vol50 = vol.rolling(50).mean().iloc[-1]
                 if pd.isna(avg_vol50) or avg_vol50 <= 0:
                     continue
-                if vol.iloc[-1] > avg_vol50:
+
+                c_today = close.iloc[-1]
+                c_prev = close.iloc[-2]
+                if pd.isna(c_today) or pd.isna(c_prev) or c_prev == 0:
+                    continue
+
+                is_vol_above = vol.iloc[-1] > avg_vol50
+                is_price_up = c_today > c_prev
+
+                if is_vol_above and is_price_up:
                     qualifying_tickers.append(ticker)
             except Exception:
                 continue
