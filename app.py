@@ -12388,9 +12388,13 @@ else:
             ret_val = ret_row[col]
             style = _heatmap_cell_color_v2(ret_val)
             display_val = "" if pd.isna(rank_val) else f"{int(rank_val)}"
+            border = "border-left:3px solid white;" if col == "XLC" else \
+                        "border-right:3px solid white;" if col == "XLY" else ""
             cells += (
-                f"<td style='{style}padding:5px 8px;text-align:center;"
-                f"font-size:12px;border:1px solid #333;'>{display_val}</td>"
+                f"<td style='{style}{border}"
+                f"padding:5px 8px;text-align:center;"
+                f"font-size:12px;border-top:1px solid #333;border-bottom:1px solid #333;"
+                f"border-left:1px solid #333;border-right:1px solid #333;'>{display_val}</td>"
             )
         body_rows += f"<tr>{cells}</tr>"
 
