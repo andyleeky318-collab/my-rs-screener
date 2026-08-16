@@ -12263,6 +12263,12 @@ else:
 st.markdown("---")
 st.markdown("#### 🌡️ Sector Strength Heatmap")
 
+
+
+SECTOR_ETFS_HEATMAP = ["XLK", "XLV", "XLF", "XLC", "XLY", "XLE", "XLI", "XLB", "XLP", "XLU"]
+HEATMAP_DAYS = 60
+HEATMAP_RETURN_LENGTH = 21  # ~1 month price return, used as the money-flow proxy
+
 @st.cache_data(ttl=3600)
 def get_sector_distribution_status(sector_etfs):
     result = {}
@@ -12302,10 +12308,6 @@ sector_dist_triggered = timed(
     get_sector_distribution_status,
     SECTOR_ETFS_HEATMAP
 )
-
-SECTOR_ETFS_HEATMAP = ["XLK", "XLV", "XLF", "XLC", "XLY", "XLE", "XLI", "XLB", "XLP", "XLU"]
-HEATMAP_DAYS = 60
-HEATMAP_RETURN_LENGTH = 21  # ~1 month price return, used as the money-flow proxy
 
 @st.cache_data(ttl=3600)
 def compute_sector_heatmap_df_v2(sector_etfs, _ticker_dfs, length=21, days=60):
