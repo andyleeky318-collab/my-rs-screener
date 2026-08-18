@@ -12839,3 +12839,172 @@ else:
     st.info(
         "No IWM distribution days in the trailing 25 sessions."
     )
+
+# ==============================================================================
+# 22. RELATIVE ROTATION GRAPH (RRG) — LIME_STOCKS vs SPY
+# Read-only, additive. Standalone data fetch + JdK-style RS-Ratio / RS-Momentum
+# calculation. Does not touch any other section or shared variable.
+# ==============================================================================
+st.markdown("---")
+st.markdown("#### 🔄 Relative Rotation Graph (RRG)")
+
+RRG_BENCHMARK = "SPY"
+RRG_EXCLUDE = {"SPY", "QQQ", "RSP"}
+RRG_TICKERS = [t for t in LIME_STOCKS if t not in RRG_EXCLUDE]
+RRG_WINDOW = 14      # smoothing window for RS-Ratio / RS-Momentum
+RRG_TAIL = 10        # number of trailing points to plot per ticker
+RRG_PERIOD = "9mo"   # history length to download
+
+
+@st.cache_data(ttl=3600)
+def fetch_rrg_raw_close(tickers_tuple, benchmark, period="9mo"):
+    all_symbols = list(tickers_tuple) + [benchmark]
+    raw = yf.download(all_symbols, period=period, interval="1d", progress=False, auto_adjust=True)
+    if isinstance(raw.columns, pd.MultiIndex):
+        return raw["Close"]
+    # Fallback for the (unlikely) single-symbol case
+    return raw[["Close"]].rename(columns={"Close": all_symbols[0]})
+
+
+@st.cache_data(ttl=3600)
+def compute_rrg_dataframe(tickers_tuple, benchmark, period="9mo", window=14, tail=10):
+    close_df = fetch_rrg_raw_close(tickers_tuple, benchmark, period)
+    if close_df.empty or benchmark not in close_df.columns:
+        return {}
+
+    bench_close = close_df[benchmark].dropna()
+    results = {}
+
+    for ticker in tickers_tuple:
+        try:
+            if ticker not in close_df.columns:
+                continue
+            stock_close = close_df[ticker].dropna()
+            aligned_stock, aligned_bench = stock_close.align(bench_close, join="inner")
+            if len(aligned_stock) < window * 2 + tail:
+                continue
+
+            rs = (aligned_stock / aligned_bench) * 100
+
+            rs_mean = rs.rolling(window).mean()
+            rs_std = rs.rolling(window).std()
+            rs_ratio = 100 + (rs - rs_mean) / rs_std.replace(0, np.nan)
+
+            rr_mean = rs_ratio.rolling(window).mean()
+            rr_std = rs_ratio.rolling(window).std()
+            rs_momentum = 100 + (rs_ratio - rr_mean) / rr_std.replace(0, np.nan)
+
+            combo = pd.DataFrame({"RS_Ratio": rs_ratio, "RS_Momentum": rs_momentum}).dropna()
+            if len(combo) < tail:
+                continue
+
+            results[ticker] = combo.tail(tail).reset_index(drop=True)
+        except Exception:
+            continue
+
+    return results
+
+
+with st.spinner("Computing Relative Rotation Graph..."):
+    rrg_data = timed(
+        "compute_rrg_dataframe",
+        compute_rrg_dataframe,
+        tuple(RRG_TICKERS), RRG_BENCHMARK, RRG_PERIOD, RRG_WINDOW, RRG_TAIL
+    )
+
+if not rrg_data:
+    st.info("RRG data unavailable.")
+else:
+    RRG_COLORS = [
+        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
+        "#aec7e8", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5",
+        "#c49c94", "#f7b6d2", "#c7c7c7", "#dbdb8d", "#9edae5",
+        "#393b79", "#637939", "#8c6d31", "#843c39", "#7b4173",
+        "#3182bd", "#e6550d", "#31a354", "#756bb1", "#636363",
+    ]
+
+    all_ratios, all_momentums = [], []
+    for df_t in rrg_data.values():
+        all_ratios.extend(df_t["RS_Ratio"].tolist())
+        all_momentums.extend(df_t["RS_Momentum"].tolist())
+
+    x_min, x_max = min(all_ratios), max(all_ratios)
+    y_min, y_max = min(all_momentums), max(all_momentums)
+    x_pad = max((x_max - x_min) * 0.12, 0.5)
+    y_pad = max((y_max - y_min) * 0.12, 0.5)
+    x_lo, x_hi = x_min - x_pad, x_max + x_pad
+    y_lo, y_hi = y_min - y_pad, y_max + y_pad
+
+    fig_rrg = go.Figure()
+
+    # Quadrant backgrounds: Improving=top-left, Leading=top-right,
+    # Lagging=bottom-left, Weakening=bottom-right
+    fig_rrg.add_shape(type="rect", x0=x_lo, y0=100, x1=100, y1=y_hi,
+                       fillcolor="rgba(144,238,144,0.18)", line_width=0, layer="below")
+    fig_rrg.add_shape(type="rect", x0=100, y0=100, x1=x_hi, y1=y_hi,
+                       fillcolor="rgba(144,238,144,0.30)", line_width=0, layer="below")
+    fig_rrg.add_shape(type="rect", x0=x_lo, y0=y_lo, x1=100, y1=100,
+                       fillcolor="rgba(255,99,99,0.22)", line_width=0, layer="below")
+    fig_rrg.add_shape(type="rect", x0=100, y0=y_lo, x1=x_hi, y1=100,
+                       fillcolor="rgba(255,99,99,0.15)", line_width=0, layer="below")
+
+    fig_rrg.add_shape(type="line", x0=100, y0=y_lo, x1=100, y1=y_hi,
+                       line=dict(color="rgba(120,150,200,0.6)", width=1.5, dash="dash"))
+    fig_rrg.add_shape(type="line", x0=x_lo, y0=100, x1=x_hi, y1=100,
+                       line=dict(color="rgba(120,150,200,0.6)", width=1.5, dash="dash"))
+
+    quad_label_style = dict(showarrow=False, font=dict(size=22, color="#222222", family="Arial Black"))
+    fig_rrg.add_annotation(x=x_lo + (100 - x_lo) * 0.05, y=y_hi - (y_hi - 100) * 0.08,
+                            text="Improving", xanchor="left", **quad_label_style)
+    fig_rrg.add_annotation(x=x_hi - (x_hi - 100) * 0.05, y=y_hi - (y_hi - 100) * 0.08,
+                            text="Leading", xanchor="right", **quad_label_style)
+    fig_rrg.add_annotation(x=x_lo + (100 - x_lo) * 0.05, y=y_lo + (100 - y_lo) * 0.08,
+                            text="Lagging", xanchor="left", **quad_label_style)
+    fig_rrg.add_annotation(x=x_hi - (x_hi - 100) * 0.05, y=y_lo + (100 - y_lo) * 0.08,
+                            text="Weakening", xanchor="right", **quad_label_style)
+
+    for i, (ticker, df_t) in enumerate(sorted(rrg_data.items())):
+        color = RRG_COLORS[i % len(RRG_COLORS)]
+        xs = df_t["RS_Ratio"].tolist()
+        ys = df_t["RS_Momentum"].tolist()
+
+        # Trail line + intermediate dots
+        fig_rrg.add_trace(go.Scatter(
+            x=xs, y=ys, mode="lines+markers", name=ticker,
+            line=dict(color=color, width=1.6),
+            marker=dict(size=4, color=color),
+            showlegend=False,
+            hovertemplate=f"<b>{ticker}</b><br>RS-Ratio: %{{x:.2f}}<br>RS-Momentum: %{{y:.2f}}<extra></extra>",
+        ))
+
+        # Start marker (hollow circle)
+        fig_rrg.add_trace(go.Scatter(
+            x=[xs[0]], y=[ys[0]], mode="markers",
+            marker=dict(size=11, color="rgba(0,0,0,0)", line=dict(color=color, width=2)),
+            showlegend=False, hoverinfo="skip",
+        ))
+
+        # End marker (star) + ticker label
+        fig_rrg.add_trace(go.Scatter(
+            x=[xs[-1]], y=[ys[-1]], mode="markers+text",
+            marker=dict(size=13, symbol="star", color=color, line=dict(color="#000000", width=1)),
+            text=[ticker], textposition="middle right",
+            textfont=dict(size=11, color=color),
+            showlegend=False,
+            hovertemplate=f"<b>{ticker}</b><br>RS-Ratio: %{{x:.2f}}<br>RS-Momentum: %{{y:.2f}}<extra></extra>",
+        ))
+
+    fig_rrg.update_layout(
+        title=dict(text="Relative Rotation Graph (vs SPY)", font=dict(size=16, color="#cccccc"), x=0.5, xanchor="center"),
+        height=800,
+        margin=dict(l=50, r=50, t=60, b=50),
+        plot_bgcolor="rgba(20,22,30,1)",
+        paper_bgcolor="rgba(13,17,23,0)",
+        font=dict(color="#cccccc"),
+        xaxis=dict(title="RS-Ratio", range=[x_lo, x_hi], showgrid=True, gridcolor="rgba(120,120,120,0.15)", zeroline=False),
+        yaxis=dict(title="RS-Momentum", range=[y_lo, y_hi], showgrid=True, gridcolor="rgba(120,120,120,0.15)", zeroline=False),
+        hovermode="closest",
+    )
+
+    st.plotly_chart(fig_rrg, use_container_width=True)
