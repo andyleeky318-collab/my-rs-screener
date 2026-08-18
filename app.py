@@ -1078,6 +1078,80 @@ else:
 
 st.markdown("---")
 
+@st.cache_data(ttl=3600)
+def compute_wick_and_volume_breadth(stocks_list, _ticker_dfs):
+    """
+    For today's bar, count (out of valid tickers):
+      - long upper wick: upper wick > 50% of candle range
+      - long lower wick: lower wick > 50% of candle range
+      - low volume: today's volume < 60% of 50-day avg volume
+    """
+    upper_wick_count = 0
+    lower_wick_count = 0
+    low_volume_count = 0
+    total_valid = 0
+
+    for ticker in stocks_list:
+        df = _ticker_dfs.get(ticker)
+        if df is None or len(df) < 51:
+            continue
+        try:
+            o = df['Open'].iloc[-1]
+            h = df['High'].iloc[-1]
+            l = df['Low'].iloc[-1]
+            c = df['Close'].iloc[-1]
+            v = df['Volume'].iloc[-1]
+
+            if pd.isna(o) or pd.isna(h) or pd.isna(l) or pd.isna(c) or pd.isna(v):
+                continue
+
+            rng = h - l
+            if rng <= 0:
+                continue
+
+            upper_wick = h - max(o, c)
+            lower_wick = min(o, c) - l
+
+            total_valid += 1
+
+            if (upper_wick / rng) > 0.5:
+                upper_wick_count += 1
+            if (lower_wick / rng) > 0.5:
+                lower_wick_count += 1
+
+            sma50_vol = df['Volume'].rolling(50).mean().iloc[-1]
+            if pd.notna(sma50_vol) and sma50_vol > 0 and v < (0.6 * sma50_vol):
+                low_volume_count += 1
+
+        except Exception:
+            continue
+
+    return {
+        'upper_wick_count': upper_wick_count,
+        'lower_wick_count': lower_wick_count,
+        'low_volume_count': low_volume_count,
+        'total_valid': total_valid,
+    }
+
+
+def single_pct_bar_html(title, count, total, bar_color="#EF9F27"):
+    """Single-sided percentage breadth bar (not a two-way comparison)."""
+    pct = (count / total * 100) if total > 0 else 0
+    return (
+        f"<div style='margin-bottom:18px;'>"
+        f"  <div style='margin-bottom:5px;font-size:14px;font-weight:700;color:#ffffff;'>"
+        f"    {title} <span style='color:{bar_color};'>({pct:.1f}%)</span>"
+        f"  </div>"
+        f"  <div style='width:40%;height:7px;overflow:hidden;border-radius:999px;background:#a9a9a9;'>"
+        f"    <div style='width:{pct:.2f}%;background:{bar_color};height:100%;border-radius:999px;'></div>"
+        f"  </div>"
+        f"  <div style='display:flex;justify-content:space-between;width:40%;margin-top:4px;'>"
+        f"    <span style='font-size:12px;color:#888888;'>{count:,}</span>"
+        f"    <span style='font-size:12px;color:#888888;'>{total:,}</span>"
+        f"  </div>"
+        f"</div>"
+    )
+
 # ============================================================
 # SINGLE DOWNLOAD + SPINNER: all compute fns share one fetch
 # ============================================================
@@ -1241,6 +1315,21 @@ if breadth_total > 0:
         + breadth_bar_html('Up 4% vs Down 4%',              breadth_stats.get('up_4pct', 0),      breadth_stats.get('down_4pct', 0))
     )
     st.markdown(breadth_html, unsafe_allow_html=True)
+
+    # ── Wick & Volume breadth bars (new) ─────────────────────────────────
+    wick_vol_stats = timed(
+        "compute_wick_and_volume_breadth",
+        compute_wick_and_volume_breadth,
+        stocks_tuple, ticker_dfs_shared
+    )
+    wv_total = wick_vol_stats.get('total_valid', 0)
+
+    wick_vol_html = (
+        single_pct_bar_html('Long Upper Wick', wick_vol_stats.get('upper_wick_count', 0), wv_total, bar_color="#FF69B4")
+        + single_pct_bar_html('Long Bottom Wick', wick_vol_stats.get('lower_wick_count', 0), wv_total, bar_color="#378ADD")
+        + single_pct_bar_html('Low Volume (< 60% of 50D Avg)', wick_vol_stats.get('low_volume_count', 0), wv_total, bar_color="#a9a9a9")
+    )
+    st.markdown(wick_vol_html, unsafe_allow_html=True)
 
 # ── Distribution Chart (after breadth bars) ──────────────────────────────────
 @st.cache_data(ttl=3600)
@@ -4133,7 +4222,7 @@ if all_data:
 
     botak_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"🧑‍🦲🧑‍🦲🧑‍🦲 Botak Cluster "
+        f"🧑‍🦲🧑‍🦲🧑‍🦲 Botak Cluster (Not suitable on sideway market)"
         #f"<span style='color:#00FF00;'>({len(botak_industry_tickers)} industries, {len(all_botak_tickers)} tickers)</span>"
         f"</div>"
     )
@@ -8615,8 +8704,8 @@ with col_up:
             )
         html_up += "</div>"
         st.markdown(html_up, unsafe_allow_html=True)
-    else:
-        st.info("None")
+    # else:
+    #     st.info("None")
 
 with col_down:
     #st.markdown(f"**🔴 Biggest Down Day ({len(biggest_down_today)})**")
@@ -8631,8 +8720,8 @@ with col_down:
             )
         html_down += "</div>"
         st.markdown(html_down, unsafe_allow_html=True)
-    else:
-        st.info("None")
+    # else:
+    #     st.info("None")
 
 @st.cache_data(ttl=3600)
 def compute_biggest_move_history(stocks_list, ticker_dfs):
