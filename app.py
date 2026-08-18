@@ -1327,7 +1327,7 @@ if breadth_total > 0:
     wick_vol_html = (
         single_pct_bar_html('Long Upper Wick', wick_vol_stats.get('upper_wick_count', 0), wv_total, bar_color="#FF69B4")
         + single_pct_bar_html('Long Bottom Wick', wick_vol_stats.get('lower_wick_count', 0), wv_total, bar_color="#378ADD")
-        + single_pct_bar_html('Low Volume (< 60% of 50D Avg)', wick_vol_stats.get('low_volume_count', 0), wv_total, bar_color="#a9a9a9")
+        + single_pct_bar_html('Low Volume (< 60% of 50D Avg)', wick_vol_stats.get('low_volume_count', 0), wv_total, bar_color="#378ADD")
     )
     st.markdown(wick_vol_html, unsafe_allow_html=True)
 
