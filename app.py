@@ -324,6 +324,10 @@ LIME_STOCKS1 = [
     'XTN', 'IYT', 'BOAT', 'MOO', 'BLOK', 'PICK', 'BOTZ', 'MJ', 'WQTM', 'IBB', 'KIE', 'IAI', 'SOXX'
 ]
 
+RRG_STOCKS = [
+    'DRAM', 'FOTO'
+]
+
 TICKER_ALIASES = {
     "GOOG": "GOOGL",
 }
