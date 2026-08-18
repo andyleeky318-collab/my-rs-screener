@@ -12854,7 +12854,7 @@ st.markdown("#### 🔄 Relative Rotation Graph (RRG)")
 
 RRG_BENCHMARK = "SPY"
 RRG_EXCLUDE = {"SPY", "QQQ", "RSP"}
-RRG_TICKERS = [t for t in LIME_STOCKS if t not in RRG_EXCLUDE]
+RRG_TICKERS = [t for t in RRG_STOCKS if t not in RRG_EXCLUDE]
 RRG_WINDOW = 14      # smoothing window for RS-Ratio / RS-Momentum
 RRG_TAIL = 10        # number of trailing points to plot per ticker
 RRG_PERIOD = "9mo"   # history length to download
