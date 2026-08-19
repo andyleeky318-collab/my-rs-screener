@@ -13450,7 +13450,14 @@ stage_pct_df = stage_pct_df[
 
 st.dataframe(
     stage_pct_df,
-    use_container_width=True,
+    use_container_width=False,
     hide_index=True,
-    height=(len(stage_pct_df) + 1) * 35
+    height=(len(stage_pct_df) + 1) * 35,
+    column_config={
+        "Ticker": st.column_config.TextColumn("Ticker", width="small"),
+        "Stage1 %": st.column_config.NumberColumn("Stage1 %", width="small"),
+        "Stage2 %": st.column_config.NumberColumn("Stage2 %", width="small"),
+        "Stage3 %": st.column_config.NumberColumn("Stage3 %", width="small"),
+        "Stage4 %": st.column_config.NumberColumn("Stage4 %", width="small"),
+    },
 )
