@@ -13448,8 +13448,16 @@ stage_pct_df = stage_pct_df[
     ["Ticker", "Stage1 %", "Stage2 %", "Stage3 %", "Stage4 %"]
 ]
 
+def highlight_stage2(val):
+    return "color: lime;" if pd.notna(val) and val > 50 else ""
+
+styled_stage_pct_df = stage_pct_df.style.map(
+    highlight_stage2,
+    subset=["Stage2 %"]
+)
+
 st.dataframe(
-    stage_pct_df,
+    styled_stage_pct_df,
     use_container_width=False,
     hide_index=True,
     height=(len(stage_pct_df) + 1) * 35,
