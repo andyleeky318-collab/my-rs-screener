@@ -1329,8 +1329,8 @@ if breadth_total > 0:
     wv_total = wick_vol_stats.get('total_valid', 0)
 
     wick_vol_html = (
-        single_pct_bar_html('Long Upper Wick', wick_vol_stats.get('upper_wick_count', 0), wv_total, bar_color="#378ADD")
-        + single_pct_bar_html('Long Bottom Wick', wick_vol_stats.get('lower_wick_count', 0), wv_total, bar_color="#FF69B4")
+        single_pct_bar_html('Long Upper Wick', wick_vol_stats.get('upper_wick_count', 0), wv_total, bar_color="#90EE90")
+        + single_pct_bar_html('Long Bottom Wick', wick_vol_stats.get('lower_wick_count', 0), wv_total, bar_color="#90EE90")
         + single_pct_bar_html('Low Volume (< 60% of 50D Avg)', wick_vol_stats.get('low_volume_count', 0), wv_total, bar_color="#378ADD")
     )
     st.markdown(wick_vol_html, unsafe_allow_html=True)
@@ -13012,3 +13012,318 @@ else:
     )
 
     st.plotly_chart(fig_rrg, use_container_width=True)
+
+# ==============================================================================
+# 23. MARKET VERDICT — Composite Breakout / Pullback / Neutral / Defensive Read
+# Read-only, additive. Synthesizes every signal already computed above plus
+# two standalone fetches (VIX term structure, HYG/LQD credit spread) into a
+# single weighted composite score and verdict. Does not touch any other
+# section or shared variable — all new names are unique.
+# ==============================================================================
+st.markdown("---")
+st.markdown("## 🧭 Market Verdict")
+
+# ── Standalone data fetches used only by the verdict (run first so they're
+# available when compute_market_verdict() executes) ─────────────────────────
+
+@st.cache_data(ttl=3600)
+def fetch_vix_term_structure_v0(period="6mo"):
+    """
+    VIX vs VIX3M. Contango (VIX < VIX3M) = normal/complacent market.
+    Backwardation (VIX >= VIX3M) = near-term fear exceeds medium-term fear,
+    historically a defensive signal.
+    """
+    try:
+        raw = yf.download(["^VIX", "^VIX3M"], period=period, interval="1d",
+                           progress=False, auto_adjust=True)
+        close = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw[["Close"]]
+        close = close.dropna()
+        if close.empty or "^VIX" not in close.columns or "^VIX3M" not in close.columns:
+            return pd.DataFrame()
+
+        df = pd.DataFrame({
+            "VIX": close["^VIX"],
+            "VIX3M": close["^VIX3M"],
+        }).dropna()
+        df["Ratio"] = df["VIX"] / df["VIX3M"]  # >= 1.0 = backwardation
+        return df
+    except Exception as e:
+        st.warning(f"VIX term structure fetch error: {e}")
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=3600)
+def fetch_credit_spread_ratio_v0(period="6mo"):
+    """
+    HYG (junk bonds) / LQD (investment grade). A rolling decline in this
+    ratio means credit markets are pricing in more risk — often leads
+    equity breadth deterioration by several days.
+    """
+    try:
+        raw = yf.download(["HYG", "LQD"], period=period, interval="1d",
+                           progress=False, auto_adjust=True)
+        close = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw[["Close"]]
+        close = close.dropna()
+        if close.empty or "HYG" not in close.columns or "LQD" not in close.columns:
+            return pd.DataFrame()
+
+        df = pd.DataFrame({
+            "HYG": close["HYG"],
+            "LQD": close["LQD"],
+        }).dropna()
+        df["Ratio"] = df["HYG"] / df["LQD"]
+        df["Ratio_MA20"] = df["Ratio"].rolling(20).mean()
+        return df
+    except Exception as e:
+        st.warning(f"Credit spread fetch error: {e}")
+        return pd.DataFrame()
+
+
+with st.spinner("Fetching VIX term structure and credit spread..."):
+    verdict_vix_df = timed("fetch_vix_term_structure_v0", fetch_vix_term_structure_v0)
+    verdict_credit_df = timed("fetch_credit_spread_ratio_v0", fetch_credit_spread_ratio_v0)
+
+
+def _safe(name, default=None):
+    """Pull a variable from the module's global namespace, defaulting safely
+    if that section hasn't run or returned nothing usable."""
+    val = globals().get(name, default)
+    return default if val is None else val
+
+
+def compute_market_verdict():
+    breakdown = []  # list of (pillar_name, score_0_100, label, detail_str)
+
+    # ── Pillar 1: Market Regime (% above 200 EMA) ──────────────────────────
+    pct_ema200 = _safe("pct_above_ema200", 50.0)
+    if pct_ema200 > 70:
+        p1_score, p1_label = 100, "Strong bull participation"
+    elif pct_ema200 > 60:
+        p1_score, p1_label = 80, "Good swing environment"
+    elif pct_ema200 >= 50:
+        p1_score, p1_label = 60, "Improving"
+    elif pct_ema200 >= 40:
+        p1_score, p1_label = 35, "Recovery attempt"
+    else:
+        p1_score, p1_label = 10, "Be cautious"
+    breakdown.append(("Market Regime", p1_score, p1_label, f"{pct_ema200:.1f}% above 200 EMA"))
+
+    # ── Pillar 2: Distribution Days (SPY/QQQ/SMH/IWM) — hard override ─────
+    dist_counts = {
+        "SPY": _safe("spy_dist_count", 0),
+        "QQQ": _safe("qqq_dist_count", 0),
+        "SMH": _safe("smh_dist_count", 0),
+        "IWM": _safe("iwm_dist_count", 0),
+    }
+    triggered = [idx for idx, c in dist_counts.items() if c >= 5]
+    avg_dist = sum(dist_counts.values()) / len(dist_counts)
+    p2_score = max(0, 100 - (avg_dist / 25) * 100 * 1.6)  # steep penalty curve
+    if triggered:
+        p2_score = min(p2_score, 25)  # hard cap when any index is triggered
+    p2_label = f"TRIGGERED: {', '.join(triggered)}" if triggered else "Clean"
+    breakdown.append(("Distribution Days", p2_score, p2_label,
+                       ", ".join(f"{k}:{v}" for k, v in dist_counts.items())))
+
+    # ── Pillar 3: Stage Breadth (S2 vs S4) ─────────────────────────────────
+    stage_counts_v = _safe("stage_counts", {1: 0, 2: 0, 3: 0, 4: 0, 0: 0})
+    stage_total = sum(stage_counts_v.get(s, 0) for s in [1, 2, 3, 4])
+    if stage_total > 0:
+        s2_pct = stage_counts_v.get(2, 0) / stage_total * 100
+        s4_pct = stage_counts_v.get(4, 0) / stage_total * 100
+        p3_score = max(0, min(100, 50 + (s2_pct - s4_pct)))
+        p3_label = f"S2 {s2_pct:.0f}% vs S4 {s4_pct:.0f}%"
+    else:
+        p3_score, p3_label = 50, "Insufficient data"
+    breakdown.append(("Stage Breadth", p3_score, p3_label, ""))
+
+    # ── Pillar 4: RS Quadrant Map (industries) ─────────────────────────────
+    quad_pts = _safe("quad_points", [])
+    if quad_pts:
+        n = len(quad_pts)
+        strong = sum(1 for p in quad_pts if p["weekly_rs"] >= 50 and p["monthly_rs"] >= 50)
+        improving = sum(1 for p in quad_pts if p["weekly_rs"] >= 50 and p["monthly_rs"] < 50)
+        weakening = sum(1 for p in quad_pts if p["weekly_rs"] < 50 and p["monthly_rs"] >= 50)
+        weak = sum(1 for p in quad_pts if p["weekly_rs"] < 50 and p["monthly_rs"] < 50)
+        p4_score = (strong + improving) / n * 100
+        p4_label = f"Strong {strong} / Improving {improving} / Weakening {weakening} / Weak {weak}"
+    else:
+        p4_score, p4_label = 50, "Insufficient data"
+    breakdown.append(("RS Quadrant Map", p4_score, p4_label, ""))
+
+    # ── Pillar 5: Minervini Breadth Trend (5D MA vs 20D MA + structure) ────
+    hist_df_v = _safe("historical_df", pd.DataFrame())
+    if isinstance(hist_df_v, pd.DataFrame) and not hist_df_v.empty and len(hist_df_v) >= 10:
+        counts_list = hist_df_v.tail(30)["Minervini Count"].tolist()
+        ma5 = np.mean(counts_list[-5:])
+        ma20 = np.mean(counts_list[-20:]) if len(counts_list) >= 20 else np.mean(counts_list)
+        current_c = counts_list[-1]
+        if ma5 > ma20 and current_c >= ma20:
+            p5_score, p5_label = 90, "Expanding momentum"
+        elif ma5 < ma20 and current_c <= ma20:
+            p5_score, p5_label = 15, "Deteriorating breadth"
+        else:
+            p5_score, p5_label = 50, "Choppy / transitional"
+        p5_detail = f"Count {current_c} | 5D {ma5:.1f} vs 20D {ma20:.1f}"
+    else:
+        p5_score, p5_label, p5_detail = 50, "Insufficient data", ""
+    breakdown.append(("Minervini Breadth Trend", p5_score, p5_label, p5_detail))
+
+    # ── Pillar 6: ETF Risk-On Ratios (slope of last 20 days, normalized) ──
+    risk_on_pairs = [("XLY", "XLP"), ("SPHB", "SPY"), ("IWM", "QQQ"), ("VUG", "VTV")]
+    ticker_dfs_v = _safe("ticker_dfs_shared", {})
+    slopes = []
+    for num, den in risk_on_pairs:
+        try:
+            df_num = ticker_dfs_v.get(num)
+            df_den = ticker_dfs_v.get(den)
+            if df_num is None or df_den is None:
+                continue
+            ratio = (df_num["Close"] / df_den["Close"]).dropna().tail(20)
+            if len(ratio) < 10:
+                continue
+            x = np.arange(len(ratio))
+            slope = np.polyfit(x, ratio.values, 1)[0]
+            norm_slope = slope / ratio.mean()  # % change per day, scale-free
+            slopes.append(norm_slope)
+        except Exception:
+            continue
+    if slopes:
+        avg_slope = np.mean(slopes)
+        p6_score = max(0, min(100, 50 + avg_slope * 5000))
+        risk_direction = "Risk-ON rotation" if avg_slope > 0 else "Risk-OFF rotation"
+        p6_label = f"{risk_direction} ({sum(1 for s in slopes if s > 0)}/{len(slopes)} pairs up)"
+    else:
+        p6_score, p6_label = 50, "Insufficient data"
+    breakdown.append(("ETF Risk Appetite", p6_score, p6_label, ""))
+
+    # ── Pillar 7: VIX Term Structure ───────────────────────────────────────
+    vix_df_v = _safe("verdict_vix_df", pd.DataFrame())
+    if isinstance(vix_df_v, pd.DataFrame) and not vix_df_v.empty:
+        vix_ratio = vix_df_v["Ratio"].iloc[-1]
+        p7_score = max(0, min(100, (1.05 - vix_ratio) * 1000))  # >=1.0 -> low score
+        p7_label = "Backwardation (defensive)" if vix_ratio >= 1.0 else "Contango (normal)"
+        p7_detail = f"VIX/VIX3M = {vix_ratio:.3f}"
+    else:
+        p7_score, p7_label, p7_detail = 50, "Insufficient data", ""
+    breakdown.append(("VIX Term Structure", p7_score, p7_label, p7_detail))
+
+    # ── Pillar 8: Credit Spread (HYG/LQD) ──────────────────────────────────
+    credit_df_v = _safe("verdict_credit_df", pd.DataFrame())
+    if isinstance(credit_df_v, pd.DataFrame) and not credit_df_v.empty and len(credit_df_v) >= 20:
+        ratio_now = credit_df_v["Ratio"].iloc[-1]
+        ratio_ma20 = credit_df_v["Ratio_MA20"].iloc[-1]
+        if pd.notna(ratio_ma20) and ratio_ma20 > 0:
+            pct_diff = (ratio_now - ratio_ma20) / ratio_ma20 * 100
+            p8_score = max(0, min(100, 50 + pct_diff * 40))
+            p8_label = "Risk-on (above 20D MA)" if pct_diff > 0 else "Risk-off (below 20D MA)"
+            p8_detail = f"HYG/LQD {ratio_now:.4f} vs MA {ratio_ma20:.4f}"
+        else:
+            p8_score, p8_label, p8_detail = 50, "Insufficient data", ""
+    else:
+        p8_score, p8_label, p8_detail = 50, "Insufficient data", ""
+    breakdown.append(("Credit Spread (HYG/LQD)", p8_score, p8_label, p8_detail))
+
+    # ── Weighted Composite ──────────────────────────────────────────────────
+    weights = {
+        "Market Regime": 0.17,
+        "Distribution Days": 0.22,
+        "Stage Breadth": 0.13,
+        "RS Quadrant Map": 0.13,
+        "Minervini Breadth Trend": 0.13,
+        "ETF Risk Appetite": 0.08,
+        "VIX Term Structure": 0.07,
+        "Credit Spread (HYG/LQD)": 0.07,
+    }
+    composite = sum(score * weights[name] for name, score, _, _ in breakdown)
+
+    # ── Setup-Style Tilt (breakout scanners vs pullback scanners) ─────────
+    # Breakout-style: Two Botak, PowerTrend, Gapper (momentum/extension entries)
+    # Pullback-style: 21ema_cloud, 21ema_wick, 50ma_bounce (basing/dip entries)
+    breakout_syms = set(_safe("b_list", [])) | set(
+        (item[0] if isinstance(item, tuple) else item) for item in _safe("pt_list", [])
+    ) | set(_safe("gapper_list", []))
+    pullback_syms = set(_safe("cloud21ema_all", set())) | set(_safe("cloudwick_all", set())) | set(_safe("ma50bounce_all", set()))
+    n_breakout, n_pullback = len(breakout_syms), len(pullback_syms)
+
+    if n_breakout + n_pullback == 0:
+        tilt_label = "No active setups to gauge tilt"
+    elif n_pullback > n_breakout * 1.3:
+        tilt_label = f"Pullback setups dominate ({n_pullback} vs {n_breakout}) — market rewarding dip entries into leaders, not fresh breakouts"
+    elif n_breakout > n_pullback * 1.3:
+        tilt_label = f"Breakout setups dominate ({n_breakout} vs {n_pullback}) — market rewarding momentum extension"
+    else:
+        tilt_label = f"Balanced ({n_breakout} breakout vs {n_pullback} pullback setups)"
+
+    # ── Final Verdict ───────────────────────────────────────────────────────
+    if triggered:
+        verdict = "🛡️ DEFENSIVE" if composite < 35 else "⚠️ PULLBACK ONLY"
+        verdict_note = "Distribution days triggered — avoid chasing extended breakouts even if breadth looks fine. Buy pullbacks in confirmed leaders only, tighten stops, reduce size."
+    elif composite >= 72:
+        verdict = "🚀 BREAKOUT"
+        verdict_note = "Regime, breadth, and rotation all aligned bullish with no distribution flags. Fresh breakouts from proper bases have a statistical tailwind — this is when position size and aggression are justified."
+    elif composite >= 55:
+        verdict = "📉 PULLBACK PREFERRED"
+        verdict_note = "Underlying trend is intact but breadth/rotation isn't confirming strongly enough to chase extension. Favor 21ema_cloud/21ema_wick/50ma_bounce style entries over fresh breakouts."
+    elif composite >= 40:
+        verdict = "⏸️ NEUTRAL"
+        verdict_note = "Mixed signals — no clear edge either direction. Reduce position sizing, be selective, and wait for either breadth to expand (favor breakout) or distribution to clear (favor pullback)."
+    else:
+        verdict = "🛡️ DEFENSIVE"
+        verdict_note = "Multiple pillars deteriorating. Prioritize capital preservation — raise cash, avoid new longs, focus only on the highest-conviction setups if any. Less is More"
+
+    return verdict, verdict_note, composite, breakdown, tilt_label, triggered
+
+
+verdict, verdict_note, composite_score, pillar_breakdown, tilt_label, dist_triggered = timed(
+    "compute_market_verdict", compute_market_verdict
+)
+
+verdict_color = (
+    "#00FF00" if "BREAKOUT" in verdict
+    else "#FFA500" if "PULLBACK" in verdict
+    else "#888888" if "NEUTRAL" in verdict
+    else "#FF4B4B"
+)
+
+st.markdown(
+    f"""
+    <div style="border:2px solid {verdict_color}; border-radius:8px; padding:18px;
+                background:#1a1c23; margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:1.6em; font-weight:900; color:{verdict_color};">{verdict}</span>
+            <span style="font-size:1.4em; font-weight:bold; color:{verdict_color};">{composite_score:.0f}/100</span>
+        </div>
+        <p style="margin:10px 0 6px; color:#e0e0e0; font-size:0.95em; line-height:1.5;">{verdict_note}</p>
+        <p style="margin:0; color:#888; font-size:0.85em;"><b>Setup-style tilt:</b> {tilt_label}</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ── Pillar breakdown table ──────────────────────────────────────────────────
+pillar_rows_html = ""
+for name, score, label, detail in pillar_breakdown:
+    bar_color = "#00FF00" if score >= 65 else "#FFA500" if score >= 40 else "#FF4B4B"
+    pillar_rows_html += (
+        f"<tr>"
+        f"<td style='padding:6px 10px;color:#e0e0e0;font-weight:bold;white-space:nowrap;'>{name}</td>"
+        f"<td style='padding:6px 10px;'>"
+        f"<div style='width:100%;background:#333;border-radius:4px;height:14px;position:relative;'>"
+        f"<div style='width:{score:.0f}%;background:{bar_color};height:14px;border-radius:4px;'></div>"
+        f"</div></td>"
+        f"<td style='padding:6px 10px;color:{bar_color};font-weight:bold;text-align:right;'>{score:.0f}</td>"
+        f"<td style='padding:6px 10px;color:#aaa;font-size:0.85em;'>{label}{(' — ' + detail) if detail else ''}</td>"
+        f"</tr>"
+    )
+
+st.markdown(
+    f"""
+    <table style="width:100%;border-collapse:collapse;">
+    <tbody>{pillar_rows_html}</tbody>
+    </table>
+    """,
+    unsafe_allow_html=True,
+)
+
+if dist_triggered:
+    st.caption(f"⚠️ Distribution-day override active on: {', '.join(dist_triggered)} — this caps the verdict regardless of other pillars.")    
