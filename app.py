@@ -312,7 +312,7 @@ LIME_STOCKS = [
     'PBW', 'REMX', 'SHLD', 'SIL', 'SLX', 'SMH', 'TAN',
     'UFO', 'URA', 'USO', 'VTV', 'VUG', 'WGMI', 'XBI',
     'XME', 'XRT', 'FOTO', 'SPY', 'QQQ', 'RSP'
-]
+]#NCLD
 
 LIME_STOCKS1 = [
     'IHF', 'CIBR', 'COPX', 'DRAM', 'GDX', 'IBIT', 'IGV', 'IHI', 'EWY',
@@ -322,7 +322,7 @@ LIME_STOCKS1 = [
     'XME', 'XRT', 'XTL', 'SPY', 'QQQ', 'RSP', 'FOTO', 'KBE', 'NLR', 
     'CLOU', 'XHB', 'BUG', 'HACK', 'ITA', 'IAT', 'XOP', 'NASA', 
     'XTN', 'IYT', 'BOAT', 'MOO', 'BLOK', 'PICK', 'BOTZ', 'MJ', 'WQTM', 'IBB', 'KIE', 'IAI', 'SOXX'
-]
+]#NCLD
 
 RRG_STOCKS = [
     'DRAM', 'FOTO'
@@ -13545,7 +13545,11 @@ stage_pct_df = pd.DataFrame(stage_pct_rows)
 # Keep only required columns
 stage_pct_df = stage_pct_df[
     ["Ticker", "Stage1 %", "Stage2 %", "Stage3 %", "Stage4 %"]
-]
+].sort_values(
+    by="Stage2 %",
+    ascending=False,
+    na_position="last"
+).reset_index(drop=True)
 
 
 # Stage 2 > 50% = lime
