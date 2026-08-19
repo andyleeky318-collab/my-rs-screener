@@ -158,6 +158,7 @@ SECTION_KEYWORDS = [
     "Stage 2 vs Stage 4",
     #"Unusual Volume",
     "Sector Strength Heatmap",
+    "Market Verdict",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the

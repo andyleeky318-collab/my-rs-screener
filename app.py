@@ -1458,6 +1458,22 @@ for i, (label, val) in enumerate(zip(bucket_order, vals)):
         f'fill="#888888">{display_label}</text>'
     )
 
+    # NEW: Losers / Gainer labels at bottom corners (same style as bucket labels)
+    losers_val = breadth_stats.get('decline', 0)
+    gainers_val = breadth_stats.get('advance', 0)
+    labels_svg += (
+        f'<text x="{PAD_L}" y="{SVG_H - 6}" '
+        f'text-anchor="start" font-size="8" '
+        f'font-family="Source Sans Pro,sans-serif" '
+        f'fill="#888888">Losers {losers_val:,}</text>'
+    )
+    labels_svg += (
+        f'<text x="{SVG_W - PAD_R}" y="{SVG_H - 6}" '
+        f'text-anchor="end" font-size="8" '
+        f'font-family="Source Sans Pro,sans-serif" '
+        f'fill="#888888">Gainer {gainers_val:,}</text>'
+    )
+
 # Baseline
 baseline_y = PAD_TOP + MAX_BAR_H
 baseline_svg = (
@@ -1486,9 +1502,9 @@ left_tail  = dist_buckets["≤-7%"] + dist_buckets["-7~-5%"]
 right_tail = dist_buckets["≥7%"] + dist_buckets["5~7%"]
 avg_bucket = sum(dist_buckets.values()) / len(dist_buckets)
 
-if left_tail > avg_bucket * 3:
+if left_tail > avg_bucket * 1.5:
     st.markdown("⚠️ **Fat left tail — distribution day**", unsafe_allow_html=True)
-elif right_tail > avg_bucket * 3:
+elif right_tail > avg_bucket * 1.5:
     st.markdown("🚀 **Fat right tail — thrust day**", unsafe_allow_html=True)
 
 st.markdown("---")
@@ -9132,7 +9148,7 @@ def _etf_pie_chart():
             positive_count = sum(1 for change in etf_changes.values() if change > 0)
             fig.update_layout(
                 title={
-                    'text': f"{positive_count}/10",
+                    'text': f"{positive_count}/10" + (" (Distribution Day)" if _pie_dist_day_today else ""),
                     'x': 0.5,
                     'xanchor': 'center',
                     'font': {'size': 30}
@@ -9181,6 +9197,21 @@ def _etf_pie_chart():
 
     else:
         st.info('ETF ETF list unavailable.')
+
+def _is_distribution_day_today(ticker, threshold=-0.2):
+    df = ticker_dfs_shared.get(ticker)
+    if df is None or len(df) < 2:
+        return False
+    prev_close = df['Close'].iloc[-2]
+    if prev_close == 0 or pd.isna(prev_close):
+        return False
+    pct_chg = (df['Close'].iloc[-1] - prev_close) / prev_close * 100
+    vol_higher = df['Volume'].iloc[-1] > df['Volume'].iloc[-2]
+    return (pct_chg <= threshold) and bool(vol_higher)
+
+_pie_spy_dist_today = _is_distribution_day_today("SPY", -0.2)
+_pie_qqq_dist_today = _is_distribution_day_today("QQQ", -0.3)
+_pie_dist_day_today = _pie_spy_dist_today or _pie_qqq_dist_today
 
 timed("ETF Pie Chart", _etf_pie_chart)
 
