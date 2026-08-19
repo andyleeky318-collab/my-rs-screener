@@ -13445,7 +13445,7 @@ stage_pct_df = pd.DataFrame(stage_pct_rows)
 
 # Keep Ticker, Industry, and Stage % columns only
 stage_pct_df = stage_pct_df[
-    ["Ticker", "Industry", "Stage1 %", "Stage2 %", "Stage3 %", "Stage4 %"]
+    ["Ticker", "Stage1 %", "Stage2 %", "Stage3 %", "Stage4 %"]
 ]
 
 st.dataframe(
