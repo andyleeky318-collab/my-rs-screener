@@ -1410,7 +1410,7 @@ vals       = [dist_buckets[b] for b in bucket_order]
 max_val    = max(vals) or 1
 
 SVG_W      = 340
-SVG_H      = 250
+SVG_H      = 265
 PAD_L      = 15
 PAD_R      = 15
 PAD_TOP    = 50        # room for count labels above bars
@@ -1463,14 +1463,14 @@ losers_val = breadth_stats.get('decline', 0)
 gainers_val = breadth_stats.get('advance', 0)
 
 labels_svg += (
-    f'<text x="2" y="{SVG_H - 3}" '
+    f'<text x="2" y="{SVG_H - 2}" '
     f'text-anchor="start" font-size="8" '
     f'font-family="Source Sans Pro,sans-serif" '
     f'fill="#888888">Losers {losers_val:,}</text>'
 )
 
 labels_svg += (
-    f'<text x="{SVG_W - 2}" y="{SVG_H - 3}" '
+    f'<text x="{SVG_W - 2}" y="{SVG_H - 2}" '
     f'text-anchor="end" font-size="8" '
     f'font-family="Source Sans Pro,sans-serif" '
     f'fill="#888888">Gainer {gainers_val:,}</text>'
