@@ -13442,5 +13442,15 @@ stage_pct_rows = timed(
 )
 
 stage_pct_df = pd.DataFrame(stage_pct_rows)
-stage_pct_df.insert(0, "#", range(1, len(stage_pct_df) + 1))
-st.dataframe(stage_pct_df, use_container_width=True, hide_index=True)
+
+# Keep Ticker, Industry, and Stage % columns only
+stage_pct_df = stage_pct_df[
+    ["Ticker", "Industry", "Stage1 %", "Stage2 %", "Stage3 %", "Stage4 %"]
+]
+
+st.dataframe(
+    stage_pct_df,
+    use_container_width=True,
+    hide_index=True,
+    height=(len(stage_pct_df) + 1) * 35
+)
