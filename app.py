@@ -13463,9 +13463,9 @@ st.dataframe(
     height=(len(stage_pct_df) + 1) * 35,
     column_config={
         "Ticker": st.column_config.TextColumn("Ticker", width="small"),
-        "Stage1 %": st.column_config.NumberColumn("Stage1 %", width="small"),
-        "Stage2 %": st.column_config.NumberColumn("Stage2 %", width="small"),
-        "Stage3 %": st.column_config.NumberColumn("Stage3 %", width="small"),
-        "Stage4 %": st.column_config.NumberColumn("Stage4 %", width="small"),
+        "Stage1 %": st.column_config.NumberColumn("Stage1 %", format="%.1f", width="small"),
+        "Stage2 %": st.column_config.NumberColumn("Stage2 %", format="%.1f", width="small"),
+        "Stage3 %": st.column_config.NumberColumn("Stage3 %", format="%.1f", width="small"),
+        "Stage4 %": st.column_config.NumberColumn("Stage4 %", format="%.1f", width="small"),
     },
 )
