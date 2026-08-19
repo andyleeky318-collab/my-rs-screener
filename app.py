@@ -13553,12 +13553,21 @@ def highlight_stage2(val):
     return "color: lime;" if pd.notna(val) and val > 50 else ""
 
 
+# Stage 4 > 50% = red
+def highlight_stage4(val):
+    return "color: red;" if pd.notna(val) and val > 50 else ""
+
+
 # Center ALL headers and ALL cells
 styled_stage_pct_df = (
     stage_pct_df.style
     .map(
         highlight_stage2,
         subset=["Stage2 %"]
+    )
+    .map(
+        highlight_stage4,
+        subset=["Stage4 %"]
     )
     .set_properties(
         **{
