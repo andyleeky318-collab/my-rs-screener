@@ -1410,7 +1410,7 @@ vals       = [dist_buckets[b] for b in bucket_order]
 max_val    = max(vals) or 1
 
 SVG_W      = 340
-SVG_H      = 220
+SVG_H      = 250
 PAD_L      = 15
 PAD_R      = 15
 PAD_TOP    = 50        # room for count labels above bars
