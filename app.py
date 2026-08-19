@@ -13376,96 +13376,251 @@ STAGE_PCT_WATCHLIST = [
 ]
 
 def _stage_num_latest(df, benchmark_df_input):
-    """Latest-bar Stage number (1-4, 0=unknown) for one ticker — mirrors the
-    existing stage-classification logic used elsewhere in this script."""
+    """Latest-bar Stage number (1-4, 0=unknown) for one ticker."""
     try:
         if df is None or benchmark_df_input is None or len(df) < 260:
             return 0
+
         combined = pd.merge(
-            df[['Close']], benchmark_df_input[['Close']].rename(columns={'Close': 'Close_bench'}),
-            left_index=True, right_index=True, how='inner'
+            df[['Close']],
+            benchmark_df_input[['Close']].rename(columns={'Close': 'Close_bench'}),
+            left_index=True,
+            right_index=True,
+            how='inner'
         )
+
         if len(combined) < 260:
             return 0
+
         close = combined['Close']
-        ema126 = df['Close'].ewm(span=126, adjust=False).mean().reindex(combined.index, method='ffill')
+
+        ema126 = (
+            df['Close']
+            .ewm(span=126, adjust=False)
+            .mean()
+            .reindex(combined.index, method='ffill')
+        )
+
         rs = close / combined['Close_bench']
-        r = {s: rs.ewm(span=s, adjust=False).mean() for s in [21, 42, 63, 72, 84, 126, 147, 168]}
-        c, rsme, ema126_v = close.iloc[-1], rs.iloc[-1], ema126.iloc[-1]
-        r21, r42, r63, r72, r84, r126, r147, r168 = (r[s].iloc[-1] for s in [21, 42, 63, 72, 84, 126, 147, 168])
+
+        r = {
+            s: rs.ewm(span=s, adjust=False).mean()
+            for s in [21, 42, 63, 72, 84, 126, 147, 168]
+        }
+
+        c = close.iloc[-1]
+        rsme = rs.iloc[-1]
+        ema126_v = ema126.iloc[-1]
+
+        r21, r42, r63, r72, r84, r126, r147, r168 = (
+            r[s].iloc[-1]
+            for s in [21, 42, 63, 72, 84, 126, 147, 168]
+        )
 
         if rsme >= r84 and rsme < r126:
             return 1
-        elif (rsme < r42 and rsme >= r72 and rsme >= r84 and rsme >= r126
-              and (r42 > r63 or rsme < r63) and r63 > r126 and c >= ema126_v):
+
+        elif (
+            rsme < r42
+            and rsme >= r72
+            and rsme >= r84
+            and rsme >= r126
+            and (r42 > r63 or rsme < r63)
+            and r63 > r126
+            and c >= ema126_v
+        ):
             return 3
-        elif (rsme >= r168 and rsme >= r147 and rsme >= r126 and c >= ema126_v and (r21 >= r42 or r42 >= r63)):
+
+        elif (
+            rsme >= r168
+            and rsme >= r147
+            and rsme >= r126
+            and c >= ema126_v
+            and (r21 >= r42 or r42 >= r63)
+        ):
             return 2
-        elif rsme >= r126 and c >= ema126_v and (r21 >= r42 or r42 >= r63):
+
+        elif (
+            rsme >= r126
+            and c >= ema126_v
+            and (r21 >= r42 or r42 >= r63)
+        ):
             return 2
-        elif (rsme < r63 and rsme < r126) or (r63 < r126 and rsme < r126):
+
+        elif (
+            (rsme < r63 and rsme < r126)
+            or (r63 < r126 and rsme < r126)
+        ):
             return 4
+
         else:
             return 0
+
     except Exception:
         return 0
 
+
 @st.cache_data(ttl=3600)
-def compute_stage_pct_by_industry(watchlist_tuple, industries_dict, _ticker_dfs, _benchmark_df_input):
+def compute_stage_pct_by_industry(
+    watchlist_tuple,
+    industries_dict,
+    _ticker_dfs,
+    _benchmark_df_input
+):
     rows = []
+
     for tkr in watchlist_tuple:
-        industry_name = next((ind for ind, members in industries_dict.items() if tkr in members), None)
+
+        industry_name = next(
+            (
+                ind
+                for ind, members in industries_dict.items()
+                if tkr in members
+            ),
+            None
+        )
+
         if industry_name is None:
-            rows.append({"Ticker": tkr, "Industry": "—", "N": 0,
-                         "Stage1 %": None, "Stage2 %": None, "Stage3 %": None, "Stage4 %": None})
+            rows.append({
+                "Ticker": tkr,
+                "Industry": "—",
+                "N": 0,
+                "Stage1 %": None,
+                "Stage2 %": None,
+                "Stage3 %": None,
+                "Stage4 %": None
+            })
             continue
 
         members = industries_dict[industry_name]
-        stage_counts_local = {1: 0, 2: 0, 3: 0, 4: 0}
+
+        stage_counts_local = {
+            1: 0,
+            2: 0,
+            3: 0,
+            4: 0
+        }
+
         n_valid = 0
+
         for m in members:
-            s = _stage_num_latest(_ticker_dfs.get(m), _benchmark_df_input)
+            s = _stage_num_latest(
+                _ticker_dfs.get(m),
+                _benchmark_df_input
+            )
+
             if s in (1, 2, 3, 4):
                 stage_counts_local[s] += 1
                 n_valid += 1
 
-        row = {"Ticker": tkr, "Industry": industry_name, "N": n_valid}
+        row = {
+            "Ticker": tkr,
+            "Industry": industry_name,
+            "N": n_valid
+        }
+
         for s in (1, 2, 3, 4):
-            row[f"Stage{s} %"] = round(stage_counts_local[s] / n_valid * 100, 1) if n_valid > 0 else None
+            row[f"Stage{s} %"] = (
+                round(stage_counts_local[s] / n_valid * 100, 1)
+                if n_valid > 0
+                else None
+            )
+
         rows.append(row)
+
     return rows
+
 
 stage_pct_rows = timed(
     "compute_stage_pct_by_industry",
     compute_stage_pct_by_industry,
-    tuple(STAGE_PCT_WATCHLIST), INDUSTRIES, ticker_dfs_shared, benchmark_df_shared
+    tuple(STAGE_PCT_WATCHLIST),
+    INDUSTRIES,
+    ticker_dfs_shared,
+    benchmark_df_shared
 )
 
 stage_pct_df = pd.DataFrame(stage_pct_rows)
 
-# Keep Ticker, Industry, and Stage % columns only
+# Keep only required columns
 stage_pct_df = stage_pct_df[
     ["Ticker", "Stage1 %", "Stage2 %", "Stage3 %", "Stage4 %"]
 ]
 
+
+# Stage 2 > 50% = lime
 def highlight_stage2(val):
     return "color: lime;" if pd.notna(val) and val > 50 else ""
 
-styled_stage_pct_df = stage_pct_df.style.map(
-    highlight_stage2,
-    subset=["Stage2 %"]
+
+# Center ALL headers and ALL cells
+styled_stage_pct_df = (
+    stage_pct_df.style
+    .map(
+        highlight_stage2,
+        subset=["Stage2 %"]
+    )
+    .set_properties(
+        **{
+            "text-align": "center",
+            "vertical-align": "middle",
+        }
+    )
+    .set_table_styles([
+        {
+            "selector": "th",
+            "props": [
+                ("text-align", "center"),
+                ("vertical-align", "middle"),
+            ]
+        },
+        {
+            "selector": "td",
+            "props": [
+                ("text-align", "center"),
+                ("vertical-align", "middle"),
+            ]
+        }
+    ])
 )
+
 
 st.dataframe(
     styled_stage_pct_df,
     use_container_width=False,
     hide_index=True,
-    height=(len(stage_pct_df) + 1) * 35,
+
+    # Enough height to show every row without vertical scrolling
+    height=(len(stage_pct_df) + 1) * 36,
+
     column_config={
-        "Ticker": st.column_config.TextColumn("Ticker", width="small"),
-        "Stage1 %": st.column_config.NumberColumn("Stage1 %", format="%.1f", width="small"),
-        "Stage2 %": st.column_config.NumberColumn("Stage2 %", format="%.1f", width="small"),
-        "Stage3 %": st.column_config.NumberColumn("Stage3 %", format="%.1f", width="small"),
-        "Stage4 %": st.column_config.NumberColumn("Stage4 %", format="%.1f", width="small"),
+        "Ticker": st.column_config.TextColumn(
+            "Ticker",
+            width=60
+        ),
+
+        "Stage1 %": st.column_config.NumberColumn(
+            "Stage1 %",
+            format="%.1f",
+            width=70
+        ),
+
+        "Stage2 %": st.column_config.NumberColumn(
+            "Stage2 %",
+            format="%.1f",
+            width=70
+        ),
+
+        "Stage3 %": st.column_config.NumberColumn(
+            "Stage3 %",
+            format="%.1f",
+            width=70
+        ),
+
+        "Stage4 %": st.column_config.NumberColumn(
+            "Stage4 %",
+            format="%.1f",
+            width=70
+        ),
     },
 )
