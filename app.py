@@ -1458,17 +1458,19 @@ for i, (label, val) in enumerate(zip(bucket_order, vals)):
         f'fill="#888888">{display_label}</text>'
     )
 
-# NEW: Losers / Gainer labels at bottom corners (same style as bucket labels)
+# Losers / Gainer labels on separate row
 losers_val = breadth_stats.get('decline', 0)
 gainers_val = breadth_stats.get('advance', 0)
+
 labels_svg += (
-    f'<text x="{PAD_L}" y="{SVG_H - 6}" '
+    f'<text x="2" y="{SVG_H - 3}" '
     f'text-anchor="start" font-size="8" '
     f'font-family="Source Sans Pro,sans-serif" '
     f'fill="#888888">Losers {losers_val:,}</text>'
 )
+
 labels_svg += (
-    f'<text x="{SVG_W - PAD_R}" y="{SVG_H - 6}" '
+    f'<text x="{SVG_W - 2}" y="{SVG_H - 3}" '
     f'text-anchor="end" font-size="8" '
     f'font-family="Source Sans Pro,sans-serif" '
     f'fill="#888888">Gainer {gainers_val:,}</text>'
