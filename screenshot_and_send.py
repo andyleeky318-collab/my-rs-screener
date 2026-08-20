@@ -159,6 +159,7 @@ SECTION_KEYWORDS = [
     #"Unusual Volume",
     "Sector Strength Heatmap",
     "Market Verdict",
+    "Breakout Count",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the

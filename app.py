@@ -14015,6 +14015,9 @@ if today_breakout_tickers_v1:
         html_breakout += setup_badge(sym, extra_style=glow_style)
     st.markdown(html_breakout, unsafe_allow_html=True)
 
+st.write("")
+st.write("")
+
 if valid_breakout_history_v1.empty:
     st.info("Insufficient historical data available for valid breakout counts.")
 else:
