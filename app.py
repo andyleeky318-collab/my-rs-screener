@@ -268,7 +268,7 @@ INDUSTRIES = {
 
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
-    'PALL', 'PLTM', 'IHF', 'ESTC', 'PRU', 'RGEN', 'UBS', 'TRV', 'WEN', 'OKLO', 'IBB', 'Q', 'OUST', 'VPG', 'WOLF', 'NOK', 'HSBC', 'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
+    'NCLD', 'PALL', 'PLTM', 'IHF', 'ESTC', 'PRU', 'RGEN', 'UBS', 'TRV', 'WEN', 'OKLO', 'IBB', 'Q', 'OUST', 'VPG', 'WOLF', 'NOK', 'HSBC', 'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
     'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EWY', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'OR', 
     'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
@@ -3192,7 +3192,7 @@ Be direct, name industries explicitly with the bracket format above, no fluff, n
             from openai import OpenAI as OpenAIClient
             groq_client = OpenAIClient(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
             completion = groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="openai/gpt-oss-120b",
                 messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
                           {"role": "user", "content": prompt}],
                 max_tokens=400, temperature=0.4,
@@ -6080,7 +6080,7 @@ Be direct, use industry names with the bracket format above, no fluff. Each line
             failures[gemini_label] = err[:120]
 
     # ── Provider 2: Groq ──────────────────────────────────────────────────
-    # Free tier: llama-3.3-70b-versatile, mixtral-8x7b-32768, gemma2-9b-it
+    # Free tier: openai/gpt-oss-120b, mixtral-8x7b-32768, gemma2-9b-it
     # Docs: console.groq.com/docs/openai
     groq_key = st.secrets.get("GROQ_API_KEY")
     if groq_key:
@@ -6091,7 +6091,7 @@ Be direct, use industry names with the bracket format above, no fluff. Each line
                 base_url="https://api.groq.com/openai/v1",
             )
             completion = groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="openai/gpt-oss-120b",
                 messages=[
                     {"role": "system", "content": "You are a concise IBD-style market analyst."},
                     {"role": "user",   "content": prompt},
@@ -6265,7 +6265,7 @@ Be direct, name industries/tickers explicitly with the bracket format above, no 
             from openai import OpenAI as OpenAIClient
             groq_client = OpenAIClient(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
             completion = groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="openai/gpt-oss-120b",
                 messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
                           {"role": "user", "content": prompt}],
                 max_tokens=350, temperature=0.4,
@@ -9997,7 +9997,7 @@ def _resolve_tickers_via_ai_from_title(title):
             from openai import OpenAI as OpenAIClient
             groq_client = OpenAIClient(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
             completion = groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="openai/gpt-oss-120b",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=100, temperature=0.1,
             )
