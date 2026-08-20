@@ -13380,7 +13380,7 @@ STAGE_PCT_WATCHLIST = [
     'IPAY', 'ITB', 'JETS', 'KRE', 'KWEB', 'LIT', 'MAGS',
     'PBW', 'REMX', 'SHLD', 'SMH', 'TAN',
     'UFO', 'URA', 'USO', 'WGMI', 'XBI',
-    'XME', 'XRT', 'XOP', 'XTN', 'IYT', 'BOAT', 'MOO', 'BLOK', 'PICK', 'BOTZ', 'MJ', 'WQTM', 'IBB', 'KIE', 'IAI', 'SOXX'
+    'XME', 'XRT', 'XOP', 'XTN', 'IYT', 'BOAT', 'MOO', 'BLOK', 'PICK', 'BOTZ', 'MJ', 'WQTM', 'IBB', 'KIE', 'IAI', 'SOXX', 'PEJ'
 ]
 
 def _stage_num_latest(df, benchmark_df_input):
@@ -14000,13 +14000,20 @@ st.markdown(
     f"### Breakout Count ({len(today_breakout_tickers_v1)})"
 )
 if today_breakout_tickers_v1:
-    st.markdown(
-        "".join(
-            setup_badge(ticker, is_removed=True)
-            for ticker in sorted(today_breakout_tickers_v1)
-        ),
-        unsafe_allow_html=True,
+    breakout_industry_counts, breakout_ticker_industry = build_leader_industry_map(
+        today_breakout_tickers_v1, INDUSTRIES
     )
+    html_breakout = ""
+    for sym in sorted(today_breakout_tickers_v1):
+        industries = breakout_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+            if is_top20_industry else ""
+        )
+        html_breakout += setup_badge(sym, extra_style=glow_style)
+    st.markdown(html_breakout, unsafe_allow_html=True)
 
 if valid_breakout_history_v1.empty:
     st.info("Insufficient historical data available for valid breakout counts.")
