@@ -182,7 +182,7 @@ INDUSTRIES = {
     'CHEMICALS-PAINTS': ['SHW', 'PPG', 'RPM', 'AXTA'],
     'COMPTER SFTWR-SCRITY': ['CIBR', 'FTNT', 'PANW', 'CRWD', 'CHKP', 'RBRK', 'RPD', 'OKTA', 'ZS', 'TENB', 'S', 'QLYS'],
     'COMPTER SFTWR-ENTR': ['IGV', 'FROG', 'TWLO', 'MSFT', 'ORCL', 'CRM', 'IBM', 'NOW', 'ADP', 'DOCN', 'PLTR', 'ADSK', 'ROP', 'TEAM', 'SNOW', 'VEEV', 'HUBS', 'PTC', 'MANH', 'TOST', 'MNDY', 'WDAY', 'SSNC', 'GWRE', 'BSY', 'PEGA', 'QTWO', 'APPF', 'BOX', 'WK', 'U', 'RNG'],
-    'COMPTER SFTWR-DSGN': ['ADBE', 'INTU', 'SNPS', 'CDNS', 'IOT', 'DT', 'TRMB', 'WIX'],
+    'COMPTER SFTWR-DSGN': ['CLOU', 'ADBE', 'INTU', 'SNPS', 'CDNS', 'IOT', 'DT', 'TRMB', 'WIX'],
     'CMPTER SFTWR-FINCL': ['FICO', 'FIS', 'NU', 'SHOP'],
     'CMP SFTWR-GAMING': ['TTWO', 'RBLX'],
     'CMP SFTWR-DBASE': ['DDOG', 'MDB', 'ORCL', 'ESTC'],
@@ -13367,12 +13367,20 @@ if dist_triggered:
 st.markdown("---")
 st.markdown("#### 🧩 Stage % By Industry Group")
 
+# STAGE_PCT_WATCHLIST = [
+#     'CIBR', 'DRAM', 'IBIT', 'IGV', 'IHI',
+#     'IPAY', 'ITB', 'JETS', 'KRE', 'KWEB', 'LIT', 'MAGS',
+#     'PBW', 'REMX', 'SHLD', 'SMH', 'TAN',
+#     'UFO', 'URA', 'USO', 'WGMI', 'XBI',
+#     'XME', 'XRT', 'FOTO',
+# ]
+
 STAGE_PCT_WATCHLIST = [
-    'CIBR', 'DRAM', 'IBIT', 'IGV', 'IHI',
+    'CIBR', 'DRAM', 'FOTO', 'IBIT', 'IGV', 'IHF', 'IHI',
     'IPAY', 'ITB', 'JETS', 'KRE', 'KWEB', 'LIT', 'MAGS',
     'PBW', 'REMX', 'SHLD', 'SMH', 'TAN',
     'UFO', 'URA', 'USO', 'WGMI', 'XBI',
-    'XME', 'XRT', 'FOTO',
+    'XME', 'XRT', 'XOP', 'XTN', 'IYT', 'BOAT', 'MOO', 'BLOK', 'PICK', 'BOTZ', 'MJ', 'WQTM', 'IBB', 'KIE', 'IAI', 'SOXX'
 ]
 
 def _stage_num_latest(df, benchmark_df_input):
