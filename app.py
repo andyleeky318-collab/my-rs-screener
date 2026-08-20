@@ -13659,6 +13659,7 @@ def compute_known_valid_breakout_history_v1(stocks_list, _ticker_dfs):
     """
     try:
         breakout_series = []
+        today_breakout_tickers = []
 
         def pivot_setup_series(high_values, low_values, close_values):
             states = {
@@ -13968,31 +13969,44 @@ def compute_known_valid_breakout_history_v1(stocks_list, _ticker_dfs):
                     & (close >= 20)
                     & (atr_multiple < 4.1)
                 )
+                if bool(valid_breakout.iloc[-1]):
+                    today_breakout_tickers.append(ticker)
                 breakout_series.append(valid_breakout.astype(int).rename(ticker))
             except Exception:
                 continue
 
         if not breakout_series:
-            return pd.DataFrame(columns=["Date", "Valid Breakout Count"])
+            return pd.DataFrame(columns=["Date", "Valid Breakout Count"]), today_breakout_tickers
 
         counts = pd.concat(breakout_series, axis=1).fillna(0).sum(axis=1)
         result = counts.tail(60).rename("Valid Breakout Count").reset_index()
         result.columns = ["Date", "Valid Breakout Count"]
         result["Date"] = pd.to_datetime(result["Date"]).dt.strftime("%Y-%m-%d")
         result["Valid Breakout Count"] = result["Valid Breakout Count"].astype(int)
-        return result
+        return result, today_breakout_tickers
     except Exception:
-        return pd.DataFrame(columns=["Date", "Valid Breakout Count"])
+        return pd.DataFrame(columns=["Date", "Valid Breakout Count"]), []
 
 
 st.markdown("---")
-st.markdown("### Valid Breakout Count — KNOWN_STOCKS (Last 60 Trading Days)")
-valid_breakout_history_v1 = timed(
+valid_breakout_history_v1, today_breakout_tickers_v1 = timed(
     "compute_known_valid_breakout_history_v1",
     compute_known_valid_breakout_history_v1,
     stocks_tuple,
     ticker_dfs_shared,
 )
+
+st.markdown(
+    f"### Breakout Count ({len(today_breakout_tickers_v1)})"
+)
+if today_breakout_tickers_v1:
+    st.markdown(
+        "".join(
+            setup_badge(ticker, is_removed=True)
+            for ticker in sorted(today_breakout_tickers_v1)
+        ),
+        unsafe_allow_html=True,
+    )
 
 if valid_breakout_history_v1.empty:
     st.info("Insufficient historical data available for valid breakout counts.")
