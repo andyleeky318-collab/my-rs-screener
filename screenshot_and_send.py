@@ -151,7 +151,8 @@ SECTION_KEYWORDS = [
     #"ETF Ratio",
     "Quant Sentiment",
     #"Setup Quality",
-    "Upcoming Earnings",
+    #"Upcoming Earnings",
+    "Breakout Count",
     "Lazy Table",
     "Lazy Charts",
     #"MM Count",
@@ -159,7 +160,6 @@ SECTION_KEYWORDS = [
     #"Unusual Volume",
     "Sector Strength Heatmap",
     "Market Verdict",
-    "Breakout Count",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the

@@ -8378,6 +8378,55 @@ if not value_trap_hist.empty:
         use_container_width=True
     )
 
+# ==============================================================================
+# 19. 10x ATR ABOVE MA50 — dollar distance from 50-day MA >= 10x ATR(14)
+# ==============================================================================
+st.markdown("---")
+
+@st.cache_data(ttl=3600)
+def compute_10x_atr_above_ma50(stocks_list, ticker_dfs):
+    matches = []
+    for ticker in stocks_list:
+        try:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < 50:
+                continue
+            close, high, low = df['Close'], df['High'], df['Low']
+            sma50 = close.rolling(50).mean().iloc[-1]
+            tr = pd.concat([
+                high - low,
+                (high - close.shift(1)).abs(),
+                (low - close.shift(1)).abs()
+            ], axis=1).max(axis=1)
+            atr = tr.rolling(14).mean().iloc[-1]
+            c = close.iloc[-1]
+            if pd.isna(sma50) or pd.isna(atr) or atr <= 0:
+                continue
+            if (c - sma50) >= 10 * atr:
+                matches.append(ticker)
+        except Exception:
+            continue
+    return sorted(matches)
+
+atr10_list = timed(
+    "compute_10x_atr_above_ma50",
+    compute_10x_atr_above_ma50,
+    stocks_tuple, ticker_dfs_shared
+)
+
+count_color = "#ff4b4b" if len(atr10_list) >= 10 else "#e0e0e0"
+st.markdown(
+    f"#### 🚀 10x ATR Parabolic <span style='color:{count_color};'>({len(atr10_list)})</span>",
+    unsafe_allow_html=True,
+)
+if atr10_list:
+    html_atr10 = ""
+    for sym in atr10_list:
+        html_atr10 += setup_badge(sym)
+    st.markdown(html_atr10, unsafe_allow_html=True)
+else:
+    st.info("None")
+
 # ============================================================
 # CHANGE OF CHARACTER (scoreUp20) — Composite Score Δ≥20 Scan
 # Ported from TradingView "Score" indicator's scoreUp20 signal.
@@ -10169,10 +10218,28 @@ def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=25):
                 "channel_id": channel_id,
             }
 
+    # No "Stock Market Today" video found:
+    # Fallback to the very first/latest video regardless of title.
+    if videos:
+        video = videos[0]
+        title = video["title"]
+
+        tickers = _resolve_tickers_via_ai_from_title(title)
+        if not tickers:
+            tickers = _extract_tickers_from_ibd_title(title)
+
+        return {
+            "tickers": tickers,
+            "title": title,
+            "video_id": video["videoId"],
+            "video_url": f"https://www.youtube.com/watch?v={video['videoId']}",
+            "channel_id": channel_id,
+            "fallback": True,
+        }
+
     return {
-        "error": "No recent video with 'Stock Market Today' in title found.",
+        "error": "No videos found.",
         "channel_id": channel_id,
-        "scanned_titles": [v["title"] for v in videos[:max_videos_to_scan]],
     }
 
 # ── Render section ────────────────────────────────────────────────────────
@@ -11142,8 +11209,18 @@ st.write("")
 if valid_breakout_history_v1.empty:
     st.info("Insufficient historical data available for valid breakout counts.")
 else:
+    breakout_chart = valid_breakout_history_v1.copy()
+    breakout_chart["Bar_Color"] = "#29B5E8"
+    if breakout_chart["Valid Breakout Count"].iloc[-1] in (
+        breakout_chart["Valid Breakout Count"].min(),
+        breakout_chart["Valid Breakout Count"].max(),
+    ):
+        breakout_chart.loc[breakout_chart.index[-1], "Bar_Color"] = "#FF4B4B"
     st.bar_chart(
-        valid_breakout_history_v1.set_index("Date")["Valid Breakout Count"],
+        data=breakout_chart,
+        x="Date",
+        y="Valid Breakout Count",
+        color="Bar_Color",
         use_container_width=True,
     )
 
@@ -12811,54 +12888,6 @@ else:
 #             "read, not a prediction of direction or magnitude."
 #         )
 
-# ==============================================================================
-# 19. 10x ATR ABOVE MA50 — dollar distance from 50-day MA >= 10x ATR(14)
-# ==============================================================================
-st.markdown("---")
-
-@st.cache_data(ttl=3600)
-def compute_10x_atr_above_ma50(stocks_list, ticker_dfs):
-    matches = []
-    for ticker in stocks_list:
-        try:
-            df = ticker_dfs.get(ticker)
-            if df is None or len(df) < 50:
-                continue
-            close, high, low = df['Close'], df['High'], df['Low']
-            sma50 = close.rolling(50).mean().iloc[-1]
-            tr = pd.concat([
-                high - low,
-                (high - close.shift(1)).abs(),
-                (low - close.shift(1)).abs()
-            ], axis=1).max(axis=1)
-            atr = tr.rolling(14).mean().iloc[-1]
-            c = close.iloc[-1]
-            if pd.isna(sma50) or pd.isna(atr) or atr <= 0:
-                continue
-            if (c - sma50) >= 10 * atr:
-                matches.append(ticker)
-        except Exception:
-            continue
-    return sorted(matches)
-
-atr10_list = timed(
-    "compute_10x_atr_above_ma50",
-    compute_10x_atr_above_ma50,
-    stocks_tuple, ticker_dfs_shared
-)
-
-count_color = "#ff4b4b" if len(atr10_list) >= 10 else "#e0e0e0"
-st.markdown(
-    f"#### 🚀 10x ATR Parabolic <span style='color:{count_color};'>({len(atr10_list)})</span>",
-    unsafe_allow_html=True,
-)
-if atr10_list:
-    html_atr10 = ""
-    for sym in atr10_list:
-        html_atr10 += setup_badge(sym)
-    st.markdown(html_atr10, unsafe_allow_html=True)
-else:
-    st.info("None")
 
 
 # ==============================================================================
@@ -13786,28 +13815,26 @@ stage_pct_df = stage_pct_df[
     na_position="last"
 ).reset_index(drop=True)
 
+# NEW: transpose — tickers become the horizontal header row,
+# Stage1-4 % become the rows
+stage_pct_df_t = stage_pct_df.set_index("Ticker").T
 
-# Stage 2 > 50% = lime
-def highlight_stage2(val):
-    return "color: lime;" if pd.notna(val) and val > 50 else ""
+
+# Stage2 row > 50% = lime
+def highlight_stage2_row(row):
+    return ["color: lime;" if pd.notna(v) and v > 50 else "" for v in row]
 
 
-# Stage 4 > 50% = red
-def highlight_stage4(val):
-    return "color: red;" if pd.notna(val) and val > 50 else ""
+# Stage4 row > 50% = red
+def highlight_stage4_row(row):
+    return ["color: red;" if pd.notna(v) and v > 50 else "" for v in row]
 
 
 # Center ALL headers and ALL cells
 styled_stage_pct_df = (
-    stage_pct_df.style
-    .map(
-        highlight_stage2,
-        subset=["Stage2 %"]
-    )
-    .map(
-        highlight_stage4,
-        subset=["Stage4 %"]
-    )
+    stage_pct_df_t.style
+    .apply(highlight_stage2_row, subset=pd.IndexSlice[["Stage2 %"], :], axis=1)
+    .apply(highlight_stage4_row, subset=pd.IndexSlice[["Stage4 %"], :], axis=1)
     .set_properties(
         **{
             "text-align": "center",
@@ -13830,47 +13857,14 @@ styled_stage_pct_df = (
             ]
         }
     ])
+    .format("{:.1f}", na_rep="-")
 )
 
 
 st.dataframe(
     styled_stage_pct_df,
-    use_container_width=False,
-    hide_index=True,
-
-    # Enough height to show every row without vertical scrolling
-    height=(len(stage_pct_df) + 1) * 36,
-
-    column_config={
-        "Ticker": st.column_config.TextColumn(
-            "Ticker",
-            width=60
-        ),
-
-        "Stage1 %": st.column_config.NumberColumn(
-            "Stage1 %",
-            format="%.1f",
-            width=70
-        ),
-
-        "Stage2 %": st.column_config.NumberColumn(
-            "Stage2 %",
-            format="%.1f",
-            width=70
-        ),
-
-        "Stage3 %": st.column_config.NumberColumn(
-            "Stage3 %",
-            format="%.1f",
-            width=70
-        ),
-
-        "Stage4 %": st.column_config.NumberColumn(
-            "Stage4 %",
-            format="%.1f",
-            width=70
-        ),
-    },
+    use_container_width=True,
+    height=(len(stage_pct_df_t) + 1) * 36,
 )
 
 
