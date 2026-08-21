@@ -3194,11 +3194,14 @@ Be direct, name industries explicitly with the bracket format above, no fluff, n
             completion = groq_client.chat.completions.create(
                 model="openai/gpt-oss-120b",
                 messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
-                          {"role": "user", "content": prompt}],
-                max_tokens=400, temperature=0.4,
+                        {"role": "user", "content": prompt}],
+                max_tokens=700, temperature=0.4,   # was 350 — give room past reasoning tokens
             )
+            result = completion.choices[0].message.content
+            if not result or not result.strip():
+                raise ValueError("Empty content from Groq (gpt-oss-120b)")
             summary = format_unavailable_reasons(failures)
-            return f"🟧 **Groq / Llama-3.3-70b** *({summary})*\n\n{completion.choices[0].message.content}"
+            return f"🟧 **Groq / gpt-oss-120b** *({summary})*\n\n{result}"
         except Exception as e:
             err = str(e)
             if not is_transient(err):
@@ -6092,16 +6095,15 @@ Be direct, use industry names with the bracket format above, no fluff. Each line
             )
             completion = groq_client.chat.completions.create(
                 model="openai/gpt-oss-120b",
-                messages=[
-                    {"role": "system", "content": "You are a concise IBD-style market analyst."},
-                    {"role": "user",   "content": prompt},
-                ],
-                max_tokens=600,
-                temperature=0.4,
+                messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
+                        {"role": "user", "content": prompt}],
+                max_tokens=700, temperature=0.4,   # was 350 — give room past reasoning tokens
             )
             result = completion.choices[0].message.content
+            if not result or not result.strip():
+                raise ValueError("Empty content from Groq (gpt-oss-120b)")
             summary = format_unavailable_reasons(failures)
-            return f"🟧 **Groq / Llama-3.3-70b** *({summary})*\n\n{result}"
+            return f"🟧 **Groq / gpt-oss-120b** *({summary})*\n\n{result}"
         except Exception as e:
             err = str(e)
             if not is_transient(err):
@@ -6267,11 +6269,14 @@ Be direct, name industries/tickers explicitly with the bracket format above, no 
             completion = groq_client.chat.completions.create(
                 model="openai/gpt-oss-120b",
                 messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
-                          {"role": "user", "content": prompt}],
-                max_tokens=350, temperature=0.4,
+                        {"role": "user", "content": prompt}],
+                max_tokens=700, temperature=0.4,   # was 350 — give room past reasoning tokens
             )
+            result = completion.choices[0].message.content
+            if not result or not result.strip():
+                raise ValueError("Empty content from Groq (gpt-oss-120b)")
             summary = format_unavailable_reasons(failures)
-            return f"🟧 **Groq / Llama-3.3-70b** *({summary})*\n\n{completion.choices[0].message.content}"
+            return f"🟧 **Groq / gpt-oss-120b** *({summary})*\n\n{result}"
         except Exception as e:
             err = str(e)
             if not is_transient(err):
@@ -13997,7 +14002,7 @@ valid_breakout_history_v1, today_breakout_tickers_v1 = timed(
 )
 
 st.markdown(
-    f"### Breakout Count ({len(today_breakout_tickers_v1)})"
+    f"### 📉 Breakout Count ({len(today_breakout_tickers_v1)})"
 )
 if today_breakout_tickers_v1:
     breakout_industry_counts, breakout_ticker_industry = build_leader_industry_map(
