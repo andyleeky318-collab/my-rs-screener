@@ -1124,7 +1124,7 @@ def compute_wick_and_volume_breadth(stocks_list, _ticker_dfs):
                 lower_wick_count += 1
 
             sma50_vol = df['Volume'].rolling(50).mean().iloc[-1]
-            if pd.notna(sma50_vol) and sma50_vol > 0 and v < (0.6 * sma50_vol):
+            if pd.notna(sma50_vol) and sma50_vol > 0 and v < (0.8 * sma50_vol):
                 low_volume_count += 1
 
         except Exception:
@@ -1331,7 +1331,7 @@ if breadth_total > 0:
     wick_vol_html = (
         single_pct_bar_html('Long Upper Wick', wick_vol_stats.get('upper_wick_count', 0), wv_total, bar_color="#90EE90")
         + single_pct_bar_html('Long Bottom Wick', wick_vol_stats.get('lower_wick_count', 0), wv_total, bar_color="#90EE90")
-        + single_pct_bar_html('Low Volume (< 60% of 50D Avg)', wick_vol_stats.get('low_volume_count', 0), wv_total, bar_color="#378ADD")
+        + single_pct_bar_html('Low Volume (< 80% of 50D Avg)', wick_vol_stats.get('low_volume_count', 0), wv_total, bar_color="#378ADD")
     )
     st.markdown(wick_vol_html, unsafe_allow_html=True)
 
@@ -1414,7 +1414,7 @@ SVG_H      = 220
 PAD_L      = 15
 PAD_R      = 15
 PAD_TOP    = 50        # room for count labels above bars
-PAD_BOT    = 32        # room for bucket labels below bars
+PAD_BOT    = 42        # room for bucket labels below bars
 MAX_BAR_H  = SVG_H - PAD_TOP - PAD_BOT   # 138px
 
 n          = len(bucket_order)
@@ -1449,7 +1449,7 @@ for i, (label, val) in enumerate(zip(bucket_order, vals)):
     )
 
     # Bucket label below
-    label_y = SVG_H - 6
+    label_y = SVG_H - 16
     display_label = "" if label == "0" else label
     labels_svg += (
         f'<text x="{cx:.1f}" y="{label_y}" '
@@ -3967,6 +3967,10 @@ if all_data:
                     f'</div>'
                 )
         bg_color = "#262730" if row_num % 2 == 0 else "#0e1117"
+
+        trend_html = industry_trend_map.get(row["Industry"], "")
+        if trend_html == "🟢🟢🟢🟢":
+            trend_html = f'<span style="text-shadow: 0 0 5px #00FF00;">{trend_html}</span>'
         
         # ================================
         # 21 EMA WICK COLUMN (new column)
@@ -4042,13 +4046,14 @@ if all_data:
             "#FF4B4B" if row["Industry"] in vol_flagged_industries
             else "#FFFF00" if engulf_industry_count > 1
             else "#00FF00" if botak_industry_count > 2
+            else "#29B5E8" if len(industry_volume_tickers.get(row["Industry"], [])) > 2
             else "#ffffff"
         )
         
         if traffic_light_mode:
             metric_cells = (
                 f'<td style="text-align: center; vertical-align: middle;">{roc_str}</td>'
-                f'<td style="text-align: center; white-space:nowrap;">{industry_trend_map.get(row["Industry"], "")}</td>'
+                f'<td style="text-align: center; white-space:nowrap;">{trend_html}</td>'
             )
         else:
             metric_cells = (
@@ -6124,7 +6129,11 @@ with st.spinner("Scanning for Leader History..."):
 #st.write(f"Percentage of stock above EMA200: {pct_above_ema200:.2f}%")
 
 # --- LEADERS SECTION ---
-st.markdown(f"#### 🏆 RS Leader = Long term ({len(leader_list)}) ")
+st.markdown(
+    f"#### 🏆 RS Leader ({len(leader_list)}) "
+    f"<span style='color:#888; font-size:12px;'>(Be vigilant of the strikethrough)</span>",
+    unsafe_allow_html=True,
+)
 st.markdown(f"#### 🔵 Blue Dot = Short term ({len([s for s in leader_rs_nh_matches if s != 'SPY'])})")
 
 if leader_list or leader_yest:
