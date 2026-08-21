@@ -3167,9 +3167,9 @@ Be direct, name industries explicitly with the bracket format above, no fluff, n
     failures = {}
 
     gemini_attempts = [
-        ("Gemini 2.5 Flash", st.secrets.get("GEMINI_API_KEY"),   "gemini-2.5-flash"),
-        ("Gemini 3.5 Flash", st.secrets.get("GEMINI_API_KEY_2"), "gemini-3.5-flash"),
-        ("Gemini 3.5 Flash", st.secrets.get("GEMINI_API_KEY_3"), "gemini-3.5-flash"),
+        ("Gemini 2.5 Flash [GEMINI_API_KEY]", st.secrets.get("GEMINI_API_KEY"),   "gemini-2.5-flash"),
+        ("Gemini 3.5 Flash [GEMINI_API_KEY_2]", st.secrets.get("GEMINI_API_KEY_2"), "gemini-3.5-flash"),
+        ("Gemini 3.5 Flash [GEMINI_API_KEY_3]", st.secrets.get("GEMINI_API_KEY_3"), "gemini-3.5-flash"),
     ]
     for gemini_label, gemini_key, gemini_model in gemini_attempts:
         if not gemini_key:
@@ -6064,9 +6064,9 @@ Be direct, use industry names with the bracket format above, no fluff. Each line
 
     # ── Provider 1: Gemini ────────────────────────────────────────────────
     gemini_attempts = [
-        ("Gemini 2.5 Flash", st.secrets.get("GEMINI_API_KEY"),   "gemini-2.5-flash"),
-        ("Gemini 3.5 Flash", st.secrets.get("GEMINI_API_KEY_2"), "gemini-3.5-flash"),
-        ("Gemini 3.5 Flash", st.secrets.get("GEMINI_API_KEY_3"), "gemini-3.5-flash"),
+        ("Gemini 2.5 Flash [GEMINI_API_KEY]", st.secrets.get("GEMINI_API_KEY"),   "gemini-2.5-flash"),
+        ("Gemini 3.5 Flash [GEMINI_API_KEY_2]", st.secrets.get("GEMINI_API_KEY_2"), "gemini-3.5-flash"),
+        ("Gemini 3.5 Flash [GEMINI_API_KEY_3]", st.secrets.get("GEMINI_API_KEY_3"), "gemini-3.5-flash"),
     ]
     for gemini_label, gemini_key, gemini_model in gemini_attempts:
         if not gemini_key:
@@ -6243,9 +6243,9 @@ Be direct, name industries/tickers explicitly with the bracket format above, no 
 
     # ── Gemini ──
     gemini_attempts = [
-        ("Gemini 2.5 Flash", st.secrets.get("GEMINI_API_KEY"),   "gemini-2.5-flash"),
-        ("Gemini 3.5 Flash", st.secrets.get("GEMINI_API_KEY_2"), "gemini-3.5-flash"),
-        ("Gemini 3.5 Flash", st.secrets.get("GEMINI_API_KEY_3"), "gemini-3.5-flash"),
+        ("Gemini 2.5 Flash [GEMINI_API_KEY]", st.secrets.get("GEMINI_API_KEY"),   "gemini-2.5-flash"),
+        ("Gemini 3.5 Flash [GEMINI_API_KEY_2]", st.secrets.get("GEMINI_API_KEY_2"), "gemini-3.5-flash"),
+        ("Gemini 3.5 Flash [GEMINI_API_KEY_3]", st.secrets.get("GEMINI_API_KEY_3"), "gemini-3.5-flash"),
     ]
     for gemini_label, gemini_key, gemini_model in gemini_attempts:
         if not gemini_key:
@@ -12810,14 +12810,14 @@ else:
 
 # ============================================================
 # SMH
-# Stricter threshold = -0.3%
+# Stricter threshold = -0.5%
 # ============================================================
 
 smh_dist_count, smh_dist_dates = timed(
     "compute_smh_distribution_days",
     lambda: compute_market_distribution_days(
         "SMH",
-        dist_threshold=-0.3
+        dist_threshold=-0.5
     )
 )
 
@@ -13163,6 +13163,8 @@ def compute_market_verdict():
         "IWM": _safe("iwm_dist_count", 0),
     }
     triggered = [idx for idx, c in dist_counts.items() if c >= 5]
+    if len(triggered) <= 1:
+        triggered = []
     avg_dist = sum(dist_counts.values()) / len(dist_counts)
     p2_score = max(0, 100 - (avg_dist / 25) * 100 * 1.6)  # steep penalty curve
     if triggered:
