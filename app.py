@@ -3169,6 +3169,7 @@ Be direct, name industries explicitly with the bracket format above, no fluff, n
     gemini_attempts = [
         ("Gemini 2.5 Flash", st.secrets.get("GEMINI_API_KEY"),   "gemini-2.5-flash"),
         ("Gemini 3.5 Flash", st.secrets.get("GEMINI_API_KEY_2"), "gemini-3.5-flash"),
+        ("Gemini 3.5 Flash", st.secrets.get("GEMINI_API_KEY_3"), "gemini-3.5-flash"),
     ]
     for gemini_label, gemini_key, gemini_model in gemini_attempts:
         if not gemini_key:
@@ -6065,6 +6066,7 @@ Be direct, use industry names with the bracket format above, no fluff. Each line
     gemini_attempts = [
         ("Gemini 2.5 Flash", st.secrets.get("GEMINI_API_KEY"),   "gemini-2.5-flash"),
         ("Gemini 3.5 Flash", st.secrets.get("GEMINI_API_KEY_2"), "gemini-3.5-flash"),
+        ("Gemini 3.5 Flash", st.secrets.get("GEMINI_API_KEY_3"), "gemini-3.5-flash"),
     ]
     for gemini_label, gemini_key, gemini_model in gemini_attempts:
         if not gemini_key:
@@ -6243,6 +6245,7 @@ Be direct, name industries/tickers explicitly with the bracket format above, no 
     gemini_attempts = [
         ("Gemini 2.5 Flash", st.secrets.get("GEMINI_API_KEY"),   "gemini-2.5-flash"),
         ("Gemini 3.5 Flash", st.secrets.get("GEMINI_API_KEY_2"), "gemini-3.5-flash"),
+        ("Gemini 3.5 Flash", st.secrets.get("GEMINI_API_KEY_3"), "gemini-3.5-flash"),
     ]
     for gemini_label, gemini_key, gemini_model in gemini_attempts:
         if not gemini_key:
@@ -9988,6 +9991,7 @@ def _resolve_tickers_via_ai_from_title(title):
     for gemini_key, gemini_model in [
         (st.secrets.get("GEMINI_API_KEY"), "gemini-2.5-flash"),
         (st.secrets.get("GEMINI_API_KEY_2"), "gemini-3.5-flash"),
+        (st.secrets.get("GEMINI_API_KEY_3"), "gemini-3.5-flash"),
     ]:
         if not gemini_key:
             continue
