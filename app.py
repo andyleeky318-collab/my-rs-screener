@@ -3195,7 +3195,7 @@ Be direct, name industries explicitly with the bracket format above, no fluff, n
                 default_headers={"HTTP-Referer": "https://your-app-name.streamlit.app", "X-Title": "Theme Tracker"},
             )
             completion = or_client.chat.completions.create(
-                model="meta-llama/llama-3.1-8b-instruct:free",
+                model="meta-llama/llama-3.1-8b-instruct",
                 messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
                           {"role": "user", "content": prompt}],
                 max_tokens=400, temperature=0.4,
@@ -6084,7 +6084,7 @@ Be direct, use industry names with the bracket format above, no fluff. Each line
 
     # ── Provider 3: OpenRouter ────────────────────────────────────────────
     # Pay-per-token but has generous free models (look for ":free" suffix).
-    # Free models as of 2025: meta-llama/llama-3.1-8b-instruct:free,
+    # Free models as of 2025: meta-llama/llama-3.1-8b-instruct,
     #   mistralai/mistral-7b-instruct:free, google/gemma-3-27b-it:free
     # Docs: openrouter.ai/docs
     openrouter_key = st.secrets.get("OPENROUTER_API_KEY")
@@ -6100,7 +6100,7 @@ Be direct, use industry names with the bracket format above, no fluff. Each line
                 },
             )
             completion = or_client.chat.completions.create(
-                model="meta-llama/llama-3.1-8b-instruct:free",
+                model="meta-llama/llama-3.1-8b-instruct",
                 messages=[
                     {"role": "system", "content": "You are a concise IBD-style market analyst."},
                     {"role": "user",   "content": prompt},
@@ -6270,7 +6270,7 @@ Be direct, name industries/tickers explicitly with the bracket format above, no 
                 default_headers={"HTTP-Referer": "https://your-app-name.streamlit.app", "X-Title": "Theme Tracker"},
             )
             completion = or_client.chat.completions.create(
-                model="meta-llama/llama-3.1-8b-instruct:free",
+                model="meta-llama/llama-3.1-8b-instruct",
                 messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
                           {"role": "user", "content": prompt}],
                 max_tokens=350, temperature=0.4,
@@ -10010,7 +10010,7 @@ def _resolve_tickers_via_ai_from_title(title):
                 default_headers={"HTTP-Referer": "https://your-app-name.streamlit.app", "X-Title": "Theme Tracker"},
             )
             completion = or_client.chat.completions.create(
-                model="meta-llama/llama-3.1-8b-instruct:free",
+                model="meta-llama/llama-3.1-8b-instruct",
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=100, temperature=0.1,
             )
