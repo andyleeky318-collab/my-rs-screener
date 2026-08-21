@@ -13293,7 +13293,6 @@ else:
 # ==============================================================================
 # 21. SPY DISTRIBUTION DAY COUNT — 5+ in trailing 25 sessions = elevated risk
 # ==============================================================================
-st.markdown("---")
 
 @st.cache_data(ttl=3600)
 def compute_market_distribution_days(ticker, dist_threshold=-0.2):
@@ -13410,20 +13409,6 @@ spy_status_text = (
     else "Not Triggered"
 )
 
-st.markdown(
-    f"#### 🚨 SPY Distribution Days ({spy_dist_count}/25) — "
-    f"<span style='color:{spy_status_color};font-weight:bold;'>"
-    f"{spy_status_text}</span>",
-    unsafe_allow_html=True,
-)
-
-if spy_dist_dates:
-    st.markdown(", ".join(spy_dist_dates))
-else:
-    st.info(
-        "No SPY distribution days in the trailing 25 sessions."
-    )
-
 
 # ============================================================
 # QQQ
@@ -13451,20 +13436,6 @@ qqq_status_text = (
     if qqq_triggered
     else "Not Triggered"
 )
-
-st.markdown(
-    f"#### 🚨 QQQ Distribution Days ({qqq_dist_count}/25) — "
-    f"<span style='color:{qqq_status_color};font-weight:bold;'>"
-    f"{qqq_status_text}</span>",
-    unsafe_allow_html=True,
-)
-
-if qqq_dist_dates:
-    st.markdown(", ".join(qqq_dist_dates))
-else:
-    st.info(
-        "No QQQ distribution days in the trailing 25 sessions."
-    )
 
 
 # ============================================================
@@ -13494,19 +13465,7 @@ smh_status_text = (
     else "Not Triggered"
 )
 
-st.markdown(
-    f"#### 🚨 SMH Distribution Days ({smh_dist_count}/25) — "
-    f"<span style='color:{smh_status_color};font-weight:bold;'>"
-    f"{smh_status_text}</span>",
-    unsafe_allow_html=True,
-)
 
-if smh_dist_dates:
-    st.markdown(", ".join(smh_dist_dates))
-else:
-    st.info(
-        "No SMH distribution days in the trailing 25 sessions."
-    )
 
 
 # ============================================================
@@ -13535,20 +13494,6 @@ iwm_status_text = (
     if iwm_triggered
     else "Not Triggered"
 )
-
-st.markdown(
-    f"#### 🚨 IWM Distribution Days ({iwm_dist_count}/25) — "
-    f"<span style='color:{iwm_status_color};font-weight:bold;'>"
-    f"{iwm_status_text}</span>",
-    unsafe_allow_html=True,
-)
-
-if iwm_dist_dates:
-    st.markdown(", ".join(iwm_dist_dates))
-else:
-    st.info(
-        "No IWM distribution days in the trailing 25 sessions."
-    )
 
 # ==============================================================================
 # 23. MARKET VERDICT — Composite Breakout / Pullback / Neutral / Defensive Read
@@ -13778,11 +13723,12 @@ def compute_market_verdict():
     # ── Setup-Style Tilt (breakout scanners vs pullback scanners) ─────────
     # Breakout-style: Two Botak, PowerTrend, Gapper (momentum/extension entries)
     # Pullback-style: 21ema_cloud, 21ema_wick, 50ma_bounce (basing/dip entries)
-    breakout_syms = set(_safe("b_list", [])) | set(
-        (item[0] if isinstance(item, tuple) else item) for item in _safe("pt_list", [])
-    ) | set(_safe("gapper_list", []))
-    pullback_syms = set(_safe("cloud21ema_all", set())) | set(_safe("cloudwick_all", set())) | set(_safe("ma50bounce_all", set()))
-    n_breakout, n_pullback = len(breakout_syms), len(pullback_syms)
+    pullback_syms = (
+        set(_safe("cloud21ema_all", set()))
+        | set(_safe("cloudwick_all", set()))
+        | set(_safe("ma50bounce_all", set()))
+    ) & set(KNOWN_STOCKS)   # NEW — match the same universe as breakout_syms / Setup badge
+    n_breakout, n_pullback = len(_safe("today_breakout_tickers_v1", [])), len(pullback_syms)
 
     if n_breakout + n_pullback == 0:
         tilt_label = "No active setups to gauge tilt"
@@ -13868,6 +13814,63 @@ if dist_triggered:
     st.caption(f"⚠️ Distribution-day override active on: {', '.join(dist_triggered)} — this caps the verdict regardless of other pillars.")    
 
 
+st.markdown("---")
+
+st.markdown(
+    f"#### 🚨 SPY Distribution Days ({spy_dist_count}/25) — "
+    f"<span style='color:{spy_status_color};font-weight:bold;'>"
+    f"{spy_status_text}</span>",
+    unsafe_allow_html=True,
+)
+
+if spy_dist_dates:
+    st.markdown(", ".join(spy_dist_dates))
+else:
+    st.info(
+        "No SPY distribution days in the trailing 25 sessions."
+    )
+
+st.markdown(
+    f"#### 🚨 QQQ Distribution Days ({qqq_dist_count}/25) — "
+    f"<span style='color:{qqq_status_color};font-weight:bold;'>"
+    f"{qqq_status_text}</span>",
+    unsafe_allow_html=True,
+)
+
+if qqq_dist_dates:
+    st.markdown(", ".join(qqq_dist_dates))
+else:
+    st.info(
+        "No QQQ distribution days in the trailing 25 sessions."
+    )
+
+st.markdown(
+    f"#### 🚨 SMH Distribution Days ({smh_dist_count}/25) — "
+    f"<span style='color:{smh_status_color};font-weight:bold;'>"
+    f"{smh_status_text}</span>",
+    unsafe_allow_html=True,
+)
+
+if smh_dist_dates:
+    st.markdown(", ".join(smh_dist_dates))
+else:
+    st.info(
+        "No SMH distribution days in the trailing 25 sessions."
+    )
+
+st.markdown(
+    f"#### 🚨 IWM Distribution Days ({iwm_dist_count}/25) — "
+    f"<span style='color:{iwm_status_color};font-weight:bold;'>"
+    f"{iwm_status_text}</span>",
+    unsafe_allow_html=True,
+)
+
+if iwm_dist_dates:
+    st.markdown(", ".join(iwm_dist_dates))
+else:
+    st.info(
+        "No IWM distribution days in the trailing 25 sessions."
+    )
 
 
 # ==============================================================================
