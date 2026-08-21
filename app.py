@@ -3186,30 +3186,6 @@ Be direct, name industries explicitly with the bracket format above, no fluff, n
                 continue
             failures[gemini_label] = err[:120]
 
-    groq_key = st.secrets.get("GROQ_API_KEY")
-    if groq_key:
-        try:
-            from openai import OpenAI as OpenAIClient
-            groq_client = OpenAIClient(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
-            completion = groq_client.chat.completions.create(
-                model="openai/gpt-oss-120b",
-                messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
-                        {"role": "user", "content": prompt}],
-                max_tokens=700, temperature=0.4,   # was 350 — give room past reasoning tokens
-            )
-            result = completion.choices[0].message.content
-            if not result or not result.strip():
-                raise ValueError("Empty content from Groq (gpt-oss-120b)")
-            summary = format_unavailable_reasons(failures)
-            return f"🟧 **Groq / gpt-oss-120b** *({summary})*\n\n{result}"
-        except Exception as e:
-            err = str(e)
-            if not is_transient(err):
-                return f"🔴 **Groq error (non-transient)**\n\n{err}"
-            failures["Groq"] = err[:120]
-    else:
-        failures["Groq"] = "No GROQ_API_KEY"
-
     openrouter_key = st.secrets.get("OPENROUTER_API_KEY")
     if openrouter_key:
         try:
@@ -3233,6 +3209,30 @@ Be direct, name industries explicitly with the bracket format above, no fluff, n
             failures["OpenRouter"] = err[:120]
     else:
         failures["OpenRouter"] = "No OPENROUTER_API_KEY"
+
+    groq_key = st.secrets.get("GROQ_API_KEY")
+    if groq_key:
+        try:
+            from openai import OpenAI as OpenAIClient
+            groq_client = OpenAIClient(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
+            completion = groq_client.chat.completions.create(
+                model="openai/gpt-oss-120b",
+                messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
+                        {"role": "user", "content": prompt}],
+                max_tokens=700, temperature=0.4,   # was 350 — give room past reasoning tokens
+            )
+            result = completion.choices[0].message.content
+            if not result or not result.strip():
+                raise ValueError("Empty content from Groq (gpt-oss-120b)")
+            summary = format_unavailable_reasons(failures)
+            return f"🟧 **Groq / gpt-oss-120b** *({summary})*\n\n{result}"
+        except Exception as e:
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **Groq error (non-transient)**\n\n{err}"
+            failures["Groq"] = err[:120]
+    else:
+        failures["Groq"] = "No GROQ_API_KEY"
 
     github_token = st.secrets.get("GITHUB_MODELS_TOKEN")
     if github_token:
@@ -6082,36 +6082,6 @@ Be direct, use industry names with the bracket format above, no fluff. Each line
                 continue
             failures[gemini_label] = err[:120]
 
-    # ── Provider 2: Groq ──────────────────────────────────────────────────
-    # Free tier: openai/gpt-oss-120b, mixtral-8x7b-32768, gemma2-9b-it
-    # Docs: console.groq.com/docs/openai
-    groq_key = st.secrets.get("GROQ_API_KEY")
-    if groq_key:
-        try:
-            from openai import OpenAI as OpenAIClient
-            groq_client = OpenAIClient(
-                api_key=groq_key,
-                base_url="https://api.groq.com/openai/v1",
-            )
-            completion = groq_client.chat.completions.create(
-                model="openai/gpt-oss-120b",
-                messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
-                        {"role": "user", "content": prompt}],
-                max_tokens=700, temperature=0.4,   # was 350 — give room past reasoning tokens
-            )
-            result = completion.choices[0].message.content
-            if not result or not result.strip():
-                raise ValueError("Empty content from Groq (gpt-oss-120b)")
-            summary = format_unavailable_reasons(failures)
-            return f"🟧 **Groq / gpt-oss-120b** *({summary})*\n\n{result}"
-        except Exception as e:
-            err = str(e)
-            if not is_transient(err):
-                return f"🔴 **Groq error (non-transient)**\n\n{err}"
-            failures["Groq"] = err[:120]
-    else:
-        failures["Groq"] = "No GROQ_API_KEY in secrets"
-
     # ── Provider 3: OpenRouter ────────────────────────────────────────────
     # Pay-per-token but has generous free models (look for ":free" suffix).
     # Free models as of 2025: meta-llama/llama-3.1-8b-instruct:free,
@@ -6148,6 +6118,36 @@ Be direct, use industry names with the bracket format above, no fluff. Each line
             failures["OpenRouter"] = err[:120]
     else:
         failures["OpenRouter"] = "No OPENROUTER_API_KEY in secrets"
+
+# ── Provider 2: Groq ──────────────────────────────────────────────────
+    # Free tier: openai/gpt-oss-120b, mixtral-8x7b-32768, gemma2-9b-it
+    # Docs: console.groq.com/docs/openai
+    groq_key = st.secrets.get("GROQ_API_KEY")
+    if groq_key:
+        try:
+            from openai import OpenAI as OpenAIClient
+            groq_client = OpenAIClient(
+                api_key=groq_key,
+                base_url="https://api.groq.com/openai/v1",
+            )
+            completion = groq_client.chat.completions.create(
+                model="openai/gpt-oss-120b",
+                messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
+                        {"role": "user", "content": prompt}],
+                max_tokens=700, temperature=0.4,   # was 350 — give room past reasoning tokens
+            )
+            result = completion.choices[0].message.content
+            if not result or not result.strip():
+                raise ValueError("Empty content from Groq (gpt-oss-120b)")
+            summary = format_unavailable_reasons(failures)
+            return f"🟧 **Groq / gpt-oss-120b** *({summary})*\n\n{result}"
+        except Exception as e:
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **Groq error (non-transient)**\n\n{err}"
+            failures["Groq"] = err[:120]
+    else:
+        failures["Groq"] = "No GROQ_API_KEY in secrets"
 
     # ── Provider 4: GitHub Models ─────────────────────────────────────────
     # Free while in preview (as of 2025). Uses OpenAI SDK + Azure endpoint.
@@ -6260,31 +6260,6 @@ Be direct, name industries/tickers explicitly with the bracket format above, no 
                 continue
             failures[gemini_label] = err[:120]
 
-    # ── Groq ──
-    groq_key = st.secrets.get("GROQ_API_KEY")
-    if groq_key:
-        try:
-            from openai import OpenAI as OpenAIClient
-            groq_client = OpenAIClient(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
-            completion = groq_client.chat.completions.create(
-                model="openai/gpt-oss-120b",
-                messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
-                        {"role": "user", "content": prompt}],
-                max_tokens=700, temperature=0.4,   # was 350 — give room past reasoning tokens
-            )
-            result = completion.choices[0].message.content
-            if not result or not result.strip():
-                raise ValueError("Empty content from Groq (gpt-oss-120b)")
-            summary = format_unavailable_reasons(failures)
-            return f"🟧 **Groq / gpt-oss-120b** *({summary})*\n\n{result}"
-        except Exception as e:
-            err = str(e)
-            if not is_transient(err):
-                return f"🔴 **Groq error (non-transient)**\n\n{err}"
-            failures["Groq"] = err[:120]
-    else:
-        failures["Groq"] = "No GROQ_API_KEY"
-
     # ── OpenRouter ──
     openrouter_key = st.secrets.get("OPENROUTER_API_KEY")
     if openrouter_key:
@@ -6309,6 +6284,36 @@ Be direct, name industries/tickers explicitly with the bracket format above, no 
             failures["OpenRouter"] = err[:120]
     else:
         failures["OpenRouter"] = "No OPENROUTER_API_KEY"
+
+# ── Provider 2: Groq ──────────────────────────────────────────────────
+    # Free tier: openai/gpt-oss-120b, mixtral-8x7b-32768, gemma2-9b-it
+    # Docs: console.groq.com/docs/openai
+    groq_key = st.secrets.get("GROQ_API_KEY")
+    if groq_key:
+        try:
+            from openai import OpenAI as OpenAIClient
+            groq_client = OpenAIClient(
+                api_key=groq_key,
+                base_url="https://api.groq.com/openai/v1",
+            )
+            completion = groq_client.chat.completions.create(
+                model="openai/gpt-oss-120b",
+                messages=[{"role": "system", "content": "You are a concise IBD-style market analyst."},
+                        {"role": "user", "content": prompt}],
+                max_tokens=700, temperature=0.4,   # was 350 — give room past reasoning tokens
+            )
+            result = completion.choices[0].message.content
+            if not result or not result.strip():
+                raise ValueError("Empty content from Groq (gpt-oss-120b)")
+            summary = format_unavailable_reasons(failures)
+            return f"🟧 **Groq / gpt-oss-120b** *({summary})*\n\n{result}"
+        except Exception as e:
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **Groq error (non-transient)**\n\n{err}"
+            failures["Groq"] = err[:120]
+    else:
+        failures["Groq"] = "No GROQ_API_KEY in secrets"
 
     # ── GitHub Models ──
     github_token = st.secrets.get("GITHUB_MODELS_TOKEN")
@@ -9996,22 +10001,6 @@ def _resolve_tickers_via_ai_from_title(title):
         except Exception:
             continue
 
-    groq_key = st.secrets.get("GROQ_API_KEY")
-    if groq_key:
-        try:
-            from openai import OpenAI as OpenAIClient
-            groq_client = OpenAIClient(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
-            completion = groq_client.chat.completions.create(
-                model="openai/gpt-oss-120b",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=100, temperature=0.1,
-            )
-            tickers = _parse(completion.choices[0].message.content)
-            if tickers:
-                return tickers
-        except Exception:
-            pass
-
     openrouter_key = st.secrets.get("OPENROUTER_API_KEY")
     if openrouter_key:
         try:
@@ -10030,6 +10019,22 @@ def _resolve_tickers_via_ai_from_title(title):
                 return tickers
         except Exception:
             pass
+
+    groq_key = st.secrets.get("GROQ_API_KEY")
+        if groq_key:
+            try:
+                from openai import OpenAI as OpenAIClient
+                groq_client = OpenAIClient(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
+                completion = groq_client.chat.completions.create(
+                    model="openai/gpt-oss-120b",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=100, temperature=0.1,
+                )
+                tickers = _parse(completion.choices[0].message.content)
+                if tickers:
+                    return tickers
+            except Exception:
+                pass
 
     github_token = st.secrets.get("GITHUB_MODELS_TOKEN")
     if github_token:
