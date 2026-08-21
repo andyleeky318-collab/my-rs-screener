@@ -3282,7 +3282,8 @@ SECTOR_KEYWORDS = {
     "Crypto": "#FF69B4", "Gold": "#FF69B4", "Broker": "#FF69B4", "Brokerage": "#FF69B4", "Rail": "#FF69B4", "railroads": "#FF69B4", 
     "Rails": "#FF69B4", "finance": "#FF69B4", "metals": "#FF69B4", "Payment Processing": "#FF69B4", 
     "travel": "#FF69B4", "airline": "#FF69B4", "fintech": "#FF69B4", "uranium": "#FF69B4", "mega-cap": "#FF69B4",
-    "apparel": "#FF69B4", "risk-on": "#FF69B4", "risk-off": "#FF69B4", "New Highs": "#FF69B4", "New Lows": "#FF69B4", "biotechnology": "#FF69B4", 
+    "apparel": "#FF69B4", "risk-on": "#FF69B4", "risk-off": "#FF69B4", "New Highs": "#FF69B4", "New Lows": "#FF69B4", 
+    "biotechnology": "#FF69B4", "Commodities": "#FF69B4", 
 }
 
 def format_ai_analysis_text(text, tickers=None, industries=None):
@@ -10578,7 +10579,7 @@ with st.spinner("Computing Setup Count history..."):
         stocks_tuple, ticker_dfs_shared
     )
 
-st.markdown(f"#### 📐 Setup Quality")
+st.markdown(f"#### 📐 Pullback Setup Quality")
 
 if not setup_avgrank_hist.empty:
     chart_df_rank = setup_avgrank_hist.merge(setup_count_hist, on="Date", how="left")
@@ -10766,6 +10767,385 @@ if in_send_window and st.session_state.get("telegram_setup_summary_sig") != setu
         st.session_state["telegram_setup_summary_sig"] = setup_summary_sig
     elif not (tg_token and tg_chat):
         st.sidebar.warning("Telegram secrets missing — Setup Summary not sent.")
+
+# ============================================================================== 
+# 24. HISTORICAL VALID BREAKOUT COUNT — KNOWN_STOCKS, LAST 60 TRADING DAYS
+# ============================================================================== 
+@st.cache_data(ttl=3600)
+def compute_known_valid_breakout_history_v1(stocks_list, _ticker_dfs):
+    """
+    Count daily KNOWN_STOCKS breakouts using historical versions of the
+    Pine setup_pivot, setup_darvas, and setup_flag state machines, followed
+    by the shared Breakout_Valid filters.
+    """
+    try:
+        breakout_series = []
+        today_breakout_tickers = []
+
+        def pivot_setup_series(high_values, low_values, close_values):
+            states = {
+                length: {
+                    "prev_price": np.nan,
+                    "prev_index": None,
+                    "curr_price": np.nan,
+                    "curr_index": None,
+                    "is_setup": False,
+                    "break_value": np.nan,
+                }
+                for length in range(2, 11)
+            }
+            output = np.zeros(len(close_values), dtype=bool)
+
+            for index in range(len(close_values)):
+                winners = []
+                for length, state in states.items():
+                    pivot_index = index - length
+                    if pivot_index >= length:
+                        pivot_window = low_values.iloc[pivot_index - length:pivot_index + length + 1]
+                        if low_values.iloc[pivot_index] == pivot_window.min():
+                            setup_cond = (
+                                not np.isnan(state["curr_price"])
+                                and low_values.iloc[pivot_index] > state["curr_price"]
+                            )
+                            state["prev_price"] = state["curr_price"]
+                            state["prev_index"] = state["curr_index"]
+                            state["curr_price"] = low_values.iloc[pivot_index]
+                            state["curr_index"] = pivot_index
+                            state["is_setup"] = setup_cond
+                            state["break_value"] = np.nan
+
+                            if setup_cond and state["prev_index"] is not None:
+                                start = state["prev_index"] + 1
+                                end = state["curr_index"]
+                                if end > start:
+                                    state["break_value"] = high_values.iloc[start:end].max()
+
+                    if state["is_setup"] and low_values.iloc[index] < state["curr_price"]:
+                        state["is_setup"] = False
+
+                    if state["is_setup"] and not np.isnan(state["break_value"]):
+                        winners.append(state["break_value"])
+
+                if winners:
+                    break_value = min(winners)  # Tightest Structure priority.
+                    output[index] = (
+                        close_values.iloc[index] >= break_value
+                        and (close_values.iloc[index] - break_value) / close_values.iloc[index] * 100 < 8
+                    )
+
+            return pd.Series(output, index=close_values.index)
+
+        def darvas_setup_series(high_values, low_values, close_values, atr_values):
+            phase = 0
+            phase_zero_bar = None
+            range_high = np.nan
+            range_low = np.nan
+            final_high = np.nan
+            red_box_streak = 0
+            cooldown_start = None
+            output = np.zeros(len(close_values), dtype=bool)
+
+            for index in range(len(close_values)):
+                current_high = high_values.iloc[index - 9:index + 1].max() if index >= 9 else np.nan
+                current_low = low_values.iloc[index - 9:index + 1].min() if index >= 9 else np.nan
+
+                if phase == 0 and not np.isnan(current_high) and not np.isnan(current_low):
+                    if current_high - current_low <= atr_values.iloc[index] * 3:
+                        range_high = current_high
+                        range_low = current_low
+                        phase_zero_bar = index
+                        phase = 1
+
+                if phase == 1 and phase_zero_bar is not None and index > phase_zero_bar:
+                    phase = 2
+
+                if phase == 2 and not np.isnan(range_high):
+                    breakout_up = close_values.iloc[index] > range_high
+                    breakout_down = close_values.iloc[index] < range_low
+                    if breakout_up or breakout_down:
+                        final_high = range_high
+                        red_box_streak = 0 if breakout_up else red_box_streak + 1
+                        cooldown_start = index
+                        phase = 3
+
+                if phase == 3 and cooldown_start is not None:
+                    if index - cooldown_start >= 13:
+                        phase = 0
+                        cooldown_start = None
+
+                if not np.isnan(final_high) and red_box_streak == 0:
+                    cutloss = (close_values.iloc[index] - final_high) / close_values.iloc[index] * 100
+                    output[index] = close_values.iloc[index] >= final_high and cutloss < 8
+
+            return pd.Series(output, index=close_values.index)
+
+        def flag_setup_series(high_values, low_values, close_values):
+            max_depth = 7.5
+            max_length = 10
+            min_length = 4
+            pole_min = 20.0
+            pole_min_length = 5
+            pole_max_length = 15
+
+            base_high = np.nan
+            base_low = np.nan
+            flag_length = 0
+            flag_bool = False
+            pole_low_index = None
+            flag_low_bear = np.nan
+            flag_high_bear = np.nan
+            flag_length_bear = 0
+            flag_bool_bear = False
+            pole_high_index = None
+            last_bull_flag_top = np.nan
+            last_bull_bar = -1
+            last_bear_bar = -1
+            previous_flag = False
+            previous_flag_length = 0
+            previous_base_high = np.nan
+            output = np.zeros(len(close_values), dtype=bool)
+
+            for index in range(len(close_values)):
+                previous_base_high = base_high
+                previous_flag = (
+                    flag_bool and flag_length < max_length
+                    and flag_length >= min_length
+                    and not np.isnan(base_high)
+                    and not np.isnan(base_low)
+                    and abs(base_low / base_high - 1) * 100 < max_depth
+                )
+                previous_flag_length = flag_length
+
+                previous_flag_low_bear = flag_low_bear
+                previous_flag_bear = (
+                    flag_bool_bear and flag_length_bear < max_length
+                    and flag_length_bear >= min_length
+                    and not np.isnan(flag_low_bear)
+                    and not np.isnan(flag_high_bear)
+                    and abs(flag_high_bear / flag_low_bear - 1) * 100 < 10
+                )
+
+                if np.isnan(base_high) or high_values.iloc[index] > base_high:
+                    base_high = high_values.iloc[index]
+                    base_low = low_values.iloc[index]
+                    flag_length = 0
+                elif high_values.iloc[index] <= base_high and low_values.iloc[index] < base_low:
+                    base_low = low_values.iloc[index]
+
+                find_depth = abs(base_low / base_high - 1) * 100 if base_high else np.nan
+                lower_close = index > 0 and close_values.iloc[index] < close_values.iloc[index - 1]
+                if (high_values.iloc[index] < base_high and find_depth <= max_depth) or (
+                    high_values.iloc[index] == base_high and lower_close
+                ):
+                    flag_length += 1
+                else:
+                    flag_length = 0
+
+                if high_values.iloc[index] == base_high:
+                    for lookback in range(pole_min_length, pole_max_length + 1):
+                        if index >= lookback and (
+                            (high_values.iloc[index] / low_values.iloc[index - lookback] - 1) * 100 >= pole_min
+                        ):
+                            flag_bool = True
+                            pole_low_index = index - lookback
+                            break
+
+                if np.isnan(flag_low_bear) or low_values.iloc[index] < flag_low_bear:
+                    flag_low_bear = low_values.iloc[index]
+                    flag_high_bear = high_values.iloc[index]
+                    flag_length_bear = 0
+                elif low_values.iloc[index] >= flag_low_bear and high_values.iloc[index] > flag_high_bear:
+                    flag_high_bear = high_values.iloc[index]
+
+                find_rally = (
+                    abs(flag_high_bear / flag_low_bear - 1) * 100
+                    if flag_low_bear else np.nan
+                )
+                higher_close = index > 0 and close_values.iloc[index] > close_values.iloc[index - 1]
+                if (low_values.iloc[index] > flag_low_bear and find_rally <= 10) or (
+                    low_values.iloc[index] == flag_low_bear and higher_close
+                ):
+                    flag_length_bear += 1
+                else:
+                    flag_length_bear = 0
+
+                if low_values.iloc[index] == flag_low_bear:
+                    for lookback in range(3, pole_max_length + 1):
+                        if index >= lookback and (
+                            abs((low_values.iloc[index] / high_values.iloc[index - lookback] - 1) * 100) >= 15
+                        ):
+                            flag_bool_bear = True
+                            pole_high_index = index - lookback
+                            break
+
+                if find_depth >= max_depth or flag_length > max_length:
+                    flag_bool = False
+                    flag_length = 0
+                    base_high = np.nan
+                    base_low = np.nan
+                    pole_low_index = None
+
+                if find_rally >= 10 or flag_length_bear > max_length:
+                    flag_bool_bear = False
+                    flag_length_bear = 0
+                    flag_low_bear = np.nan
+                    flag_high_bear = np.nan
+                    pole_high_index = None
+
+                breakout = (
+                    previous_flag
+                    and not np.isnan(previous_base_high)
+                    and high_values.iloc[index] > previous_base_high
+                    and previous_flag_length >= min_length
+                    and flag_bool
+                )
+                if breakout:
+                    last_bull_flag_top = previous_base_high
+                    last_bull_bar = index
+                    base_high = high_values.iloc[index]
+                    base_low = low_values.iloc[index]
+                    flag_length = 0
+
+                breakout_bear = (
+                    previous_flag_bear
+                    and not np.isnan(previous_flag_low_bear)
+                    and low_values.iloc[index] < previous_flag_low_bear
+                    and flag_length_bear >= min_length
+                    and flag_bool_bear
+                )
+                if breakout_bear:
+                    last_bear_bar = index
+                    flag_low_bear = low_values.iloc[index]
+                    flag_high_bear = high_values.iloc[index]
+                    flag_length_bear = 0
+
+                if not np.isnan(last_bull_flag_top) and last_bull_bar > last_bear_bar:
+                    cutloss = (close_values.iloc[index] - last_bull_flag_top) / close_values.iloc[index] * 100
+                    output[index] = close_values.iloc[index] >= last_bull_flag_top and 0 <= cutloss < 8
+
+            return pd.Series(output, index=close_values.index)
+
+        for ticker in stocks_list:
+            df = _ticker_dfs.get(ticker)
+            required_columns = {"Open", "High", "Low", "Close"}
+            if df is None or not required_columns.issubset(df.columns) or len(df) < 261:
+                continue
+
+            try:
+                high = df["High"].astype(float)
+                low = df["Low"].astype(float)
+                close = df["Close"].astype(float)
+
+                sma50 = close.rolling(50, min_periods=50).mean()
+                sma150 = close.rolling(150, min_periods=150).mean()
+                sma200 = close.rolling(200, min_periods=200).mean()
+                sma200_22 = sma200.shift(22)
+
+                high_52w = high.rolling(260, min_periods=260).max()
+                low_52w = low.rolling(260, min_periods=260).min()
+
+                # This is the existing seven-criterion Minervini count,
+                # evaluated across history instead of only on the latest bar.
+                minervini_count7 = (
+                    (close > sma150).astype(int).where(close > sma200, 0)
+                    + (sma150 > sma200).astype(int)
+                    + (sma200 > sma200_22).astype(int)
+                    + (sma50 > sma150).astype(int).where(sma50 > sma200, 0)
+                    + (close > sma50).astype(int)
+                    + (((close / low_52w) - 1) * 100 >= 25).astype(int)
+                    + ((1 - (close / high_52w)) * 100 <= 25).astype(int)
+                )
+                minervini_count8 = minervini_count7 + (close >= 20).astype(int)
+                count_qualified = (minervini_count7 == 7) | (minervini_count8 >= 7)
+
+                true_range = pd.concat(
+                    [high - low,
+                     (high - close.shift(1)).abs(),
+                     (low - close.shift(1)).abs()],
+                    axis=1,
+                ).max(axis=1)
+                atr_percent = true_range.rolling(14, min_periods=14).mean() / close * 100
+
+                adr_percent = 100 * ((high / low).rolling(20, min_periods=20).mean() - 1)
+                cond1 = (adr_percent >= 2.45) & (adr_percent < 8.05)
+                ma50_rising = (sma50 > sma50.shift(1)) & (sma50.shift(1) > sma50.shift(2))
+                fiftyday_percent = ((close - sma50) / sma50) * 100
+                fiftyday_percent2 = np.trunc(fiftyday_percent * 10) / 10
+                percent_gain_from_ma = ((close - sma50) / sma50) * 100
+                atr_multiple = np.trunc(
+                    (percent_gain_from_ma / atr_percent.replace(0, np.nan)) * 10
+                ) / 10
+
+                setup_pivot = pivot_setup_series(high, low, close)
+                setup_darvas = darvas_setup_series(high, low, close, atr_percent * close / 100)
+                setup_flag = flag_setup_series(high, low, close)
+                setup_trigger = setup_pivot | setup_darvas | setup_flag
+
+                valid_breakout = (
+                    setup_trigger
+                    & count_qualified
+                    & cond1
+                    & ma50_rising
+                    & (fiftyday_percent2 > 0)
+                    & (close >= 20)
+                    & (atr_multiple < 4.1)
+                )
+                if bool(valid_breakout.iloc[-1]):
+                    today_breakout_tickers.append(ticker)
+                breakout_series.append(valid_breakout.astype(int).rename(ticker))
+            except Exception:
+                continue
+
+        if not breakout_series:
+            return pd.DataFrame(columns=["Date", "Valid Breakout Count"]), today_breakout_tickers
+
+        counts = pd.concat(breakout_series, axis=1).fillna(0).sum(axis=1)
+        result = counts.tail(60).rename("Valid Breakout Count").reset_index()
+        result.columns = ["Date", "Valid Breakout Count"]
+        result["Date"] = pd.to_datetime(result["Date"]).dt.strftime("%Y-%m-%d")
+        result["Valid Breakout Count"] = result["Valid Breakout Count"].astype(int)
+        return result, today_breakout_tickers
+    except Exception:
+        return pd.DataFrame(columns=["Date", "Valid Breakout Count"]), []
+
+
+st.markdown("---")
+valid_breakout_history_v1, today_breakout_tickers_v1 = timed(
+    "compute_known_valid_breakout_history_v1",
+    compute_known_valid_breakout_history_v1,
+    stocks_tuple,
+    ticker_dfs_shared,
+)
+
+st.markdown(
+    f"### 📉 Breakout Count ({len(today_breakout_tickers_v1)})"
+)
+if today_breakout_tickers_v1:
+    breakout_industry_counts, breakout_ticker_industry = build_leader_industry_map(
+        today_breakout_tickers_v1, INDUSTRIES
+    )
+    html_breakout = ""
+    for sym in sorted(today_breakout_tickers_v1):
+        industries = breakout_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+            if is_top20_industry else ""
+        )
+        html_breakout += setup_badge(sym, extra_style=glow_style)
+    st.markdown(html_breakout, unsafe_allow_html=True)
+
+st.write("")
+st.write("")
+
+if valid_breakout_history_v1.empty:
+    st.info("Insufficient historical data available for valid breakout counts.")
+else:
+    st.bar_chart(
+        valid_breakout_history_v1.set_index("Date")["Valid Breakout Count"],
+        use_container_width=True,
+    )
 
 def massive_get(endpoint, params=None, timeout=15):
     massive_key = st.secrets.get("MASSIVE_API_KEY")
@@ -12469,7 +12849,7 @@ atr10_list = timed(
 
 count_color = "#ff4b4b" if len(atr10_list) >= 10 else "#e0e0e0"
 st.markdown(
-    f"#### 🚀 10x ATR Above MA50 <span style='color:{count_color};'>({len(atr10_list)})</span>",
+    f"#### 🚀 10x ATR Parabolic <span style='color:{count_color};'>({len(atr10_list)})</span>",
     unsafe_allow_html=True,
 )
 if atr10_list:
@@ -12890,175 +13270,6 @@ else:
     st.info(
         "No IWM distribution days in the trailing 25 sessions."
     )
-
-# ==============================================================================
-# 22. RELATIVE ROTATION GRAPH (RRG) — LIME_STOCKS vs SPY
-# Read-only, additive. Standalone data fetch + JdK-style RS-Ratio / RS-Momentum
-# calculation. Does not touch any other section or shared variable.
-# ==============================================================================
-st.markdown("---")
-st.markdown("#### 🔄 Relative Rotation Graph (RRG)")
-
-RRG_BENCHMARK = "SPY"
-RRG_EXCLUDE = {"SPY", "QQQ", "RSP"}
-RRG_TICKERS = [t for t in RRG_STOCKS if t not in RRG_EXCLUDE]
-RRG_WINDOW = 14      # smoothing window for RS-Ratio / RS-Momentum
-RRG_TAIL = 10        # number of trailing points to plot per ticker
-RRG_PERIOD = "9mo"   # history length to download
-
-
-@st.cache_data(ttl=3600)
-def fetch_rrg_raw_close(tickers_tuple, benchmark, period="9mo"):
-    all_symbols = list(tickers_tuple) + [benchmark]
-    raw = yf.download(all_symbols, period=period, interval="1d", progress=False, auto_adjust=True)
-    if isinstance(raw.columns, pd.MultiIndex):
-        return raw["Close"]
-    # Fallback for the (unlikely) single-symbol case
-    return raw[["Close"]].rename(columns={"Close": all_symbols[0]})
-
-
-@st.cache_data(ttl=3600)
-def compute_rrg_dataframe(tickers_tuple, benchmark, period="9mo", window=14, tail=10):
-    close_df = fetch_rrg_raw_close(tickers_tuple, benchmark, period)
-    if close_df.empty or benchmark not in close_df.columns:
-        return {}
-
-    bench_close = close_df[benchmark].dropna()
-    results = {}
-
-    for ticker in tickers_tuple:
-        try:
-            if ticker not in close_df.columns:
-                continue
-            stock_close = close_df[ticker].dropna()
-            aligned_stock, aligned_bench = stock_close.align(bench_close, join="inner")
-            if len(aligned_stock) < window * 2 + tail:
-                continue
-
-            rs = (aligned_stock / aligned_bench) * 100
-
-            rs_mean = rs.rolling(window).mean()
-            rs_std = rs.rolling(window).std()
-            rs_ratio = 100 + (rs - rs_mean) / rs_std.replace(0, np.nan)
-
-            rr_mean = rs_ratio.rolling(window).mean()
-            rr_std = rs_ratio.rolling(window).std()
-            rs_momentum = 100 + (rs_ratio - rr_mean) / rr_std.replace(0, np.nan)
-
-            combo = pd.DataFrame({"RS_Ratio": rs_ratio, "RS_Momentum": rs_momentum}).dropna()
-            if len(combo) < tail:
-                continue
-
-            results[ticker] = combo.tail(tail).reset_index(drop=True)
-        except Exception:
-            continue
-
-    return results
-
-
-with st.spinner("Computing Relative Rotation Graph..."):
-    rrg_data = timed(
-        "compute_rrg_dataframe",
-        compute_rrg_dataframe,
-        tuple(RRG_TICKERS), RRG_BENCHMARK, RRG_PERIOD, RRG_WINDOW, RRG_TAIL
-    )
-
-if not rrg_data:
-    st.info("RRG data unavailable.")
-else:
-    RRG_COLORS = [
-        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
-        "#aec7e8", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5",
-        "#c49c94", "#f7b6d2", "#c7c7c7", "#dbdb8d", "#9edae5",
-        "#393b79", "#637939", "#8c6d31", "#843c39", "#7b4173",
-        "#3182bd", "#e6550d", "#31a354", "#756bb1", "#636363",
-    ]
-
-    all_ratios, all_momentums = [], []
-    for df_t in rrg_data.values():
-        all_ratios.extend(df_t["RS_Ratio"].tolist())
-        all_momentums.extend(df_t["RS_Momentum"].tolist())
-
-    x_min, x_max = min(all_ratios), max(all_ratios)
-    y_min, y_max = min(all_momentums), max(all_momentums)
-    x_pad = max((x_max - x_min) * 0.12, 0.5)
-    y_pad = max((y_max - y_min) * 0.12, 0.5)
-    x_lo, x_hi = x_min - x_pad, x_max + x_pad
-    y_lo, y_hi = y_min - y_pad, y_max + y_pad
-
-    fig_rrg = go.Figure()
-
-    # Quadrant backgrounds: Improving=top-left, Leading=top-right,
-    # Lagging=bottom-left, Weakening=bottom-right
-    fig_rrg.add_shape(type="rect", x0=x_lo, y0=100, x1=100, y1=y_hi,
-                       fillcolor="rgba(144,238,144,0.18)", line_width=0, layer="below")
-    fig_rrg.add_shape(type="rect", x0=100, y0=100, x1=x_hi, y1=y_hi,
-                       fillcolor="rgba(144,238,144,0.30)", line_width=0, layer="below")
-    fig_rrg.add_shape(type="rect", x0=x_lo, y0=y_lo, x1=100, y1=100,
-                       fillcolor="rgba(255,99,99,0.22)", line_width=0, layer="below")
-    fig_rrg.add_shape(type="rect", x0=100, y0=y_lo, x1=x_hi, y1=100,
-                       fillcolor="rgba(255,99,99,0.15)", line_width=0, layer="below")
-
-    fig_rrg.add_shape(type="line", x0=100, y0=y_lo, x1=100, y1=y_hi,
-                       line=dict(color="rgba(120,150,200,0.6)", width=1.5, dash="dash"))
-    fig_rrg.add_shape(type="line", x0=x_lo, y0=100, x1=x_hi, y1=100,
-                       line=dict(color="rgba(120,150,200,0.6)", width=1.5, dash="dash"))
-
-    quad_label_style = dict(showarrow=False, font=dict(size=22, color="#222222", family="Arial Black"))
-    fig_rrg.add_annotation(x=x_lo + (100 - x_lo) * 0.05, y=y_hi - (y_hi - 100) * 0.08,
-                            text="Improving", xanchor="left", **quad_label_style)
-    fig_rrg.add_annotation(x=x_hi - (x_hi - 100) * 0.05, y=y_hi - (y_hi - 100) * 0.08,
-                            text="Leading", xanchor="right", **quad_label_style)
-    fig_rrg.add_annotation(x=x_lo + (100 - x_lo) * 0.05, y=y_lo + (100 - y_lo) * 0.08,
-                            text="Lagging", xanchor="left", **quad_label_style)
-    fig_rrg.add_annotation(x=x_hi - (x_hi - 100) * 0.05, y=y_lo + (100 - y_lo) * 0.08,
-                            text="Weakening", xanchor="right", **quad_label_style)
-
-    for i, (ticker, df_t) in enumerate(sorted(rrg_data.items())):
-        color = RRG_COLORS[i % len(RRG_COLORS)]
-        xs = df_t["RS_Ratio"].tolist()
-        ys = df_t["RS_Momentum"].tolist()
-
-        # Trail line + intermediate dots
-        fig_rrg.add_trace(go.Scatter(
-            x=xs, y=ys, mode="lines+markers", name=ticker,
-            line=dict(color=color, width=1.6),
-            marker=dict(size=4, color=color),
-            showlegend=False,
-            hovertemplate=f"<b>{ticker}</b><br>RS-Ratio: %{{x:.2f}}<br>RS-Momentum: %{{y:.2f}}<extra></extra>",
-        ))
-
-        # Start marker (hollow circle)
-        fig_rrg.add_trace(go.Scatter(
-            x=[xs[0]], y=[ys[0]], mode="markers",
-            marker=dict(size=11, color="rgba(0,0,0,0)", line=dict(color=color, width=2)),
-            showlegend=False, hoverinfo="skip",
-        ))
-
-        # End marker (star) + ticker label
-        fig_rrg.add_trace(go.Scatter(
-            x=[xs[-1]], y=[ys[-1]], mode="markers+text",
-            marker=dict(size=13, symbol="star", color=color, line=dict(color="#000000", width=1)),
-            text=[ticker], textposition="middle right",
-            textfont=dict(size=11, color=color),
-            showlegend=False,
-            hovertemplate=f"<b>{ticker}</b><br>RS-Ratio: %{{x:.2f}}<br>RS-Momentum: %{{y:.2f}}<extra></extra>",
-        ))
-
-    fig_rrg.update_layout(
-        title=dict(text="Relative Rotation Graph (vs SPY)", font=dict(size=16, color="#cccccc"), x=0.5, xanchor="center"),
-        height=800,
-        margin=dict(l=50, r=50, t=60, b=50),
-        plot_bgcolor="rgba(20,22,30,1)",
-        paper_bgcolor="rgba(13,17,23,0)",
-        font=dict(color="#cccccc"),
-        xaxis=dict(title="RS-Ratio", range=[x_lo, x_hi], showgrid=True, gridcolor="rgba(120,120,120,0.15)", zeroline=False),
-        yaxis=dict(title="RS-Momentum", range=[y_lo, y_hi], showgrid=True, gridcolor="rgba(120,120,120,0.15)", zeroline=False),
-        hovermode="closest",
-    )
-
-    st.plotly_chart(fig_rrg, use_container_width=True)
 
 # ==============================================================================
 # 23. MARKET VERDICT — Composite Breakout / Pullback / Neutral / Defensive Read
@@ -13663,381 +13874,171 @@ st.dataframe(
 )
 
 
-# ============================================================================== 
-# 24. HISTORICAL VALID BREAKOUT COUNT — KNOWN_STOCKS, LAST 60 TRADING DAYS
-# ============================================================================== 
-@st.cache_data(ttl=3600)
-def compute_known_valid_breakout_history_v1(stocks_list, _ticker_dfs):
-    """
-    Count daily KNOWN_STOCKS breakouts using historical versions of the
-    Pine setup_pivot, setup_darvas, and setup_flag state machines, followed
-    by the shared Breakout_Valid filters.
-    """
-    try:
-        breakout_series = []
-        today_breakout_tickers = []
-
-        def pivot_setup_series(high_values, low_values, close_values):
-            states = {
-                length: {
-                    "prev_price": np.nan,
-                    "prev_index": None,
-                    "curr_price": np.nan,
-                    "curr_index": None,
-                    "is_setup": False,
-                    "break_value": np.nan,
-                }
-                for length in range(2, 11)
-            }
-            output = np.zeros(len(close_values), dtype=bool)
-
-            for index in range(len(close_values)):
-                winners = []
-                for length, state in states.items():
-                    pivot_index = index - length
-                    if pivot_index >= length:
-                        pivot_window = low_values.iloc[pivot_index - length:pivot_index + length + 1]
-                        if low_values.iloc[pivot_index] == pivot_window.min():
-                            setup_cond = (
-                                not np.isnan(state["curr_price"])
-                                and low_values.iloc[pivot_index] > state["curr_price"]
-                            )
-                            state["prev_price"] = state["curr_price"]
-                            state["prev_index"] = state["curr_index"]
-                            state["curr_price"] = low_values.iloc[pivot_index]
-                            state["curr_index"] = pivot_index
-                            state["is_setup"] = setup_cond
-                            state["break_value"] = np.nan
-
-                            if setup_cond and state["prev_index"] is not None:
-                                start = state["prev_index"] + 1
-                                end = state["curr_index"]
-                                if end > start:
-                                    state["break_value"] = high_values.iloc[start:end].max()
-
-                    if state["is_setup"] and low_values.iloc[index] < state["curr_price"]:
-                        state["is_setup"] = False
-
-                    if state["is_setup"] and not np.isnan(state["break_value"]):
-                        winners.append(state["break_value"])
-
-                if winners:
-                    break_value = min(winners)  # Tightest Structure priority.
-                    output[index] = (
-                        close_values.iloc[index] >= break_value
-                        and (close_values.iloc[index] - break_value) / close_values.iloc[index] * 100 < 8
-                    )
-
-            return pd.Series(output, index=close_values.index)
-
-        def darvas_setup_series(high_values, low_values, close_values, atr_values):
-            phase = 0
-            phase_zero_bar = None
-            range_high = np.nan
-            range_low = np.nan
-            final_high = np.nan
-            red_box_streak = 0
-            cooldown_start = None
-            output = np.zeros(len(close_values), dtype=bool)
-
-            for index in range(len(close_values)):
-                current_high = high_values.iloc[index - 9:index + 1].max() if index >= 9 else np.nan
-                current_low = low_values.iloc[index - 9:index + 1].min() if index >= 9 else np.nan
-
-                if phase == 0 and not np.isnan(current_high) and not np.isnan(current_low):
-                    if current_high - current_low <= atr_values.iloc[index] * 3:
-                        range_high = current_high
-                        range_low = current_low
-                        phase_zero_bar = index
-                        phase = 1
-
-                if phase == 1 and phase_zero_bar is not None and index > phase_zero_bar:
-                    phase = 2
-
-                if phase == 2 and not np.isnan(range_high):
-                    breakout_up = close_values.iloc[index] > range_high
-                    breakout_down = close_values.iloc[index] < range_low
-                    if breakout_up or breakout_down:
-                        final_high = range_high
-                        red_box_streak = 0 if breakout_up else red_box_streak + 1
-                        cooldown_start = index
-                        phase = 3
-
-                if phase == 3 and cooldown_start is not None:
-                    if index - cooldown_start >= 13:
-                        phase = 0
-                        cooldown_start = None
-
-                if not np.isnan(final_high) and red_box_streak == 0:
-                    cutloss = (close_values.iloc[index] - final_high) / close_values.iloc[index] * 100
-                    output[index] = close_values.iloc[index] >= final_high and cutloss < 8
-
-            return pd.Series(output, index=close_values.index)
-
-        def flag_setup_series(high_values, low_values, close_values):
-            max_depth = 7.5
-            max_length = 10
-            min_length = 4
-            pole_min = 20.0
-            pole_min_length = 5
-            pole_max_length = 15
-
-            base_high = np.nan
-            base_low = np.nan
-            flag_length = 0
-            flag_bool = False
-            pole_low_index = None
-            flag_low_bear = np.nan
-            flag_high_bear = np.nan
-            flag_length_bear = 0
-            flag_bool_bear = False
-            pole_high_index = None
-            last_bull_flag_top = np.nan
-            last_bull_bar = -1
-            last_bear_bar = -1
-            previous_flag = False
-            previous_flag_length = 0
-            previous_base_high = np.nan
-            output = np.zeros(len(close_values), dtype=bool)
-
-            for index in range(len(close_values)):
-                previous_base_high = base_high
-                previous_flag = (
-                    flag_bool and flag_length < max_length
-                    and flag_length >= min_length
-                    and not np.isnan(base_high)
-                    and not np.isnan(base_low)
-                    and abs(base_low / base_high - 1) * 100 < max_depth
-                )
-                previous_flag_length = flag_length
-
-                previous_flag_low_bear = flag_low_bear
-                previous_flag_bear = (
-                    flag_bool_bear and flag_length_bear < max_length
-                    and flag_length_bear >= min_length
-                    and not np.isnan(flag_low_bear)
-                    and not np.isnan(flag_high_bear)
-                    and abs(flag_high_bear / flag_low_bear - 1) * 100 < 10
-                )
-
-                if np.isnan(base_high) or high_values.iloc[index] > base_high:
-                    base_high = high_values.iloc[index]
-                    base_low = low_values.iloc[index]
-                    flag_length = 0
-                elif high_values.iloc[index] <= base_high and low_values.iloc[index] < base_low:
-                    base_low = low_values.iloc[index]
-
-                find_depth = abs(base_low / base_high - 1) * 100 if base_high else np.nan
-                lower_close = index > 0 and close_values.iloc[index] < close_values.iloc[index - 1]
-                if (high_values.iloc[index] < base_high and find_depth <= max_depth) or (
-                    high_values.iloc[index] == base_high and lower_close
-                ):
-                    flag_length += 1
-                else:
-                    flag_length = 0
-
-                if high_values.iloc[index] == base_high:
-                    for lookback in range(pole_min_length, pole_max_length + 1):
-                        if index >= lookback and (
-                            (high_values.iloc[index] / low_values.iloc[index - lookback] - 1) * 100 >= pole_min
-                        ):
-                            flag_bool = True
-                            pole_low_index = index - lookback
-                            break
-
-                if np.isnan(flag_low_bear) or low_values.iloc[index] < flag_low_bear:
-                    flag_low_bear = low_values.iloc[index]
-                    flag_high_bear = high_values.iloc[index]
-                    flag_length_bear = 0
-                elif low_values.iloc[index] >= flag_low_bear and high_values.iloc[index] > flag_high_bear:
-                    flag_high_bear = high_values.iloc[index]
-
-                find_rally = (
-                    abs(flag_high_bear / flag_low_bear - 1) * 100
-                    if flag_low_bear else np.nan
-                )
-                higher_close = index > 0 and close_values.iloc[index] > close_values.iloc[index - 1]
-                if (low_values.iloc[index] > flag_low_bear and find_rally <= 10) or (
-                    low_values.iloc[index] == flag_low_bear and higher_close
-                ):
-                    flag_length_bear += 1
-                else:
-                    flag_length_bear = 0
-
-                if low_values.iloc[index] == flag_low_bear:
-                    for lookback in range(3, pole_max_length + 1):
-                        if index >= lookback and (
-                            abs((low_values.iloc[index] / high_values.iloc[index - lookback] - 1) * 100) >= 15
-                        ):
-                            flag_bool_bear = True
-                            pole_high_index = index - lookback
-                            break
-
-                if find_depth >= max_depth or flag_length > max_length:
-                    flag_bool = False
-                    flag_length = 0
-                    base_high = np.nan
-                    base_low = np.nan
-                    pole_low_index = None
-
-                if find_rally >= 10 or flag_length_bear > max_length:
-                    flag_bool_bear = False
-                    flag_length_bear = 0
-                    flag_low_bear = np.nan
-                    flag_high_bear = np.nan
-                    pole_high_index = None
-
-                breakout = (
-                    previous_flag
-                    and not np.isnan(previous_base_high)
-                    and high_values.iloc[index] > previous_base_high
-                    and previous_flag_length >= min_length
-                    and flag_bool
-                )
-                if breakout:
-                    last_bull_flag_top = previous_base_high
-                    last_bull_bar = index
-                    base_high = high_values.iloc[index]
-                    base_low = low_values.iloc[index]
-                    flag_length = 0
-
-                breakout_bear = (
-                    previous_flag_bear
-                    and not np.isnan(previous_flag_low_bear)
-                    and low_values.iloc[index] < previous_flag_low_bear
-                    and flag_length_bear >= min_length
-                    and flag_bool_bear
-                )
-                if breakout_bear:
-                    last_bear_bar = index
-                    flag_low_bear = low_values.iloc[index]
-                    flag_high_bear = high_values.iloc[index]
-                    flag_length_bear = 0
-
-                if not np.isnan(last_bull_flag_top) and last_bull_bar > last_bear_bar:
-                    cutloss = (close_values.iloc[index] - last_bull_flag_top) / close_values.iloc[index] * 100
-                    output[index] = close_values.iloc[index] >= last_bull_flag_top and 0 <= cutloss < 8
-
-            return pd.Series(output, index=close_values.index)
-
-        for ticker in stocks_list:
-            df = _ticker_dfs.get(ticker)
-            required_columns = {"Open", "High", "Low", "Close"}
-            if df is None or not required_columns.issubset(df.columns) or len(df) < 261:
-                continue
-
-            try:
-                high = df["High"].astype(float)
-                low = df["Low"].astype(float)
-                close = df["Close"].astype(float)
-
-                sma50 = close.rolling(50, min_periods=50).mean()
-                sma150 = close.rolling(150, min_periods=150).mean()
-                sma200 = close.rolling(200, min_periods=200).mean()
-                sma200_22 = sma200.shift(22)
-
-                high_52w = high.rolling(260, min_periods=260).max()
-                low_52w = low.rolling(260, min_periods=260).min()
-
-                # This is the existing seven-criterion Minervini count,
-                # evaluated across history instead of only on the latest bar.
-                minervini_count7 = (
-                    (close > sma150).astype(int).where(close > sma200, 0)
-                    + (sma150 > sma200).astype(int)
-                    + (sma200 > sma200_22).astype(int)
-                    + (sma50 > sma150).astype(int).where(sma50 > sma200, 0)
-                    + (close > sma50).astype(int)
-                    + (((close / low_52w) - 1) * 100 >= 25).astype(int)
-                    + ((1 - (close / high_52w)) * 100 <= 25).astype(int)
-                )
-                minervini_count8 = minervini_count7 + (close >= 20).astype(int)
-                count_qualified = (minervini_count7 == 7) | (minervini_count8 >= 7)
-
-                true_range = pd.concat(
-                    [high - low,
-                     (high - close.shift(1)).abs(),
-                     (low - close.shift(1)).abs()],
-                    axis=1,
-                ).max(axis=1)
-                atr_percent = true_range.rolling(14, min_periods=14).mean() / close * 100
-
-                adr_percent = 100 * ((high / low).rolling(20, min_periods=20).mean() - 1)
-                cond1 = (adr_percent >= 2.45) & (adr_percent < 8.05)
-                ma50_rising = (sma50 > sma50.shift(1)) & (sma50.shift(1) > sma50.shift(2))
-                fiftyday_percent = ((close - sma50) / sma50) * 100
-                fiftyday_percent2 = np.trunc(fiftyday_percent * 10) / 10
-                percent_gain_from_ma = ((close - sma50) / sma50) * 100
-                atr_multiple = np.trunc(
-                    (percent_gain_from_ma / atr_percent.replace(0, np.nan)) * 10
-                ) / 10
-
-                setup_pivot = pivot_setup_series(high, low, close)
-                setup_darvas = darvas_setup_series(high, low, close, atr_percent * close / 100)
-                setup_flag = flag_setup_series(high, low, close)
-                setup_trigger = setup_pivot | setup_darvas | setup_flag
-
-                valid_breakout = (
-                    setup_trigger
-                    & count_qualified
-                    & cond1
-                    & ma50_rising
-                    & (fiftyday_percent2 > 0)
-                    & (close >= 20)
-                    & (atr_multiple < 4.1)
-                )
-                if bool(valid_breakout.iloc[-1]):
-                    today_breakout_tickers.append(ticker)
-                breakout_series.append(valid_breakout.astype(int).rename(ticker))
-            except Exception:
-                continue
-
-        if not breakout_series:
-            return pd.DataFrame(columns=["Date", "Valid Breakout Count"]), today_breakout_tickers
-
-        counts = pd.concat(breakout_series, axis=1).fillna(0).sum(axis=1)
-        result = counts.tail(60).rename("Valid Breakout Count").reset_index()
-        result.columns = ["Date", "Valid Breakout Count"]
-        result["Date"] = pd.to_datetime(result["Date"]).dt.strftime("%Y-%m-%d")
-        result["Valid Breakout Count"] = result["Valid Breakout Count"].astype(int)
-        return result, today_breakout_tickers
-    except Exception:
-        return pd.DataFrame(columns=["Date", "Valid Breakout Count"]), []
-
-
+# ==============================================================================
+# 22. RELATIVE ROTATION GRAPH (RRG) — LIME_STOCKS vs SPY
+# Read-only, additive. Standalone data fetch + JdK-style RS-Ratio / RS-Momentum
+# calculation. Does not touch any other section or shared variable.
+# ==============================================================================
 st.markdown("---")
-valid_breakout_history_v1, today_breakout_tickers_v1 = timed(
-    "compute_known_valid_breakout_history_v1",
-    compute_known_valid_breakout_history_v1,
-    stocks_tuple,
-    ticker_dfs_shared,
-)
+st.markdown("#### 🔄 Relative Rotation Graph (RRG)")
 
-st.markdown(
-    f"### 📉 Breakout Count ({len(today_breakout_tickers_v1)})"
-)
-if today_breakout_tickers_v1:
-    breakout_industry_counts, breakout_ticker_industry = build_leader_industry_map(
-        today_breakout_tickers_v1, INDUSTRIES
+RRG_BENCHMARK = "SPY"
+RRG_EXCLUDE = {"SPY", "QQQ", "RSP"}
+RRG_TICKERS = [t for t in RRG_STOCKS if t not in RRG_EXCLUDE]
+RRG_WINDOW = 14      # smoothing window for RS-Ratio / RS-Momentum
+RRG_TAIL = 10        # number of trailing points to plot per ticker
+RRG_PERIOD = "9mo"   # history length to download
+
+
+@st.cache_data(ttl=3600)
+def fetch_rrg_raw_close(tickers_tuple, benchmark, period="9mo"):
+    all_symbols = list(tickers_tuple) + [benchmark]
+    raw = yf.download(all_symbols, period=period, interval="1d", progress=False, auto_adjust=True)
+    if isinstance(raw.columns, pd.MultiIndex):
+        return raw["Close"]
+    # Fallback for the (unlikely) single-symbol case
+    return raw[["Close"]].rename(columns={"Close": all_symbols[0]})
+
+
+@st.cache_data(ttl=3600)
+def compute_rrg_dataframe(tickers_tuple, benchmark, period="9mo", window=14, tail=10):
+    close_df = fetch_rrg_raw_close(tickers_tuple, benchmark, period)
+    if close_df.empty or benchmark not in close_df.columns:
+        return {}
+
+    bench_close = close_df[benchmark].dropna()
+    results = {}
+
+    for ticker in tickers_tuple:
+        try:
+            if ticker not in close_df.columns:
+                continue
+            stock_close = close_df[ticker].dropna()
+            aligned_stock, aligned_bench = stock_close.align(bench_close, join="inner")
+            if len(aligned_stock) < window * 2 + tail:
+                continue
+
+            rs = (aligned_stock / aligned_bench) * 100
+
+            rs_mean = rs.rolling(window).mean()
+            rs_std = rs.rolling(window).std()
+            rs_ratio = 100 + (rs - rs_mean) / rs_std.replace(0, np.nan)
+
+            rr_mean = rs_ratio.rolling(window).mean()
+            rr_std = rs_ratio.rolling(window).std()
+            rs_momentum = 100 + (rs_ratio - rr_mean) / rr_std.replace(0, np.nan)
+
+            combo = pd.DataFrame({"RS_Ratio": rs_ratio, "RS_Momentum": rs_momentum}).dropna()
+            if len(combo) < tail:
+                continue
+
+            results[ticker] = combo.tail(tail).reset_index(drop=True)
+        except Exception:
+            continue
+
+    return results
+
+
+with st.spinner("Computing Relative Rotation Graph..."):
+    rrg_data = timed(
+        "compute_rrg_dataframe",
+        compute_rrg_dataframe,
+        tuple(RRG_TICKERS), RRG_BENCHMARK, RRG_PERIOD, RRG_WINDOW, RRG_TAIL
     )
-    html_breakout = ""
-    for sym in sorted(today_breakout_tickers_v1):
-        industries = breakout_ticker_industry.get(sym, [])
-        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
-        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
-        glow_style = (
-            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
-            if is_top20_industry else ""
-        )
-        html_breakout += setup_badge(sym, extra_style=glow_style)
-    st.markdown(html_breakout, unsafe_allow_html=True)
 
-st.write("")
-st.write("")
-
-if valid_breakout_history_v1.empty:
-    st.info("Insufficient historical data available for valid breakout counts.")
+if not rrg_data:
+    st.info("RRG data unavailable.")
 else:
-    st.bar_chart(
-        valid_breakout_history_v1.set_index("Date")["Valid Breakout Count"],
-        use_container_width=True,
+    RRG_COLORS = [
+        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
+        "#aec7e8", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5",
+        "#c49c94", "#f7b6d2", "#c7c7c7", "#dbdb8d", "#9edae5",
+        "#393b79", "#637939", "#8c6d31", "#843c39", "#7b4173",
+        "#3182bd", "#e6550d", "#31a354", "#756bb1", "#636363",
+    ]
+
+    all_ratios, all_momentums = [], []
+    for df_t in rrg_data.values():
+        all_ratios.extend(df_t["RS_Ratio"].tolist())
+        all_momentums.extend(df_t["RS_Momentum"].tolist())
+
+    x_min, x_max = min(all_ratios), max(all_ratios)
+    y_min, y_max = min(all_momentums), max(all_momentums)
+    x_pad = max((x_max - x_min) * 0.12, 0.5)
+    y_pad = max((y_max - y_min) * 0.12, 0.5)
+    x_lo, x_hi = x_min - x_pad, x_max + x_pad
+    y_lo, y_hi = y_min - y_pad, y_max + y_pad
+
+    fig_rrg = go.Figure()
+
+    # Quadrant backgrounds: Improving=top-left, Leading=top-right,
+    # Lagging=bottom-left, Weakening=bottom-right
+    fig_rrg.add_shape(type="rect", x0=x_lo, y0=100, x1=100, y1=y_hi,
+                       fillcolor="rgba(144,238,144,0.18)", line_width=0, layer="below")
+    fig_rrg.add_shape(type="rect", x0=100, y0=100, x1=x_hi, y1=y_hi,
+                       fillcolor="rgba(144,238,144,0.30)", line_width=0, layer="below")
+    fig_rrg.add_shape(type="rect", x0=x_lo, y0=y_lo, x1=100, y1=100,
+                       fillcolor="rgba(255,99,99,0.22)", line_width=0, layer="below")
+    fig_rrg.add_shape(type="rect", x0=100, y0=y_lo, x1=x_hi, y1=100,
+                       fillcolor="rgba(255,99,99,0.15)", line_width=0, layer="below")
+
+    fig_rrg.add_shape(type="line", x0=100, y0=y_lo, x1=100, y1=y_hi,
+                       line=dict(color="rgba(120,150,200,0.6)", width=1.5, dash="dash"))
+    fig_rrg.add_shape(type="line", x0=x_lo, y0=100, x1=x_hi, y1=100,
+                       line=dict(color="rgba(120,150,200,0.6)", width=1.5, dash="dash"))
+
+    quad_label_style = dict(showarrow=False, font=dict(size=22, color="#222222", family="Arial Black"))
+    fig_rrg.add_annotation(x=x_lo + (100 - x_lo) * 0.05, y=y_hi - (y_hi - 100) * 0.08,
+                            text="Improving", xanchor="left", **quad_label_style)
+    fig_rrg.add_annotation(x=x_hi - (x_hi - 100) * 0.05, y=y_hi - (y_hi - 100) * 0.08,
+                            text="Leading", xanchor="right", **quad_label_style)
+    fig_rrg.add_annotation(x=x_lo + (100 - x_lo) * 0.05, y=y_lo + (100 - y_lo) * 0.08,
+                            text="Lagging", xanchor="left", **quad_label_style)
+    fig_rrg.add_annotation(x=x_hi - (x_hi - 100) * 0.05, y=y_lo + (100 - y_lo) * 0.08,
+                            text="Weakening", xanchor="right", **quad_label_style)
+
+    for i, (ticker, df_t) in enumerate(sorted(rrg_data.items())):
+        color = RRG_COLORS[i % len(RRG_COLORS)]
+        xs = df_t["RS_Ratio"].tolist()
+        ys = df_t["RS_Momentum"].tolist()
+
+        # Trail line + intermediate dots
+        fig_rrg.add_trace(go.Scatter(
+            x=xs, y=ys, mode="lines+markers", name=ticker,
+            line=dict(color=color, width=1.6),
+            marker=dict(size=4, color=color),
+            showlegend=False,
+            hovertemplate=f"<b>{ticker}</b><br>RS-Ratio: %{{x:.2f}}<br>RS-Momentum: %{{y:.2f}}<extra></extra>",
+        ))
+
+        # Start marker (hollow circle)
+        fig_rrg.add_trace(go.Scatter(
+            x=[xs[0]], y=[ys[0]], mode="markers",
+            marker=dict(size=11, color="rgba(0,0,0,0)", line=dict(color=color, width=2)),
+            showlegend=False, hoverinfo="skip",
+        ))
+
+        # End marker (star) + ticker label
+        fig_rrg.add_trace(go.Scatter(
+            x=[xs[-1]], y=[ys[-1]], mode="markers+text",
+            marker=dict(size=13, symbol="star", color=color, line=dict(color="#000000", width=1)),
+            text=[ticker], textposition="middle right",
+            textfont=dict(size=11, color=color),
+            showlegend=False,
+            hovertemplate=f"<b>{ticker}</b><br>RS-Ratio: %{{x:.2f}}<br>RS-Momentum: %{{y:.2f}}<extra></extra>",
+        ))
+
+    fig_rrg.update_layout(
+        title=dict(text="Relative Rotation Graph (vs SPY)", font=dict(size=16, color="#cccccc"), x=0.5, xanchor="center"),
+        height=800,
+        margin=dict(l=50, r=50, t=60, b=50),
+        plot_bgcolor="rgba(20,22,30,1)",
+        paper_bgcolor="rgba(13,17,23,0)",
+        font=dict(color="#cccccc"),
+        xaxis=dict(title="RS-Ratio", range=[x_lo, x_hi], showgrid=True, gridcolor="rgba(120,120,120,0.15)", zeroline=False),
+        yaxis=dict(title="RS-Momentum", range=[y_lo, y_hi], showgrid=True, gridcolor="rgba(120,120,120,0.15)", zeroline=False),
+        hovermode="closest",
     )
+
+    st.plotly_chart(fig_rrg, use_container_width=True)
