@@ -10021,20 +10021,20 @@ def _resolve_tickers_via_ai_from_title(title):
             pass
 
     groq_key = st.secrets.get("GROQ_API_KEY")
-        if groq_key:
-            try:
-                from openai import OpenAI as OpenAIClient
-                groq_client = OpenAIClient(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
-                completion = groq_client.chat.completions.create(
-                    model="openai/gpt-oss-120b",
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=100, temperature=0.1,
-                )
-                tickers = _parse(completion.choices[0].message.content)
-                if tickers:
-                    return tickers
-            except Exception:
-                pass
+    if groq_key:
+        try:
+            from openai import OpenAI as OpenAIClient
+            groq_client = OpenAIClient(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
+            completion = groq_client.chat.completions.create(
+                model="openai/gpt-oss-120b",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=100, temperature=0.1,
+            )
+            tickers = _parse(completion.choices[0].message.content)
+            if tickers:
+                return tickers
+        except Exception:
+            pass
 
     github_token = st.secrets.get("GITHUB_MODELS_TOKEN")
     if github_token:
