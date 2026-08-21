@@ -11885,6 +11885,745 @@ else:
             #         st.markdown(f"- {e.get('date','?')} ({when})")
 
 # ==============================================================================
+# 23. MARKET VERDICT — Composite Breakout / Pullback / Neutral / Defensive Read
+# Read-only, additive. Synthesizes every signal already computed above plus
+# two standalone fetches (VIX term structure, HYG/LQD credit spread) into a
+# single weighted composite score and verdict. Does not touch any other
+# section or shared variable — all new names are unique.
+# ==============================================================================
+st.markdown("---")
+st.markdown("## 🧭 Market Verdict")
+
+# ── Standalone data fetches used only by the verdict (run first so they're
+# available when compute_market_verdict() executes) ─────────────────────────
+
+@st.cache_data(ttl=3600)
+def fetch_vix_term_structure_v0(period="6mo"):
+    """
+    VIX vs VIX3M. Contango (VIX < VIX3M) = normal/complacent market.
+    Backwardation (VIX >= VIX3M) = near-term fear exceeds medium-term fear,
+    historically a defensive signal.
+    """
+    try:
+        raw = yf.download(["^VIX", "^VIX3M"], period=period, interval="1d",
+                           progress=False, auto_adjust=True)
+        close = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw[["Close"]]
+        close = close.dropna()
+        if close.empty or "^VIX" not in close.columns or "^VIX3M" not in close.columns:
+            return pd.DataFrame()
+
+        df = pd.DataFrame({
+            "VIX": close["^VIX"],
+            "VIX3M": close["^VIX3M"],
+        }).dropna()
+        df["Ratio"] = df["VIX"] / df["VIX3M"]  # >= 1.0 = backwardation
+        return df
+    except Exception as e:
+        st.warning(f"VIX term structure fetch error: {e}")
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=3600)
+def fetch_credit_spread_ratio_v0(period="6mo"):
+    """
+    HYG (junk bonds) / LQD (investment grade). A rolling decline in this
+    ratio means credit markets are pricing in more risk — often leads
+    equity breadth deterioration by several days.
+    """
+    try:
+        raw = yf.download(["HYG", "LQD"], period=period, interval="1d",
+                           progress=False, auto_adjust=True)
+        close = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw[["Close"]]
+        close = close.dropna()
+        if close.empty or "HYG" not in close.columns or "LQD" not in close.columns:
+            return pd.DataFrame()
+
+        df = pd.DataFrame({
+            "HYG": close["HYG"],
+            "LQD": close["LQD"],
+        }).dropna()
+        df["Ratio"] = df["HYG"] / df["LQD"]
+        df["Ratio_MA20"] = df["Ratio"].rolling(20).mean()
+        return df
+    except Exception as e:
+        st.warning(f"Credit spread fetch error: {e}")
+        return pd.DataFrame()
+
+
+with st.spinner("Fetching VIX term structure and credit spread..."):
+    verdict_vix_df = timed("fetch_vix_term_structure_v0", fetch_vix_term_structure_v0)
+    verdict_credit_df = timed("fetch_credit_spread_ratio_v0", fetch_credit_spread_ratio_v0)
+
+
+def _safe(name, default=None):
+    """Pull a variable from the module's global namespace, defaulting safely
+    if that section hasn't run or returned nothing usable."""
+    val = globals().get(name, default)
+    return default if val is None else val
+
+
+def compute_market_verdict():
+    breakdown = []  # list of (pillar_name, score_0_100, label, detail_str)
+
+    # ── Pillar 1: Market Regime (% above 200 EMA) ──────────────────────────
+    pct_ema200 = _safe("pct_above_ema200", 50.0)
+    if pct_ema200 > 70:
+        p1_score, p1_label = 100, "Strong bull participation"
+    elif pct_ema200 > 60:
+        p1_score, p1_label = 80, "Good swing environment"
+    elif pct_ema200 >= 50:
+        p1_score, p1_label = 60, "Improving"
+    elif pct_ema200 >= 40:
+        p1_score, p1_label = 35, "Recovery attempt"
+    else:
+        p1_score, p1_label = 10, "Be cautious"
+    breakdown.append(("Market Regime", p1_score, p1_label, f"{pct_ema200:.1f}% above 200 EMA"))
+
+    # ── Pillar 2: Distribution Days (SPY/QQQ/SMH/IWM) — hard override ─────
+    dist_counts = {
+        "SPY": _safe("spy_dist_count", 0),
+        "QQQ": _safe("qqq_dist_count", 0),
+        "SMH": _safe("smh_dist_count", 0),
+        "IWM": _safe("iwm_dist_count", 0),
+    }
+    triggered = [idx for idx, c in dist_counts.items() if c >= 5]
+    if len(triggered) <= 1:
+        triggered = []
+    avg_dist = sum(dist_counts.values()) / len(dist_counts)
+    p2_score = max(0, 100 - (avg_dist / 25) * 100 * 1.6)  # steep penalty curve
+    if triggered:
+        p2_score = min(p2_score, 25)  # hard cap when any index is triggered
+    p2_label = f"TRIGGERED: {', '.join(triggered)}" if triggered else "Clean"
+    breakdown.append(("Distribution Days", p2_score, p2_label,
+                       ", ".join(f"{k}:{v}" for k, v in dist_counts.items())))
+
+    # ── Pillar 3: Stage Breadth (S2 vs S4) ─────────────────────────────────
+    stage_counts_v = _safe("stage_counts", {1: 0, 2: 0, 3: 0, 4: 0, 0: 0})
+    stage_total = sum(stage_counts_v.get(s, 0) for s in [1, 2, 3, 4])
+    if stage_total > 0:
+        s2_pct = stage_counts_v.get(2, 0) / stage_total * 100
+        s4_pct = stage_counts_v.get(4, 0) / stage_total * 100
+        p3_score = max(0, min(100, 50 + (s2_pct - s4_pct)))
+        p3_label = f"S2 {s2_pct:.0f}% vs S4 {s4_pct:.0f}%"
+    else:
+        p3_score, p3_label = 50, "Insufficient data"
+    breakdown.append(("Stage Breadth", p3_score, p3_label, ""))
+
+    # ── Pillar 4: RS Quadrant Map (industries) ─────────────────────────────
+    quad_pts = _safe("quad_points", [])
+    if quad_pts:
+        n = len(quad_pts)
+        strong = sum(1 for p in quad_pts if p["weekly_rs"] >= 50 and p["monthly_rs"] >= 50)
+        improving = sum(1 for p in quad_pts if p["weekly_rs"] >= 50 and p["monthly_rs"] < 50)
+        weakening = sum(1 for p in quad_pts if p["weekly_rs"] < 50 and p["monthly_rs"] >= 50)
+        weak = sum(1 for p in quad_pts if p["weekly_rs"] < 50 and p["monthly_rs"] < 50)
+        p4_score = (strong + improving) / n * 100
+        p4_label = f"Strong {strong} / Improving {improving} / Weakening {weakening} / Weak {weak}"
+    else:
+        p4_score, p4_label = 50, "Insufficient data"
+    breakdown.append(("RS Quadrant Map", p4_score, p4_label, ""))
+
+    # ── Pillar 5: Minervini Breadth Trend (5D MA vs 20D MA + structure) ────
+    hist_df_v = _safe("historical_df", pd.DataFrame())
+    if isinstance(hist_df_v, pd.DataFrame) and not hist_df_v.empty and len(hist_df_v) >= 10:
+        counts_list = hist_df_v.tail(30)["Minervini Count"].tolist()
+        ma5 = np.mean(counts_list[-5:])
+        ma20 = np.mean(counts_list[-20:]) if len(counts_list) >= 20 else np.mean(counts_list)
+        current_c = counts_list[-1]
+        if ma5 > ma20 and current_c >= ma20:
+            p5_score, p5_label = 90, "Expanding momentum"
+        elif ma5 < ma20 and current_c <= ma20:
+            p5_score, p5_label = 15, "Deteriorating breadth"
+        else:
+            p5_score, p5_label = 50, "Choppy / transitional"
+        p5_detail = f"Count {current_c} | 5D {ma5:.1f} vs 20D {ma20:.1f}"
+    else:
+        p5_score, p5_label, p5_detail = 50, "Insufficient data", ""
+    breakdown.append(("Minervini Breadth Trend", p5_score, p5_label, p5_detail))
+
+    # ── Pillar 6: ETF Risk-On Ratios (slope of last 20 days, normalized) ──
+    risk_on_pairs = [("XLY", "XLP"), ("SPHB", "SPY"), ("IWM", "QQQ"), ("VUG", "VTV")]
+    ticker_dfs_v = _safe("ticker_dfs_shared", {})
+    slopes = []
+    for num, den in risk_on_pairs:
+        try:
+            df_num = ticker_dfs_v.get(num)
+            df_den = ticker_dfs_v.get(den)
+            if df_num is None or df_den is None:
+                continue
+            ratio = (df_num["Close"] / df_den["Close"]).dropna().tail(20)
+            if len(ratio) < 10:
+                continue
+            x = np.arange(len(ratio))
+            slope = np.polyfit(x, ratio.values, 1)[0]
+            norm_slope = slope / ratio.mean()  # % change per day, scale-free
+            slopes.append(norm_slope)
+        except Exception:
+            continue
+    if slopes:
+        avg_slope = np.mean(slopes)
+        p6_score = max(0, min(100, 50 + avg_slope * 5000))
+        risk_direction = "Risk-ON rotation" if avg_slope > 0 else "Risk-OFF rotation"
+        p6_label = f"{risk_direction} ({sum(1 for s in slopes if s > 0)}/{len(slopes)} pairs up)"
+    else:
+        p6_score, p6_label = 50, "Insufficient data"
+    breakdown.append(("ETF Risk Appetite", p6_score, p6_label, ""))
+
+    # ── Pillar 7: VIX Term Structure ───────────────────────────────────────
+    vix_df_v = _safe("verdict_vix_df", pd.DataFrame())
+    if isinstance(vix_df_v, pd.DataFrame) and not vix_df_v.empty:
+        vix_ratio = vix_df_v["Ratio"].iloc[-1]
+        p7_score = max(0, min(100, (1.05 - vix_ratio) * 1000))  # >=1.0 -> low score
+        p7_label = "Backwardation (defensive)" if vix_ratio >= 1.0 else "Contango (normal)"
+        p7_detail = f"VIX/VIX3M = {vix_ratio:.3f}"
+    else:
+        p7_score, p7_label, p7_detail = 50, "Insufficient data", ""
+    breakdown.append(("VIX Term Structure", p7_score, p7_label, p7_detail))
+
+    # ── Pillar 8: Credit Spread (HYG/LQD) ──────────────────────────────────
+    credit_df_v = _safe("verdict_credit_df", pd.DataFrame())
+    if isinstance(credit_df_v, pd.DataFrame) and not credit_df_v.empty and len(credit_df_v) >= 20:
+        ratio_now = credit_df_v["Ratio"].iloc[-1]
+        ratio_ma20 = credit_df_v["Ratio_MA20"].iloc[-1]
+        if pd.notna(ratio_ma20) and ratio_ma20 > 0:
+            pct_diff = (ratio_now - ratio_ma20) / ratio_ma20 * 100
+            p8_score = max(0, min(100, 50 + pct_diff * 40))
+            p8_label = "Risk-on (above 20D MA)" if pct_diff > 0 else "Risk-off (below 20D MA)"
+            p8_detail = f"HYG/LQD {ratio_now:.4f} vs MA {ratio_ma20:.4f}"
+        else:
+            p8_score, p8_label, p8_detail = 50, "Insufficient data", ""
+    else:
+        p8_score, p8_label, p8_detail = 50, "Insufficient data", ""
+    breakdown.append(("Credit Spread (HYG/LQD)", p8_score, p8_label, p8_detail))
+
+    # ── Weighted Composite ──────────────────────────────────────────────────
+    weights = {
+        "Market Regime": 0.17,
+        "Distribution Days": 0.22,
+        "Stage Breadth": 0.13,
+        "RS Quadrant Map": 0.13,
+        "Minervini Breadth Trend": 0.13,
+        "ETF Risk Appetite": 0.08,
+        "VIX Term Structure": 0.07,
+        "Credit Spread (HYG/LQD)": 0.07,
+    }
+    composite = sum(score * weights[name] for name, score, _, _ in breakdown)
+
+    # ── Setup-Style Tilt (breakout scanners vs pullback scanners) ─────────
+    # Breakout-style: Two Botak, PowerTrend, Gapper (momentum/extension entries)
+    # Pullback-style: 21ema_cloud, 21ema_wick, 50ma_bounce (basing/dip entries)
+    cloud_valid_syms = set()
+    for item in _safe("all_data", []):
+        cloud_valid_syms.update(item.get("Cloud", []))
+
+    pullback_syms = (
+        cloud_valid_syms
+        | set(_safe("cloud21ema_all", set()))
+        | set(_safe("cloudwick_all", set()))
+        | set(_safe("ma50bounce_all", set()))
+    ) & set(KNOWN_STOCKS)
+    
+    n_breakout, n_pullback = len(_safe("today_breakout_tickers_v1", [])), len(pullback_syms)
+
+    if n_breakout + n_pullback == 0:
+        tilt_label = "No active setups to gauge tilt"
+    elif n_pullback > n_breakout * 1.3:
+        tilt_label = f"Pullback setups dominate ({n_pullback} vs {n_breakout}) — market rewarding dip entries into leaders, not fresh breakouts"
+    elif n_breakout > n_pullback * 1.3:
+        tilt_label = f"Breakout setups dominate ({n_breakout} vs {n_pullback}) — market rewarding momentum extension"
+    else:
+        tilt_label = f"Balanced ({n_breakout} breakout vs {n_pullback} pullback setups)"
+
+    # ── Final Verdict ───────────────────────────────────────────────────────
+    if triggered:
+        verdict = "🛡️ DEFENSIVE" if composite < 35 else "⚠️ PULLBACK ONLY"
+        verdict_note = "Distribution days triggered — avoid chasing extended breakouts even if breadth looks fine. Buy pullbacks in confirmed leaders only, tighten stops, reduce size."
+    elif composite >= 72:
+        verdict = "🚀 BREAKOUT"
+        verdict_note = "Regime, breadth, and rotation all aligned bullish with no distribution flags. Fresh breakouts from proper bases have a statistical tailwind — this is when position size and aggression are justified."
+    elif composite >= 55:
+        verdict = "📉 PULLBACK PREFERRED"
+        verdict_note = "Underlying trend is intact but breadth/rotation isn't confirming strongly enough to chase extension. Favor 21ema_cloud/21ema_wick/50ma_bounce style entries over fresh breakouts."
+    elif composite >= 40:
+        verdict = "⏸️ NEUTRAL"
+        verdict_note = "Mixed signals — no clear edge either direction. Reduce position sizing, be selective, and wait for either breadth to expand (favor breakout) or distribution to clear (favor pullback)."
+    else:
+        verdict = "🛡️ DEFENSIVE"
+        verdict_note = "Multiple pillars deteriorating. Prioritize capital preservation — raise cash, avoid new longs, focus only on the highest-conviction setups if any. Less is More"
+
+    return verdict, verdict_note, composite, breakdown, tilt_label, triggered
+
+
+verdict, verdict_note, composite_score, pillar_breakdown, tilt_label, dist_triggered = timed(
+    "compute_market_verdict", compute_market_verdict
+)
+
+verdict_color = (
+    "#00FF00" if "BREAKOUT" in verdict
+    else "#FFA500" if "PULLBACK" in verdict
+    else "#888888" if "NEUTRAL" in verdict
+    else "#FF4B4B"
+)
+
+st.markdown(
+    f"""
+    <div style="border:2px solid {verdict_color}; border-radius:8px; padding:18px;
+                background:#1a1c23; margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:1.6em; font-weight:900; color:{verdict_color};">{verdict}</span>
+            <span style="font-size:1.4em; font-weight:bold; color:{verdict_color};">{composite_score:.0f}/100</span>
+        </div>
+        <p style="margin:10px 0 6px; color:#e0e0e0; font-size:0.95em; line-height:1.5;">{verdict_note}</p>
+        <p style="margin:0; color:#888; font-size:0.85em;"><b>Setup-style tilt:</b> {tilt_label}</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ── Pillar breakdown table ──────────────────────────────────────────────────
+pillar_rows_html = ""
+for name, score, label, detail in pillar_breakdown:
+    bar_color = "#00FF00" if score >= 65 else "#FFA500" if score >= 40 else "#FF4B4B"
+    pillar_rows_html += (
+        f"<tr>"
+        f"<td style='padding:6px 10px;color:#e0e0e0;font-weight:bold;white-space:nowrap;'>{name}</td>"
+        f"<td style='padding:6px 10px;'>"
+        f"<div style='width:100%;background:#333;border-radius:4px;height:14px;position:relative;'>"
+        f"<div style='width:{score:.0f}%;background:{bar_color};height:14px;border-radius:4px;'></div>"
+        f"</div></td>"
+        f"<td style='padding:6px 10px;color:{bar_color};font-weight:bold;text-align:right;'>{score:.0f}</td>"
+        f"<td style='padding:6px 10px;color:#aaa;font-size:0.85em;'>{label}{(' — ' + detail) if detail else ''}</td>"
+        f"</tr>"
+    )
+
+st.markdown(
+    f"""
+    <table style="width:100%;border-collapse:collapse;">
+    <tbody>{pillar_rows_html}</tbody>
+    </table>
+    """,
+    unsafe_allow_html=True,
+)
+
+if dist_triggered:
+    st.caption(f"⚠️ Distribution-day override active on: {', '.join(dist_triggered)} — this caps the verdict regardless of other pillars.")    
+
+# ==============================================================================
+# 20. SECTOR STRENGTH HEATMAP — cross-sectional rank (display) +
+# absolute-return money-flow coloring (so a broad bear market shows all red)
+# ==============================================================================
+st.markdown("---")
+st.markdown("#### 🌡️ Sector Strength Heatmap")
+
+
+
+SECTOR_ETFS_HEATMAP = ["XLK", "XLV", "XLF", "XLC", "XLY", "XLE", "XLI", "XLB", "XLP", "XLU"]
+HEATMAP_DAYS = 60
+HEATMAP_RETURN_LENGTH = 21  # ~1 month price return, used as the money-flow proxy
+
+@st.cache_data(ttl=3600)
+def get_sector_distribution_status(sector_etfs):
+    result = {}
+
+    for ticker in sector_etfs:
+        df = yf.download(
+            ticker, period="2mo", interval="1d",
+            progress=False, auto_adjust=True
+        )
+        df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
+        df = df[["Close", "Volume"]].dropna()
+
+        df["Pct_Chg"] = df["Close"].pct_change() * 100
+        df["Vol_Higher"] = df["Volume"] > df["Volume"].shift(1)
+        df["Is_Dist"] = (df["Pct_Chg"] <= -0.2) & df["Vol_Higher"]
+
+        count = 0
+
+        for date, row in df[df["Is_Dist"]].iterrows():
+            subsequent = df.loc[date:]
+
+            if len(subsequent) - 1 >= 25:
+                continue
+
+            if ((subsequent["Close"].max() - row["Close"]) / row["Close"]) * 100 >= 5:
+                continue
+
+            count += 1
+
+        result[ticker] = count >= 5
+
+    return result
+
+
+sector_dist_triggered = timed(
+    "get_sector_distribution_status",
+    get_sector_distribution_status,
+    SECTOR_ETFS_HEATMAP
+)
+
+@st.cache_data(ttl=3600)
+def compute_sector_heatmap_df_v2(sector_etfs, _ticker_dfs, length=21, days=60):
+    """
+    Two parallel grids, same shape:
+      - rank_wide: cross-sectional percentile rank (0-100) of each sector's
+        `length`-day return vs the OTHER sectors on that SAME day. This is
+        the number displayed in each cell.
+      - ret_wide: each sector's raw absolute `length`-day % return. This
+        drives cell COLOR — so if every sector's absolute return is
+        negative (broad selloff), every cell renders red regardless of
+        how the ranks shake out among them.
+    """
+    returns = {}
+    for etf in sector_etfs:
+        df = _ticker_dfs.get(etf)
+        if df is None:
+            continue
+        returns[etf] = df['Close'].pct_change(length) * 100
+
+    if not returns:
+        return pd.DataFrame(), pd.DataFrame()
+
+    ret_wide = pd.DataFrame(returns).dropna(how='all').tail(days)
+    rank_wide = ret_wide.rank(axis=1, pct=True) * 100
+
+    ret_wide = ret_wide.iloc[::-1]
+    rank_wide = rank_wide.iloc[::-1]
+
+    ret_wide.index = pd.to_datetime(ret_wide.index).strftime("%y-%m-%d")
+    rank_wide.index = ret_wide.index
+
+    ret_wide = ret_wide.reset_index().rename(columns={"index": "Date"})
+    rank_wide = rank_wide.reset_index().rename(columns={"index": "Date"})
+    return rank_wide, ret_wide
+
+rank_df, ret_df = timed(
+    "compute_sector_heatmap_df_v2",
+    compute_sector_heatmap_df_v2,
+    SECTOR_ETFS_HEATMAP, ticker_dfs_shared, HEATMAP_RETURN_LENGTH, HEATMAP_DAYS
+)
+
+def _heatmap_cell_color_v2(ret_val, cap=8.0):
+    """Color = absolute-return money-flow direction, NOT the cross-sectional rank."""
+    if pd.isna(ret_val):
+        return "background-color:#1a1a1a;color:#555;"
+    r = float(ret_val)
+    alpha = min(abs(r) / cap, 1.0)
+    if r >= 0:
+        return f"background-color:rgba(0,200,120,{0.15 + alpha * 0.75:.2f});color:#ffffff;"
+    return f"background-color:rgba(220,60,60,{0.15 + alpha * 0.75:.2f});color:#ffffff;"
+
+if rank_df.empty:
+    st.info("Sector heatmap data unavailable.")
+else:
+    header_cells = (
+        "<th style='position:sticky;top:0;background:#111;color:#eee;padding:6px 10px;"
+        "text-align:center;font-size:12px;border:1px solid #333;z-index:2;'>Date</th>"
+    )
+
+    EXTRA_BORDER = {"XLC": "border-left:3px solid #ffffff;", "XLY": "border-right:3px solid #ffffff;", "XLB": "border-right:3px solid #ffffff;"}
+
+    header_cells += "".join(
+        f"<th style='position:sticky;top:0;background:#111;"
+        f"color:{'#FF4B4B' if sector_dist_triggered.get(col, False) else '#eee'};"
+        f"padding:6px 10px;text-align:center;font-size:12px;"
+        f"border:1px solid #333;{EXTRA_BORDER.get(col,'')}z-index:2;'>{col}</th>"
+        for col in rank_df.columns[1:]
+    )
+    body_rows = ""
+    for i in range(len(rank_df)):
+        rank_row = rank_df.iloc[i]
+        ret_row = ret_df.iloc[i]
+        cells = (
+            f"<td style='position:sticky;left:0;background:#111;color:#eee;padding:5px 8px;"
+            f"font-size:11px;border:1px solid #333;white-space:nowrap;z-index:1;'>{rank_row['Date']}</td>"
+        )
+        for col in rank_df.columns[1:]:
+            rank_val = rank_row[col]
+            ret_val = ret_row[col]
+            style = _heatmap_cell_color_v2(ret_val)
+            display_val = "" if pd.isna(rank_val) else f"{int(rank_val)}"
+            cells += (
+                f"<td style='{style}padding:5px 8px;text-align:center;"
+                f"font-size:12px;border:1px solid #333;{EXTRA_BORDER.get(col,'')}'>{display_val}</td>"
+            )
+        body_rows += f"<tr>{cells}</tr>"
+
+    heatmap_html = f"""
+    <div style="max-height:600px; overflow-y:auto; overflow-x:auto; border-radius:6px;">
+    <table style="border-collapse:collapse; width:100%;">
+    <thead><tr>{header_cells}</tr></thead>
+    <tbody>{body_rows}</tbody>
+    </table>
+    </div>
+    """
+    st.markdown(heatmap_html, unsafe_allow_html=True)
+
+# ==============================================================================
+# 21. SPY DISTRIBUTION DAY COUNT — 5+ in trailing 25 sessions = elevated risk
+# ==============================================================================
+
+@st.cache_data(ttl=3600)
+def compute_market_distribution_days(ticker, dist_threshold=-0.2):
+    # Fetch 2 months of data to ensure enough history
+    # to track the 25-trading-day distribution-day lifespan
+    df = yf.download(
+        ticker,
+        period="2mo",
+        interval="1d",
+        progress=False,
+        auto_adjust=True
+    )
+
+    df.columns = [
+        c[0] if isinstance(c, tuple) else c
+        for c in df.columns
+    ]
+
+    # Ensure required columns are available
+    df = df[
+        ["Open", "High", "Low", "Close", "Volume"]
+    ].dropna()
+
+    # 1. Calculate daily percentage change
+    df["Pct_Chg"] = df["Close"].pct_change() * 100
+
+    # 2. Volume must be higher than previous trading day
+    df["Vol_Higher"] = (
+        df["Volume"] > df["Volume"].shift(1)
+    )
+
+    # 3. Identify distribution days
+    #
+    # SPY / IWM:
+    #   Close down >= 0.2% on higher volume
+    #
+    # QQQ / SMH:
+    #   Close down >= 0.3% on higher volume
+    #
+    df["Is_Dist_Day"] = (
+        (df["Pct_Chg"] <= dist_threshold)
+        & df["Vol_Higher"]
+    )
+
+    active_distribution_days = []
+
+    # 4. Get all potential distribution days
+    potential_dist_df = df[df["Is_Dist_Day"]]
+
+    for dist_date, dist_row in potential_dist_df.iterrows():
+
+        dist_close = dist_row["Close"]
+
+        # Get all trading rows starting from the
+        # distribution day
+        subsequent_df = df.loc[dist_date:]
+
+        # ------------------------------------------------
+        # Rule 1:
+        # Distribution day expires after 25 trading days
+        # ------------------------------------------------
+        trading_days_elapsed = len(subsequent_df) - 1
+
+        if trading_days_elapsed >= 25:
+            continue
+
+        # ------------------------------------------------
+        # Rule 2:
+        # Cancel distribution day if ETF closes
+        # 5% or more above the distribution-day close
+        # ------------------------------------------------
+        max_close_since = subsequent_df["Close"].max()
+
+        pct_gain_since = (
+            (max_close_since - dist_close)
+            / dist_close
+        ) * 100
+
+        if pct_gain_since >= 5.0:
+            continue
+
+        # Distribution day is still active
+        active_distribution_days.append(
+            dist_date.strftime("%Y-%m-%d")
+        )
+
+    return len(active_distribution_days), active_distribution_days
+
+
+# ============================================================
+# SPY
+# Distribution threshold = -0.2%
+# ============================================================
+
+spy_dist_count, spy_dist_dates = timed(
+    "compute_spy_distribution_days",
+    lambda: compute_market_distribution_days(
+        "SPY",
+        dist_threshold=-0.2
+    )
+)
+
+spy_triggered = spy_dist_count >= 5
+
+spy_status_color = (
+    "#FF4B4B"
+    if spy_triggered
+    else "#00FF00"
+)
+
+spy_status_text = (
+    "TRIGGERED — elevated correction risk, skip new breakouts"
+    if spy_triggered
+    else "Not Triggered"
+)
+
+
+# ============================================================
+# QQQ
+# Stricter threshold = -0.3%
+# ============================================================
+
+qqq_dist_count, qqq_dist_dates = timed(
+    "compute_qqq_distribution_days",
+    lambda: compute_market_distribution_days(
+        "QQQ",
+        dist_threshold=-0.3
+    )
+)
+
+qqq_triggered = qqq_dist_count >= 5
+
+qqq_status_color = (
+    "#FF4B4B"
+    if qqq_triggered
+    else "#00FF00"
+)
+
+qqq_status_text = (
+    "TRIGGERED — elevated correction risk, skip new breakouts"
+    if qqq_triggered
+    else "Not Triggered"
+)
+
+
+# ============================================================
+# SMH
+# Stricter threshold = -0.5%
+# ============================================================
+
+smh_dist_count, smh_dist_dates = timed(
+    "compute_smh_distribution_days",
+    lambda: compute_market_distribution_days(
+        "SMH",
+        dist_threshold=-0.5
+    )
+)
+
+smh_triggered = smh_dist_count >= 5
+
+smh_status_color = (
+    "#FF4B4B"
+    if smh_triggered
+    else "#00FF00"
+)
+
+smh_status_text = (
+    "TRIGGERED — elevated correction risk, skip new breakouts"
+    if smh_triggered
+    else "Not Triggered"
+)
+
+
+
+
+# ============================================================
+# IWM
+# Distribution threshold = -0.2%
+# ============================================================
+
+iwm_dist_count, iwm_dist_dates = timed(
+    "compute_iwm_distribution_days",
+    lambda: compute_market_distribution_days(
+        "IWM",
+        dist_threshold=-0.2
+    )
+)
+
+iwm_triggered = iwm_dist_count >= 5
+
+iwm_status_color = (
+    "#FF4B4B"
+    if iwm_triggered
+    else "#00FF00"
+)
+
+iwm_status_text = (
+    "TRIGGERED — elevated correction risk, skip new breakouts"
+    if iwm_triggered
+    else "Not Triggered"
+)
+
+
+
+st.markdown("---")
+
+st.markdown(
+    f"#### 🚨 SPY Distribution Days ({spy_dist_count}/25) — "
+    f"<span style='color:{spy_status_color};font-weight:bold;'>"
+    f"{spy_status_text}</span>",
+    unsafe_allow_html=True,
+)
+
+if spy_dist_dates:
+    st.markdown(", ".join(spy_dist_dates))
+else:
+    st.info(
+        "No SPY distribution days in the trailing 25 sessions."
+    )
+
+st.markdown(
+    f"#### 🚨 QQQ Distribution Days ({qqq_dist_count}/25) — "
+    f"<span style='color:{qqq_status_color};font-weight:bold;'>"
+    f"{qqq_status_text}</span>",
+    unsafe_allow_html=True,
+)
+
+if qqq_dist_dates:
+    st.markdown(", ".join(qqq_dist_dates))
+else:
+    st.info(
+        "No QQQ distribution days in the trailing 25 sessions."
+    )
+
+st.markdown(
+    f"#### 🚨 SMH Distribution Days ({smh_dist_count}/25) — "
+    f"<span style='color:{smh_status_color};font-weight:bold;'>"
+    f"{smh_status_text}</span>",
+    unsafe_allow_html=True,
+)
+
+if smh_dist_dates:
+    st.markdown(", ".join(smh_dist_dates))
+else:
+    st.info(
+        "No SMH distribution days in the trailing 25 sessions."
+    )
+
+st.markdown(
+    f"#### 🚨 IWM Distribution Days ({iwm_dist_count}/25) — "
+    f"<span style='color:{iwm_status_color};font-weight:bold;'>"
+    f"{iwm_status_text}</span>",
+    unsafe_allow_html=True,
+)
+
+if iwm_dist_dates:
+    st.markdown(", ".join(iwm_dist_dates))
+else:
+    st.info(
+        "No IWM distribution days in the trailing 25 sessions."
+    )
+
+# ==============================================================================
 # MASTER SETUP CONSOLIDATION TABLE
 # Aggregates every tracked screen into one ticker x section table, ticked where
 # a ticker currently qualifies for that section, sorted by how many sections
@@ -13140,743 +13879,6 @@ else:
 
 
 
-# ==============================================================================
-# 20. SECTOR STRENGTH HEATMAP — cross-sectional rank (display) +
-# absolute-return money-flow coloring (so a broad bear market shows all red)
-# ==============================================================================
-st.markdown("---")
-st.markdown("#### 🌡️ Sector Strength Heatmap")
-
-
-
-SECTOR_ETFS_HEATMAP = ["XLK", "XLV", "XLF", "XLC", "XLY", "XLE", "XLI", "XLB", "XLP", "XLU"]
-HEATMAP_DAYS = 60
-HEATMAP_RETURN_LENGTH = 21  # ~1 month price return, used as the money-flow proxy
-
-@st.cache_data(ttl=3600)
-def get_sector_distribution_status(sector_etfs):
-    result = {}
-
-    for ticker in sector_etfs:
-        df = yf.download(
-            ticker, period="2mo", interval="1d",
-            progress=False, auto_adjust=True
-        )
-        df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
-        df = df[["Close", "Volume"]].dropna()
-
-        df["Pct_Chg"] = df["Close"].pct_change() * 100
-        df["Vol_Higher"] = df["Volume"] > df["Volume"].shift(1)
-        df["Is_Dist"] = (df["Pct_Chg"] <= -0.2) & df["Vol_Higher"]
-
-        count = 0
-
-        for date, row in df[df["Is_Dist"]].iterrows():
-            subsequent = df.loc[date:]
-
-            if len(subsequent) - 1 >= 25:
-                continue
-
-            if ((subsequent["Close"].max() - row["Close"]) / row["Close"]) * 100 >= 5:
-                continue
-
-            count += 1
-
-        result[ticker] = count >= 5
-
-    return result
-
-
-sector_dist_triggered = timed(
-    "get_sector_distribution_status",
-    get_sector_distribution_status,
-    SECTOR_ETFS_HEATMAP
-)
-
-@st.cache_data(ttl=3600)
-def compute_sector_heatmap_df_v2(sector_etfs, _ticker_dfs, length=21, days=60):
-    """
-    Two parallel grids, same shape:
-      - rank_wide: cross-sectional percentile rank (0-100) of each sector's
-        `length`-day return vs the OTHER sectors on that SAME day. This is
-        the number displayed in each cell.
-      - ret_wide: each sector's raw absolute `length`-day % return. This
-        drives cell COLOR — so if every sector's absolute return is
-        negative (broad selloff), every cell renders red regardless of
-        how the ranks shake out among them.
-    """
-    returns = {}
-    for etf in sector_etfs:
-        df = _ticker_dfs.get(etf)
-        if df is None:
-            continue
-        returns[etf] = df['Close'].pct_change(length) * 100
-
-    if not returns:
-        return pd.DataFrame(), pd.DataFrame()
-
-    ret_wide = pd.DataFrame(returns).dropna(how='all').tail(days)
-    rank_wide = ret_wide.rank(axis=1, pct=True) * 100
-
-    ret_wide = ret_wide.iloc[::-1]
-    rank_wide = rank_wide.iloc[::-1]
-
-    ret_wide.index = pd.to_datetime(ret_wide.index).strftime("%y-%m-%d")
-    rank_wide.index = ret_wide.index
-
-    ret_wide = ret_wide.reset_index().rename(columns={"index": "Date"})
-    rank_wide = rank_wide.reset_index().rename(columns={"index": "Date"})
-    return rank_wide, ret_wide
-
-rank_df, ret_df = timed(
-    "compute_sector_heatmap_df_v2",
-    compute_sector_heatmap_df_v2,
-    SECTOR_ETFS_HEATMAP, ticker_dfs_shared, HEATMAP_RETURN_LENGTH, HEATMAP_DAYS
-)
-
-def _heatmap_cell_color_v2(ret_val, cap=8.0):
-    """Color = absolute-return money-flow direction, NOT the cross-sectional rank."""
-    if pd.isna(ret_val):
-        return "background-color:#1a1a1a;color:#555;"
-    r = float(ret_val)
-    alpha = min(abs(r) / cap, 1.0)
-    if r >= 0:
-        return f"background-color:rgba(0,200,120,{0.15 + alpha * 0.75:.2f});color:#ffffff;"
-    return f"background-color:rgba(220,60,60,{0.15 + alpha * 0.75:.2f});color:#ffffff;"
-
-if rank_df.empty:
-    st.info("Sector heatmap data unavailable.")
-else:
-    header_cells = (
-        "<th style='position:sticky;top:0;background:#111;color:#eee;padding:6px 10px;"
-        "text-align:center;font-size:12px;border:1px solid #333;z-index:2;'>Date</th>"
-    )
-
-    EXTRA_BORDER = {"XLC": "border-left:3px solid #ffffff;", "XLY": "border-right:3px solid #ffffff;", "XLB": "border-right:3px solid #ffffff;"}
-
-    header_cells += "".join(
-        f"<th style='position:sticky;top:0;background:#111;"
-        f"color:{'#FF4B4B' if sector_dist_triggered.get(col, False) else '#eee'};"
-        f"padding:6px 10px;text-align:center;font-size:12px;"
-        f"border:1px solid #333;{EXTRA_BORDER.get(col,'')}z-index:2;'>{col}</th>"
-        for col in rank_df.columns[1:]
-    )
-    body_rows = ""
-    for i in range(len(rank_df)):
-        rank_row = rank_df.iloc[i]
-        ret_row = ret_df.iloc[i]
-        cells = (
-            f"<td style='position:sticky;left:0;background:#111;color:#eee;padding:5px 8px;"
-            f"font-size:11px;border:1px solid #333;white-space:nowrap;z-index:1;'>{rank_row['Date']}</td>"
-        )
-        for col in rank_df.columns[1:]:
-            rank_val = rank_row[col]
-            ret_val = ret_row[col]
-            style = _heatmap_cell_color_v2(ret_val)
-            display_val = "" if pd.isna(rank_val) else f"{int(rank_val)}"
-            cells += (
-                f"<td style='{style}padding:5px 8px;text-align:center;"
-                f"font-size:12px;border:1px solid #333;{EXTRA_BORDER.get(col,'')}'>{display_val}</td>"
-            )
-        body_rows += f"<tr>{cells}</tr>"
-
-    heatmap_html = f"""
-    <div style="max-height:600px; overflow-y:auto; overflow-x:auto; border-radius:6px;">
-    <table style="border-collapse:collapse; width:100%;">
-    <thead><tr>{header_cells}</tr></thead>
-    <tbody>{body_rows}</tbody>
-    </table>
-    </div>
-    """
-    st.markdown(heatmap_html, unsafe_allow_html=True)
-
-# ==============================================================================
-# 21. SPY DISTRIBUTION DAY COUNT — 5+ in trailing 25 sessions = elevated risk
-# ==============================================================================
-
-@st.cache_data(ttl=3600)
-def compute_market_distribution_days(ticker, dist_threshold=-0.2):
-    # Fetch 2 months of data to ensure enough history
-    # to track the 25-trading-day distribution-day lifespan
-    df = yf.download(
-        ticker,
-        period="2mo",
-        interval="1d",
-        progress=False,
-        auto_adjust=True
-    )
-
-    df.columns = [
-        c[0] if isinstance(c, tuple) else c
-        for c in df.columns
-    ]
-
-    # Ensure required columns are available
-    df = df[
-        ["Open", "High", "Low", "Close", "Volume"]
-    ].dropna()
-
-    # 1. Calculate daily percentage change
-    df["Pct_Chg"] = df["Close"].pct_change() * 100
-
-    # 2. Volume must be higher than previous trading day
-    df["Vol_Higher"] = (
-        df["Volume"] > df["Volume"].shift(1)
-    )
-
-    # 3. Identify distribution days
-    #
-    # SPY / IWM:
-    #   Close down >= 0.2% on higher volume
-    #
-    # QQQ / SMH:
-    #   Close down >= 0.3% on higher volume
-    #
-    df["Is_Dist_Day"] = (
-        (df["Pct_Chg"] <= dist_threshold)
-        & df["Vol_Higher"]
-    )
-
-    active_distribution_days = []
-
-    # 4. Get all potential distribution days
-    potential_dist_df = df[df["Is_Dist_Day"]]
-
-    for dist_date, dist_row in potential_dist_df.iterrows():
-
-        dist_close = dist_row["Close"]
-
-        # Get all trading rows starting from the
-        # distribution day
-        subsequent_df = df.loc[dist_date:]
-
-        # ------------------------------------------------
-        # Rule 1:
-        # Distribution day expires after 25 trading days
-        # ------------------------------------------------
-        trading_days_elapsed = len(subsequent_df) - 1
-
-        if trading_days_elapsed >= 25:
-            continue
-
-        # ------------------------------------------------
-        # Rule 2:
-        # Cancel distribution day if ETF closes
-        # 5% or more above the distribution-day close
-        # ------------------------------------------------
-        max_close_since = subsequent_df["Close"].max()
-
-        pct_gain_since = (
-            (max_close_since - dist_close)
-            / dist_close
-        ) * 100
-
-        if pct_gain_since >= 5.0:
-            continue
-
-        # Distribution day is still active
-        active_distribution_days.append(
-            dist_date.strftime("%Y-%m-%d")
-        )
-
-    return len(active_distribution_days), active_distribution_days
-
-
-# ============================================================
-# SPY
-# Distribution threshold = -0.2%
-# ============================================================
-
-spy_dist_count, spy_dist_dates = timed(
-    "compute_spy_distribution_days",
-    lambda: compute_market_distribution_days(
-        "SPY",
-        dist_threshold=-0.2
-    )
-)
-
-spy_triggered = spy_dist_count >= 5
-
-spy_status_color = (
-    "#FF4B4B"
-    if spy_triggered
-    else "#00FF00"
-)
-
-spy_status_text = (
-    "TRIGGERED — elevated correction risk, skip new breakouts"
-    if spy_triggered
-    else "Not Triggered"
-)
-
-
-# ============================================================
-# QQQ
-# Stricter threshold = -0.3%
-# ============================================================
-
-qqq_dist_count, qqq_dist_dates = timed(
-    "compute_qqq_distribution_days",
-    lambda: compute_market_distribution_days(
-        "QQQ",
-        dist_threshold=-0.3
-    )
-)
-
-qqq_triggered = qqq_dist_count >= 5
-
-qqq_status_color = (
-    "#FF4B4B"
-    if qqq_triggered
-    else "#00FF00"
-)
-
-qqq_status_text = (
-    "TRIGGERED — elevated correction risk, skip new breakouts"
-    if qqq_triggered
-    else "Not Triggered"
-)
-
-
-# ============================================================
-# SMH
-# Stricter threshold = -0.5%
-# ============================================================
-
-smh_dist_count, smh_dist_dates = timed(
-    "compute_smh_distribution_days",
-    lambda: compute_market_distribution_days(
-        "SMH",
-        dist_threshold=-0.5
-    )
-)
-
-smh_triggered = smh_dist_count >= 5
-
-smh_status_color = (
-    "#FF4B4B"
-    if smh_triggered
-    else "#00FF00"
-)
-
-smh_status_text = (
-    "TRIGGERED — elevated correction risk, skip new breakouts"
-    if smh_triggered
-    else "Not Triggered"
-)
-
-
-
-
-# ============================================================
-# IWM
-# Distribution threshold = -0.2%
-# ============================================================
-
-iwm_dist_count, iwm_dist_dates = timed(
-    "compute_iwm_distribution_days",
-    lambda: compute_market_distribution_days(
-        "IWM",
-        dist_threshold=-0.2
-    )
-)
-
-iwm_triggered = iwm_dist_count >= 5
-
-iwm_status_color = (
-    "#FF4B4B"
-    if iwm_triggered
-    else "#00FF00"
-)
-
-iwm_status_text = (
-    "TRIGGERED — elevated correction risk, skip new breakouts"
-    if iwm_triggered
-    else "Not Triggered"
-)
-
-# ==============================================================================
-# 23. MARKET VERDICT — Composite Breakout / Pullback / Neutral / Defensive Read
-# Read-only, additive. Synthesizes every signal already computed above plus
-# two standalone fetches (VIX term structure, HYG/LQD credit spread) into a
-# single weighted composite score and verdict. Does not touch any other
-# section or shared variable — all new names are unique.
-# ==============================================================================
-st.markdown("---")
-st.markdown("## 🧭 Market Verdict")
-
-# ── Standalone data fetches used only by the verdict (run first so they're
-# available when compute_market_verdict() executes) ─────────────────────────
-
-@st.cache_data(ttl=3600)
-def fetch_vix_term_structure_v0(period="6mo"):
-    """
-    VIX vs VIX3M. Contango (VIX < VIX3M) = normal/complacent market.
-    Backwardation (VIX >= VIX3M) = near-term fear exceeds medium-term fear,
-    historically a defensive signal.
-    """
-    try:
-        raw = yf.download(["^VIX", "^VIX3M"], period=period, interval="1d",
-                           progress=False, auto_adjust=True)
-        close = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw[["Close"]]
-        close = close.dropna()
-        if close.empty or "^VIX" not in close.columns or "^VIX3M" not in close.columns:
-            return pd.DataFrame()
-
-        df = pd.DataFrame({
-            "VIX": close["^VIX"],
-            "VIX3M": close["^VIX3M"],
-        }).dropna()
-        df["Ratio"] = df["VIX"] / df["VIX3M"]  # >= 1.0 = backwardation
-        return df
-    except Exception as e:
-        st.warning(f"VIX term structure fetch error: {e}")
-        return pd.DataFrame()
-
-
-@st.cache_data(ttl=3600)
-def fetch_credit_spread_ratio_v0(period="6mo"):
-    """
-    HYG (junk bonds) / LQD (investment grade). A rolling decline in this
-    ratio means credit markets are pricing in more risk — often leads
-    equity breadth deterioration by several days.
-    """
-    try:
-        raw = yf.download(["HYG", "LQD"], period=period, interval="1d",
-                           progress=False, auto_adjust=True)
-        close = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw[["Close"]]
-        close = close.dropna()
-        if close.empty or "HYG" not in close.columns or "LQD" not in close.columns:
-            return pd.DataFrame()
-
-        df = pd.DataFrame({
-            "HYG": close["HYG"],
-            "LQD": close["LQD"],
-        }).dropna()
-        df["Ratio"] = df["HYG"] / df["LQD"]
-        df["Ratio_MA20"] = df["Ratio"].rolling(20).mean()
-        return df
-    except Exception as e:
-        st.warning(f"Credit spread fetch error: {e}")
-        return pd.DataFrame()
-
-
-with st.spinner("Fetching VIX term structure and credit spread..."):
-    verdict_vix_df = timed("fetch_vix_term_structure_v0", fetch_vix_term_structure_v0)
-    verdict_credit_df = timed("fetch_credit_spread_ratio_v0", fetch_credit_spread_ratio_v0)
-
-
-def _safe(name, default=None):
-    """Pull a variable from the module's global namespace, defaulting safely
-    if that section hasn't run or returned nothing usable."""
-    val = globals().get(name, default)
-    return default if val is None else val
-
-
-def compute_market_verdict():
-    breakdown = []  # list of (pillar_name, score_0_100, label, detail_str)
-
-    # ── Pillar 1: Market Regime (% above 200 EMA) ──────────────────────────
-    pct_ema200 = _safe("pct_above_ema200", 50.0)
-    if pct_ema200 > 70:
-        p1_score, p1_label = 100, "Strong bull participation"
-    elif pct_ema200 > 60:
-        p1_score, p1_label = 80, "Good swing environment"
-    elif pct_ema200 >= 50:
-        p1_score, p1_label = 60, "Improving"
-    elif pct_ema200 >= 40:
-        p1_score, p1_label = 35, "Recovery attempt"
-    else:
-        p1_score, p1_label = 10, "Be cautious"
-    breakdown.append(("Market Regime", p1_score, p1_label, f"{pct_ema200:.1f}% above 200 EMA"))
-
-    # ── Pillar 2: Distribution Days (SPY/QQQ/SMH/IWM) — hard override ─────
-    dist_counts = {
-        "SPY": _safe("spy_dist_count", 0),
-        "QQQ": _safe("qqq_dist_count", 0),
-        "SMH": _safe("smh_dist_count", 0),
-        "IWM": _safe("iwm_dist_count", 0),
-    }
-    triggered = [idx for idx, c in dist_counts.items() if c >= 5]
-    if len(triggered) <= 1:
-        triggered = []
-    avg_dist = sum(dist_counts.values()) / len(dist_counts)
-    p2_score = max(0, 100 - (avg_dist / 25) * 100 * 1.6)  # steep penalty curve
-    if triggered:
-        p2_score = min(p2_score, 25)  # hard cap when any index is triggered
-    p2_label = f"TRIGGERED: {', '.join(triggered)}" if triggered else "Clean"
-    breakdown.append(("Distribution Days", p2_score, p2_label,
-                       ", ".join(f"{k}:{v}" for k, v in dist_counts.items())))
-
-    # ── Pillar 3: Stage Breadth (S2 vs S4) ─────────────────────────────────
-    stage_counts_v = _safe("stage_counts", {1: 0, 2: 0, 3: 0, 4: 0, 0: 0})
-    stage_total = sum(stage_counts_v.get(s, 0) for s in [1, 2, 3, 4])
-    if stage_total > 0:
-        s2_pct = stage_counts_v.get(2, 0) / stage_total * 100
-        s4_pct = stage_counts_v.get(4, 0) / stage_total * 100
-        p3_score = max(0, min(100, 50 + (s2_pct - s4_pct)))
-        p3_label = f"S2 {s2_pct:.0f}% vs S4 {s4_pct:.0f}%"
-    else:
-        p3_score, p3_label = 50, "Insufficient data"
-    breakdown.append(("Stage Breadth", p3_score, p3_label, ""))
-
-    # ── Pillar 4: RS Quadrant Map (industries) ─────────────────────────────
-    quad_pts = _safe("quad_points", [])
-    if quad_pts:
-        n = len(quad_pts)
-        strong = sum(1 for p in quad_pts if p["weekly_rs"] >= 50 and p["monthly_rs"] >= 50)
-        improving = sum(1 for p in quad_pts if p["weekly_rs"] >= 50 and p["monthly_rs"] < 50)
-        weakening = sum(1 for p in quad_pts if p["weekly_rs"] < 50 and p["monthly_rs"] >= 50)
-        weak = sum(1 for p in quad_pts if p["weekly_rs"] < 50 and p["monthly_rs"] < 50)
-        p4_score = (strong + improving) / n * 100
-        p4_label = f"Strong {strong} / Improving {improving} / Weakening {weakening} / Weak {weak}"
-    else:
-        p4_score, p4_label = 50, "Insufficient data"
-    breakdown.append(("RS Quadrant Map", p4_score, p4_label, ""))
-
-    # ── Pillar 5: Minervini Breadth Trend (5D MA vs 20D MA + structure) ────
-    hist_df_v = _safe("historical_df", pd.DataFrame())
-    if isinstance(hist_df_v, pd.DataFrame) and not hist_df_v.empty and len(hist_df_v) >= 10:
-        counts_list = hist_df_v.tail(30)["Minervini Count"].tolist()
-        ma5 = np.mean(counts_list[-5:])
-        ma20 = np.mean(counts_list[-20:]) if len(counts_list) >= 20 else np.mean(counts_list)
-        current_c = counts_list[-1]
-        if ma5 > ma20 and current_c >= ma20:
-            p5_score, p5_label = 90, "Expanding momentum"
-        elif ma5 < ma20 and current_c <= ma20:
-            p5_score, p5_label = 15, "Deteriorating breadth"
-        else:
-            p5_score, p5_label = 50, "Choppy / transitional"
-        p5_detail = f"Count {current_c} | 5D {ma5:.1f} vs 20D {ma20:.1f}"
-    else:
-        p5_score, p5_label, p5_detail = 50, "Insufficient data", ""
-    breakdown.append(("Minervini Breadth Trend", p5_score, p5_label, p5_detail))
-
-    # ── Pillar 6: ETF Risk-On Ratios (slope of last 20 days, normalized) ──
-    risk_on_pairs = [("XLY", "XLP"), ("SPHB", "SPY"), ("IWM", "QQQ"), ("VUG", "VTV")]
-    ticker_dfs_v = _safe("ticker_dfs_shared", {})
-    slopes = []
-    for num, den in risk_on_pairs:
-        try:
-            df_num = ticker_dfs_v.get(num)
-            df_den = ticker_dfs_v.get(den)
-            if df_num is None or df_den is None:
-                continue
-            ratio = (df_num["Close"] / df_den["Close"]).dropna().tail(20)
-            if len(ratio) < 10:
-                continue
-            x = np.arange(len(ratio))
-            slope = np.polyfit(x, ratio.values, 1)[0]
-            norm_slope = slope / ratio.mean()  # % change per day, scale-free
-            slopes.append(norm_slope)
-        except Exception:
-            continue
-    if slopes:
-        avg_slope = np.mean(slopes)
-        p6_score = max(0, min(100, 50 + avg_slope * 5000))
-        risk_direction = "Risk-ON rotation" if avg_slope > 0 else "Risk-OFF rotation"
-        p6_label = f"{risk_direction} ({sum(1 for s in slopes if s > 0)}/{len(slopes)} pairs up)"
-    else:
-        p6_score, p6_label = 50, "Insufficient data"
-    breakdown.append(("ETF Risk Appetite", p6_score, p6_label, ""))
-
-    # ── Pillar 7: VIX Term Structure ───────────────────────────────────────
-    vix_df_v = _safe("verdict_vix_df", pd.DataFrame())
-    if isinstance(vix_df_v, pd.DataFrame) and not vix_df_v.empty:
-        vix_ratio = vix_df_v["Ratio"].iloc[-1]
-        p7_score = max(0, min(100, (1.05 - vix_ratio) * 1000))  # >=1.0 -> low score
-        p7_label = "Backwardation (defensive)" if vix_ratio >= 1.0 else "Contango (normal)"
-        p7_detail = f"VIX/VIX3M = {vix_ratio:.3f}"
-    else:
-        p7_score, p7_label, p7_detail = 50, "Insufficient data", ""
-    breakdown.append(("VIX Term Structure", p7_score, p7_label, p7_detail))
-
-    # ── Pillar 8: Credit Spread (HYG/LQD) ──────────────────────────────────
-    credit_df_v = _safe("verdict_credit_df", pd.DataFrame())
-    if isinstance(credit_df_v, pd.DataFrame) and not credit_df_v.empty and len(credit_df_v) >= 20:
-        ratio_now = credit_df_v["Ratio"].iloc[-1]
-        ratio_ma20 = credit_df_v["Ratio_MA20"].iloc[-1]
-        if pd.notna(ratio_ma20) and ratio_ma20 > 0:
-            pct_diff = (ratio_now - ratio_ma20) / ratio_ma20 * 100
-            p8_score = max(0, min(100, 50 + pct_diff * 40))
-            p8_label = "Risk-on (above 20D MA)" if pct_diff > 0 else "Risk-off (below 20D MA)"
-            p8_detail = f"HYG/LQD {ratio_now:.4f} vs MA {ratio_ma20:.4f}"
-        else:
-            p8_score, p8_label, p8_detail = 50, "Insufficient data", ""
-    else:
-        p8_score, p8_label, p8_detail = 50, "Insufficient data", ""
-    breakdown.append(("Credit Spread (HYG/LQD)", p8_score, p8_label, p8_detail))
-
-    # ── Weighted Composite ──────────────────────────────────────────────────
-    weights = {
-        "Market Regime": 0.17,
-        "Distribution Days": 0.22,
-        "Stage Breadth": 0.13,
-        "RS Quadrant Map": 0.13,
-        "Minervini Breadth Trend": 0.13,
-        "ETF Risk Appetite": 0.08,
-        "VIX Term Structure": 0.07,
-        "Credit Spread (HYG/LQD)": 0.07,
-    }
-    composite = sum(score * weights[name] for name, score, _, _ in breakdown)
-
-    # ── Setup-Style Tilt (breakout scanners vs pullback scanners) ─────────
-    # Breakout-style: Two Botak, PowerTrend, Gapper (momentum/extension entries)
-    # Pullback-style: 21ema_cloud, 21ema_wick, 50ma_bounce (basing/dip entries)
-    cloud_valid_syms = set()
-    for item in _safe("all_data", []):
-        cloud_valid_syms.update(item.get("Cloud", []))
-
-    pullback_syms = (
-        cloud_valid_syms
-        | set(_safe("cloud21ema_all", set()))
-        | set(_safe("cloudwick_all", set()))
-        | set(_safe("ma50bounce_all", set()))
-    ) & set(KNOWN_STOCKS)
-    
-    n_breakout, n_pullback = len(_safe("today_breakout_tickers_v1", [])), len(pullback_syms)
-
-    if n_breakout + n_pullback == 0:
-        tilt_label = "No active setups to gauge tilt"
-    elif n_pullback > n_breakout * 1.3:
-        tilt_label = f"Pullback setups dominate ({n_pullback} vs {n_breakout}) — market rewarding dip entries into leaders, not fresh breakouts"
-    elif n_breakout > n_pullback * 1.3:
-        tilt_label = f"Breakout setups dominate ({n_breakout} vs {n_pullback}) — market rewarding momentum extension"
-    else:
-        tilt_label = f"Balanced ({n_breakout} breakout vs {n_pullback} pullback setups)"
-
-    # ── Final Verdict ───────────────────────────────────────────────────────
-    if triggered:
-        verdict = "🛡️ DEFENSIVE" if composite < 35 else "⚠️ PULLBACK ONLY"
-        verdict_note = "Distribution days triggered — avoid chasing extended breakouts even if breadth looks fine. Buy pullbacks in confirmed leaders only, tighten stops, reduce size."
-    elif composite >= 72:
-        verdict = "🚀 BREAKOUT"
-        verdict_note = "Regime, breadth, and rotation all aligned bullish with no distribution flags. Fresh breakouts from proper bases have a statistical tailwind — this is when position size and aggression are justified."
-    elif composite >= 55:
-        verdict = "📉 PULLBACK PREFERRED"
-        verdict_note = "Underlying trend is intact but breadth/rotation isn't confirming strongly enough to chase extension. Favor 21ema_cloud/21ema_wick/50ma_bounce style entries over fresh breakouts."
-    elif composite >= 40:
-        verdict = "⏸️ NEUTRAL"
-        verdict_note = "Mixed signals — no clear edge either direction. Reduce position sizing, be selective, and wait for either breadth to expand (favor breakout) or distribution to clear (favor pullback)."
-    else:
-        verdict = "🛡️ DEFENSIVE"
-        verdict_note = "Multiple pillars deteriorating. Prioritize capital preservation — raise cash, avoid new longs, focus only on the highest-conviction setups if any. Less is More"
-
-    return verdict, verdict_note, composite, breakdown, tilt_label, triggered
-
-
-verdict, verdict_note, composite_score, pillar_breakdown, tilt_label, dist_triggered = timed(
-    "compute_market_verdict", compute_market_verdict
-)
-
-verdict_color = (
-    "#00FF00" if "BREAKOUT" in verdict
-    else "#FFA500" if "PULLBACK" in verdict
-    else "#888888" if "NEUTRAL" in verdict
-    else "#FF4B4B"
-)
-
-st.markdown(
-    f"""
-    <div style="border:2px solid {verdict_color}; border-radius:8px; padding:18px;
-                background:#1a1c23; margin-bottom:14px;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-size:1.6em; font-weight:900; color:{verdict_color};">{verdict}</span>
-            <span style="font-size:1.4em; font-weight:bold; color:{verdict_color};">{composite_score:.0f}/100</span>
-        </div>
-        <p style="margin:10px 0 6px; color:#e0e0e0; font-size:0.95em; line-height:1.5;">{verdict_note}</p>
-        <p style="margin:0; color:#888; font-size:0.85em;"><b>Setup-style tilt:</b> {tilt_label}</p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ── Pillar breakdown table ──────────────────────────────────────────────────
-pillar_rows_html = ""
-for name, score, label, detail in pillar_breakdown:
-    bar_color = "#00FF00" if score >= 65 else "#FFA500" if score >= 40 else "#FF4B4B"
-    pillar_rows_html += (
-        f"<tr>"
-        f"<td style='padding:6px 10px;color:#e0e0e0;font-weight:bold;white-space:nowrap;'>{name}</td>"
-        f"<td style='padding:6px 10px;'>"
-        f"<div style='width:100%;background:#333;border-radius:4px;height:14px;position:relative;'>"
-        f"<div style='width:{score:.0f}%;background:{bar_color};height:14px;border-radius:4px;'></div>"
-        f"</div></td>"
-        f"<td style='padding:6px 10px;color:{bar_color};font-weight:bold;text-align:right;'>{score:.0f}</td>"
-        f"<td style='padding:6px 10px;color:#aaa;font-size:0.85em;'>{label}{(' — ' + detail) if detail else ''}</td>"
-        f"</tr>"
-    )
-
-st.markdown(
-    f"""
-    <table style="width:100%;border-collapse:collapse;">
-    <tbody>{pillar_rows_html}</tbody>
-    </table>
-    """,
-    unsafe_allow_html=True,
-)
-
-if dist_triggered:
-    st.caption(f"⚠️ Distribution-day override active on: {', '.join(dist_triggered)} — this caps the verdict regardless of other pillars.")    
-
-
-st.markdown("---")
-
-st.markdown(
-    f"#### 🚨 SPY Distribution Days ({spy_dist_count}/25) — "
-    f"<span style='color:{spy_status_color};font-weight:bold;'>"
-    f"{spy_status_text}</span>",
-    unsafe_allow_html=True,
-)
-
-if spy_dist_dates:
-    st.markdown(", ".join(spy_dist_dates))
-else:
-    st.info(
-        "No SPY distribution days in the trailing 25 sessions."
-    )
-
-st.markdown(
-    f"#### 🚨 QQQ Distribution Days ({qqq_dist_count}/25) — "
-    f"<span style='color:{qqq_status_color};font-weight:bold;'>"
-    f"{qqq_status_text}</span>",
-    unsafe_allow_html=True,
-)
-
-if qqq_dist_dates:
-    st.markdown(", ".join(qqq_dist_dates))
-else:
-    st.info(
-        "No QQQ distribution days in the trailing 25 sessions."
-    )
-
-st.markdown(
-    f"#### 🚨 SMH Distribution Days ({smh_dist_count}/25) — "
-    f"<span style='color:{smh_status_color};font-weight:bold;'>"
-    f"{smh_status_text}</span>",
-    unsafe_allow_html=True,
-)
-
-if smh_dist_dates:
-    st.markdown(", ".join(smh_dist_dates))
-else:
-    st.info(
-        "No SMH distribution days in the trailing 25 sessions."
-    )
-
-st.markdown(
-    f"#### 🚨 IWM Distribution Days ({iwm_dist_count}/25) — "
-    f"<span style='color:{iwm_status_color};font-weight:bold;'>"
-    f"{iwm_status_text}</span>",
-    unsafe_allow_html=True,
-)
-
-if iwm_dist_dates:
-    st.markdown(", ".join(iwm_dist_dates))
-else:
-    st.info(
-        "No IWM distribution days in the trailing 25 sessions."
-    )
 
 
 # ==============================================================================

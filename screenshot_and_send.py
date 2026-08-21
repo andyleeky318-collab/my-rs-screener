@@ -153,13 +153,13 @@ SECTION_KEYWORDS = [
     #"Setup Quality",
     #"Upcoming Earnings",
     "Breakout Count",
+    "Market Verdict",
     "Lazy Table",
     "Lazy Charts",
     #"MM Count",
     "Stage 2 vs Stage 4",
     #"Unusual Volume",
-    "Sector Strength Heatmap",
-    "Market Verdict",
+    #"Sector Strength Heatmap",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the
