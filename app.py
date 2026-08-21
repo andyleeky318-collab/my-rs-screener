@@ -13723,11 +13723,17 @@ def compute_market_verdict():
     # ── Setup-Style Tilt (breakout scanners vs pullback scanners) ─────────
     # Breakout-style: Two Botak, PowerTrend, Gapper (momentum/extension entries)
     # Pullback-style: 21ema_cloud, 21ema_wick, 50ma_bounce (basing/dip entries)
+    cloud_valid_syms = set()
+    for item in _safe("all_data", []):
+        cloud_valid_syms.update(item.get("Cloud", []))
+
     pullback_syms = (
-        set(_safe("cloud21ema_all", set()))
+        cloud_valid_syms
+        | set(_safe("cloud21ema_all", set()))
         | set(_safe("cloudwick_all", set()))
         | set(_safe("ma50bounce_all", set()))
-    ) & set(KNOWN_STOCKS)   # NEW — match the same universe as breakout_syms / Setup badge
+    ) & set(KNOWN_STOCKS)
+    
     n_breakout, n_pullback = len(_safe("today_breakout_tickers_v1", [])), len(pullback_syms)
 
     if n_breakout + n_pullback == 0:
