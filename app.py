@@ -5514,7 +5514,7 @@ styled_stage_pct_df = (
             ]
         }
     ])
-    .format("{:.1f}", na_rep="-")
+    .format(lambda value: "-" if pd.isna(value) or value == 0.0 else f"{value:.1f}")
 )
 
 
@@ -8663,9 +8663,17 @@ def compute_10x_atr_above_ma50(stocks_list, ticker_dfs):
             ], axis=1).max(axis=1)
             atr = tr.rolling(14).mean().iloc[-1]
             c = close.iloc[-1]
-            if pd.isna(sma50) or pd.isna(atr) or atr <= 0:
+            if pd.isna(sma50) or pd.isna(atr) or atr <= 0 or sma50 <= 0:
                 continue
-            if (c - sma50) >= 10 * atr:
+            # CHANGED: use the same atr_multiple formula as the PowerTrend badge
+            # (pct-gain-from-MA50 / ATR%-of-price), instead of raw dollar distance,
+            # so a ticker showing "10.x" in the PowerTrend badge also shows up here.
+            pct_gain = ((c - sma50) / sma50) * 100
+            atr_pct = (atr / c) * 100
+            if atr_pct <= 0:
+                continue
+            atr_multiple = pct_gain / atr_pct
+            if atr_multiple >= 10:
                 matches.append(ticker)
         except Exception:
             continue
@@ -14408,6 +14416,43 @@ def compute_rotation_pillars():
     add_pillar("RRG Quadrant Flip (→Improving/Leading)", _rrd_scale(len(rrg_flips), 3), 0.06,
                f"{len(rrg_flips)} tickers just flipped into a bullish RRG quadrant", rrg_flips)
 
+        # ── 27. Unusual Volume Clustering (HVE/HVQ/HVM) by industry commonality
+    unusual_vol_v = _rrd_get("unusual_vol_results", {})
+    hve_syms = unusual_vol_v.get("HVE", [])
+    hvq_syms = unusual_vol_v.get("HVQ", [])
+    hvm_syms = unusual_vol_v.get("HVM", [])
+
+    def _industry_cluster_count(sym_list, min_cluster_size=2):
+        """Returns (num_industries_clustered, all_clustered_tickers) where an
+        industry qualifies if 2+ of sym_list's tickers share it."""
+        if not sym_list:
+            return 0, []
+        _counts, _ticker_industry = build_leader_industry_map(sym_list, INDUSTRIES)
+        clustered_industries = {ind: cnt for ind, cnt in _counts.items() if cnt >= min_cluster_size}
+        clustered_tickers = sorted({
+            t for t, inds in _ticker_industry.items()
+            if any(ind in clustered_industries for ind in inds)
+        })
+        return len(clustered_industries), clustered_tickers
+
+    hve_ind_count, hve_clustered = _industry_cluster_count(hve_syms)
+    hvq_ind_count, hvq_clustered = _industry_cluster_count(hvq_syms)
+    hvm_ind_count, hvm_clustered = _industry_cluster_count(hvm_syms)
+
+    # HVE (highest volume EVER) is the rarest/strongest tell -> heaviest weight
+    unusual_vol_score = (
+        _rrd_scale(hve_ind_count, 1) * 0.5
+        + _rrd_scale(hvq_ind_count, 2) * 0.3
+        + _rrd_scale(hvm_ind_count, 3) * 0.2
+    )
+    add_pillar(
+        "Unusual Volume Cluster (HVE/HVQ/HVM)", unusual_vol_score, 0.05,
+        f"HVE: {hve_ind_count} industries ({len(hve_clustered)} tickers) | "
+        f"HVQ: {hvq_ind_count} industries ({len(hvq_clustered)} tickers) | "
+        f"HVM: {hvm_ind_count} industries ({len(hvm_clustered)} tickers)",
+        sorted(set(hve_clustered) | set(hvq_clustered) | set(hvm_clustered))
+    )
+
     # ── Composite ──
     composite = sum(score * weight for _, score, weight, _, _ in pillars)
     return composite, pillars, highlight_badges
@@ -14471,7 +14516,9 @@ _TOP_BADGE_PILLARS = [
     "RS Leader Addition", "True Market Leader Addition", "Change of Character Addition",
     "RRG Quadrant Flip (→Improving/Leading)", "Social + Technical Confirmation",
     "Trend Flip (Red→Green)", "Sector Heatmap Flip (neg→pos)",
+    "Unusual Volume Cluster (HVE/HVQ/HVM)",   # NEW
 ]
+
 for label in _TOP_BADGE_PILLARS:
     tickers = rrd_badges.get(label, [])
     if not tickers:
