@@ -3889,7 +3889,7 @@ if all_data:
                         f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{rs_score:.0f}</span>' 
                         f'</div>'
                     )
-                elif ticker_sym in KNOWN_STOCKS:
+                elif ticker_sym in KNOWN_STOCKS and not new_style_industry_table:
                     ticker_html += (
                         f'<div class="ticker-badge new-pattern-badge" style="{ticker_glow}">'
                         f'<span class="ticker-name" style="color: #111111; font-weight: bold;">{ticker_sym}</span>' # Clean high-contrast dark charcoal text
@@ -11124,59 +11124,79 @@ def compute_known_valid_breakout_history_v1(stocks_list, _ticker_dfs):
         today_breakout_tickers = []
 
         def pivot_setup_series(high_values, low_values, close_values):
+            low_arr = low_values.to_numpy()
+            high_arr = high_values.to_numpy()
+            close_arr = close_values.to_numpy()
+            n = len(close_arr)
+
+            # Precompute, per length, whether low_arr[pivot_index] is the center-min
+            # of the (2*length+1)-wide window around it. This is exactly what the
+            # original manual slice+min did inside the loop, just vectorized once.
+            pivot_is_low = {}
+            for length in range(2, 11):
+                window = 2 * length + 1
+                roll_min = low_values.rolling(window, center=True, min_periods=window).min()
+                pivot_is_low[length] = (low_values == roll_min).to_numpy()
+
             states = {
                 length: {
-                    "prev_price": np.nan,
-                    "prev_index": None,
-                    "curr_price": np.nan,
-                    "curr_index": None,
-                    "is_setup": False,
-                    "break_value": np.nan,
+                    "prev_price": np.nan, "prev_index": None,
+                    "curr_price": np.nan, "curr_index": None,
+                    "is_setup": False, "break_value": np.nan,
                 }
                 for length in range(2, 11)
             }
-            output = np.zeros(len(close_values), dtype=bool)
+            output = np.zeros(n, dtype=bool)
 
-            for index in range(len(close_values)):
+            for index in range(n):
                 winners = []
+                curr_low = low_arr[index]
                 for length, state in states.items():
                     pivot_index = index - length
-                    if pivot_index >= length:
-                        pivot_window = low_values.iloc[pivot_index - length:pivot_index + length + 1]
-                        if low_values.iloc[pivot_index] == pivot_window.min():
-                            setup_cond = (
-                                not np.isnan(state["curr_price"])
-                                and low_values.iloc[pivot_index] > state["curr_price"]
-                            )
-                            state["prev_price"] = state["curr_price"]
-                            state["prev_index"] = state["curr_index"]
-                            state["curr_price"] = low_values.iloc[pivot_index]
-                            state["curr_index"] = pivot_index
-                            state["is_setup"] = setup_cond
-                            state["break_value"] = np.nan
+                    if pivot_index >= length and pivot_is_low[length][pivot_index]:
+                        pivot_low_val = low_arr[pivot_index]
+                        setup_cond = (
+                            not np.isnan(state["curr_price"])
+                            and pivot_low_val > state["curr_price"]
+                        )
+                        state["prev_price"] = state["curr_price"]
+                        state["prev_index"] = state["curr_index"]
+                        state["curr_price"] = pivot_low_val
+                        state["curr_index"] = pivot_index
+                        state["is_setup"] = setup_cond
+                        state["break_value"] = np.nan
 
-                            if setup_cond and state["prev_index"] is not None:
-                                start = state["prev_index"] + 1
-                                end = state["curr_index"]
-                                if end > start:
-                                    state["break_value"] = high_values.iloc[start:end].max()
+                        if setup_cond and state["prev_index"] is not None:
+                            start = state["prev_index"] + 1
+                            end = state["curr_index"]
+                            if end > start:
+                                state["break_value"] = high_arr[start:end].max()
 
-                    if state["is_setup"] and low_values.iloc[index] < state["curr_price"]:
+                    if state["is_setup"] and curr_low < state["curr_price"]:
                         state["is_setup"] = False
 
                     if state["is_setup"] and not np.isnan(state["break_value"]):
                         winners.append(state["break_value"])
 
                 if winners:
-                    break_value = min(winners)  # Tightest Structure priority.
-                    output[index] = (
-                        close_values.iloc[index] >= break_value
-                        and (close_values.iloc[index] - break_value) / close_values.iloc[index] * 100 < 8
-                    )
+                    break_value = min(winners)
+                    c = close_arr[index]
+                    output[index] = c >= break_value and (c - break_value) / c * 100 < 8
 
             return pd.Series(output, index=close_values.index)
 
+
         def darvas_setup_series(high_values, low_values, close_values, atr_values):
+            high_arr = high_values.to_numpy()
+            low_arr = low_values.to_numpy()
+            close_arr = close_values.to_numpy()
+            atr_arr = atr_values.to_numpy()
+            n = len(close_arr)
+
+            # Precompute the rolling 10-bar high/low once instead of re-slicing every iteration
+            roll_high10 = high_values.rolling(10).max().to_numpy()
+            roll_low10 = low_values.rolling(10).min().to_numpy()
+
             phase = 0
             phase_zero_bar = None
             range_high = np.nan
@@ -11184,14 +11204,14 @@ def compute_known_valid_breakout_history_v1(stocks_list, _ticker_dfs):
             final_high = np.nan
             red_box_streak = 0
             cooldown_start = None
-            output = np.zeros(len(close_values), dtype=bool)
+            output = np.zeros(n, dtype=bool)
 
-            for index in range(len(close_values)):
-                current_high = high_values.iloc[index - 9:index + 1].max() if index >= 9 else np.nan
-                current_low = low_values.iloc[index - 9:index + 1].min() if index >= 9 else np.nan
+            for index in range(n):
+                current_high = roll_high10[index] if index >= 9 else np.nan
+                current_low = roll_low10[index] if index >= 9 else np.nan
 
                 if phase == 0 and not np.isnan(current_high) and not np.isnan(current_low):
-                    if current_high - current_low <= atr_values.iloc[index] * 3:
+                    if current_high - current_low <= atr_arr[index] * 3:
                         range_high = current_high
                         range_low = current_low
                         phase_zero_bar = index
@@ -11201,8 +11221,8 @@ def compute_known_valid_breakout_history_v1(stocks_list, _ticker_dfs):
                     phase = 2
 
                 if phase == 2 and not np.isnan(range_high):
-                    breakout_up = close_values.iloc[index] > range_high
-                    breakout_down = close_values.iloc[index] < range_low
+                    breakout_up = close_arr[index] > range_high
+                    breakout_down = close_arr[index] < range_low
                     if breakout_up or breakout_down:
                         final_high = range_high
                         red_box_streak = 0 if breakout_up else red_box_streak + 1
@@ -11215,8 +11235,8 @@ def compute_known_valid_breakout_history_v1(stocks_list, _ticker_dfs):
                         cooldown_start = None
 
                 if not np.isnan(final_high) and red_box_streak == 0:
-                    cutloss = (close_values.iloc[index] - final_high) / close_values.iloc[index] * 100
-                    output[index] = close_values.iloc[index] >= final_high and cutloss < 8
+                    cutloss = (close_arr[index] - final_high) / close_arr[index] * 100
+                    output[index] = close_arr[index] >= final_high and cutloss < 8
 
             return pd.Series(output, index=close_values.index)
 
@@ -11227,6 +11247,12 @@ def compute_known_valid_breakout_history_v1(stocks_list, _ticker_dfs):
             pole_min = 20.0
             pole_min_length = 5
             pole_max_length = 15
+
+            # NEW: convert to numpy arrays once — avoids slow .iloc scalar access in the loop
+            high_arr = high_values.to_numpy()
+            low_arr = low_values.to_numpy()
+            close_arr = close_values.to_numpy()
+            n = len(close_arr)
 
             base_high = np.nan
             base_low = np.nan
@@ -11244,9 +11270,9 @@ def compute_known_valid_breakout_history_v1(stocks_list, _ticker_dfs):
             previous_flag = False
             previous_flag_length = 0
             previous_base_high = np.nan
-            output = np.zeros(len(close_values), dtype=bool)
+            output = np.zeros(n, dtype=bool)
 
-            for index in range(len(close_values)):
+            for index in range(n):
                 previous_base_high = base_high
                 previous_flag = (
                     flag_bool and flag_length < max_length
@@ -11266,54 +11292,54 @@ def compute_known_valid_breakout_history_v1(stocks_list, _ticker_dfs):
                     and abs(flag_high_bear / flag_low_bear - 1) * 100 < 10
                 )
 
-                if np.isnan(base_high) or high_values.iloc[index] > base_high:
-                    base_high = high_values.iloc[index]
-                    base_low = low_values.iloc[index]
+                if np.isnan(base_high) or high_arr[index] > base_high:
+                    base_high = high_arr[index]
+                    base_low = low_arr[index]
                     flag_length = 0
-                elif high_values.iloc[index] <= base_high and low_values.iloc[index] < base_low:
-                    base_low = low_values.iloc[index]
+                elif high_arr[index] <= base_high and low_arr[index] < base_low:
+                    base_low = low_arr[index]
 
                 find_depth = abs(base_low / base_high - 1) * 100 if base_high else np.nan
-                lower_close = index > 0 and close_values.iloc[index] < close_values.iloc[index - 1]
-                if (high_values.iloc[index] < base_high and find_depth <= max_depth) or (
-                    high_values.iloc[index] == base_high and lower_close
+                lower_close = index > 0 and close_arr[index] < close_arr[index - 1]
+                if (high_arr[index] < base_high and find_depth <= max_depth) or (
+                    high_arr[index] == base_high and lower_close
                 ):
                     flag_length += 1
                 else:
                     flag_length = 0
 
-                if high_values.iloc[index] == base_high:
+                if high_arr[index] == base_high:
                     for lookback in range(pole_min_length, pole_max_length + 1):
                         if index >= lookback and (
-                            (high_values.iloc[index] / low_values.iloc[index - lookback] - 1) * 100 >= pole_min
+                            (high_arr[index] / low_arr[index - lookback] - 1) * 100 >= pole_min
                         ):
                             flag_bool = True
                             pole_low_index = index - lookback
                             break
 
-                if np.isnan(flag_low_bear) or low_values.iloc[index] < flag_low_bear:
-                    flag_low_bear = low_values.iloc[index]
-                    flag_high_bear = high_values.iloc[index]
+                if np.isnan(flag_low_bear) or low_arr[index] < flag_low_bear:
+                    flag_low_bear = low_arr[index]
+                    flag_high_bear = high_arr[index]
                     flag_length_bear = 0
-                elif low_values.iloc[index] >= flag_low_bear and high_values.iloc[index] > flag_high_bear:
-                    flag_high_bear = high_values.iloc[index]
+                elif low_arr[index] >= flag_low_bear and high_arr[index] > flag_high_bear:
+                    flag_high_bear = high_arr[index]
 
                 find_rally = (
                     abs(flag_high_bear / flag_low_bear - 1) * 100
                     if flag_low_bear else np.nan
                 )
-                higher_close = index > 0 and close_values.iloc[index] > close_values.iloc[index - 1]
-                if (low_values.iloc[index] > flag_low_bear and find_rally <= 10) or (
-                    low_values.iloc[index] == flag_low_bear and higher_close
+                higher_close = index > 0 and close_arr[index] > close_arr[index - 1]
+                if (low_arr[index] > flag_low_bear and find_rally <= 10) or (
+                    low_arr[index] == flag_low_bear and higher_close
                 ):
                     flag_length_bear += 1
                 else:
                     flag_length_bear = 0
 
-                if low_values.iloc[index] == flag_low_bear:
+                if low_arr[index] == flag_low_bear:
                     for lookback in range(3, pole_max_length + 1):
                         if index >= lookback and (
-                            abs((low_values.iloc[index] / high_values.iloc[index - lookback] - 1) * 100) >= 15
+                            abs((low_arr[index] / high_arr[index - lookback] - 1) * 100) >= 15
                         ):
                             flag_bool_bear = True
                             pole_high_index = index - lookback
@@ -11336,33 +11362,33 @@ def compute_known_valid_breakout_history_v1(stocks_list, _ticker_dfs):
                 breakout = (
                     previous_flag
                     and not np.isnan(previous_base_high)
-                    and high_values.iloc[index] > previous_base_high
+                    and high_arr[index] > previous_base_high
                     and previous_flag_length >= min_length
                     and flag_bool
                 )
                 if breakout:
                     last_bull_flag_top = previous_base_high
                     last_bull_bar = index
-                    base_high = high_values.iloc[index]
-                    base_low = low_values.iloc[index]
+                    base_high = high_arr[index]
+                    base_low = low_arr[index]
                     flag_length = 0
 
                 breakout_bear = (
                     previous_flag_bear
                     and not np.isnan(previous_flag_low_bear)
-                    and low_values.iloc[index] < previous_flag_low_bear
+                    and low_arr[index] < previous_flag_low_bear
                     and flag_length_bear >= min_length
                     and flag_bool_bear
                 )
                 if breakout_bear:
                     last_bear_bar = index
-                    flag_low_bear = low_values.iloc[index]
-                    flag_high_bear = high_values.iloc[index]
+                    flag_low_bear = low_arr[index]
+                    flag_high_bear = high_arr[index]
                     flag_length_bear = 0
 
                 if not np.isnan(last_bull_flag_top) and last_bull_bar > last_bear_bar:
-                    cutloss = (close_values.iloc[index] - last_bull_flag_top) / close_values.iloc[index] * 100
-                    output[index] = close_values.iloc[index] >= last_bull_flag_top and 0 <= cutloss < 8
+                    cutloss = (close_arr[index] - last_bull_flag_top) / close_arr[index] * 100
+                    output[index] = close_arr[index] >= last_bull_flag_top and 0 <= cutloss < 8
 
             return pd.Series(output, index=close_values.index)
 
