@@ -13902,7 +13902,7 @@ RRG_BENCHMARK = "SPY"
 RRG_EXCLUDE = {"SPY", "QQQ", "RSP"}
 RRG_TICKERS = [t for t in RRG_STOCKS if t not in RRG_EXCLUDE]
 RRG_WINDOW = 14      # smoothing window for RS-Ratio / RS-Momentum
-RRG_TAIL = 5         # NEW: shorter trail = cleaner directional stroke, less zigzag
+RRG_TAIL = 8         # full-trail point count (only used if "Full trail" is selected)
 RRG_PERIOD = "9mo"   # history length to download
 
 
@@ -13967,10 +13967,9 @@ if not rrg_data_full:
 else:
     all_rrg_tickers_sorted = sorted(rrg_data_full.keys())
 
-    # NEW: quadrant-based "Top Movers" default — picks the tickers furthest
-    # from the (100,100) center on their latest point, so the default view
-    # highlights whoever is showing the strongest rotation right now instead
-    # of dumping all ~28 tickers on screen at once.
+    # Quadrant-based "Top Movers" default — picks the tickers furthest from
+    # the (100,100) center on their latest point, so the default view
+    # highlights strongest current rotation instead of dumping all tickers on screen.
     def _dist_from_center(df_t):
         last = df_t.iloc[-1]
         return ((last["RS_Ratio"] - 100) ** 2 + (last["RS_Momentum"] - 100) ** 2) ** 0.5
@@ -13979,7 +13978,7 @@ else:
         rrg_data_full.keys(), key=lambda t: -_dist_from_center(rrg_data_full[t])
     )[:10]
 
-    rrg_col_a, rrg_col_b = st.columns([4, 1])
+    rrg_col_a, rrg_col_b = st.columns([4, 1.4])
     with rrg_col_a:
         rrg_selected = st.multiselect(
             "Tickers on RRG",
@@ -13988,7 +13987,13 @@ else:
             key="rrg_ticker_filter",
         )
     with rrg_col_b:
-        rrg_show_dots = st.checkbox("Show trail dots", value=False, key="rrg_show_dots")
+        rrg_trail_style = st.radio(
+            "Trail style",
+            options=["Simplified (straight)", "Full trail"],
+            index=0,
+            key="rrg_trail_style",
+            horizontal=False,
+        )
 
     rrg_data = (
         {t: df for t, df in rrg_data_full.items() if t in rrg_selected}
@@ -14007,8 +14012,21 @@ else:
             "#3182bd", "#e6550d", "#31a354", "#756bb1", "#636363",
         ]
 
+        # When "Simplified" is chosen, collapse each ticker's trail to just
+        # its first and last point — a 2-point segment is mathematically a
+        # straight line, which is what "still looks curvy" was pointing at
+        # (a 5-8 point path bends at every vertex since the underlying
+        # RS-Ratio/RS-Momentum trajectory genuinely changes direction daily).
+        use_simplified = rrg_trail_style.startswith("Simplified")
+        plot_data = {}
+        for t, df_t in rrg_data.items():
+            if use_simplified and len(df_t) >= 2:
+                plot_data[t] = df_t.iloc[[0, -1]].reset_index(drop=True)
+            else:
+                plot_data[t] = df_t
+
         all_ratios, all_momentums = [], []
-        for df_t in rrg_data.values():
+        for df_t in plot_data.values():
             all_ratios.extend(df_t["RS_Ratio"].tolist())
             all_momentums.extend(df_t["RS_Momentum"].tolist())
 
@@ -14037,7 +14055,7 @@ else:
         fig_rrg.add_shape(type="line", x0=x_lo, y0=100, x1=x_hi, y1=100,
                            line=dict(color="rgba(120,150,200,0.6)", width=1.5, dash="dash"))
 
-        quad_label_style = dict(showarrow=False, font=dict(size=22, color="#222222", family="Arial Black"))
+        quad_label_style = dict(showarrow=False, font=dict(size=22, color="#FFFF00", family="Arial Black"))
         fig_rrg.add_annotation(x=x_lo + (100 - x_lo) * 0.05, y=y_hi - (y_hi - 100) * 0.08,
                                 text="Improving", xanchor="left", **quad_label_style)
         fig_rrg.add_annotation(x=x_hi - (x_hi - 100) * 0.05, y=y_hi - (y_hi - 100) * 0.08,
@@ -14047,20 +14065,17 @@ else:
         fig_rrg.add_annotation(x=x_hi - (x_hi - 100) * 0.05, y=y_lo + (100 - y_lo) * 0.08,
                                 text="Weakening", xanchor="right", **quad_label_style)
 
-        trail_mode = "lines+markers" if rrg_show_dots else "lines"
-
-        for i, ticker in enumerate(sorted(rrg_data.keys())):
-            df_t = rrg_data[ticker]
+        for i, ticker in enumerate(sorted(plot_data.keys())):
+            df_t = plot_data[ticker]
             color = RRG_COLORS[i % len(RRG_COLORS)]
             xs = df_t["RS_Ratio"].tolist()
             ys = df_t["RS_Momentum"].tolist()
 
-            # Trail — plain thin line, no per-point dots unless toggled on
+            # Trail — plain thin straight-segment line, no per-point dots
             fig_rrg.add_trace(go.Scatter(
-                x=xs, y=ys, mode=trail_mode, name=ticker,
-                line=dict(color=color, width=1.4, shape="linear"),
-                marker=dict(size=3, color=color) if rrg_show_dots else None,
-                opacity=0.55,
+                x=xs, y=ys, mode="lines", name=ticker,
+                line=dict(color=color, width=1.6, shape="linear"),
+                opacity=0.6,
                 showlegend=False,
                 hovertemplate=f"<b>{ticker}</b><br>RS-Ratio: %{{x:.2f}}<br>RS-Momentum: %{{y:.2f}}<extra></extra>",
             ))
