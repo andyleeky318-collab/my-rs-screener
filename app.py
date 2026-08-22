@@ -14004,12 +14004,36 @@ else:
         st.info("No tickers selected.")
     else:
         RRG_COLORS = [
-            "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
-            "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
-            "#aec7e8", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5",
-            "#c49c94", "#f7b6d2", "#c7c7c7", "#dbdb8d", "#9edae5",
-            "#393b79", "#637939", "#8c6d31", "#843c39", "#7b4173",
-            "#3182bd", "#e6550d", "#31a354", "#756bb1", "#636363",
+            "#00BFFF",  # Bright blue
+            "#FFD700",  # Bright yellow
+            "#32CD32",  # Lime green
+            "#FF3333",  # Bright red
+            "#BF5FFF",  # Bright purple
+            "#00FFFF",  # Cyan
+            "#FF69B4",  # Hot pink
+            "#A9A9A9",  # Light gray
+            "#ADFF2F",  # Green yellow
+            "#00E5FF",  # Bright cyan
+            "#87CEFA",  # Pale blue
+            "#FFD580",  # Pale orange
+            "#90EE90",  # Pale green
+            "#FF9999",  # Pale red
+            "#D8B4FE",  # Pale purple
+            "#F0F0F0",  # Very light gray
+            "#FFB6D9",  # Pale pink
+            "#D3D3D3",  # Light gray
+            "#FFFF99",  # Pale yellow
+            "#B0E0E6",  # Powder blue
+            "#4169E1",  # Royal blue
+            "#7CFC00",  # Lawn green
+            "#FFA500",  # Bright orange
+            "#FF4500",  # Orange red
+            "#EE82EE",  # Violet
+            "#1E90FF",  # Dodger blue
+            "#FF6347",  # Tomato
+            "#00C853",  # Bright green
+            "#8A2BE2",  # Blue violet
+            "#696969",  # Dark gray
         ]
 
         # When "Simplified" is chosen, collapse each ticker's trail to just
@@ -14110,3 +14134,497 @@ else:
         )
 
         st.plotly_chart(fig_rrg, use_container_width=True)
+
+# ==============================================================================
+# 25. RAPID ROTATION DETECTOR — high-sensitivity, 1-2 day rotation confirmation
+# Read-only, purely additive. Aggregates day-over-day "cluster additions" and
+# flip-type signals (the earliest tells of a regime change) across every
+# section already computed above, into one weighted composite score, then
+# asks an LLM to translate the evidence into a plain-English rotation call.
+# Uses globals().get(...) everywhere so a missing/renamed upstream variable
+# degrades a single pillar to "neutral" instead of crashing the page.
+# ==============================================================================
+st.markdown("---")
+st.markdown("## ⚡ Rapid Rotation Detector")
+st.caption("Optimized for early (1-2 day) confirmation of a rotation — weighted toward NEW cluster additions and flip-type signals rather than absolute levels.")
+
+
+def _rrd_get(name, default=None):
+    """Safe global lookup — a pillar degrades to neutral instead of crashing
+    if an upstream variable was renamed, or its section produced nothing."""
+    val = globals().get(name, default)
+    return default if val is None else val
+
+
+def _rrd_scale(count, threshold, cap=100):
+    """Linear 0-100 scaling: count>=threshold -> 100 (capped)."""
+    if threshold <= 0:
+        return 0.0
+    return float(min(cap, max(0.0, (count / threshold) * 100)))
+
+
+@st.cache_data(ttl=3600)
+def _rrd_compute_etf_rsi_cross(_ticker_dfs, etf_list):
+    """Sectors whose 14-day RSI crossed UP through 50 between yesterday and
+    today — a fast momentum-flip proxy, independent of the main Pie Chart
+    render function above (read-only, reuses cached price history only)."""
+    crossed = []
+    for sym in etf_list:
+        try:
+            df_sym = _ticker_dfs.get(sym)
+            if df_sym is None or len(df_sym) < 16:
+                continue
+            rsi_series = compute_rsi(df_sym['Close'], period=14).dropna()
+            if len(rsi_series) < 2:
+                continue
+            y_val, t_val = rsi_series.iloc[-2], rsi_series.iloc[-1]
+            if y_val < 50 <= t_val:
+                crossed.append(sym)
+        except Exception:
+            continue
+    return crossed
+
+
+def compute_rotation_pillars():
+    pillars = []          # (label, score_0_100, weight, detail_str, tickers_list)
+    highlight_badges = {} # label -> tickers to badge-render
+
+    def add_pillar(label, score, weight, detail, tickers=None):
+        pillars.append((label, max(0.0, min(100.0, score)), weight, detail, tickers or []))
+        if tickers:
+            highlight_badges[label] = tickers
+
+    # ── 1. Multi-timeframe acceleration (daily / 1W / 1M) across top-20 industries
+    df_main_v = _rrd_get("df_main")
+    if isinstance(df_main_v, pd.DataFrame) and not df_main_v.empty:
+        top20 = df_main_v.sort_values("Current Rank").head(20)
+        delta_1w = (top20["Group RS"] - top20["Group RS Prev"]).mean()
+        delta_1m = (top20["Group RS"] - top20["Group RS 1M"]).mean()
+        avg_delta = (delta_1w + delta_1m) / 2
+        score = 50 + avg_delta * 4
+        add_pillar("Multi-TF Acceleration (D/1W/1M)", score, 0.06,
+                   f"Top20 avg RS Δ1W={delta_1w:+.1f}, Δ1M={delta_1m:+.1f}")
+    else:
+        add_pillar("Multi-TF Acceleration (D/1W/1M)", 50, 0.06, "Insufficient data")
+
+    # ── 2. Volume Cluster (positive-gain by construction)
+    vol_flagged_v = _rrd_get("vol_flagged_industries_volume", set())
+    industry_vol_v = _rrd_get("industry_volume_tickers", {})
+    vol_tickers = sorted({t for lst in industry_vol_v.values() for t in lst})
+    add_pillar("Volume Cluster (+Gain)", _rrd_scale(len(vol_flagged_v), 4), 0.03,
+               f"{len(vol_flagged_v)} industries, {len(vol_tickers)} tickers", vol_tickers[:20])
+
+    # ── 3. Botak Cluster (positive-gain by construction)
+    botak_industry_v = _rrd_get("botak_industry_tickers", {})
+    botak_tickers = sorted({t for lst in botak_industry_v.values() for t in lst})
+    add_pillar("Botak Cluster (+Gain)", _rrd_scale(len(botak_industry_v), 3), 0.03,
+               f"{len(botak_industry_v)} industries, {len(botak_tickers)} tickers", botak_tickers[:20])
+
+    # ── 4. Engulfing Cluster (positive-gain by construction)
+    engulf_industry_v = _rrd_get("engulf_industry_tickers", {})
+    engulf_cluster_tickers = sorted({t for lst in engulf_industry_v.values() for t in lst})
+    add_pillar("Engulfing Cluster (+Gain)", _rrd_scale(len(engulf_industry_v), 3), 0.03,
+               f"{len(engulf_industry_v)} industries, {len(engulf_cluster_tickers)} tickers", engulf_cluster_tickers[:20])
+
+    # ── 5. Trend Flip: 🔴 -> 🟢 in the most recent step (industry_trend_map)
+    trend_map_v = _rrd_get("industry_trend_map", {})
+    flipped_industries = [ind for ind, s in trend_map_v.items() if isinstance(s, str) and s.endswith("🔴🟢")]
+    add_pillar("Trend Flip (Red→Green)", _rrd_scale(len(flipped_industries), 3), 0.06,
+               f"{len(flipped_industries)} industries just flipped", flipped_industries[:15])
+
+    # ── 6. Improving △T: rank climbing + ROC strong, among top 20
+    improving_roc_industries = []
+    if isinstance(df_main_v, pd.DataFrame) and not df_main_v.empty:
+        for _, r in df_main_v.iterrows():
+            if r["Current Rank"] <= 20 and r["Current Rank"] < r.get("Prev Rank", 9999) and r.get("ROC", 0) >= 70:
+                improving_roc_industries.append(r["Industry"])
+    add_pillar("Improving △T (rank+ROC)", _rrd_scale(len(improving_roc_industries), 4), 0.04,
+               f"{len(improving_roc_industries)} industries climbing with strong ROC", improving_roc_industries[:15])
+
+    # ── 7. Quadrant Map "Improving" bucket (weekly high, monthly still low = fresh)
+    quad_points_v = _rrd_get("quad_points", [])
+    improving_quad = [p["industry"] for p in quad_points_v if p["weekly_rs"] >= 50 and p["monthly_rs"] < 50]
+    add_pillar("Quadrant Map — Improving Bucket", _rrd_scale(len(improving_quad), 5), 0.05,
+               f"{len(improving_quad)} industries freshly improving", improving_quad[:15])
+
+    # ── 8. Stage breadth — Stage2 dominance across the fixed watchlist
+    stage_pct_rows_v = _rrd_get("stage_pct_rows", [])
+    stage2_dominant = [r["Ticker"] for r in stage_pct_rows_v if (r.get("Stage2 %") or 0) > 50]
+    add_pillar("Stage2 Dominance (watchlist)", _rrd_scale(len(stage2_dominant), 8), 0.03,
+               f"{len(stage2_dominant)}/{len(stage_pct_rows_v)} watchlist tickers >50% Stage2", stage2_dominant[:20])
+
+    # ── 9. Minervini cluster ADDITION
+    email_content_stocks_v = _rrd_get("email_content_stocks", [])
+    minervini_new = [sym for sym, is_new, _ in email_content_stocks_v if is_new]
+    add_pillar("Minervini Addition", _rrd_scale(len(minervini_new), 4), 0.03,
+               f"{len(minervini_new)} new qualifiers today", minervini_new[:20])
+
+    # ── 10. RS Leader cluster ADDITION
+    leader_list_v = set(_rrd_get("leader_list", []))
+    leader_yest_v = set(_rrd_get("leader_yest", []))
+    leader_new = sorted(leader_list_v - leader_yest_v)
+    add_pillar("RS Leader Addition", _rrd_scale(len(leader_new), 3), 0.05,
+               f"{len(leader_new)} new RS leaders today", leader_new)
+
+    # ── 11. True Market Leader cluster ADDITION
+    tml_list_v = set(_rrd_get("tml_list", []))
+    tml_yest_v = set(_rrd_get("tml_yest", []))
+    tml_new = sorted(tml_list_v - tml_yest_v)
+    add_pillar("True Market Leader Addition", _rrd_scale(len(tml_new), 2), 0.05,
+               f"{len(tml_new)} new TML today", tml_new)
+
+    # ── 12. RS New-High-Before-Price cluster ADDITION
+    rs_nh_today_v = set(_rrd_get("rs_nh_b4_today", []))
+    rs_nh_yest_v = set(_rrd_get("rs_nh_b4_yest", []))
+    rs_nh_new = sorted(rs_nh_today_v - rs_nh_yest_v)
+    add_pillar("RS NH B4 Price Addition", _rrd_scale(len(rs_nh_new), 3), 0.04,
+               f"{len(rs_nh_new)} new RS-leads-price today", rs_nh_new)
+
+    # ── 13. 2x/3x Engulfing ADDITION
+    e2_new = set(_rrd_get("e2_list", [])) - set(_rrd_get("e2_yest", []))
+    e3_new = set(_rrd_get("e3_list", [])) - set(_rrd_get("e3_yest", []))
+    engulf_new = sorted(e2_new | e3_new)
+    add_pillar("2x/3x Engulfing Addition", _rrd_scale(len(engulf_new), 3), 0.03,
+               f"{len(engulf_new)} new engulfing signals today", engulf_new)
+
+    # ── 14. Gapper Earning Drift cluster ADDITION
+    gapper_new = sorted(set(_rrd_get("gapper_list", [])) - set(_rrd_get("gapper_yest", [])))
+    add_pillar("Gapper Drift Addition", _rrd_scale(len(gapper_new), 3), 0.03,
+               f"{len(gapper_new)} new unfilled-gap continuations today", gapper_new)
+
+    # ── 15. Early Bull cluster — level only (no prior-day snapshot retained)
+    early_bull_v = _rrd_get("early_bull_list", [])
+    add_pillar("Early Bull (current level)", _rrd_scale(len(early_bull_v), 5), 0.02,
+               f"{len(early_bull_v)} tickers currently in Stage1/4→2 transition", early_bull_v[:20])
+
+    # ── 16. Two Botak cluster ADDITION
+    b_new = sorted(set(_rrd_get("b_list", [])) - set(_rrd_get("b_yest", [])))
+    add_pillar("Two Botak Addition", _rrd_scale(len(b_new), 3), 0.03,
+               f"{len(b_new)} new short-term bursts today", b_new)
+
+    # ── 17. PowerTrend cluster ADDITION
+    pt_list_v = _rrd_get("pt_list", [])
+    pt_syms_v = set(item[0] if isinstance(item, tuple) else item for item in pt_list_v)
+    pt_new = sorted(pt_syms_v - set(_rrd_get("pt_yest", [])))
+    add_pillar("PowerTrend Addition", _rrd_scale(len(pt_new), 3), 0.03,
+               f"{len(pt_new)} new fast-EMA-gradient names today", pt_new)
+
+    # ── 18. Volatility positive-gain cluster (inherently a "today" event)
+    vol_hits_v = _rrd_get("volatility_hits", [])
+    vol_pos = [sym for sym, z, pct in vol_hits_v if pct >= 0]
+    add_pillar("Volatility +Gain Cluster", _rrd_scale(len(vol_pos), 4), 0.02,
+               f"{len(vol_pos)} tickers with elevated range AND a positive day", vol_pos[:20])
+
+    # ── 19. Change of Character cluster ADDITION
+    coc_new = sorted(set(_rrd_get("coc_today", [])) - set(_rrd_get("coc_yest", [])))
+    add_pillar("Change of Character Addition", _rrd_scale(len(coc_new), 3), 0.05,
+               f"{len(coc_new)} new +20 composite-score jumps today", coc_new)
+
+    # ── 20. Biggest Move Today — net tilt
+    up_today_v = _rrd_get("biggest_up_today", [])
+    down_today_v = _rrd_get("biggest_down_today", [])
+    total_moves = len(up_today_v) + len(down_today_v)
+    if total_moves > 0:
+        net_tilt = (len(up_today_v) - len(down_today_v)) / total_moves
+        score = 50 + net_tilt * 50
+    else:
+        score = 50
+    add_pillar("Biggest Move Today (net tilt)", score, 0.03,
+               f"{len(up_today_v)} biggest-up vs {len(down_today_v)} biggest-down")
+
+    # ── 21. Pie Chart — which sector is leading today's gain
+    etf_symbols_v = INDUSTRIES.get('ETF', [])
+    RISK_ON_ETFS = {"XLK", "XLY", "XLC", "XLI", "XLB"}
+    RISK_OFF_ETFS = {"XLP", "XLU", "XLV"}
+    pie_detail = "No ETF data"
+    pie_score = 50
+    top_etf_sym = None
+    if etf_symbols_v:
+        etf_changes_v, etf_pct_v, _, _ = fetch_etf_daily_direction(tuple(etf_symbols_v))
+        if etf_pct_v:
+            top_etf_sym = max(etf_pct_v, key=etf_pct_v.get)
+            top_pct = etf_pct_v[top_etf_sym]
+            if top_pct <= 0:
+                pie_score, pie_detail = 15, f"Top ETF {top_etf_sym} still negative ({top_pct:+.2f}%) — broad weakness"
+            elif top_etf_sym in RISK_ON_ETFS:
+                pie_score, pie_detail = 90, f"Risk-on sector {top_etf_sym} leads today ({top_pct:+.2f}%)"
+            elif top_etf_sym in RISK_OFF_ETFS:
+                pie_score, pie_detail = 30, f"Defensive sector {top_etf_sym} leads today ({top_pct:+.2f}%) — flight to safety"
+            else:
+                pie_score, pie_detail = 60, f"{top_etf_sym} leads today ({top_pct:+.2f}%)"
+    add_pillar("Pie Chart — Leading Sector", pie_score, 0.03, pie_detail)
+
+    # ── 22. Pie Chart — RSI sequence jump (14D RSI crossing up through 50)
+    rsi_cross_syms = _rrd_compute_etf_rsi_cross(_rrd_get("ticker_dfs_shared", {}), etf_symbols_v)
+    add_pillar("ETF RSI Cross-Up (50-line)", _rrd_scale(len(rsi_cross_syms), 3), 0.04,
+               f"{len(rsi_cross_syms)} sector ETFs just crossed RSI above 50", rsi_cross_syms)
+
+    # ── 23. Correlated social hint (Reddit + X.com) confirmed by technicals
+    cross_syms_v = _rrd_get("cross_section_glow_syms", set())
+    bullish_tech_syms = (
+        set(_rrd_get("leader_list", [])) | set(_rrd_get("tml_list", [])) | set(_rrd_get("coc_today", []))
+    )
+    social_confirmed = sorted(cross_syms_v & bullish_tech_syms)
+    add_pillar("Social + Technical Confirmation", _rrd_scale(len(social_confirmed), 3), 0.05,
+               f"{len(social_confirmed)} tickers trending socially AND technically strong", social_confirmed)
+
+    # ── 24. Breakout count — day-over-day delta
+    breakout_hist_v = _rrd_get("valid_breakout_history_v1", pd.DataFrame())
+    breakout_delta = 0
+    if isinstance(breakout_hist_v, pd.DataFrame) and len(breakout_hist_v) >= 2:
+        breakout_delta = int(breakout_hist_v["Valid Breakout Count"].iloc[-1] - breakout_hist_v["Valid Breakout Count"].iloc[-2])
+    add_pillar("Breakout Count Δ (1-day)", 50 + breakout_delta * 8, 0.04,
+               f"Breakout count changed by {breakout_delta:+d} vs yesterday")
+
+    # ── 25. Sector Heatmap — sectors flipping negative -> positive return
+    ret_df_v = _rrd_get("ret_df", pd.DataFrame())
+    heatmap_flips = []
+    if isinstance(ret_df_v, pd.DataFrame) and len(ret_df_v) >= 2:
+        today_row, yest_row = ret_df_v.iloc[0], ret_df_v.iloc[1]
+        for col in ret_df_v.columns[1:]:
+            try:
+                if pd.notna(yest_row[col]) and pd.notna(today_row[col]) and yest_row[col] < 0 <= today_row[col]:
+                    heatmap_flips.append(col)
+            except Exception:
+                continue
+    add_pillar("Sector Heatmap Flip (neg→pos)", _rrd_scale(len(heatmap_flips), 3), 0.04,
+               f"{len(heatmap_flips)} sectors flipped to positive money-flow", heatmap_flips)
+
+    # ── 26. RRG — tickers flipping into Improving/Leading quadrant
+    rrg_data_v = _rrd_get("rrg_data_full", {})
+    rrg_flips = []
+    for sym, df_t in rrg_data_v.items():
+        try:
+            if len(df_t) < 2:
+                continue
+            prev, cur = df_t.iloc[-2], df_t.iloc[-1]
+            prev_bullish = prev["RS_Ratio"] >= 100 and prev["RS_Momentum"] >= 100
+            cur_improving_or_leading = cur["RS_Momentum"] >= 100
+            was_lagging_or_weak = prev["RS_Momentum"] < 100
+            if was_lagging_or_weak and cur_improving_or_leading and not prev_bullish:
+                rrg_flips.append(sym)
+        except Exception:
+            continue
+    add_pillar("RRG Quadrant Flip (→Improving/Leading)", _rrd_scale(len(rrg_flips), 3), 0.06,
+               f"{len(rrg_flips)} tickers just flipped into a bullish RRG quadrant", rrg_flips)
+
+    # ── Composite ──
+    composite = sum(score * weight for _, score, weight, _, _ in pillars)
+    return composite, pillars, highlight_badges
+
+
+composite_rrd, rrd_pillars, rrd_badges = timed(
+    "compute_rotation_pillars", compute_rotation_pillars
+)
+
+if composite_rrd >= 70:
+    rrd_verdict, rrd_color = "🚨 HIGH-CONFIDENCE BULLISH ROTATION", "#00FF00"
+elif composite_rrd >= 58:
+    rrd_verdict, rrd_color = "📈 EMERGING BULLISH ROTATION", "#90EE90"
+elif composite_rrd >= 42:
+    rrd_verdict, rrd_color = "😐 NO CLEAR ROTATION YET", "#888888"
+elif composite_rrd >= 30:
+    rrd_verdict, rrd_color = "📉 EMERGING DEFENSIVE ROTATION", "#FFA500"
+else:
+    rrd_verdict, rrd_color = "🛡️ HIGH-CONFIDENCE DEFENSIVE ROTATION", "#FF4B4B"
+
+st.markdown(
+    f"""
+    <div style="border:2px solid {rrd_color}; border-radius:8px; padding:16px;
+                background:#1a1c23; margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:1.4em; font-weight:900; color:{rrd_color};">{rrd_verdict}</span>
+            <span style="font-size:1.3em; font-weight:bold; color:{rrd_color};">{composite_rrd:.0f}/100</span>
+        </div>
+        <p style="margin:8px 0 0; color:#888; font-size:0.85em;">
+            Weighted toward NEW cluster additions and flip-type signals — designed to catch a rotation
+            within 1-2 days, not confirm one that's already well underway.
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ── Pillar breakdown table ──
+pillar_rows_html = ""
+for label, score, weight, detail, _tickers in rrd_pillars:
+    bar_color = "#00FF00" if score >= 65 else "#FFA500" if score >= 40 else "#FF4B4B"
+    pillar_rows_html += (
+        f"<tr>"
+        f"<td style='padding:5px 8px;color:#e0e0e0;font-weight:bold;white-space:nowrap;font-size:12px;'>{label}</td>"
+        f"<td style='padding:5px 8px;'>"
+        f"<div style='width:100%;background:#333;border-radius:4px;height:11px;'>"
+        f"<div style='width:{score:.0f}%;background:{bar_color};height:11px;border-radius:4px;'></div>"
+        f"</div></td>"
+        f"<td style='padding:5px 8px;color:{bar_color};font-weight:bold;text-align:right;font-size:12px;'>{score:.0f}</td>"
+        f"<td style='padding:5px 8px;color:#666;font-size:10px;text-align:right;'>w={weight:.2f}</td>"
+        f"<td style='padding:5px 8px;color:#aaa;font-size:11px;'>{detail}</td>"
+        f"</tr>"
+    )
+
+with st.expander("📊 Pillar Breakdown (26 signals)", expanded=False):
+    st.markdown(f"<table style='width:100%;border-collapse:collapse;'><tbody>{pillar_rows_html}</tbody></table>",
+                unsafe_allow_html=True)
+
+# ── Badge rows for the highest-signal "addition" pillars ──
+_TOP_BADGE_PILLARS = [
+    "RS Leader Addition", "True Market Leader Addition", "Change of Character Addition",
+    "RRG Quadrant Flip (→Improving/Leading)", "Social + Technical Confirmation",
+    "Trend Flip (Red→Green)", "Sector Heatmap Flip (neg→pos)",
+]
+for label in _TOP_BADGE_PILLARS:
+    tickers = rrd_badges.get(label, [])
+    if not tickers:
+        continue
+    st.markdown(f"**{label} ({len(tickers)})**")
+    badge_html = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:2px 0 10px;'>"
+    for t in tickers[:25]:
+        badge_html += (
+            f'<div class="ticker-badge" style="background:#1e1e1e;border:1px solid #444;">'
+            f'<span class="ticker-name">{t}</span></div>'
+        )
+    badge_html += "</div>"
+    st.markdown(badge_html, unsafe_allow_html=True)
+
+
+def generate_rotation_ai_alert(composite_score, pillars):
+    top_evidence = sorted(pillars, key=lambda p: -(p[1] * p[2]))[:12]
+    evidence_lines = []
+    for label, score, weight, detail, tickers in top_evidence:
+        tick_str = f" — tickers: {', '.join(tickers[:10])}" if tickers else ""
+        evidence_lines.append(f"  - {label}: score {score:.0f}/100 (weight {weight:.2f}) — {detail}{tick_str}")
+    evidence_block = "\n".join(evidence_lines)
+
+    prompt = f"""
+You are a rapid market-rotation alert system for a swing trader. Composite rotation score: {composite_score:.0f}/100
+(>=70 strong bullish rotation, 58-70 emerging bullish, 42-58 no clear rotation, 30-42 emerging defensive, <30 strong defensive).
+
+Top weighted evidence driving this score:
+{evidence_block}
+
+Respond with EXACTLY these lines, each starting with the bolded label followed by a colon, content on the same line:
+
+**Rotation Call**: State plainly whether this looks like an early bullish rotation, early defensive rotation, or no clear rotation yet, and how confident you are (High/Medium/Low) given this is only 1-2 days of evidence.
+**Key Drivers**: Name the 2-3 specific signals/tickers/sectors above that most support this call.
+**What Would Confirm It**: One sentence on what to watch tomorrow to confirm or invalidate this call.
+**Risk of False Signal**: One sentence on why this could still reverse or be noise.
+
+Be direct, cite tickers/sectors from the evidence above, no fluff, no repeating the prompt.
+"""
+
+    TRANSIENT_CODES = ["503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "quota",
+                        "overloaded", "high demand", "rate_limit", "capacity", "timeout", "502", "529"]
+    def is_transient(e):
+        return any(c.lower() in e.lower() for c in TRANSIENT_CODES)
+
+    failures = {}
+    for gemini_label, gemini_key, gemini_model in [
+        ("Gemini 2.5 Flash [GEMINI_API_KEY]", st.secrets.get("GEMINI_API_KEY"), "gemini-2.5-flash"),
+        ("Gemini 3.5 Flash [GEMINI_API_KEY_2]", st.secrets.get("GEMINI_API_KEY_2"), "gemini-3.5-flash"),
+        ("Gemini 3.5 Flash [GEMINI_API_KEY_3]", st.secrets.get("GEMINI_API_KEY_3"), "gemini-3.5-flash"),
+    ]:
+        if not gemini_key:
+            failures[gemini_label] = "No key in secrets"
+            continue
+        try:
+            from google import genai as google_genai
+            client = google_genai.Client(api_key=gemini_key)
+            response = client.models.generate_content(model=gemini_model, contents=prompt)
+            return f"🟦 **{gemini_label}**\n\n{response.text}"
+        except Exception as e:
+            failures[gemini_label] = str(e)[:120]
+
+    openrouter_key = st.secrets.get("OPENROUTER_API_KEY")
+    if openrouter_key:
+        try:
+            from openai import OpenAI as OpenAIClient
+            or_client = OpenAIClient(
+                api_key=openrouter_key, base_url="https://openrouter.ai/api/v1",
+                default_headers={"HTTP-Referer": "https://your-app-name.streamlit.app", "X-Title": "Theme Tracker"},
+            )
+            completion = or_client.chat.completions.create(
+                model="meta-llama/llama-3.1-8b-instruct",
+                messages=[{"role": "system", "content": "You are a rapid rotation alert system."},
+                          {"role": "user", "content": prompt}],
+                max_tokens=400, temperature=0.3,
+            )
+            summary = format_unavailable_reasons(failures)
+            return f"🟣 **OpenRouter / Llama-3.1-8b** *({summary})*\n\n{completion.choices[0].message.content}"
+        except Exception as e:
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **OpenRouter error (non-transient)**\n\n{err}"
+            failures["OpenRouter"] = err[:120]
+    else:
+        failures["OpenRouter"] = "No OPENROUTER_API_KEY"
+
+    groq_key = st.secrets.get("GROQ_API_KEY")
+    if groq_key:
+        try:
+            from openai import OpenAI as OpenAIClient
+            groq_client = OpenAIClient(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
+            completion = groq_client.chat.completions.create(
+                model="openai/gpt-oss-120b",
+                messages=[{"role": "system", "content": "You are a rapid rotation alert system."},
+                          {"role": "user", "content": prompt}],
+                max_tokens=500, temperature=0.3,
+            )
+            result = completion.choices[0].message.content
+            if not result or not result.strip():
+                raise ValueError("Empty content from Groq")
+            summary = format_unavailable_reasons(failures)
+            return f"🟧 **Groq / gpt-oss-120b** *({summary})*\n\n{result}"
+        except Exception as e:
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **Groq error (non-transient)**\n\n{err}"
+            failures["Groq"] = err[:120]
+    else:
+        failures["Groq"] = "No GROQ_API_KEY"
+
+    github_token = st.secrets.get("GITHUB_MODELS_TOKEN")
+    if github_token:
+        try:
+            from openai import OpenAI as OpenAIClient
+            github_client = OpenAIClient(api_key=github_token, base_url="https://models.inference.ai.azure.com")
+            completion = github_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "system", "content": "You are a rapid rotation alert system."},
+                          {"role": "user", "content": prompt}],
+                max_tokens=400, temperature=0.3,
+            )
+            summary = format_unavailable_reasons(failures)
+            return f"⬜ **GitHub Models / gpt-4o-mini** *({summary})*\n\n{completion.choices[0].message.content}"
+        except Exception as e:
+            err = str(e)
+            if not is_transient(err):
+                return f"🔴 **GitHub Models error (non-transient)**\n\n{err}"
+            failures["GitHub Models"] = err[:120]
+    else:
+        failures["GitHub Models"] = "No GITHUB_MODELS_TOKEN"
+
+    failure_lines = "\n".join(f"- {p}: {r}" for p, r in failures.items())
+    return f"🔴 **All AI providers failed**\n\n{failure_lines}"
+
+
+_rrd_sig_parts = [f"{label}:{score:.0f}" for label, score, _, _, _ in rrd_pillars]
+rotation_sig = f"{datetime.date.today().isoformat()}_{composite_rrd:.0f}_{'|'.join(_rrd_sig_parts)}"
+
+force_rotation_ai = st.button("🔄 Refresh Rotation Alert", key="retry_rotation_ai")
+
+if force_rotation_ai or st.session_state.get("rotation_ai_sig") != rotation_sig:
+    with st.spinner("Synthesizing rotation evidence via AI..."):
+        rotation_ai_result = timed(
+            "generate_rotation_ai_alert", generate_rotation_ai_alert, composite_rrd, rrd_pillars
+        )
+    if rotation_ai_result:
+        st.session_state["rotation_ai_result"] = rotation_ai_result
+        st.session_state["rotation_ai_sig"] = rotation_sig
+
+if "rotation_ai_result" in st.session_state:
+    all_evidence_tickers = sorted({t for _l, _s, _w, _d, tickers in rrd_pillars for t in tickers})
+    render_ai_points_table(
+        st.session_state["rotation_ai_result"],
+        tickers=all_evidence_tickers,
+        industries=list(_rrd_get("industry_rank_map", {}).keys())
+    )        
