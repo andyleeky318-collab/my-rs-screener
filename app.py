@@ -1329,8 +1329,8 @@ if breadth_total > 0:
     wv_total = wick_vol_stats.get('total_valid', 0)
 
     wick_vol_html = (
-        single_pct_bar_html('Long Upper Wick', wick_vol_stats.get('upper_wick_count', 0), wv_total, bar_color="#90EE90")
-        + single_pct_bar_html('Long Bottom Wick', wick_vol_stats.get('lower_wick_count', 0), wv_total, bar_color="#90EE90")
+        single_pct_bar_html('Long Upper Wick', wick_vol_stats.get('upper_wick_count', 0), wv_total, bar_color="#EF9F27" if wick_vol_stats.get('upper_wick_count', 0) > wick_vol_stats.get('lower_wick_count', 0) else "#90EE90")
+        + single_pct_bar_html('Long Bottom Wick', wick_vol_stats.get('lower_wick_count', 0), wv_total, bar_color="#EF9F27" if wick_vol_stats.get('upper_wick_count', 0) > wick_vol_stats.get('lower_wick_count', 0) else "#90EE90")
         + single_pct_bar_html('Low Volume (< 80% of 50D Avg)', wick_vol_stats.get('low_volume_count', 0), wv_total, bar_color="#378ADD")
     )
     st.markdown(wick_vol_html, unsafe_allow_html=True)
@@ -5402,10 +5402,10 @@ def compute_stage_pct_by_industry(
                 "Ticker": tkr,
                 "Industry": "—",
                 "N": 0,
-                "stg1 %": None,
-                "stg2 %": None,
-                "stg3 %": None,
-                "stg4 %": None
+                "Stage1 %": None,
+                "Stage2 %": None,
+                "Stage3 %": None,
+                "Stage4 %": None
             })
             continue
 
@@ -5461,9 +5461,9 @@ stage_pct_df = pd.DataFrame(stage_pct_rows)
 
 # Keep only required columns
 stage_pct_df = stage_pct_df[
-    ["Ticker", "stg1 %", "stg2 %", "stg3 %", "stg4 %"]
+    ["Ticker", "Stage1 %", "Stage2 %", "Stage3 %", "Stage4 %"]
 ].sort_values(
-    by="stg2 %",
+    by="Stage2 %",
     ascending=False,
     na_position="last"
 ).reset_index(drop=True)
@@ -5486,8 +5486,8 @@ def highlight_stage4_row(row):
 # Center ALL headers and ALL cells
 styled_stage_pct_df = (
     stage_pct_df_t.style
-    .apply(highlight_stage2_row, subset=pd.IndexSlice[["stg2 %"], :], axis=1)
-    .apply(highlight_stage4_row, subset=pd.IndexSlice[["stg4 %"], :], axis=1)
+    .apply(highlight_stage2_row, subset=pd.IndexSlice[["Stage2 %"], :], axis=1)
+    .apply(highlight_stage4_row, subset=pd.IndexSlice[["Stage4 %"], :], axis=1)
     .set_properties(
         **{
             "text-align": "center",
