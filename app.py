@@ -1473,7 +1473,7 @@ labels_svg += (
     f'<text x="{SVG_W - 2}" y="{SVG_H - 2}" '
     f'text-anchor="end" font-size="8" '
     f'font-family="Source Sans Pro,sans-serif" '
-    f'fill="#888888">Gainer {gainers_val:,}</text>'
+    f'fill="#888888">Gainers {gainers_val:,}</text>'
 )
 
 # Baseline
@@ -5402,10 +5402,10 @@ def compute_stage_pct_by_industry(
                 "Ticker": tkr,
                 "Industry": "—",
                 "N": 0,
-                "Stage1 %": None,
-                "Stage2 %": None,
-                "Stage3 %": None,
-                "Stage4 %": None
+                "stg1 %": None,
+                "stg2 %": None,
+                "stg3 %": None,
+                "stg4 %": None
             })
             continue
 
@@ -5461,9 +5461,9 @@ stage_pct_df = pd.DataFrame(stage_pct_rows)
 
 # Keep only required columns
 stage_pct_df = stage_pct_df[
-    ["Ticker", "Stage1 %", "Stage2 %", "Stage3 %", "Stage4 %"]
+    ["Ticker", "stg1 %", "stg2 %", "stg3 %", "stg4 %"]
 ].sort_values(
-    by="Stage2 %",
+    by="stg2 %",
     ascending=False,
     na_position="last"
 ).reset_index(drop=True)
@@ -5486,8 +5486,8 @@ def highlight_stage4_row(row):
 # Center ALL headers and ALL cells
 styled_stage_pct_df = (
     stage_pct_df_t.style
-    .apply(highlight_stage2_row, subset=pd.IndexSlice[["Stage2 %"], :], axis=1)
-    .apply(highlight_stage4_row, subset=pd.IndexSlice[["Stage4 %"], :], axis=1)
+    .apply(highlight_stage2_row, subset=pd.IndexSlice[["stg2 %"], :], axis=1)
+    .apply(highlight_stage4_row, subset=pd.IndexSlice[["stg4 %"], :], axis=1)
     .set_properties(
         **{
             "text-align": "center",
