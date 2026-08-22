@@ -2883,13 +2883,16 @@ for item in all_data:
         global_setup_ticker_groups[sym].append(item["Industry"])
 global_setup_count = len(global_setup_tickers)
 
-cloud21ema_all  = set()
-cloudwick_all   = set()
-ma50bounce_all  = set()
+cloud_valid_syms = set()
+cloud21ema_all = set()
+cloudwick_all = set()
+ma50bounce_all = set()
+
 for item in all_data:
+    cloud_valid_syms.update(item.get("Cloud", []))
     cloud21ema_all.update(item.get("Cloud21EMA", []))
-    cloudwick_all.update(item.get("CloudWick",   []))
-    ma50bounce_all.update(item.get("MA50Bounce",  []))
+    cloudwick_all.update(item.get("CloudWick", []))
+    ma50bounce_all.update(item.get("MA50Bounce", []))
 
 def setup_badge(sym, is_new=False, is_removed=False, extra_prefix="", extra_suffix="", extra_suffix_color="#888888", extra_style="", extra_text_color=None):
     """Render a ticker badge, colored by setup-category precedence:
@@ -6862,7 +6865,7 @@ with st.spinner("Scanning for True Market Leaders (healthyPct >= 69.5%)..."):
 
 tml_count = len(tml_list)
 tml_count_color = "#FF4B4B" if tml_count == 0 else "#FFFFFF"
-st.markdown(f"#### 👑 True Market Leader = A+ Leader on weakness is a gift (<span style='color:{tml_count_color};'>{tml_count}</span>)", unsafe_allow_html=True)
+st.markdown(f"#### 👑 True Market Leader = A+ Leader on weakness is a gift (<span style='color:{tml_count_color};'>{tml_count}</span>) <span style='color:#888; font-size:12px;'>(Be vigilant of the strikethrough)</span>", unsafe_allow_html=True)
 
 if tml_list or tml_yest:
     tml_industry_counts, tml_ticker_industry = build_leader_industry_map(tml_list, INDUSTRIES)
@@ -11471,7 +11474,7 @@ if today_breakout_tickers_v1:
             "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
             if is_top20_industry else ""
         )
-        html_breakout += setup_badge(sym, extra_style=glow_style)
+        html_breakout += setup_badge(sym, extra_prefix="⭐ " if sym in (cloud_valid_syms | cloud21ema_all | cloudwick_all | ma50bounce_all) else "", extra_style=glow_style)
     st.markdown(html_breakout, unsafe_allow_html=True)
 
 st.write("")
@@ -12133,9 +12136,6 @@ def compute_market_verdict():
     # ── Setup-Style Tilt (breakout scanners vs pullback scanners) ─────────
     # Breakout-style: Two Botak, PowerTrend, Gapper (momentum/extension entries)
     # Pullback-style: 21ema_cloud, 21ema_wick, 50ma_bounce (basing/dip entries)
-    cloud_valid_syms = set()
-    for item in _safe("all_data", []):
-        cloud_valid_syms.update(item.get("Cloud", []))
 
     pullback_syms = (
         cloud_valid_syms
@@ -14554,6 +14554,7 @@ else:
     default_top_movers = sorted(
         rrg_data_full.keys(), key=lambda t: -_dist_from_center(rrg_data_full[t])
     )[:10]
+    #default_top_movers = all_rrg_tickers_sorted
 
     rrg_col_a, rrg_col_b = st.columns([4, 1.4])
     with rrg_col_a:
