@@ -12143,6 +12143,102 @@ else:
 
         st.plotly_chart(fig_rrg, use_container_width=True)
 
+@st.cache_data(ttl=3600)
+def compute_market_distribution_days(ticker, dist_threshold=-0.2):
+    # Fetch 2 months of data to ensure enough history
+    # to track the 25-trading-day distribution-day lifespan
+    df = yf.download(
+        ticker,
+        period="2mo",
+        interval="1d",
+        progress=False,
+        auto_adjust=True
+    )
+
+    df.columns = [
+        c[0] if isinstance(c, tuple) else c
+        for c in df.columns
+    ]
+
+    # Ensure required columns are available
+    df = df[
+        ["Open", "High", "Low", "Close", "Volume"]
+    ].dropna()
+
+    # 1. Calculate daily percentage change
+    df["Pct_Chg"] = df["Close"].pct_change() * 100
+
+    # 2. Volume must be higher than previous trading day
+    df["Vol_Higher"] = (
+        df["Volume"] > df["Volume"].shift(1)
+    )
+
+    # 3. Identify distribution days
+    #
+    # SPY / IWM:
+    #   Close down >= 0.2% on higher volume
+    #
+    # QQQ / SMH:
+    #   Close down >= 0.3% on higher volume
+    #
+    df["Is_Dist_Day"] = (
+        (df["Pct_Chg"] <= dist_threshold)
+        & df["Vol_Higher"]
+    )
+
+    active_distribution_days = []
+
+    # 4. Get all potential distribution days
+    potential_dist_df = df[df["Is_Dist_Day"]]
+
+    for dist_date, dist_row in potential_dist_df.iterrows():
+
+        dist_close = dist_row["Close"]
+
+        # Get all trading rows starting from the
+        # distribution day
+        subsequent_df = df.loc[dist_date:]
+
+        # ------------------------------------------------
+        # Rule 1:
+        # Distribution day expires after 25 trading days
+        # ------------------------------------------------
+        trading_days_elapsed = len(subsequent_df) - 1
+
+        if trading_days_elapsed >= 25:
+            continue
+
+        # ------------------------------------------------
+        # Rule 2:
+        # Cancel distribution day if ETF closes
+        # 5% or more above the distribution-day close
+        # ------------------------------------------------
+        max_close_since = subsequent_df["Close"].max()
+
+        pct_gain_since = (
+            (max_close_since - dist_close)
+            / dist_close
+        ) * 100
+
+        if pct_gain_since >= 5.0:
+            continue
+
+        # Distribution day is still active
+        active_distribution_days.append(
+            dist_date.strftime("%Y-%m-%d")
+        )
+
+    return len(active_distribution_days), active_distribution_days
+
+spy_dist_count, spy_dist_dates = timed("compute_spy_distribution_days",
+    lambda: compute_market_distribution_days("SPY", dist_threshold=-0.2))
+qqq_dist_count, qqq_dist_dates = timed("compute_qqq_distribution_days",
+    lambda: compute_market_distribution_days("QQQ", dist_threshold=-0.3))
+smh_dist_count, smh_dist_dates = timed("compute_smh_distribution_days",
+    lambda: compute_market_distribution_days("SMH", dist_threshold=-0.5))
+iwm_dist_count, iwm_dist_dates = timed("compute_iwm_distribution_days",
+    lambda: compute_market_distribution_days("IWM", dist_threshold=-0.2))
+
 # ==============================================================================
 # 23. MARKET VERDICT — Composite Breakout / Pullback / Neutral / Defensive Read
 # Read-only, additive. Synthesizes every signal already computed above plus
@@ -12263,7 +12359,7 @@ def compute_market_verdict():
         s2_pct = stage_counts_v.get(2, 0) / stage_total * 100
         s4_pct = stage_counts_v.get(4, 0) / stage_total * 100
         p3_score = max(0, min(100, 50 + (s2_pct - s4_pct)))
-        p3_label = f"S2 {s2_pct:.0f}% vs S4 {s4_pct:.0f}%"
+        p3_label = f"S2 = {s2_pct:.0f}% vs S4 = {s4_pct:.0f}%"
     else:
         p3_score, p3_label = 50, "Insufficient data"
     breakdown.append(("Stage Breadth", p3_score, p3_label, ""))
@@ -12618,92 +12714,7 @@ else:
 # 21. SPY DISTRIBUTION DAY COUNT — 5+ in trailing 25 sessions = elevated risk
 # ==============================================================================
 
-@st.cache_data(ttl=3600)
-def compute_market_distribution_days(ticker, dist_threshold=-0.2):
-    # Fetch 2 months of data to ensure enough history
-    # to track the 25-trading-day distribution-day lifespan
-    df = yf.download(
-        ticker,
-        period="2mo",
-        interval="1d",
-        progress=False,
-        auto_adjust=True
-    )
 
-    df.columns = [
-        c[0] if isinstance(c, tuple) else c
-        for c in df.columns
-    ]
-
-    # Ensure required columns are available
-    df = df[
-        ["Open", "High", "Low", "Close", "Volume"]
-    ].dropna()
-
-    # 1. Calculate daily percentage change
-    df["Pct_Chg"] = df["Close"].pct_change() * 100
-
-    # 2. Volume must be higher than previous trading day
-    df["Vol_Higher"] = (
-        df["Volume"] > df["Volume"].shift(1)
-    )
-
-    # 3. Identify distribution days
-    #
-    # SPY / IWM:
-    #   Close down >= 0.2% on higher volume
-    #
-    # QQQ / SMH:
-    #   Close down >= 0.3% on higher volume
-    #
-    df["Is_Dist_Day"] = (
-        (df["Pct_Chg"] <= dist_threshold)
-        & df["Vol_Higher"]
-    )
-
-    active_distribution_days = []
-
-    # 4. Get all potential distribution days
-    potential_dist_df = df[df["Is_Dist_Day"]]
-
-    for dist_date, dist_row in potential_dist_df.iterrows():
-
-        dist_close = dist_row["Close"]
-
-        # Get all trading rows starting from the
-        # distribution day
-        subsequent_df = df.loc[dist_date:]
-
-        # ------------------------------------------------
-        # Rule 1:
-        # Distribution day expires after 25 trading days
-        # ------------------------------------------------
-        trading_days_elapsed = len(subsequent_df) - 1
-
-        if trading_days_elapsed >= 25:
-            continue
-
-        # ------------------------------------------------
-        # Rule 2:
-        # Cancel distribution day if ETF closes
-        # 5% or more above the distribution-day close
-        # ------------------------------------------------
-        max_close_since = subsequent_df["Close"].max()
-
-        pct_gain_since = (
-            (max_close_since - dist_close)
-            / dist_close
-        ) * 100
-
-        if pct_gain_since >= 5.0:
-            continue
-
-        # Distribution day is still active
-        active_distribution_days.append(
-            dist_date.strftime("%Y-%m-%d")
-        )
-
-    return len(active_distribution_days), active_distribution_days
 
 
 # ============================================================
@@ -12711,13 +12722,7 @@ def compute_market_distribution_days(ticker, dist_threshold=-0.2):
 # Distribution threshold = -0.2%
 # ============================================================
 
-spy_dist_count, spy_dist_dates = timed(
-    "compute_spy_distribution_days",
-    lambda: compute_market_distribution_days(
-        "SPY",
-        dist_threshold=-0.2
-    )
-)
+
 
 spy_triggered = spy_dist_count >= 5
 
@@ -12739,13 +12744,7 @@ spy_status_text = (
 # Stricter threshold = -0.3%
 # ============================================================
 
-qqq_dist_count, qqq_dist_dates = timed(
-    "compute_qqq_distribution_days",
-    lambda: compute_market_distribution_days(
-        "QQQ",
-        dist_threshold=-0.3
-    )
-)
+
 
 qqq_triggered = qqq_dist_count >= 5
 
@@ -12767,13 +12766,7 @@ qqq_status_text = (
 # Stricter threshold = -0.5%
 # ============================================================
 
-smh_dist_count, smh_dist_dates = timed(
-    "compute_smh_distribution_days",
-    lambda: compute_market_distribution_days(
-        "SMH",
-        dist_threshold=-0.5
-    )
-)
+
 
 smh_triggered = smh_dist_count >= 5
 
@@ -12797,13 +12790,7 @@ smh_status_text = (
 # Distribution threshold = -0.2%
 # ============================================================
 
-iwm_dist_count, iwm_dist_dates = timed(
-    "compute_iwm_distribution_days",
-    lambda: compute_market_distribution_days(
-        "IWM",
-        dist_threshold=-0.2
-    )
-)
+
 
 iwm_triggered = iwm_dist_count >= 5
 
@@ -12878,6 +12865,170 @@ else:
     st.info(
         "No IWM distribution days in the trailing 25 sessions."
     )
+
+@st.cache_data(ttl=3600)
+def compute_market_stalling_days(ticker, max_gain=0.4):
+    """
+    IBD-style Stalling Day detector:
+      1. Small gain: 0% < close-to-close change <= max_gain%
+      2. Intraday reversal: close sits in the LOWER half of the day's
+         High-Low range (gave up most of the day's gains)
+      3. Heavy volume: today's volume >= 95% of prior day's volume
+         (i.e. volume didn't meaningfully dry up, even if not higher)
+    Mirrors the same 25-trading-day "still active" window and 5%+ cancel
+    rule used for distribution days, for consistency.
+    """
+    df = yf.download(
+        ticker,
+        period="2mo",
+        interval="1d",
+        progress=False,
+        auto_adjust=True
+    )
+
+    df.columns = [
+        c[0] if isinstance(c, tuple) else c
+        for c in df.columns
+    ]
+
+    df = df[
+        ["Open", "High", "Low", "Close", "Volume"]
+    ].dropna()
+
+    df["Pct_Chg"] = df["Close"].pct_change() * 100
+    df["Vol_Ratio"] = df["Volume"] / df["Volume"].shift(1)
+
+    day_range = df["High"] - df["Low"]
+    midpoint = df["Low"] + (day_range / 2)
+    df["Lower_Half_Close"] = (df["Close"] < midpoint) & (day_range > 0)
+
+    df["Is_Stall_Day"] = (
+        (df["Pct_Chg"] > 0)
+        & (df["Pct_Chg"] <= max_gain)
+        & df["Lower_Half_Close"]
+        & (df["Vol_Ratio"] >= 0.95)
+    )
+
+    active_stalling_days = []
+    potential_stall_df = df[df["Is_Stall_Day"]]
+
+    for stall_date, stall_row in potential_stall_df.iterrows():
+
+        stall_close = stall_row["Close"]
+
+        subsequent_df = df.loc[stall_date:]
+
+        trading_days_elapsed = len(subsequent_df) - 1
+        if trading_days_elapsed >= 25:
+            continue
+
+        max_close_since = subsequent_df["Close"].max()
+        pct_gain_since = (
+            (max_close_since - stall_close) / stall_close
+        ) * 100
+
+        if pct_gain_since >= 5.0:
+            continue
+
+        active_stalling_days.append(
+            stall_date.strftime("%Y-%m-%d")
+        )
+
+    return len(active_stalling_days), active_stalling_days
+
+st.markdown("---")
+
+# ============================================================
+# STALLING DAY COUNTS — SPY / QQQ / SMH / IWM
+# ============================================================
+
+spy_stall_count, spy_stall_dates = timed(
+    "compute_spy_stalling_days",
+    lambda: compute_market_stalling_days("SPY", max_gain=0.4)
+)
+spy_stall_triggered = spy_stall_count >= 3
+spy_stall_color = "#FF4B4B" if spy_stall_triggered else "#00FF00"
+spy_stall_text = (
+    "TRIGGERED — buying momentum drying up, watch for a top"
+    if spy_stall_triggered else "Not Triggered"
+)
+
+qqq_stall_count, qqq_stall_dates = timed(
+    "compute_qqq_stalling_days",
+    lambda: compute_market_stalling_days("QQQ", max_gain=0.4)
+)
+qqq_stall_triggered = qqq_stall_count >= 3
+qqq_stall_color = "#FF4B4B" if qqq_stall_triggered else "#00FF00"
+qqq_stall_text = (
+    "TRIGGERED — buying momentum drying up, watch for a top"
+    if qqq_stall_triggered else "Not Triggered"
+)
+
+smh_stall_count, smh_stall_dates = timed(
+    "compute_smh_stalling_days",
+    lambda: compute_market_stalling_days("SMH", max_gain=0.4)
+)
+smh_stall_triggered = smh_stall_count >= 3
+smh_stall_color = "#FF4B4B" if smh_stall_triggered else "#00FF00"
+smh_stall_text = (
+    "TRIGGERED — buying momentum drying up, watch for a top"
+    if smh_stall_triggered else "Not Triggered"
+)
+
+iwm_stall_count, iwm_stall_dates = timed(
+    "compute_iwm_stalling_days",
+    lambda: compute_market_stalling_days("IWM", max_gain=0.4)
+)
+iwm_stall_triggered = iwm_stall_count >= 3
+iwm_stall_color = "#FF4B4B" if iwm_stall_triggered else "#00FF00"
+iwm_stall_text = (
+    "TRIGGERED — buying momentum drying up, watch for a top"
+    if iwm_stall_triggered else "Not Triggered"
+)
+
+st.markdown(
+    f"#### 🛑 SPY Stalling Days ({spy_stall_count}/25) — "
+    f"<span style='color:{spy_stall_color};font-weight:bold;'>"
+    f"{spy_stall_text}</span>",
+    unsafe_allow_html=True,
+)
+if spy_stall_dates:
+    st.markdown(", ".join(spy_stall_dates))
+else:
+    st.info("No SPY stalling days in the trailing 25 sessions.")
+
+st.markdown(
+    f"#### 🛑 QQQ Stalling Days ({qqq_stall_count}/25) — "
+    f"<span style='color:{qqq_stall_color};font-weight:bold;'>"
+    f"{qqq_stall_text}</span>",
+    unsafe_allow_html=True,
+)
+if qqq_stall_dates:
+    st.markdown(", ".join(qqq_stall_dates))
+else:
+    st.info("No QQQ stalling days in the trailing 25 sessions.")
+
+st.markdown(
+    f"#### 🛑 SMH Stalling Days ({smh_stall_count}/25) — "
+    f"<span style='color:{smh_stall_color};font-weight:bold;'>"
+    f"{smh_stall_text}</span>",
+    unsafe_allow_html=True,
+)
+if smh_stall_dates:
+    st.markdown(", ".join(smh_stall_dates))
+else:
+    st.info("No SMH stalling days in the trailing 25 sessions.")
+
+st.markdown(
+    f"#### 🛑 IWM Stalling Days ({iwm_stall_count}/25) — "
+    f"<span style='color:{iwm_stall_color};font-weight:bold;'>"
+    f"{iwm_stall_text}</span>",
+    unsafe_allow_html=True,
+)
+if iwm_stall_dates:
+    st.markdown(", ".join(iwm_stall_dates))
+else:
+    st.info("No IWM stalling days in the trailing 25 sessions.")
 
 # ==============================================================================
 # MASTER SETUP CONSOLIDATION TABLE
