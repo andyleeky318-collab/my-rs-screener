@@ -12247,7 +12247,7 @@ iwm_dist_count, iwm_dist_dates = timed("compute_iwm_distribution_days",
 # section or shared variable — all new names are unique.
 # ==============================================================================
 st.markdown("---")
-st.markdown("## 🧭 Market Verdict")
+st.markdown("## 🧭 Market Verdict/Internal")
 
 # ── Standalone data fetches used only by the verdict (run first so they're
 # available when compute_market_verdict() executes) ─────────────────────────
@@ -12451,16 +12451,63 @@ def compute_market_verdict():
         p8_score, p8_label, p8_detail = 50, "Insufficient data", ""
     breakdown.append(("Credit Spread (HYG/LQD)", p8_score, p8_label, p8_detail))
 
+    # ── Pillar 9: RRG Rotation (Leading + Improving quadrant %) ───────────
+    rrg_full_v = _safe("rrg_data_full", {})
+    leading_count = improving_count = weakening_count = lagging_count = total_rrg = 0
+    for sym, df_t in rrg_full_v.items():
+        try:
+            if df_t is None or df_t.empty:
+                continue
+            last = df_t.iloc[-1]
+            rr, rm = last["RS_Ratio"], last["RS_Momentum"]
+            if pd.isna(rr) or pd.isna(rm):
+                continue
+            total_rrg += 1
+            if rr >= 100 and rm >= 100:
+                leading_count += 1
+            elif rr < 100 and rm >= 100:
+                improving_count += 1
+            elif rr >= 100 and rm < 100:
+                weakening_count += 1
+            else:
+                lagging_count += 1
+        except Exception:
+            continue
+
+    if total_rrg > 0:
+        p9_score = (leading_count + improving_count) / total_rrg * 100
+        p9_label = f"Leading {leading_count} / Improving {improving_count} / Weakening {weakening_count} / Lagging {lagging_count}"
+    else:
+        p9_score, p9_label = 50, "Insufficient data"
+    breakdown.append(("RRG Rotation", p9_score, p9_label, f"{total_rrg} tickers tracked"))
+
+    # ── Pillar 10: ETF Stage2/4 Watchlist (stg2 % vs stg4 %) ───────────────
+    stage_pct_t_v = _safe("stage_pct_df_t", pd.DataFrame())
+    if (isinstance(stage_pct_t_v, pd.DataFrame) and not stage_pct_t_v.empty
+            and "stg2 %" in stage_pct_t_v.index and "stg4 %" in stage_pct_t_v.index):
+        stg2_avg = pd.to_numeric(stage_pct_t_v.loc["stg2 %"], errors="coerce").mean()
+        stg4_avg = pd.to_numeric(stage_pct_t_v.loc["stg4 %"], errors="coerce").mean()
+        if pd.notna(stg2_avg) and pd.notna(stg4_avg):
+            p10_score = max(0, min(100, 50 + (stg2_avg - stg4_avg)))
+            p10_label = f"Stage2 avg {stg2_avg:.1f}% vs Stage4 avg {stg4_avg:.1f}%"
+        else:
+            p10_score, p10_label = 50, "Insufficient data"
+    else:
+        p10_score, p10_label = 50, "Insufficient data"
+    breakdown.append(("ETF Stage2/4 (watchlist)", p10_score, p10_label, ""))
+
     # ── Weighted Composite ──────────────────────────────────────────────────
     weights = {
-        "Market Regime": 0.17,
-        "Distribution Days": 0.22,
-        "Stage Breadth": 0.13,
-        "RS Quadrant Map": 0.13,
-        "Minervini Breadth Trend": 0.13,
-        "ETF Risk Appetite": 0.08,
-        "VIX Term Structure": 0.07,
-        "Credit Spread (HYG/LQD)": 0.07,
+        "Market Regime": 0.15,
+        "Distribution Days": 0.18,
+        "Stage Breadth": 0.10,
+        "RS Quadrant Map": 0.10,
+        "Minervini Breadth Trend": 0.10,
+        "ETF Risk Appetite": 0.07,
+        "VIX Term Structure": 0.06,
+        "Credit Spread (HYG/LQD)": 0.06,
+        "RRG Rotation": 0.10,
+        "ETF Stage2/4 (watchlist)": 0.08,
     }
     composite = sum(score * weights[name] for name, score, _, _ in breakdown)
 
@@ -12995,7 +13042,7 @@ st.markdown(
 if spy_stall_dates:
     st.markdown(", ".join(spy_stall_dates))
 else:
-    st.info("No SPY stalling days in the trailing 25 sessions.")
+    st.info("None")
 
 st.markdown(
     f"#### 🛑 QQQ Stalling Days ({qqq_stall_count}/25) — "
@@ -13006,7 +13053,7 @@ st.markdown(
 if qqq_stall_dates:
     st.markdown(", ".join(qqq_stall_dates))
 else:
-    st.info("No QQQ stalling days in the trailing 25 sessions.")
+    st.info("None")
 
 st.markdown(
     f"#### 🛑 SMH Stalling Days ({smh_stall_count}/25) — "
@@ -13017,7 +13064,7 @@ st.markdown(
 if smh_stall_dates:
     st.markdown(", ".join(smh_stall_dates))
 else:
-    st.info("No SMH stalling days in the trailing 25 sessions.")
+    st.info("None")
 
 st.markdown(
     f"#### 🛑 IWM Stalling Days ({iwm_stall_count}/25) — "
@@ -13028,7 +13075,7 @@ st.markdown(
 if iwm_stall_dates:
     st.markdown(", ".join(iwm_stall_dates))
 else:
-    st.info("No IWM stalling days in the trailing 25 sessions.")
+    st.info("None")
 
 # ==============================================================================
 # MASTER SETUP CONSOLIDATION TABLE
