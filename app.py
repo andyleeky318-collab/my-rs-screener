@@ -11745,7 +11745,7 @@ else:
     render_weekly_earnings_grid(weekly_earnings_df, week_monday, week_friday, gold_tickers=earnings_gold_tickers)
 
 st.markdown("---")
-st.markdown("#### 📅 Economic Calendar (This Week)")
+st.markdown(f"#### 📅 Economic Calendar ({week_label})")
 
 @st.cache_data(ttl=3600)  # Refresh hourly to catch new releases
 def fetch_economic_calendar():
