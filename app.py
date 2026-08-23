@@ -12324,6 +12324,486 @@ rank_df, ret_df = timed(
     SECTOR_ETFS_HEATMAP, ticker_dfs_shared, HEATMAP_RETURN_LENGTH, HEATMAP_DAYS
 )
 
+@st.cache_data(ttl=3600)
+def compute_market_stalling_days(ticker, max_gain=0.4):
+    """
+    IBD-style Stalling Day detector:
+      1. Small gain: 0% < close-to-close change <= max_gain%
+      2. Intraday reversal: close sits in the LOWER half of the day's
+         High-Low range (gave up most of the day's gains)
+      3. Heavy volume: today's volume >= 95% of prior day's volume
+         (i.e. volume didn't meaningfully dry up, even if not higher)
+    Mirrors the same 25-trading-day "still active" window and 5%+ cancel
+    rule used for distribution days, for consistency.
+    """
+    df = yf.download(
+        ticker,
+        period="2mo",
+        interval="1d",
+        progress=False,
+        auto_adjust=True
+    )
+
+    df.columns = [
+        c[0] if isinstance(c, tuple) else c
+        for c in df.columns
+    ]
+
+    df = df[
+        ["Open", "High", "Low", "Close", "Volume"]
+    ].dropna()
+
+    df["Pct_Chg"] = df["Close"].pct_change() * 100
+    df["Vol_Ratio"] = df["Volume"] / df["Volume"].shift(1)
+
+    day_range = df["High"] - df["Low"]
+    midpoint = df["Low"] + (day_range / 2)
+    df["Lower_Half_Close"] = (df["Close"] < midpoint) & (day_range > 0)
+
+    df["Is_Stall_Day"] = (
+        (df["Pct_Chg"] > 0)
+        & (df["Pct_Chg"] <= max_gain)
+        & df["Lower_Half_Close"]
+        & (df["Vol_Ratio"] >= 0.95)
+    )
+
+    active_stalling_days = []
+    potential_stall_df = df[df["Is_Stall_Day"]]
+
+    for stall_date, stall_row in potential_stall_df.iterrows():
+
+        stall_close = stall_row["Close"]
+
+        subsequent_df = df.loc[stall_date:]
+
+        trading_days_elapsed = len(subsequent_df) - 1
+        if trading_days_elapsed >= 25:
+            continue
+
+        max_close_since = subsequent_df["Close"].max()
+        pct_gain_since = (
+            (max_close_since - stall_close) / stall_close
+        ) * 100
+
+        if pct_gain_since >= 5.0:
+            continue
+
+        active_stalling_days.append(
+            stall_date.strftime("%Y-%m-%d")
+        )
+
+    return len(active_stalling_days), active_stalling_days
+
+st.markdown("---")
+
+# ============================================================
+# STALLING DAY COUNTS — SPY / QQQ / SMH / IWM
+# ============================================================
+
+spy_stall_count, spy_stall_dates = timed(
+    "compute_spy_stalling_days",
+    lambda: compute_market_stalling_days("SPY", max_gain=0.4)
+)
+spy_stall_triggered = spy_stall_count >= 3
+spy_stall_color = "#FF4B4B" if spy_stall_triggered else "#00FF00"
+spy_stall_text = (
+    "TRIGGERED — buying momentum drying up, watch for a top"
+    if spy_stall_triggered else "Not Triggered"
+)
+
+qqq_stall_count, qqq_stall_dates = timed(
+    "compute_qqq_stalling_days",
+    lambda: compute_market_stalling_days("QQQ", max_gain=0.4)
+)
+qqq_stall_triggered = qqq_stall_count >= 3
+qqq_stall_color = "#FF4B4B" if qqq_stall_triggered else "#00FF00"
+qqq_stall_text = (
+    "TRIGGERED — buying momentum drying up, watch for a top"
+    if qqq_stall_triggered else "Not Triggered"
+)
+
+smh_stall_count, smh_stall_dates = timed(
+    "compute_smh_stalling_days",
+    lambda: compute_market_stalling_days("SMH", max_gain=0.4)
+)
+smh_stall_triggered = smh_stall_count >= 3
+smh_stall_color = "#FF4B4B" if smh_stall_triggered else "#00FF00"
+smh_stall_text = (
+    "TRIGGERED — buying momentum drying up, watch for a top"
+    if smh_stall_triggered else "Not Triggered"
+)
+
+iwm_stall_count, iwm_stall_dates = timed(
+    "compute_iwm_stalling_days",
+    lambda: compute_market_stalling_days("IWM", max_gain=0.4)
+)
+iwm_stall_triggered = iwm_stall_count >= 3
+iwm_stall_color = "#FF4B4B" if iwm_stall_triggered else "#00FF00"
+iwm_stall_text = (
+    "TRIGGERED — buying momentum drying up, watch for a top"
+    if iwm_stall_triggered else "Not Triggered"
+)
+
+st.markdown(
+    f"#### 🛑 SPY Stalling Days ({spy_stall_count}/25) — "
+    f"<span style='color:{spy_stall_color};font-weight:bold;'>"
+    f"{spy_stall_text}</span>",
+    unsafe_allow_html=True,
+)
+if spy_stall_dates:
+    st.markdown(", ".join(spy_stall_dates))
+else:
+    st.info("None")
+
+st.markdown(
+    f"#### 🛑 QQQ Stalling Days ({qqq_stall_count}/25) — "
+    f"<span style='color:{qqq_stall_color};font-weight:bold;'>"
+    f"{qqq_stall_text}</span>",
+    unsafe_allow_html=True,
+)
+if qqq_stall_dates:
+    st.markdown(", ".join(qqq_stall_dates))
+else:
+    st.info("None")
+
+st.markdown(
+    f"#### 🛑 SMH Stalling Days ({smh_stall_count}/25) — "
+    f"<span style='color:{smh_stall_color};font-weight:bold;'>"
+    f"{smh_stall_text}</span>",
+    unsafe_allow_html=True,
+)
+if smh_stall_dates:
+    st.markdown(", ".join(smh_stall_dates))
+else:
+    st.info("None")
+
+st.markdown(
+    f"#### 🛑 IWM Stalling Days ({iwm_stall_count}/25) — "
+    f"<span style='color:{iwm_stall_color};font-weight:bold;'>"
+    f"{iwm_stall_text}</span>",
+    unsafe_allow_html=True,
+)
+if iwm_stall_dates:
+    st.markdown(", ".join(iwm_stall_dates))
+else:
+    st.info("None")
+
+# ==============================================================================
+# 20. SECTOR STRENGTH HEATMAP — cross-sectional rank (display) +
+# absolute-return money-flow coloring (so a broad bear market shows all red)
+# ==============================================================================
+st.markdown("---")
+st.markdown('#### 🌡️ Sector Strength Heatmap <span style="color:#888; font-size:12px;">(Long Term)</span>', unsafe_allow_html=True)
+
+
+
+def _heatmap_cell_color_v2(ret_val, cap=8.0):
+    """Color = absolute-return money-flow direction, NOT the cross-sectional rank."""
+    if pd.isna(ret_val):
+        return "background-color:#1a1a1a;color:#555;"
+    r = float(ret_val)
+    alpha = min(abs(r) / cap, 1.0)
+    if r >= 0:
+        return f"background-color:rgba(0,200,120,{0.15 + alpha * 0.75:.2f});color:#ffffff;"
+    return f"background-color:rgba(220,60,60,{0.15 + alpha * 0.75:.2f});color:#ffffff;"
+
+if rank_df.empty:
+    st.info("Sector heatmap data unavailable.")
+else:
+    header_cells = (
+        "<th style='position:sticky;top:0;background:#111;color:#eee;padding:6px 10px;"
+        "text-align:center;font-size:12px;border:1px solid #333;z-index:2;'>Date</th>"
+    )
+
+    EXTRA_BORDER = {"XLC": "border-left:3px solid #ffffff;", "XLY": "border-right:3px solid #ffffff;", "XLB": "border-right:3px solid #ffffff;"}
+
+    header_cells += "".join(
+        f"<th style='position:sticky;top:0;background:#111;"
+        f"color:{'#FF4B4B' if sector_dist_triggered.get(col, False) else '#eee'};"
+        f"padding:6px 10px;text-align:center;font-size:12px;"
+        f"border:1px solid #333;{EXTRA_BORDER.get(col,'')}z-index:2;'>{col}</th>"
+        for col in rank_df.columns[1:]
+    )
+    body_rows = ""
+    for i in range(len(rank_df)):
+        rank_row = rank_df.iloc[i]
+        ret_row = ret_df.iloc[i]
+        cells = (
+            f"<td style='position:sticky;left:0;background:#111;color:#eee;padding:5px 8px;"
+            f"font-size:11px;border:1px solid #333;white-space:nowrap;z-index:1;'>{rank_row['Date']}</td>"
+        )
+        for col in rank_df.columns[1:]:
+            rank_val = rank_row[col]
+            ret_val = ret_row[col]
+            style = _heatmap_cell_color_v2(ret_val)
+            display_val = "" if pd.isna(rank_val) else f"{int(rank_val)}"
+            cells += (
+                f"<td style='{style}padding:5px 8px;text-align:center;"
+                f"font-size:12px;border:1px solid #333;{EXTRA_BORDER.get(col,'')}'>{display_val}</td>"
+            )
+        body_rows += f"<tr>{cells}</tr>"
+
+    heatmap_html = f"""
+    <div style="max-height:600px; overflow-y:auto; overflow-x:auto; border-radius:6px;">
+    <table style="border-collapse:collapse; width:100%;">
+    <thead><tr>{header_cells}</tr></thead>
+    <tbody>{body_rows}</tbody>
+    </table>
+    </div>
+    """
+    st.markdown(heatmap_html, unsafe_allow_html=True)
+
+# ==============================================================================
+# 21. SPY DISTRIBUTION DAY COUNT — 5+ in trailing 25 sessions = elevated risk
+# ==============================================================================
+
+
+
+
+# ============================================================
+# SPY
+# Distribution threshold = -0.2%
+# ============================================================
+
+
+
+spy_triggered = spy_dist_count >= 5
+
+spy_status_color = (
+    "#FF4B4B"
+    if spy_triggered
+    else "#00FF00"
+)
+
+spy_status_text = (
+    "TRIGGERED — elevated correction risk, skip new breakouts"
+    if spy_triggered
+    else "Not Triggered"
+)
+
+
+# ============================================================
+# QQQ
+# Stricter threshold = -0.3%
+# ============================================================
+
+
+
+qqq_triggered = qqq_dist_count >= 5
+
+qqq_status_color = (
+    "#FF4B4B"
+    if qqq_triggered
+    else "#00FF00"
+)
+
+qqq_status_text = (
+    "TRIGGERED — elevated correction risk, skip new breakouts"
+    if qqq_triggered
+    else "Not Triggered"
+)
+
+
+# ============================================================
+# SMH
+# Stricter threshold = -0.5%
+# ============================================================
+
+
+
+smh_triggered = smh_dist_count >= 5
+
+smh_status_color = (
+    "#FF4B4B"
+    if smh_triggered
+    else "#00FF00"
+)
+
+smh_status_text = (
+    "TRIGGERED — elevated correction risk, skip new breakouts"
+    if smh_triggered
+    else "Not Triggered"
+)
+
+
+
+
+# ============================================================
+# IWM
+# Distribution threshold = -0.2%
+# ============================================================
+
+
+
+iwm_triggered = iwm_dist_count >= 5
+
+iwm_status_color = (
+    "#FF4B4B"
+    if iwm_triggered
+    else "#00FF00"
+)
+
+iwm_status_text = (
+    "TRIGGERED — elevated correction risk, skip new breakouts"
+    if iwm_triggered
+    else "Not Triggered"
+)
+
+
+
+st.markdown("---")
+
+st.markdown(
+    f"#### 🚨 SPY Distribution Days ({spy_dist_count}/25) — "
+    f"<span style='color:{spy_status_color};font-weight:bold;'>"
+    f"{spy_status_text}</span>",
+    unsafe_allow_html=True,
+)
+
+if spy_dist_dates:
+    st.markdown(", ".join(spy_dist_dates))
+else:
+    st.info(
+        "No SPY distribution days in the trailing 25 sessions."
+    )
+
+st.markdown(
+    f"#### 🚨 QQQ Distribution Days ({qqq_dist_count}/25) — "
+    f"<span style='color:{qqq_status_color};font-weight:bold;'>"
+    f"{qqq_status_text}</span>",
+    unsafe_allow_html=True,
+)
+
+if qqq_dist_dates:
+    st.markdown(", ".join(qqq_dist_dates))
+else:
+    st.info(
+        "No QQQ distribution days in the trailing 25 sessions."
+    )
+
+st.markdown(
+    f"#### 🚨 SMH Distribution Days ({smh_dist_count}/25) — "
+    f"<span style='color:{smh_status_color};font-weight:bold;'>"
+    f"{smh_status_text}</span>",
+    unsafe_allow_html=True,
+)
+
+if smh_dist_dates:
+    st.markdown(", ".join(smh_dist_dates))
+else:
+    st.info(
+        "No SMH distribution days in the trailing 25 sessions."
+    )
+
+st.markdown(
+    f"#### 🚨 IWM Distribution Days ({iwm_dist_count}/25) — "
+    f"<span style='color:{iwm_status_color};font-weight:bold;'>"
+    f"{iwm_status_text}</span>",
+    unsafe_allow_html=True,
+)
+
+if iwm_dist_dates:
+    st.markdown(", ".join(iwm_dist_dates))
+else:
+    st.info(
+        "No IWM distribution days in the trailing 25 sessions."
+    )
+
+
+
+# ==============================================================================
+# MASTER SETUP CONSOLIDATION TABLE
+# Aggregates every tracked screen into one ticker x section table, ticked where
+# a ticker currently qualifies for that section, sorted by how many sections
+# it appears in (most -> least). Also flags whether ANY industry the ticker
+# belongs to is currently in the top 20 by Group RS.
+# ==============================================================================
+st.markdown("---")
+
+# Global "21ema_valid" set = the underlying buyable/cloud-eligible list
+# (item["Cloud"] per industry), same pool that feeds 21ema_cloud/wick/50ma_bounce.
+cloud_valid_all = set()
+for item in all_data:
+    cloud_valid_all.update(item.get("Cloud", []))
+
+# Column label -> set of tickers currently qualifying for that section.
+# Built defensively: several of these (pt_syms, coc_today, etc.) only get
+# defined inside their section's "if list or yest_list:" conditional block,
+# so on a day where that list is empty the variable never exists. Reading
+# everything through globals().get(...) with a safe default avoids a
+# NameError crash on those quiet days.
+_pt_list_safe = globals().get("pt_list", [])
+_pt_syms_fallback = set(
+    item[0] if isinstance(item, tuple) else item for item in _pt_list_safe
+)
+
+SECTION_DEFINITIONS = {
+    "Minervini":          set(sym for sym, _, _ in globals().get("email_content_stocks", [])),
+    "RS Leader":          set(globals().get("leader_list", [])),
+    "TML":                set(globals().get("tml_list", [])),
+    "PPP":                set(globals().get("ppp_list", [])),    
+    "RS NH B4 Price":     set(globals().get("rs_nh_b4_today", [])),
+    "Gapper":             set(globals().get("gapper_list", [])),          # short form
+    "Early Bull":         set(globals().get("early_bull_list", [])),
+    "Two Botak":          set(globals().get("b_list", [])),
+    "Engulfing":          set(globals().get("engulf_combined_syms", [])),
+    "PowerTrend":         _pt_syms_fallback,
+    "CoC":                set(globals().get("coc_today", [])),            # short form
+    "21ema_valid":        cloud_valid_all,
+    "21ema_cloud":        cloud21ema_all,
+    "21ema_wick":         cloudwick_all,
+    "50ma_bounce":        ma50bounce_all,
+}
+
+# Reverse lookup: ticker -> industries it belongs to (built once, O(1) lookups after)
+ticker_to_industries = {}
+for _industry, _tickers_in_group in INDUSTRIES.items():
+    for _t in _tickers_in_group:
+        ticker_to_industries.setdefault(_t, []).append(_industry)
+
+def _ticker_is_top20_industry(sym):
+    """True if ANY industry this ticker belongs to is currently ranked <= 20 by Group RS."""
+    return any(
+        industry_rank_map.get(ind, 9999) <= 20
+        for ind in ticker_to_industries.get(sym, [])
+    )
+
+# ── Extra non-counted columns (not part of SECTION_DEFINITIONS/Count) ──────
+# Volatility: ticker itself hit today's volatility Z-score screen
+_vol_hits_safe = globals().get("volatility_hits", [])
+vol_hit_syms = set(sym for sym, _z, _pct in _vol_hits_safe)
+_lime_stocks1_safe = set(globals().get("LIME_STOCKS1", []))
+
+# Distribution: ticker belongs to an industry currently flagged for
+# distribution (the same set that colors the industry-table rank number red)
+_vol_flagged_industries_safe = globals().get("vol_flagged_industries", set())
+
+def _ticker_in_distribution_industry(sym):
+    return any(
+        ind in _vol_flagged_industries_safe
+        for ind in ticker_to_industries.get(sym, [])
+    )
+
+# Union of every ticker appearing in at least one counted section,
+# restricted to the KNOWN_STOCKS universe only.
+master_ticker_set = set()
+for _tset in SECTION_DEFINITIONS.values():
+    master_ticker_set.update(_tset)
+master_ticker_set &= set(KNOWN_STOCKS)
+
+master_rows = []
+for sym in master_ticker_set:
+    section_flags = {label: (sym in tset) for label, tset in SECTION_DEFINITIONS.items()}
+    is_top20 = _ticker_is_top20_industry(sym)
+    master_rows.append({
+        "Ticker": sym,
+        "Count": sum(section_flags.values()) + (1 if is_top20 else 0),
+        "Top20 Industry": is_top20,
+        "Volatility": sym in vol_hit_syms,
+        "Distribution": _ticker_in_distribution_industry(sym),
+        **section_flags,
+    })
+
 # ==============================================================================
 # 23. MARKET VERDICT — Composite Breakout / Pullback / Neutral / Defensive Read
 # Read-only, additive. Synthesizes every signal already computed above plus
@@ -12794,484 +13274,6 @@ st.markdown(
 
 if dist_triggered:
     st.caption(f"⚠️ Distribution-day override active on: {', '.join(dist_triggered)} — this caps the verdict regardless of other pillars.")    
-
-# ==============================================================================
-# 20. SECTOR STRENGTH HEATMAP — cross-sectional rank (display) +
-# absolute-return money-flow coloring (so a broad bear market shows all red)
-# ==============================================================================
-st.markdown("---")
-st.markdown('#### 🌡️ Sector Strength Heatmap <span style="color:#888; font-size:12px;">(Long Term)</span>', unsafe_allow_html=True)
-
-
-
-def _heatmap_cell_color_v2(ret_val, cap=8.0):
-    """Color = absolute-return money-flow direction, NOT the cross-sectional rank."""
-    if pd.isna(ret_val):
-        return "background-color:#1a1a1a;color:#555;"
-    r = float(ret_val)
-    alpha = min(abs(r) / cap, 1.0)
-    if r >= 0:
-        return f"background-color:rgba(0,200,120,{0.15 + alpha * 0.75:.2f});color:#ffffff;"
-    return f"background-color:rgba(220,60,60,{0.15 + alpha * 0.75:.2f});color:#ffffff;"
-
-if rank_df.empty:
-    st.info("Sector heatmap data unavailable.")
-else:
-    header_cells = (
-        "<th style='position:sticky;top:0;background:#111;color:#eee;padding:6px 10px;"
-        "text-align:center;font-size:12px;border:1px solid #333;z-index:2;'>Date</th>"
-    )
-
-    EXTRA_BORDER = {"XLC": "border-left:3px solid #ffffff;", "XLY": "border-right:3px solid #ffffff;", "XLB": "border-right:3px solid #ffffff;"}
-
-    header_cells += "".join(
-        f"<th style='position:sticky;top:0;background:#111;"
-        f"color:{'#FF4B4B' if sector_dist_triggered.get(col, False) else '#eee'};"
-        f"padding:6px 10px;text-align:center;font-size:12px;"
-        f"border:1px solid #333;{EXTRA_BORDER.get(col,'')}z-index:2;'>{col}</th>"
-        for col in rank_df.columns[1:]
-    )
-    body_rows = ""
-    for i in range(len(rank_df)):
-        rank_row = rank_df.iloc[i]
-        ret_row = ret_df.iloc[i]
-        cells = (
-            f"<td style='position:sticky;left:0;background:#111;color:#eee;padding:5px 8px;"
-            f"font-size:11px;border:1px solid #333;white-space:nowrap;z-index:1;'>{rank_row['Date']}</td>"
-        )
-        for col in rank_df.columns[1:]:
-            rank_val = rank_row[col]
-            ret_val = ret_row[col]
-            style = _heatmap_cell_color_v2(ret_val)
-            display_val = "" if pd.isna(rank_val) else f"{int(rank_val)}"
-            cells += (
-                f"<td style='{style}padding:5px 8px;text-align:center;"
-                f"font-size:12px;border:1px solid #333;{EXTRA_BORDER.get(col,'')}'>{display_val}</td>"
-            )
-        body_rows += f"<tr>{cells}</tr>"
-
-    heatmap_html = f"""
-    <div style="max-height:600px; overflow-y:auto; overflow-x:auto; border-radius:6px;">
-    <table style="border-collapse:collapse; width:100%;">
-    <thead><tr>{header_cells}</tr></thead>
-    <tbody>{body_rows}</tbody>
-    </table>
-    </div>
-    """
-    st.markdown(heatmap_html, unsafe_allow_html=True)
-
-# ==============================================================================
-# 21. SPY DISTRIBUTION DAY COUNT — 5+ in trailing 25 sessions = elevated risk
-# ==============================================================================
-
-
-
-
-# ============================================================
-# SPY
-# Distribution threshold = -0.2%
-# ============================================================
-
-
-
-spy_triggered = spy_dist_count >= 5
-
-spy_status_color = (
-    "#FF4B4B"
-    if spy_triggered
-    else "#00FF00"
-)
-
-spy_status_text = (
-    "TRIGGERED — elevated correction risk, skip new breakouts"
-    if spy_triggered
-    else "Not Triggered"
-)
-
-
-# ============================================================
-# QQQ
-# Stricter threshold = -0.3%
-# ============================================================
-
-
-
-qqq_triggered = qqq_dist_count >= 5
-
-qqq_status_color = (
-    "#FF4B4B"
-    if qqq_triggered
-    else "#00FF00"
-)
-
-qqq_status_text = (
-    "TRIGGERED — elevated correction risk, skip new breakouts"
-    if qqq_triggered
-    else "Not Triggered"
-)
-
-
-# ============================================================
-# SMH
-# Stricter threshold = -0.5%
-# ============================================================
-
-
-
-smh_triggered = smh_dist_count >= 5
-
-smh_status_color = (
-    "#FF4B4B"
-    if smh_triggered
-    else "#00FF00"
-)
-
-smh_status_text = (
-    "TRIGGERED — elevated correction risk, skip new breakouts"
-    if smh_triggered
-    else "Not Triggered"
-)
-
-
-
-
-# ============================================================
-# IWM
-# Distribution threshold = -0.2%
-# ============================================================
-
-
-
-iwm_triggered = iwm_dist_count >= 5
-
-iwm_status_color = (
-    "#FF4B4B"
-    if iwm_triggered
-    else "#00FF00"
-)
-
-iwm_status_text = (
-    "TRIGGERED — elevated correction risk, skip new breakouts"
-    if iwm_triggered
-    else "Not Triggered"
-)
-
-
-
-st.markdown("---")
-
-st.markdown(
-    f"#### 🚨 SPY Distribution Days ({spy_dist_count}/25) — "
-    f"<span style='color:{spy_status_color};font-weight:bold;'>"
-    f"{spy_status_text}</span>",
-    unsafe_allow_html=True,
-)
-
-if spy_dist_dates:
-    st.markdown(", ".join(spy_dist_dates))
-else:
-    st.info(
-        "No SPY distribution days in the trailing 25 sessions."
-    )
-
-st.markdown(
-    f"#### 🚨 QQQ Distribution Days ({qqq_dist_count}/25) — "
-    f"<span style='color:{qqq_status_color};font-weight:bold;'>"
-    f"{qqq_status_text}</span>",
-    unsafe_allow_html=True,
-)
-
-if qqq_dist_dates:
-    st.markdown(", ".join(qqq_dist_dates))
-else:
-    st.info(
-        "No QQQ distribution days in the trailing 25 sessions."
-    )
-
-st.markdown(
-    f"#### 🚨 SMH Distribution Days ({smh_dist_count}/25) — "
-    f"<span style='color:{smh_status_color};font-weight:bold;'>"
-    f"{smh_status_text}</span>",
-    unsafe_allow_html=True,
-)
-
-if smh_dist_dates:
-    st.markdown(", ".join(smh_dist_dates))
-else:
-    st.info(
-        "No SMH distribution days in the trailing 25 sessions."
-    )
-
-st.markdown(
-    f"#### 🚨 IWM Distribution Days ({iwm_dist_count}/25) — "
-    f"<span style='color:{iwm_status_color};font-weight:bold;'>"
-    f"{iwm_status_text}</span>",
-    unsafe_allow_html=True,
-)
-
-if iwm_dist_dates:
-    st.markdown(", ".join(iwm_dist_dates))
-else:
-    st.info(
-        "No IWM distribution days in the trailing 25 sessions."
-    )
-
-@st.cache_data(ttl=3600)
-def compute_market_stalling_days(ticker, max_gain=0.4):
-    """
-    IBD-style Stalling Day detector:
-      1. Small gain: 0% < close-to-close change <= max_gain%
-      2. Intraday reversal: close sits in the LOWER half of the day's
-         High-Low range (gave up most of the day's gains)
-      3. Heavy volume: today's volume >= 95% of prior day's volume
-         (i.e. volume didn't meaningfully dry up, even if not higher)
-    Mirrors the same 25-trading-day "still active" window and 5%+ cancel
-    rule used for distribution days, for consistency.
-    """
-    df = yf.download(
-        ticker,
-        period="2mo",
-        interval="1d",
-        progress=False,
-        auto_adjust=True
-    )
-
-    df.columns = [
-        c[0] if isinstance(c, tuple) else c
-        for c in df.columns
-    ]
-
-    df = df[
-        ["Open", "High", "Low", "Close", "Volume"]
-    ].dropna()
-
-    df["Pct_Chg"] = df["Close"].pct_change() * 100
-    df["Vol_Ratio"] = df["Volume"] / df["Volume"].shift(1)
-
-    day_range = df["High"] - df["Low"]
-    midpoint = df["Low"] + (day_range / 2)
-    df["Lower_Half_Close"] = (df["Close"] < midpoint) & (day_range > 0)
-
-    df["Is_Stall_Day"] = (
-        (df["Pct_Chg"] > 0)
-        & (df["Pct_Chg"] <= max_gain)
-        & df["Lower_Half_Close"]
-        & (df["Vol_Ratio"] >= 0.95)
-    )
-
-    active_stalling_days = []
-    potential_stall_df = df[df["Is_Stall_Day"]]
-
-    for stall_date, stall_row in potential_stall_df.iterrows():
-
-        stall_close = stall_row["Close"]
-
-        subsequent_df = df.loc[stall_date:]
-
-        trading_days_elapsed = len(subsequent_df) - 1
-        if trading_days_elapsed >= 25:
-            continue
-
-        max_close_since = subsequent_df["Close"].max()
-        pct_gain_since = (
-            (max_close_since - stall_close) / stall_close
-        ) * 100
-
-        if pct_gain_since >= 5.0:
-            continue
-
-        active_stalling_days.append(
-            stall_date.strftime("%Y-%m-%d")
-        )
-
-    return len(active_stalling_days), active_stalling_days
-
-st.markdown("---")
-
-# ============================================================
-# STALLING DAY COUNTS — SPY / QQQ / SMH / IWM
-# ============================================================
-
-spy_stall_count, spy_stall_dates = timed(
-    "compute_spy_stalling_days",
-    lambda: compute_market_stalling_days("SPY", max_gain=0.4)
-)
-spy_stall_triggered = spy_stall_count >= 3
-spy_stall_color = "#FF4B4B" if spy_stall_triggered else "#00FF00"
-spy_stall_text = (
-    "TRIGGERED — buying momentum drying up, watch for a top"
-    if spy_stall_triggered else "Not Triggered"
-)
-
-qqq_stall_count, qqq_stall_dates = timed(
-    "compute_qqq_stalling_days",
-    lambda: compute_market_stalling_days("QQQ", max_gain=0.4)
-)
-qqq_stall_triggered = qqq_stall_count >= 3
-qqq_stall_color = "#FF4B4B" if qqq_stall_triggered else "#00FF00"
-qqq_stall_text = (
-    "TRIGGERED — buying momentum drying up, watch for a top"
-    if qqq_stall_triggered else "Not Triggered"
-)
-
-smh_stall_count, smh_stall_dates = timed(
-    "compute_smh_stalling_days",
-    lambda: compute_market_stalling_days("SMH", max_gain=0.4)
-)
-smh_stall_triggered = smh_stall_count >= 3
-smh_stall_color = "#FF4B4B" if smh_stall_triggered else "#00FF00"
-smh_stall_text = (
-    "TRIGGERED — buying momentum drying up, watch for a top"
-    if smh_stall_triggered else "Not Triggered"
-)
-
-iwm_stall_count, iwm_stall_dates = timed(
-    "compute_iwm_stalling_days",
-    lambda: compute_market_stalling_days("IWM", max_gain=0.4)
-)
-iwm_stall_triggered = iwm_stall_count >= 3
-iwm_stall_color = "#FF4B4B" if iwm_stall_triggered else "#00FF00"
-iwm_stall_text = (
-    "TRIGGERED — buying momentum drying up, watch for a top"
-    if iwm_stall_triggered else "Not Triggered"
-)
-
-st.markdown(
-    f"#### 🛑 SPY Stalling Days ({spy_stall_count}/25) — "
-    f"<span style='color:{spy_stall_color};font-weight:bold;'>"
-    f"{spy_stall_text}</span>",
-    unsafe_allow_html=True,
-)
-if spy_stall_dates:
-    st.markdown(", ".join(spy_stall_dates))
-else:
-    st.info("None")
-
-st.markdown(
-    f"#### 🛑 QQQ Stalling Days ({qqq_stall_count}/25) — "
-    f"<span style='color:{qqq_stall_color};font-weight:bold;'>"
-    f"{qqq_stall_text}</span>",
-    unsafe_allow_html=True,
-)
-if qqq_stall_dates:
-    st.markdown(", ".join(qqq_stall_dates))
-else:
-    st.info("None")
-
-st.markdown(
-    f"#### 🛑 SMH Stalling Days ({smh_stall_count}/25) — "
-    f"<span style='color:{smh_stall_color};font-weight:bold;'>"
-    f"{smh_stall_text}</span>",
-    unsafe_allow_html=True,
-)
-if smh_stall_dates:
-    st.markdown(", ".join(smh_stall_dates))
-else:
-    st.info("None")
-
-st.markdown(
-    f"#### 🛑 IWM Stalling Days ({iwm_stall_count}/25) — "
-    f"<span style='color:{iwm_stall_color};font-weight:bold;'>"
-    f"{iwm_stall_text}</span>",
-    unsafe_allow_html=True,
-)
-if iwm_stall_dates:
-    st.markdown(", ".join(iwm_stall_dates))
-else:
-    st.info("None")
-
-# ==============================================================================
-# MASTER SETUP CONSOLIDATION TABLE
-# Aggregates every tracked screen into one ticker x section table, ticked where
-# a ticker currently qualifies for that section, sorted by how many sections
-# it appears in (most -> least). Also flags whether ANY industry the ticker
-# belongs to is currently in the top 20 by Group RS.
-# ==============================================================================
-st.markdown("---")
-
-# Global "21ema_valid" set = the underlying buyable/cloud-eligible list
-# (item["Cloud"] per industry), same pool that feeds 21ema_cloud/wick/50ma_bounce.
-cloud_valid_all = set()
-for item in all_data:
-    cloud_valid_all.update(item.get("Cloud", []))
-
-# Column label -> set of tickers currently qualifying for that section.
-# Built defensively: several of these (pt_syms, coc_today, etc.) only get
-# defined inside their section's "if list or yest_list:" conditional block,
-# so on a day where that list is empty the variable never exists. Reading
-# everything through globals().get(...) with a safe default avoids a
-# NameError crash on those quiet days.
-_pt_list_safe = globals().get("pt_list", [])
-_pt_syms_fallback = set(
-    item[0] if isinstance(item, tuple) else item for item in _pt_list_safe
-)
-
-SECTION_DEFINITIONS = {
-    "Minervini":          set(sym for sym, _, _ in globals().get("email_content_stocks", [])),
-    "RS Leader":          set(globals().get("leader_list", [])),
-    "TML":                set(globals().get("tml_list", [])),
-    "PPP":                set(globals().get("ppp_list", [])),    
-    "RS NH B4 Price":     set(globals().get("rs_nh_b4_today", [])),
-    "Gapper":             set(globals().get("gapper_list", [])),          # short form
-    "Early Bull":         set(globals().get("early_bull_list", [])),
-    "Two Botak":          set(globals().get("b_list", [])),
-    "Engulfing":          set(globals().get("engulf_combined_syms", [])),
-    "PowerTrend":         _pt_syms_fallback,
-    "CoC":                set(globals().get("coc_today", [])),            # short form
-    "21ema_valid":        cloud_valid_all,
-    "21ema_cloud":        cloud21ema_all,
-    "21ema_wick":         cloudwick_all,
-    "50ma_bounce":        ma50bounce_all,
-}
-
-# Reverse lookup: ticker -> industries it belongs to (built once, O(1) lookups after)
-ticker_to_industries = {}
-for _industry, _tickers_in_group in INDUSTRIES.items():
-    for _t in _tickers_in_group:
-        ticker_to_industries.setdefault(_t, []).append(_industry)
-
-def _ticker_is_top20_industry(sym):
-    """True if ANY industry this ticker belongs to is currently ranked <= 20 by Group RS."""
-    return any(
-        industry_rank_map.get(ind, 9999) <= 20
-        for ind in ticker_to_industries.get(sym, [])
-    )
-
-# ── Extra non-counted columns (not part of SECTION_DEFINITIONS/Count) ──────
-# Volatility: ticker itself hit today's volatility Z-score screen
-_vol_hits_safe = globals().get("volatility_hits", [])
-vol_hit_syms = set(sym for sym, _z, _pct in _vol_hits_safe)
-_lime_stocks1_safe = set(globals().get("LIME_STOCKS1", []))
-
-# Distribution: ticker belongs to an industry currently flagged for
-# distribution (the same set that colors the industry-table rank number red)
-_vol_flagged_industries_safe = globals().get("vol_flagged_industries", set())
-
-def _ticker_in_distribution_industry(sym):
-    return any(
-        ind in _vol_flagged_industries_safe
-        for ind in ticker_to_industries.get(sym, [])
-    )
-
-# Union of every ticker appearing in at least one counted section,
-# restricted to the KNOWN_STOCKS universe only.
-master_ticker_set = set()
-for _tset in SECTION_DEFINITIONS.values():
-    master_ticker_set.update(_tset)
-master_ticker_set &= set(KNOWN_STOCKS)
-
-master_rows = []
-for sym in master_ticker_set:
-    section_flags = {label: (sym in tset) for label, tset in SECTION_DEFINITIONS.items()}
-    is_top20 = _ticker_is_top20_industry(sym)
-    master_rows.append({
-        "Ticker": sym,
-        "Count": sum(section_flags.values()) + (1 if is_top20 else 0),
-        "Top20 Industry": is_top20,
-        "Volatility": sym in vol_hit_syms,
-        "Distribution": _ticker_in_distribution_industry(sym),
-        **section_flags,
-    })
 
 # Most sections first, then alphabetical tiebreaker
 master_rows.sort(key=lambda r: (-r["Count"], r["Ticker"]))
@@ -15226,20 +15228,9 @@ def _render_accumulation_sparkline_svg(values, width=140, height=32):
         points.append(f"{x:.1f},{y:.1f}")
     points_str = " ".join(points)
 
-    # Reference line at ratio == 1 (mapped into the same y-scale)
-    if v_min <= 1.0 <= v_max:
-        y_ref = pad + (1 - (1.0 - v_min) / v_range) * plot_h
-        ref_line = (
-            f'<line x1="{pad}" y1="{y_ref:.1f}" x2="{width - pad}" y2="{y_ref:.1f}" '
-            f'stroke="#666" stroke-width="0.6" stroke-dasharray="2,2"/>'
-        )
-    else:
-        ref_line = ""
-
     last_x, last_y = points[-1].split(",")
     svg = (
         f'<svg width="{width}" height="{height}" style="display:block;">'
-        f'{ref_line}'
         f'<polyline points="{points_str}" fill="none" stroke="{color}" stroke-width="1.6"/>'
         f'<circle cx="{last_x}" cy="{last_y}" r="2.2" fill="{color}"/>'
         f'</svg>'
