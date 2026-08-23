@@ -9641,52 +9641,482 @@ timed("Relative ETF Ratios", _relative_etf_ratios)
 
 st.markdown("---")
 
-# ── Timing Summary ───────────────────────────────────────────────────────────
-st.markdown("#### ⏱ Test Time")
+ticker_dfs_all_industries, benchmark_df_all_industries = timed(
+    "download_all_industry_stocks_data",
+    download_all_industry_stocks_data,
+    all_industry_tickers_tuple, ticker_dfs_shared
+)
 
-if _timing_log:
-    # Separate industry-level rows from top-level function rows
-    industry_rows = {k: v for k, v in _timing_log.items() if k.startswith("RS+Cloud")}
-    main_rows     = {k: v for k, v in _timing_log.items() if not k.startswith("RS+Cloud")}
+with st.spinner("Computing Setup Rank history..."):
+    setup_avgrank_hist = timed(
+        "compute_setup_avgrank_history",
+        compute_setup_avgrank_history,
+        all_data, ticker_dfs_all_industries, benchmark_df_all_industries, 90,
+        tuple(sorted(global_setup_tickers)), global_setup_ticker_groups
+    )
 
-    # Top-level functions table
-    # timing_records = [{"Function": k, "Time (ms)": f"{v:,.0f}", "Time (s)": f"{v/1000:.2f}"}
-    #                   for k, v in sorted(main_rows.items(), key=lambda x: -x[1])]
-    timing_records = [{"Function": k, "Time (s)": f"{v/1000:.2f}"}
-                      for k, v in main_rows.items()]
+with st.spinner("Computing Setup Count history..."):
+    setup_count_hist = timed(
+        "compute_global_setup_count_history",
+        compute_global_setup_count_history,
+        stocks_tuple, ticker_dfs_shared
+    )
 
-    if timing_records:
-        st.dataframe(
-            pd.DataFrame(timing_records),
-            use_container_width=False,
-            width=350,
-            hide_index=True
+st.markdown(f"#### 📐 Pullback Setup Quality ({global_setup_count})")
+
+if not setup_avgrank_hist.empty:
+    chart_df_rank = setup_avgrank_hist.merge(setup_count_hist, on="Date", how="left")
+    chart_df_rank["Setup Count"] = chart_df_rank["Setup Count"].ffill().fillna(0)
+    today_rank = chart_df_rank["Avg Rank"].iloc[-1]
+    min_rank = chart_df_rank["Avg Rank"].min()
+    min_idx = chart_df_rank["Avg Rank"].idxmin()
+
+    bar_colors = ["#29B5E8"] * len(chart_df_rank)
+    bar_colors[chart_df_rank.index.get_loc(min_idx)] = "#90EE90"  # overall lowest bar (best rank)
+    second_min_idx = chart_df_rank["Avg Rank"].nsmallest(2).index[-1]  # NEW: 2nd lowest bar
+    bar_colors[chart_df_rank.index.get_loc(second_min_idx)] = "#90EE90"  # NEW: same green
+    if today_rank == min_rank:
+        bar_colors[-1] = "#FF4B4B"  # today is also the lowest
+
+    fig_setup = go.Figure()
+    fig_setup.add_trace(go.Bar(
+        x=chart_df_rank["Date"], y=chart_df_rank["Avg Rank"],
+        name="Avg Rank", marker_color=bar_colors, yaxis="y1",
+    ))
+    fig_setup.add_trace(go.Scatter(
+        x=chart_df_rank["Date"], y=chart_df_rank["Setup Count"],
+        name="Setup Count", mode="lines", line=dict(color="#FF4B4B", width=2),
+        yaxis="y2",
+    ))
+    fig_setup.update_layout(
+        height=320,
+        margin=dict(l=20, r=20, t=10, b=20),
+        plot_bgcolor="rgba(20,22,30,1)",
+        paper_bgcolor="rgba(13,17,23,0)",
+        font=dict(color="#cccccc"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="center", x=0.5),
+        xaxis=dict(showgrid=False, tickfont=dict(size=9, color="#888888")),
+        yaxis=dict(title="Avg Rank", showgrid=True, gridcolor="rgba(120,120,120,0.15)", tickfont=dict(color="#888888")),
+        yaxis2=dict(title="Setup Count", overlaying="y", side="right", showgrid=False, tickfont=dict(color="#888888")),
+    )
+    st.plotly_chart(fig_setup, use_container_width=True)
+else:
+    st.info("Insufficient data to compute Setup Avg Rank history.")
+
+# ============================================================================== 
+# 24. HISTORICAL VALID BREAKOUT COUNT — KNOWN_STOCKS, LAST 60 TRADING DAYS
+# ============================================================================== 
+@st.cache_data(ttl=3600)
+def compute_known_valid_breakout_history_v1(stocks_list, _ticker_dfs):
+    """
+    Count daily KNOWN_STOCKS breakouts using historical versions of the
+    Pine setup_pivot, setup_darvas, and setup_flag state machines, followed
+    by the shared Breakout_Valid filters.
+    """
+    try:
+        breakout_series = []
+        today_breakout_tickers = []
+
+        def pivot_setup_series(high_values, low_values, close_values):
+            low_arr = low_values.to_numpy()
+            high_arr = high_values.to_numpy()
+            close_arr = close_values.to_numpy()
+            n = len(close_arr)
+
+            # Precompute, per length, whether low_arr[pivot_index] is the center-min
+            # of the (2*length+1)-wide window around it. This is exactly what the
+            # original manual slice+min did inside the loop, just vectorized once.
+            pivot_is_low = {}
+            for length in range(2, 11):
+                window = 2 * length + 1
+                roll_min = low_values.rolling(window, center=True, min_periods=window).min()
+                pivot_is_low[length] = (low_values == roll_min).to_numpy()
+
+            states = {
+                length: {
+                    "prev_price": np.nan, "prev_index": None,
+                    "curr_price": np.nan, "curr_index": None,
+                    "is_setup": False, "break_value": np.nan,
+                }
+                for length in range(2, 11)
+            }
+            output = np.zeros(n, dtype=bool)
+
+            for index in range(n):
+                winners = []
+                curr_low = low_arr[index]
+                for length, state in states.items():
+                    pivot_index = index - length
+                    if pivot_index >= length and pivot_is_low[length][pivot_index]:
+                        pivot_low_val = low_arr[pivot_index]
+                        setup_cond = (
+                            not np.isnan(state["curr_price"])
+                            and pivot_low_val > state["curr_price"]
+                        )
+                        state["prev_price"] = state["curr_price"]
+                        state["prev_index"] = state["curr_index"]
+                        state["curr_price"] = pivot_low_val
+                        state["curr_index"] = pivot_index
+                        state["is_setup"] = setup_cond
+                        state["break_value"] = np.nan
+
+                        if setup_cond and state["prev_index"] is not None:
+                            start = state["prev_index"] + 1
+                            end = state["curr_index"]
+                            if end > start:
+                                state["break_value"] = high_arr[start:end].max()
+
+                    if state["is_setup"] and curr_low < state["curr_price"]:
+                        state["is_setup"] = False
+
+                    if state["is_setup"] and not np.isnan(state["break_value"]):
+                        winners.append(state["break_value"])
+
+                if winners:
+                    break_value = min(winners)
+                    c = close_arr[index]
+                    output[index] = c >= break_value and (c - break_value) / c * 100 < 8
+
+            return pd.Series(output, index=close_values.index)
+
+
+        def darvas_setup_series(high_values, low_values, close_values, atr_values):
+            high_arr = high_values.to_numpy()
+            low_arr = low_values.to_numpy()
+            close_arr = close_values.to_numpy()
+            atr_arr = atr_values.to_numpy()
+            n = len(close_arr)
+
+            # Precompute the rolling 10-bar high/low once instead of re-slicing every iteration
+            roll_high10 = high_values.rolling(10).max().to_numpy()
+            roll_low10 = low_values.rolling(10).min().to_numpy()
+
+            phase = 0
+            phase_zero_bar = None
+            range_high = np.nan
+            range_low = np.nan
+            final_high = np.nan
+            red_box_streak = 0
+            cooldown_start = None
+            output = np.zeros(n, dtype=bool)
+
+            for index in range(n):
+                current_high = roll_high10[index] if index >= 9 else np.nan
+                current_low = roll_low10[index] if index >= 9 else np.nan
+
+                if phase == 0 and not np.isnan(current_high) and not np.isnan(current_low):
+                    if current_high - current_low <= atr_arr[index] * 3:
+                        range_high = current_high
+                        range_low = current_low
+                        phase_zero_bar = index
+                        phase = 1
+
+                if phase == 1 and phase_zero_bar is not None and index > phase_zero_bar:
+                    phase = 2
+
+                if phase == 2 and not np.isnan(range_high):
+                    breakout_up = close_arr[index] > range_high
+                    breakout_down = close_arr[index] < range_low
+                    if breakout_up or breakout_down:
+                        final_high = range_high
+                        red_box_streak = 0 if breakout_up else red_box_streak + 1
+                        cooldown_start = index
+                        phase = 3
+
+                if phase == 3 and cooldown_start is not None:
+                    if index - cooldown_start >= 13:
+                        phase = 0
+                        cooldown_start = None
+
+                if not np.isnan(final_high) and red_box_streak == 0:
+                    cutloss = (close_arr[index] - final_high) / close_arr[index] * 100
+                    output[index] = close_arr[index] >= final_high and cutloss < 8
+
+            return pd.Series(output, index=close_values.index)
+
+        def flag_setup_series(high_values, low_values, close_values):
+            max_depth = 7.5
+            max_length = 10
+            min_length = 4
+            pole_min = 20.0
+            pole_min_length = 5
+            pole_max_length = 15
+
+            # NEW: convert to numpy arrays once — avoids slow .iloc scalar access in the loop
+            high_arr = high_values.to_numpy()
+            low_arr = low_values.to_numpy()
+            close_arr = close_values.to_numpy()
+            n = len(close_arr)
+
+            base_high = np.nan
+            base_low = np.nan
+            flag_length = 0
+            flag_bool = False
+            pole_low_index = None
+            flag_low_bear = np.nan
+            flag_high_bear = np.nan
+            flag_length_bear = 0
+            flag_bool_bear = False
+            pole_high_index = None
+            last_bull_flag_top = np.nan
+            last_bull_bar = -1
+            last_bear_bar = -1
+            previous_flag = False
+            previous_flag_length = 0
+            previous_base_high = np.nan
+            output = np.zeros(n, dtype=bool)
+
+            for index in range(n):
+                previous_base_high = base_high
+                previous_flag = (
+                    flag_bool and flag_length < max_length
+                    and flag_length >= min_length
+                    and not np.isnan(base_high)
+                    and not np.isnan(base_low)
+                    and abs(base_low / base_high - 1) * 100 < max_depth
+                )
+                previous_flag_length = flag_length
+
+                previous_flag_low_bear = flag_low_bear
+                previous_flag_bear = (
+                    flag_bool_bear and flag_length_bear < max_length
+                    and flag_length_bear >= min_length
+                    and not np.isnan(flag_low_bear)
+                    and not np.isnan(flag_high_bear)
+                    and abs(flag_high_bear / flag_low_bear - 1) * 100 < 10
+                )
+
+                if np.isnan(base_high) or high_arr[index] > base_high:
+                    base_high = high_arr[index]
+                    base_low = low_arr[index]
+                    flag_length = 0
+                elif high_arr[index] <= base_high and low_arr[index] < base_low:
+                    base_low = low_arr[index]
+
+                find_depth = abs(base_low / base_high - 1) * 100 if base_high else np.nan
+                lower_close = index > 0 and close_arr[index] < close_arr[index - 1]
+                if (high_arr[index] < base_high and find_depth <= max_depth) or (
+                    high_arr[index] == base_high and lower_close
+                ):
+                    flag_length += 1
+                else:
+                    flag_length = 0
+
+                if high_arr[index] == base_high:
+                    for lookback in range(pole_min_length, pole_max_length + 1):
+                        if index >= lookback and (
+                            (high_arr[index] / low_arr[index - lookback] - 1) * 100 >= pole_min
+                        ):
+                            flag_bool = True
+                            pole_low_index = index - lookback
+                            break
+
+                if np.isnan(flag_low_bear) or low_arr[index] < flag_low_bear:
+                    flag_low_bear = low_arr[index]
+                    flag_high_bear = high_arr[index]
+                    flag_length_bear = 0
+                elif low_arr[index] >= flag_low_bear and high_arr[index] > flag_high_bear:
+                    flag_high_bear = high_arr[index]
+
+                find_rally = (
+                    abs(flag_high_bear / flag_low_bear - 1) * 100
+                    if flag_low_bear else np.nan
+                )
+                higher_close = index > 0 and close_arr[index] > close_arr[index - 1]
+                if (low_arr[index] > flag_low_bear and find_rally <= 10) or (
+                    low_arr[index] == flag_low_bear and higher_close
+                ):
+                    flag_length_bear += 1
+                else:
+                    flag_length_bear = 0
+
+                if low_arr[index] == flag_low_bear:
+                    for lookback in range(3, pole_max_length + 1):
+                        if index >= lookback and (
+                            abs((low_arr[index] / high_arr[index - lookback] - 1) * 100) >= 15
+                        ):
+                            flag_bool_bear = True
+                            pole_high_index = index - lookback
+                            break
+
+                if find_depth >= max_depth or flag_length > max_length:
+                    flag_bool = False
+                    flag_length = 0
+                    base_high = np.nan
+                    base_low = np.nan
+                    pole_low_index = None
+
+                if find_rally >= 10 or flag_length_bear > max_length:
+                    flag_bool_bear = False
+                    flag_length_bear = 0
+                    flag_low_bear = np.nan
+                    flag_high_bear = np.nan
+                    pole_high_index = None
+
+                breakout = (
+                    previous_flag
+                    and not np.isnan(previous_base_high)
+                    and high_arr[index] > previous_base_high
+                    and previous_flag_length >= min_length
+                    and flag_bool
+                )
+                if breakout:
+                    last_bull_flag_top = previous_base_high
+                    last_bull_bar = index
+                    base_high = high_arr[index]
+                    base_low = low_arr[index]
+                    flag_length = 0
+
+                breakout_bear = (
+                    previous_flag_bear
+                    and not np.isnan(previous_flag_low_bear)
+                    and low_arr[index] < previous_flag_low_bear
+                    and flag_length_bear >= min_length
+                    and flag_bool_bear
+                )
+                if breakout_bear:
+                    last_bear_bar = index
+                    flag_low_bear = low_arr[index]
+                    flag_high_bear = high_arr[index]
+                    flag_length_bear = 0
+
+                if not np.isnan(last_bull_flag_top) and last_bull_bar > last_bear_bar:
+                    cutloss = (close_arr[index] - last_bull_flag_top) / close_arr[index] * 100
+                    output[index] = close_arr[index] >= last_bull_flag_top and 0 <= cutloss < 8
+
+            return pd.Series(output, index=close_values.index)
+
+        for ticker in stocks_list:
+            df = _ticker_dfs.get(ticker)
+            required_columns = {"Open", "High", "Low", "Close"}
+            if df is None or not required_columns.issubset(df.columns) or len(df) < 261:
+                continue
+
+            try:
+                high = df["High"].astype(float)
+                low = df["Low"].astype(float)
+                close = df["Close"].astype(float)
+
+                sma50 = close.rolling(50, min_periods=50).mean()
+                sma150 = close.rolling(150, min_periods=150).mean()
+                sma200 = close.rolling(200, min_periods=200).mean()
+                sma200_22 = sma200.shift(22)
+
+                high_52w = high.rolling(260, min_periods=260).max()
+                low_52w = low.rolling(260, min_periods=260).min()
+
+                # This is the existing seven-criterion Minervini count,
+                # evaluated across history instead of only on the latest bar.
+                minervini_count7 = (
+                    (close > sma150).astype(int).where(close > sma200, 0)
+                    + (sma150 > sma200).astype(int)
+                    + (sma200 > sma200_22).astype(int)
+                    + (sma50 > sma150).astype(int).where(sma50 > sma200, 0)
+                    + (close > sma50).astype(int)
+                    + (((close / low_52w) - 1) * 100 >= 25).astype(int)
+                    + ((1 - (close / high_52w)) * 100 <= 25).astype(int)
+                )
+                minervini_count8 = minervini_count7 + (close >= 20).astype(int)
+                count_qualified = (minervini_count7 == 7) | (minervini_count8 >= 7)
+
+                true_range = pd.concat(
+                    [high - low,
+                     (high - close.shift(1)).abs(),
+                     (low - close.shift(1)).abs()],
+                    axis=1,
+                ).max(axis=1)
+                atr_percent = true_range.rolling(14, min_periods=14).mean() / close * 100
+
+                adr_percent = 100 * ((high / low).rolling(20, min_periods=20).mean() - 1)
+                cond1 = (adr_percent >= 2.45) & (adr_percent < 8.05)
+                ma50_rising = (sma50 > sma50.shift(1)) & (sma50.shift(1) > sma50.shift(2))
+                fiftyday_percent = ((close - sma50) / sma50) * 100
+                fiftyday_percent2 = np.trunc(fiftyday_percent * 10) / 10
+                percent_gain_from_ma = ((close - sma50) / sma50) * 100
+                atr_multiple = np.trunc(
+                    (percent_gain_from_ma / atr_percent.replace(0, np.nan)) * 10
+                ) / 10
+
+                setup_pivot = pivot_setup_series(high, low, close)
+                setup_darvas = darvas_setup_series(high, low, close, atr_percent * close / 100)
+                setup_flag = flag_setup_series(high, low, close)
+                setup_trigger = setup_pivot | setup_darvas | setup_flag
+
+                valid_breakout = (
+                    setup_trigger
+                    & count_qualified
+                    & cond1
+                    & ma50_rising
+                    & (fiftyday_percent2 > 0)
+                    & (close >= 20)
+                    & (atr_multiple < 4.1)
+                )
+                if bool(valid_breakout.iloc[-1]):
+                    today_breakout_tickers.append(ticker)
+                breakout_series.append(valid_breakout.astype(int).rename(ticker))
+            except Exception:
+                continue
+
+        if not breakout_series:
+            return pd.DataFrame(columns=["Date", "Valid Breakout Count"]), today_breakout_tickers
+
+        counts = pd.concat(breakout_series, axis=1).fillna(0).sum(axis=1)
+        result = counts.tail(60).rename("Valid Breakout Count").reset_index()
+        result.columns = ["Date", "Valid Breakout Count"]
+        result["Date"] = pd.to_datetime(result["Date"]).dt.strftime("%Y-%m-%d")
+        result["Valid Breakout Count"] = result["Valid Breakout Count"].astype(int)
+        return result, today_breakout_tickers
+    except Exception:
+        return pd.DataFrame(columns=["Date", "Valid Breakout Count"]), []
+
+
+st.markdown("---")
+valid_breakout_history_v1, today_breakout_tickers_v1 = timed(
+    "compute_known_valid_breakout_history_v1",
+    compute_known_valid_breakout_history_v1,
+    stocks_tuple,
+    ticker_dfs_shared,
+)
+
+st.markdown(
+    f"### 📈 Breakout Count ({len(today_breakout_tickers_v1)})"
+)
+if today_breakout_tickers_v1:
+    breakout_industry_counts, breakout_ticker_industry = build_leader_industry_map(
+        today_breakout_tickers_v1, INDUSTRIES
+    )
+    html_breakout = ""
+    for sym in sorted(today_breakout_tickers_v1):
+        industries = breakout_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+            if is_top20_industry else ""
         )
+        html_breakout += setup_badge(sym, extra_prefix="⭐ " if sym in (cloud_valid_syms | cloud21ema_all | cloudwick_all | ma50bounce_all) else "", extra_style=glow_style)
+    st.markdown(html_breakout, unsafe_allow_html=True)
 
-    # Industry RS breakdown — collapsed by default
-    if industry_rows:
-        total_rs_ms = sum(industry_rows.values())
-        with st.expander(f"RS+Cloud per industry — {len(industry_rows)} groups, total {total_rs_ms/1000:.2f}s"):
-            # industry_records = [
-            #     {"Industry": k.replace("RS+Cloud [", "").replace("]", ""),
-            #      "Time (ms)": f"{v:,.0f}",
-            #      "Time (s)": f"{v/1000:.2f}"}
-            #     for k, v in sorted(industry_rows.items(), key=lambda x: -x[1])
-            # ]
-            industry_records = [
-                {"Industry": k.replace("RS+Cloud [", "").replace("]", ""),
-                 "Time (s)": f"{v/1000:.2f}"}
-                for k, v in industry_rows.items()
-            ]
-            st.dataframe(
-                pd.DataFrame(industry_records),
-                use_container_width=False,
-                width=350,
-                hide_index=True
-            )
+st.write("")
+st.write("")
 
-    total_ms = sum(_timing_log.values())
-    st.caption(f"Total measured wall-clock time: **{total_ms/1000:.2f}s** across {len(_timing_log)} tracked calls")
+if valid_breakout_history_v1.empty:
+    st.info("Insufficient historical data available for valid breakout counts.")
+else:
+    breakout_chart = valid_breakout_history_v1.copy()
+    breakout_chart["Bar_Color"] = "#29B5E8"
+    if breakout_chart["Valid Breakout Count"].iloc[-1] in (
+        breakout_chart["Valid Breakout Count"].min(),
+        breakout_chart["Valid Breakout Count"].max(),
+    ):
+        breakout_chart.loc[breakout_chart.index[-1], "Bar_Color"] = "#FF4B4B"
+    st.bar_chart(
+        data=breakout_chart,
+        x="Date",
+        y="Valid Breakout Count",
+        color="Bar_Color",
+        use_container_width=True,
+    )
 
 # ============================================================
 # QUANT SENTIMENT — Trending Stocks (stockanalysis.com)
@@ -10049,12 +10479,19 @@ def fetch_spikepanel_surge_tickers(window="24h"):
 # NEW: cross-section glow — ticker glows if it appears in >=2 of
 # {Quant Sentiment, Reddit top 30, X.com}. Fetches are cached, so this
 # doesn't add extra network cost — later calls in those sections reuse cache.
-_reddit_df_pre = fetch_reddit_mentions_apewisdom(stocks_tuple, "wallstreetbets")
+_reddit_df_pre = timed(
+    "fetch_reddit_mentions_apewisdom_preload",
+    fetch_reddit_mentions_apewisdom,
+    stocks_tuple, "wallstreetbets"
+)
 _reddit_top30_syms_pre = (
     set(_reddit_df_pre[~_reddit_df_pre["Ticker"].isin(["SPY", "QQQ", "VOO"])].head(30)["Ticker"])
     if not _reddit_df_pre.empty else set()
 )
-_spikepanel_syms_pre = set(fetch_spikepanel_surge_tickers())
+_spikepanel_syms_pre = set(timed(
+    "fetch_spikepanel_surge_tickers_preload",
+    fetch_spikepanel_surge_tickers
+))
 _quant_sentiment_syms_pre = set(trending_today)
 
 cross_section_glow_syms = {
@@ -10203,7 +10640,10 @@ else:
 
 
 
-spikepanel_tickers = fetch_spikepanel_surge_tickers()
+spikepanel_tickers = timed(
+    "fetch_spikepanel_surge_tickers",
+    fetch_spikepanel_surge_tickers
+)
 
 st.markdown(f"#### 🧵 X.com")#({len(spikepanel_tickers)})
 
@@ -10899,70 +11339,6 @@ else:
             tick_str = ", ".join(art["tickers"]) if art["tickers"] else "—"
             st.markdown(f"- [{art['title']}]({art['url']}) → **{tick_str}**")
 
-st.markdown("---")
-
-ticker_dfs_all_industries, benchmark_df_all_industries = timed(
-    "download_all_industry_stocks_data",
-    download_all_industry_stocks_data,
-    all_industry_tickers_tuple, ticker_dfs_shared
-)
-
-with st.spinner("Computing Setup Rank history..."):
-    setup_avgrank_hist = timed(
-        "compute_setup_avgrank_history",
-        compute_setup_avgrank_history,
-        all_data, ticker_dfs_all_industries, benchmark_df_all_industries, 90,
-        tuple(sorted(global_setup_tickers)), global_setup_ticker_groups
-    )
-
-with st.spinner("Computing Setup Count history..."):
-    setup_count_hist = timed(
-        "compute_global_setup_count_history",
-        compute_global_setup_count_history,
-        stocks_tuple, ticker_dfs_shared
-    )
-
-st.markdown(f"#### 📐 Pullback Setup Quality ({global_setup_count})")
-
-if not setup_avgrank_hist.empty:
-    chart_df_rank = setup_avgrank_hist.merge(setup_count_hist, on="Date", how="left")
-    chart_df_rank["Setup Count"] = chart_df_rank["Setup Count"].ffill().fillna(0)
-    today_rank = chart_df_rank["Avg Rank"].iloc[-1]
-    min_rank = chart_df_rank["Avg Rank"].min()
-    min_idx = chart_df_rank["Avg Rank"].idxmin()
-
-    bar_colors = ["#29B5E8"] * len(chart_df_rank)
-    bar_colors[chart_df_rank.index.get_loc(min_idx)] = "#90EE90"  # overall lowest bar (best rank)
-    second_min_idx = chart_df_rank["Avg Rank"].nsmallest(2).index[-1]  # NEW: 2nd lowest bar
-    bar_colors[chart_df_rank.index.get_loc(second_min_idx)] = "#90EE90"  # NEW: same green
-    if today_rank == min_rank:
-        bar_colors[-1] = "#FF4B4B"  # today is also the lowest
-
-    fig_setup = go.Figure()
-    fig_setup.add_trace(go.Bar(
-        x=chart_df_rank["Date"], y=chart_df_rank["Avg Rank"],
-        name="Avg Rank", marker_color=bar_colors, yaxis="y1",
-    ))
-    fig_setup.add_trace(go.Scatter(
-        x=chart_df_rank["Date"], y=chart_df_rank["Setup Count"],
-        name="Setup Count", mode="lines", line=dict(color="#FF4B4B", width=2),
-        yaxis="y2",
-    ))
-    fig_setup.update_layout(
-        height=320,
-        margin=dict(l=20, r=20, t=10, b=20),
-        plot_bgcolor="rgba(20,22,30,1)",
-        paper_bgcolor="rgba(13,17,23,0)",
-        font=dict(color="#cccccc"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="center", x=0.5),
-        xaxis=dict(showgrid=False, tickfont=dict(size=9, color="#888888")),
-        yaxis=dict(title="Avg Rank", showgrid=True, gridcolor="rgba(120,120,120,0.15)", tickfont=dict(color="#888888")),
-        yaxis2=dict(title="Setup Count", overlaying="y", side="right", showgrid=False, tickfont=dict(color="#888888")),
-    )
-    st.plotly_chart(fig_setup, use_container_width=True)
-else:
-    st.info("Insufficient data to compute Setup Avg Rank history.")
-
 # ==============================================================================
 # 13. SEND SETUP SUMMARY TEXT DIRECTLY TO TELEGRAM
 # ==============================================================================
@@ -11110,421 +11486,6 @@ if in_send_window and st.session_state.get("telegram_setup_summary_sig") != setu
         st.session_state["telegram_setup_summary_sig"] = setup_summary_sig
     elif not (tg_token and tg_chat):
         st.sidebar.warning("Telegram secrets missing — Setup Summary not sent.")
-
-# ============================================================================== 
-# 24. HISTORICAL VALID BREAKOUT COUNT — KNOWN_STOCKS, LAST 60 TRADING DAYS
-# ============================================================================== 
-@st.cache_data(ttl=3600)
-def compute_known_valid_breakout_history_v1(stocks_list, _ticker_dfs):
-    """
-    Count daily KNOWN_STOCKS breakouts using historical versions of the
-    Pine setup_pivot, setup_darvas, and setup_flag state machines, followed
-    by the shared Breakout_Valid filters.
-    """
-    try:
-        breakout_series = []
-        today_breakout_tickers = []
-
-        def pivot_setup_series(high_values, low_values, close_values):
-            low_arr = low_values.to_numpy()
-            high_arr = high_values.to_numpy()
-            close_arr = close_values.to_numpy()
-            n = len(close_arr)
-
-            # Precompute, per length, whether low_arr[pivot_index] is the center-min
-            # of the (2*length+1)-wide window around it. This is exactly what the
-            # original manual slice+min did inside the loop, just vectorized once.
-            pivot_is_low = {}
-            for length in range(2, 11):
-                window = 2 * length + 1
-                roll_min = low_values.rolling(window, center=True, min_periods=window).min()
-                pivot_is_low[length] = (low_values == roll_min).to_numpy()
-
-            states = {
-                length: {
-                    "prev_price": np.nan, "prev_index": None,
-                    "curr_price": np.nan, "curr_index": None,
-                    "is_setup": False, "break_value": np.nan,
-                }
-                for length in range(2, 11)
-            }
-            output = np.zeros(n, dtype=bool)
-
-            for index in range(n):
-                winners = []
-                curr_low = low_arr[index]
-                for length, state in states.items():
-                    pivot_index = index - length
-                    if pivot_index >= length and pivot_is_low[length][pivot_index]:
-                        pivot_low_val = low_arr[pivot_index]
-                        setup_cond = (
-                            not np.isnan(state["curr_price"])
-                            and pivot_low_val > state["curr_price"]
-                        )
-                        state["prev_price"] = state["curr_price"]
-                        state["prev_index"] = state["curr_index"]
-                        state["curr_price"] = pivot_low_val
-                        state["curr_index"] = pivot_index
-                        state["is_setup"] = setup_cond
-                        state["break_value"] = np.nan
-
-                        if setup_cond and state["prev_index"] is not None:
-                            start = state["prev_index"] + 1
-                            end = state["curr_index"]
-                            if end > start:
-                                state["break_value"] = high_arr[start:end].max()
-
-                    if state["is_setup"] and curr_low < state["curr_price"]:
-                        state["is_setup"] = False
-
-                    if state["is_setup"] and not np.isnan(state["break_value"]):
-                        winners.append(state["break_value"])
-
-                if winners:
-                    break_value = min(winners)
-                    c = close_arr[index]
-                    output[index] = c >= break_value and (c - break_value) / c * 100 < 8
-
-            return pd.Series(output, index=close_values.index)
-
-
-        def darvas_setup_series(high_values, low_values, close_values, atr_values):
-            high_arr = high_values.to_numpy()
-            low_arr = low_values.to_numpy()
-            close_arr = close_values.to_numpy()
-            atr_arr = atr_values.to_numpy()
-            n = len(close_arr)
-
-            # Precompute the rolling 10-bar high/low once instead of re-slicing every iteration
-            roll_high10 = high_values.rolling(10).max().to_numpy()
-            roll_low10 = low_values.rolling(10).min().to_numpy()
-
-            phase = 0
-            phase_zero_bar = None
-            range_high = np.nan
-            range_low = np.nan
-            final_high = np.nan
-            red_box_streak = 0
-            cooldown_start = None
-            output = np.zeros(n, dtype=bool)
-
-            for index in range(n):
-                current_high = roll_high10[index] if index >= 9 else np.nan
-                current_low = roll_low10[index] if index >= 9 else np.nan
-
-                if phase == 0 and not np.isnan(current_high) and not np.isnan(current_low):
-                    if current_high - current_low <= atr_arr[index] * 3:
-                        range_high = current_high
-                        range_low = current_low
-                        phase_zero_bar = index
-                        phase = 1
-
-                if phase == 1 and phase_zero_bar is not None and index > phase_zero_bar:
-                    phase = 2
-
-                if phase == 2 and not np.isnan(range_high):
-                    breakout_up = close_arr[index] > range_high
-                    breakout_down = close_arr[index] < range_low
-                    if breakout_up or breakout_down:
-                        final_high = range_high
-                        red_box_streak = 0 if breakout_up else red_box_streak + 1
-                        cooldown_start = index
-                        phase = 3
-
-                if phase == 3 and cooldown_start is not None:
-                    if index - cooldown_start >= 13:
-                        phase = 0
-                        cooldown_start = None
-
-                if not np.isnan(final_high) and red_box_streak == 0:
-                    cutloss = (close_arr[index] - final_high) / close_arr[index] * 100
-                    output[index] = close_arr[index] >= final_high and cutloss < 8
-
-            return pd.Series(output, index=close_values.index)
-
-        def flag_setup_series(high_values, low_values, close_values):
-            max_depth = 7.5
-            max_length = 10
-            min_length = 4
-            pole_min = 20.0
-            pole_min_length = 5
-            pole_max_length = 15
-
-            # NEW: convert to numpy arrays once — avoids slow .iloc scalar access in the loop
-            high_arr = high_values.to_numpy()
-            low_arr = low_values.to_numpy()
-            close_arr = close_values.to_numpy()
-            n = len(close_arr)
-
-            base_high = np.nan
-            base_low = np.nan
-            flag_length = 0
-            flag_bool = False
-            pole_low_index = None
-            flag_low_bear = np.nan
-            flag_high_bear = np.nan
-            flag_length_bear = 0
-            flag_bool_bear = False
-            pole_high_index = None
-            last_bull_flag_top = np.nan
-            last_bull_bar = -1
-            last_bear_bar = -1
-            previous_flag = False
-            previous_flag_length = 0
-            previous_base_high = np.nan
-            output = np.zeros(n, dtype=bool)
-
-            for index in range(n):
-                previous_base_high = base_high
-                previous_flag = (
-                    flag_bool and flag_length < max_length
-                    and flag_length >= min_length
-                    and not np.isnan(base_high)
-                    and not np.isnan(base_low)
-                    and abs(base_low / base_high - 1) * 100 < max_depth
-                )
-                previous_flag_length = flag_length
-
-                previous_flag_low_bear = flag_low_bear
-                previous_flag_bear = (
-                    flag_bool_bear and flag_length_bear < max_length
-                    and flag_length_bear >= min_length
-                    and not np.isnan(flag_low_bear)
-                    and not np.isnan(flag_high_bear)
-                    and abs(flag_high_bear / flag_low_bear - 1) * 100 < 10
-                )
-
-                if np.isnan(base_high) or high_arr[index] > base_high:
-                    base_high = high_arr[index]
-                    base_low = low_arr[index]
-                    flag_length = 0
-                elif high_arr[index] <= base_high and low_arr[index] < base_low:
-                    base_low = low_arr[index]
-
-                find_depth = abs(base_low / base_high - 1) * 100 if base_high else np.nan
-                lower_close = index > 0 and close_arr[index] < close_arr[index - 1]
-                if (high_arr[index] < base_high and find_depth <= max_depth) or (
-                    high_arr[index] == base_high and lower_close
-                ):
-                    flag_length += 1
-                else:
-                    flag_length = 0
-
-                if high_arr[index] == base_high:
-                    for lookback in range(pole_min_length, pole_max_length + 1):
-                        if index >= lookback and (
-                            (high_arr[index] / low_arr[index - lookback] - 1) * 100 >= pole_min
-                        ):
-                            flag_bool = True
-                            pole_low_index = index - lookback
-                            break
-
-                if np.isnan(flag_low_bear) or low_arr[index] < flag_low_bear:
-                    flag_low_bear = low_arr[index]
-                    flag_high_bear = high_arr[index]
-                    flag_length_bear = 0
-                elif low_arr[index] >= flag_low_bear and high_arr[index] > flag_high_bear:
-                    flag_high_bear = high_arr[index]
-
-                find_rally = (
-                    abs(flag_high_bear / flag_low_bear - 1) * 100
-                    if flag_low_bear else np.nan
-                )
-                higher_close = index > 0 and close_arr[index] > close_arr[index - 1]
-                if (low_arr[index] > flag_low_bear and find_rally <= 10) or (
-                    low_arr[index] == flag_low_bear and higher_close
-                ):
-                    flag_length_bear += 1
-                else:
-                    flag_length_bear = 0
-
-                if low_arr[index] == flag_low_bear:
-                    for lookback in range(3, pole_max_length + 1):
-                        if index >= lookback and (
-                            abs((low_arr[index] / high_arr[index - lookback] - 1) * 100) >= 15
-                        ):
-                            flag_bool_bear = True
-                            pole_high_index = index - lookback
-                            break
-
-                if find_depth >= max_depth or flag_length > max_length:
-                    flag_bool = False
-                    flag_length = 0
-                    base_high = np.nan
-                    base_low = np.nan
-                    pole_low_index = None
-
-                if find_rally >= 10 or flag_length_bear > max_length:
-                    flag_bool_bear = False
-                    flag_length_bear = 0
-                    flag_low_bear = np.nan
-                    flag_high_bear = np.nan
-                    pole_high_index = None
-
-                breakout = (
-                    previous_flag
-                    and not np.isnan(previous_base_high)
-                    and high_arr[index] > previous_base_high
-                    and previous_flag_length >= min_length
-                    and flag_bool
-                )
-                if breakout:
-                    last_bull_flag_top = previous_base_high
-                    last_bull_bar = index
-                    base_high = high_arr[index]
-                    base_low = low_arr[index]
-                    flag_length = 0
-
-                breakout_bear = (
-                    previous_flag_bear
-                    and not np.isnan(previous_flag_low_bear)
-                    and low_arr[index] < previous_flag_low_bear
-                    and flag_length_bear >= min_length
-                    and flag_bool_bear
-                )
-                if breakout_bear:
-                    last_bear_bar = index
-                    flag_low_bear = low_arr[index]
-                    flag_high_bear = high_arr[index]
-                    flag_length_bear = 0
-
-                if not np.isnan(last_bull_flag_top) and last_bull_bar > last_bear_bar:
-                    cutloss = (close_arr[index] - last_bull_flag_top) / close_arr[index] * 100
-                    output[index] = close_arr[index] >= last_bull_flag_top and 0 <= cutloss < 8
-
-            return pd.Series(output, index=close_values.index)
-
-        for ticker in stocks_list:
-            df = _ticker_dfs.get(ticker)
-            required_columns = {"Open", "High", "Low", "Close"}
-            if df is None or not required_columns.issubset(df.columns) or len(df) < 261:
-                continue
-
-            try:
-                high = df["High"].astype(float)
-                low = df["Low"].astype(float)
-                close = df["Close"].astype(float)
-
-                sma50 = close.rolling(50, min_periods=50).mean()
-                sma150 = close.rolling(150, min_periods=150).mean()
-                sma200 = close.rolling(200, min_periods=200).mean()
-                sma200_22 = sma200.shift(22)
-
-                high_52w = high.rolling(260, min_periods=260).max()
-                low_52w = low.rolling(260, min_periods=260).min()
-
-                # This is the existing seven-criterion Minervini count,
-                # evaluated across history instead of only on the latest bar.
-                minervini_count7 = (
-                    (close > sma150).astype(int).where(close > sma200, 0)
-                    + (sma150 > sma200).astype(int)
-                    + (sma200 > sma200_22).astype(int)
-                    + (sma50 > sma150).astype(int).where(sma50 > sma200, 0)
-                    + (close > sma50).astype(int)
-                    + (((close / low_52w) - 1) * 100 >= 25).astype(int)
-                    + ((1 - (close / high_52w)) * 100 <= 25).astype(int)
-                )
-                minervini_count8 = minervini_count7 + (close >= 20).astype(int)
-                count_qualified = (minervini_count7 == 7) | (minervini_count8 >= 7)
-
-                true_range = pd.concat(
-                    [high - low,
-                     (high - close.shift(1)).abs(),
-                     (low - close.shift(1)).abs()],
-                    axis=1,
-                ).max(axis=1)
-                atr_percent = true_range.rolling(14, min_periods=14).mean() / close * 100
-
-                adr_percent = 100 * ((high / low).rolling(20, min_periods=20).mean() - 1)
-                cond1 = (adr_percent >= 2.45) & (adr_percent < 8.05)
-                ma50_rising = (sma50 > sma50.shift(1)) & (sma50.shift(1) > sma50.shift(2))
-                fiftyday_percent = ((close - sma50) / sma50) * 100
-                fiftyday_percent2 = np.trunc(fiftyday_percent * 10) / 10
-                percent_gain_from_ma = ((close - sma50) / sma50) * 100
-                atr_multiple = np.trunc(
-                    (percent_gain_from_ma / atr_percent.replace(0, np.nan)) * 10
-                ) / 10
-
-                setup_pivot = pivot_setup_series(high, low, close)
-                setup_darvas = darvas_setup_series(high, low, close, atr_percent * close / 100)
-                setup_flag = flag_setup_series(high, low, close)
-                setup_trigger = setup_pivot | setup_darvas | setup_flag
-
-                valid_breakout = (
-                    setup_trigger
-                    & count_qualified
-                    & cond1
-                    & ma50_rising
-                    & (fiftyday_percent2 > 0)
-                    & (close >= 20)
-                    & (atr_multiple < 4.1)
-                )
-                if bool(valid_breakout.iloc[-1]):
-                    today_breakout_tickers.append(ticker)
-                breakout_series.append(valid_breakout.astype(int).rename(ticker))
-            except Exception:
-                continue
-
-        if not breakout_series:
-            return pd.DataFrame(columns=["Date", "Valid Breakout Count"]), today_breakout_tickers
-
-        counts = pd.concat(breakout_series, axis=1).fillna(0).sum(axis=1)
-        result = counts.tail(60).rename("Valid Breakout Count").reset_index()
-        result.columns = ["Date", "Valid Breakout Count"]
-        result["Date"] = pd.to_datetime(result["Date"]).dt.strftime("%Y-%m-%d")
-        result["Valid Breakout Count"] = result["Valid Breakout Count"].astype(int)
-        return result, today_breakout_tickers
-    except Exception:
-        return pd.DataFrame(columns=["Date", "Valid Breakout Count"]), []
-
-
-st.markdown("---")
-valid_breakout_history_v1, today_breakout_tickers_v1 = timed(
-    "compute_known_valid_breakout_history_v1",
-    compute_known_valid_breakout_history_v1,
-    stocks_tuple,
-    ticker_dfs_shared,
-)
-
-st.markdown(
-    f"### 📈 Breakout Count ({len(today_breakout_tickers_v1)})"
-)
-if today_breakout_tickers_v1:
-    breakout_industry_counts, breakout_ticker_industry = build_leader_industry_map(
-        today_breakout_tickers_v1, INDUSTRIES
-    )
-    html_breakout = ""
-    for sym in sorted(today_breakout_tickers_v1):
-        industries = breakout_ticker_industry.get(sym, [])
-        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
-        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
-        glow_style = (
-            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
-            if is_top20_industry else ""
-        )
-        html_breakout += setup_badge(sym, extra_prefix="⭐ " if sym in (cloud_valid_syms | cloud21ema_all | cloudwick_all | ma50bounce_all) else "", extra_style=glow_style)
-    st.markdown(html_breakout, unsafe_allow_html=True)
-
-st.write("")
-st.write("")
-
-if valid_breakout_history_v1.empty:
-    st.info("Insufficient historical data available for valid breakout counts.")
-else:
-    breakout_chart = valid_breakout_history_v1.copy()
-    breakout_chart["Bar_Color"] = "#29B5E8"
-    if breakout_chart["Valid Breakout Count"].iloc[-1] in (
-        breakout_chart["Valid Breakout Count"].min(),
-        breakout_chart["Valid Breakout Count"].max(),
-    ):
-        breakout_chart.loc[breakout_chart.index[-1], "Bar_Color"] = "#FF4B4B"
-    st.bar_chart(
-        data=breakout_chart,
-        x="Date",
-        y="Valid Breakout Count",
-        color="Bar_Color",
-        use_container_width=True,
-    )
 
 def massive_get(endpoint, params=None, timeout=15):
     massive_key = st.secrets.get("MASSIVE_API_KEY")
@@ -11825,7 +11786,7 @@ def fetch_economic_calendar():
         st.warning(f"Economic calendar fetch error: {e}")
         return pd.DataFrame()
 
-econ_df = fetch_economic_calendar()
+econ_df = timed("fetch_economic_calendar", fetch_economic_calendar)
 
 ECON_KEYWORDS = [
     "CPI", "PPI", "Nonfarm", "Payroll", "Michigan", "Sentiment",
@@ -14754,4 +14715,41 @@ else:
 #             "comparison of current implied vs. historical average |move| as a rough 'rich vs cheap' "
 #             "read, not a prediction of direction or magnitude."
 #         )
+
+# ── Timing Summary ───────────────────────────────────────────────────────────
+st.markdown("---")
+st.markdown("#### ⏱ Test Time")
+
+if _timing_log:
+    industry_rows = {k: v for k, v in _timing_log.items() if k.startswith("RS+Cloud")}
+    main_rows     = {k: v for k, v in _timing_log.items() if not k.startswith("RS+Cloud")}
+
+    timing_records = [{"Function": k, "Time (s)": f"{v/1000:.2f}"}
+                      for k, v in main_rows.items()]
+
+    if timing_records:
+        st.dataframe(
+            pd.DataFrame(timing_records),
+            use_container_width=False,
+            width=350,
+            hide_index=True
+        )
+
+    if industry_rows:
+        total_rs_ms = sum(industry_rows.values())
+        with st.expander(f"RS+Cloud per industry — {len(industry_rows)} groups, total {total_rs_ms/1000:.2f}s"):
+            industry_records = [
+                {"Industry": k.replace("RS+Cloud [", "").replace("]", ""),
+                 "Time (s)": f"{v/1000:.2f}"}
+                for k, v in industry_rows.items()
+            ]
+            st.dataframe(
+                pd.DataFrame(industry_records),
+                use_container_width=False,
+                width=350,
+                hide_index=True
+            )
+
+    total_ms = sum(_timing_log.values())
+    st.caption(f"Total measured wall-clock time: **{total_ms/1000:.2f}s** across {len(_timing_log)} tracked calls")
 
