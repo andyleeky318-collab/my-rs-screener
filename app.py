@@ -13422,10 +13422,10 @@ def compute_market_verdict():
         "RRG Rotation",
         "Stage Breadth",
         "ETF Stage2/4 (watchlist)",
+        "Accumulation Rating",
         "Market Regime",
         "Minervini Breadth Trend",
         "Distribution Days",
-        "Accumulation Rating",
         "VIX Term Structure",
         "Credit Spread (HYG/LQD)",
     ]
