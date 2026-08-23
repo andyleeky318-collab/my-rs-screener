@@ -15120,7 +15120,9 @@ def compute_accumulation_rating_by_industry(watchlist_tuple, industries_dict, _t
     the smoothed Up/Down Volume Ratio (last ~30 points, for the sparkline)
     across every member of that industry group. Returns a list of dicts:
       { "Ticker": ..., "Industry": ..., "Avg Value": float|None,
-        "Rating": str, "Sparkline": [floats] }
+        "Rating": str, "Sparkline": [floats],
+        "Above1": [tickers with ratio >= 1], "Below1": [tickers with ratio < 1] }
+    Sorted by Avg Value descending (None values last).
     """
     rows = []
 
@@ -15143,6 +15145,7 @@ def compute_accumulation_rating_by_industry(watchlist_tuple, industries_dict, _t
             rows.append({
                 "Ticker": tkr, "Industry": "—",
                 "Avg Value": None, "Rating": "-", "Sparkline": [],
+                "Above1": [], "Below1": [],
             })
             continue
 
@@ -15150,10 +15153,24 @@ def compute_accumulation_rating_by_industry(watchlist_tuple, industries_dict, _t
         member_series = [ratio_series_map.get(m) for m in members]
         member_series = [s for s in member_series if s is not None and not s.empty]
 
+        # Per-member latest ratio -> split above/below 1
+        above_1 = []
+        below_1 = []
+        for m in members:
+            s = ratio_series_map.get(m)
+            if s is None or s.empty:
+                continue
+            latest_m = float(s.iloc[-1])
+            if latest_m >= 1.0:
+                above_1.append(m)
+            else:
+                below_1.append(m)
+
         if not member_series:
             rows.append({
                 "Ticker": tkr, "Industry": industry_name,
                 "Avg Value": None, "Rating": "-", "Sparkline": [],
+                "Above1": above_1, "Below1": below_1,
             })
             continue
 
@@ -15167,6 +15184,7 @@ def compute_accumulation_rating_by_industry(watchlist_tuple, industries_dict, _t
             rows.append({
                 "Ticker": tkr, "Industry": industry_name,
                 "Avg Value": None, "Rating": "-", "Sparkline": [],
+                "Above1": above_1, "Below1": below_1,
             })
             continue
 
@@ -15177,8 +15195,11 @@ def compute_accumulation_rating_by_industry(watchlist_tuple, industries_dict, _t
             "Avg Value": round(latest_val, 2),
             "Rating": _udvr_rating(latest_val),
             "Sparkline": avg_series.tolist(),
+            "Above1": above_1,
+            "Below1": below_1,
         })
 
+    rows.sort(key=lambda r: (r["Avg Value"] is None, -(r["Avg Value"] or 0)))
     return rows
 
 
@@ -15252,12 +15273,17 @@ if accumulation_rows:
 
         sparkline_html = _render_accumulation_sparkline_svg(r["Sparkline"])
 
+        above1_str = ", ".join(r.get("Above1", [])) or "-"
+        below1_str = ", ".join(r.get("Below1", [])) or "-"
+
         acc_table_rows_html += (
             f"<tr style='background-color:{bg};'>"
             f"<td style='text-align:center;color:#888888;padding:4px 8px;'>{row_num}</td>"
             f"<td style='font-weight:bold;color:#ffffff;padding:4px 8px;white-space:nowrap;'>{r['Ticker']}</td>"
             f"<td style='text-align:center;color:{val_color};font-weight:bold;padding:4px 8px;white-space:nowrap;'>{val_str}</td>"
             f"<td style='padding:4px 8px;'>{sparkline_html}</td>"
+            f"<td style='padding:4px 8px;color:#00FF00;font-size:11px;'>{above1_str}</td>"
+            f"<td style='padding:4px 8px;color:#FF4B4B;font-size:11px;'>{below1_str}</td>"
             f"</tr>"
         )
 
@@ -15269,6 +15295,8 @@ if accumulation_rows:
     <th style="text-align:left; padding:4px 8px;">Ticker</th>
     <th style="text-align:center; padding:4px 8px;">Avg Accum (Rating)</th>
     <th style="text-align:left; padding:4px 8px;">Trend</th>
+    <th style="text-align:left; padding:4px 8px;">Ratio &gt; 1</th>
+    <th style="text-align:left; padding:4px 8px;">Ratio &lt; 1</th>
     </tr></thead>
     <tbody>{acc_table_rows_html}</tbody>
     </table>
