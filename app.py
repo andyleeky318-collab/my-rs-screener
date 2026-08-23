@@ -12804,6 +12804,255 @@ for sym in master_ticker_set:
     })
 
 # ==============================================================================
+# 26. ACCUMULATION RATING — Up/Down Volume Ratio by STAGE_PCT_WATCHLIST group
+# Read-only, additive. Mirrors the Pine Script "Up/Down Volume Ratio" logic:
+#   upVol/downVol over a 50-day lookback, smoothed with a 10-day SMA,
+#   rated IBD-style (A+ / A / B / C / D / E). For each STAGE_PCT_WATCHLIST
+#   ticker, averages this smoothed ratio across every member of that
+#   ticker's industry group (same industry mapping used by the Stage %
+#   table), and renders a small sparkline colored green/red by the >=1
+#   threshold. Does not touch any other section or shared variable.
+# ==============================================================================
+
+@st.cache_data(ttl=3600)
+def compute_up_down_vol_ratio_series(ticker, _ticker_dfs, udvr_len=50, ma_len=10):
+    """
+    Mirrors the Pine Script Up/Down Volume Ratio indicator:
+      upVol   = sum(volume where close > close[1], udvr_len)
+      downVol = sum(volume where close < close[1], udvr_len)
+      ratio   = upVol / downVol
+      smoothed = SMA(ratio, ma_len)
+    Returns the full smoothed ratio Series (indexed same as price), or
+    None if insufficient data.
+    """
+    df = _ticker_dfs.get(ticker)
+    if df is None or len(df) < udvr_len + ma_len + 2:
+        return None
+    try:
+        close = df['Close']
+        volume = df['Volume']
+
+        is_up = close > close.shift(1)
+        is_down = close < close.shift(1)
+
+        up_vol = (volume.where(is_up, 0)).rolling(udvr_len).sum()
+        down_vol = (volume.where(is_down, 0)).rolling(udvr_len).sum()
+
+        ratio = up_vol / down_vol.replace(0, np.nan)
+        smoothed = ratio.rolling(ma_len).mean() if ma_len > 0 else ratio
+        return smoothed.dropna()
+    except Exception:
+        return None
+
+
+def _udvr_rating(value):
+    if value is None or pd.isna(value):
+        return "-"
+    if value >= 1.75:
+        return "A+"
+    if value >= 1.50:
+        return "A"
+    if value >= 1.25:
+        return "B"
+    if value >= 1.00:
+        return "C"
+    if value >= 0.75:
+        return "D"
+    return "E"
+
+
+@st.cache_data(ttl=3600)
+def compute_accumulation_rating_by_industry(watchlist_tuple, industries_dict, _ticker_dfs, udvr_len=50, ma_len=10):
+    """
+    For each ticker in watchlist_tuple, find its industry group (same
+    membership logic used elsewhere for the Stage % table), then average
+    the smoothed Up/Down Volume Ratio (last ~30 points, for the sparkline)
+    across every member of that industry group. Returns a list of dicts:
+      { "Ticker": ..., "Industry": ..., "Avg Value": float|None,
+        "Rating": str, "Sparkline": [floats],
+        "Above1": [tickers with ratio >= 1], "Below1": [tickers with ratio < 1] }
+    Sorted by Avg Value descending (None values last).
+    """
+    rows = []
+
+    # Pre-compute each unique ticker's ratio series once (avoid recompute
+    # across overlapping industry groups)
+    all_group_tickers = set()
+    for tkr in watchlist_tuple:
+        industry_name = next((ind for ind, members in industries_dict.items() if tkr in members), None)
+        if industry_name:
+            all_group_tickers.update(industries_dict[industry_name])
+
+    ratio_series_map = {}
+    for t in all_group_tickers:
+        ratio_series_map[t] = compute_up_down_vol_ratio_series(t, _ticker_dfs, udvr_len, ma_len)
+
+    for tkr in watchlist_tuple:
+        industry_name = next((ind for ind, members in industries_dict.items() if tkr in members), None)
+
+        if industry_name is None:
+            rows.append({
+                "Ticker": tkr, "Industry": "—",
+                "Avg Value": None, "Rating": "-", "Sparkline": [],
+                "Above1": [], "Below1": [],
+            })
+            continue
+
+        members = industries_dict[industry_name]
+        member_series = [ratio_series_map.get(m) for m in members]
+        member_series = [s for s in member_series if s is not None and not s.empty]
+
+        # Per-member latest ratio -> split above/below 1
+        above_1 = []
+        below_1 = []
+        for m in members:
+            s = ratio_series_map.get(m)
+            if s is None or s.empty:
+                continue
+            latest_m = float(s.iloc[-1])
+            if latest_m >= 1.0:
+                above_1.append(m)
+            else:
+                below_1.append(m)
+
+        if not member_series:
+            rows.append({
+                "Ticker": tkr, "Industry": industry_name,
+                "Avg Value": None, "Rating": "-", "Sparkline": [],
+                "Above1": above_1, "Below1": below_1,
+            })
+            continue
+
+        # Align all member series on their common trailing window (last 30 pts)
+        combined = pd.concat(
+            [s.tail(30).reset_index(drop=True) for s in member_series], axis=1
+        )
+        avg_series = combined.mean(axis=1, skipna=True).dropna()
+
+        if avg_series.empty:
+            rows.append({
+                "Ticker": tkr, "Industry": industry_name,
+                "Avg Value": None, "Rating": "-", "Sparkline": [],
+                "Above1": above_1, "Below1": below_1,
+            })
+            continue
+
+        latest_val = float(avg_series.iloc[-1])
+        rows.append({
+            "Ticker": tkr,
+            "Industry": industry_name,
+            "Avg Value": round(latest_val, 2),
+            "Rating": _udvr_rating(latest_val),
+            "Sparkline": avg_series.tolist(),
+            "Above1": above_1,
+            "Below1": below_1,
+        })
+
+    rows.sort(key=lambda r: (r["Avg Value"] is None, -(r["Avg Value"] or 0)))
+    return rows
+
+
+def _render_accumulation_sparkline_svg(values, width=140, height=32):
+    """Tiny inline SVG line chart: green if latest value >= 1, else red."""
+    if not values or len(values) < 2:
+        return "<span style='color:#555;font-size:11px;'>—</span>"
+
+    vals = values[-30:]  # cap to last 30 points
+    n = len(vals)
+    v_min, v_max = min(vals), max(vals)
+    v_range = (v_max - v_min) or 1.0
+
+    color = "#00FF00" if vals[-1] >= 1.0 else "#FF4B4B"
+
+    pad = 3
+    plot_w = width - pad * 2
+    plot_h = height - pad * 2
+
+    points = []
+    for i, v in enumerate(vals):
+        x = pad + (i / (n - 1)) * plot_w
+        y = pad + (1 - (v - v_min) / v_range) * plot_h
+        points.append(f"{x:.1f},{y:.1f}")
+    points_str = " ".join(points)
+
+    last_x, last_y = points[-1].split(",")
+    svg = (
+        f'<svg width="{width}" height="{height}" style="display:block;">'
+        f'<polyline points="{points_str}" fill="none" stroke="{color}" stroke-width="1.6"/>'
+        f'<circle cx="{last_x}" cy="{last_y}" r="2.2" fill="{color}"/>'
+        f'</svg>'
+    )
+    return svg
+
+
+st.markdown("---")
+st.markdown("#### 🧮 Accumulation Rating")
+
+with st.spinner("Computing Up/Down Volume Ratio by industry group..."):
+    accumulation_rows = timed(
+        "compute_accumulation_rating_by_industry",
+        compute_accumulation_rating_by_industry,
+        tuple(STAGE_PCT_WATCHLIST), INDUSTRIES, ticker_dfs_shared, 50, 10
+    )
+
+if accumulation_rows:
+    acc_table_rows_html = ""
+    for row_num, r in enumerate(accumulation_rows, start=1):
+        bg = "#262730" if row_num % 2 == 0 else "#0e1117"
+        val = r["Avg Value"]
+        rating = r["Rating"]
+
+        if val is None:
+            val_str = "-"
+            val_color = "#888888"
+        else:
+            val_str = f"{val:.2f} ({rating})"
+            val_color = "#00FF00" if val >= 1.0 else "#FF4B4B"
+
+        sparkline_html = _render_accumulation_sparkline_svg(r["Sparkline"])
+
+        above1_str = ", ".join(r.get("Above1", [])) or "-"
+        below1_str = ", ".join(r.get("Below1", [])) or "-"
+
+        acc_table_rows_html += (
+            f"<tr style='background-color:{bg};'>"
+            f"<td style='text-align:center;color:#888888;padding:4px 8px;'>{row_num}</td>"
+            f"<td style='font-weight:bold;color:#ffffff;padding:4px 8px;white-space:nowrap;'>{r['Ticker']}</td>"
+            f"<td style='text-align:center;color:{val_color};font-weight:bold;padding:4px 8px;white-space:nowrap;'>{val_str}</td>"
+            f"<td style='padding:4px 8px;'>{sparkline_html}</td>"
+            f"<td style='padding:4px 8px;color:#00FF00;font-size:11px;'>{above1_str}</td>"
+            f"<td style='padding:4px 8px;color:#FF4B4B;font-size:11px;'>{below1_str}</td>"
+            f"</tr>"
+        )
+
+    acc_table_html = f"""
+    <style>
+    .accum-rating-table tbody tr:nth-child(21) td {{
+        border-top: none !important;
+    }}
+    .accum-rating-table th, .accum-rating-table td {{
+        border-right: none !important;
+    }}
+    </style>
+    <div class="accum-rating-table" style="overflow-x:auto; background:#0e1117; border-radius:6px;">
+    <table style="width:100%; border-collapse:collapse;">
+    <thead><tr>
+    <th style="width:30px; text-align:center; padding:4px 8px;">#</th>
+    <th style="text-align:left; padding:4px 8px;">Ticker</th>
+    <th style="text-align:center; padding:4px 8px;">Avg Accum (Rating)</th>
+    <th style="text-align:left; padding:4px 8px;">Trend</th>
+    <th style="text-align:left; padding:4px 8px;">Ratio &gt; 1</th>
+    <th style="text-align:left; padding:4px 8px;">Ratio &lt; 1</th>
+    </tr></thead>
+    <tbody>{acc_table_rows_html}</tbody>
+    </table>
+    </div>
+    """
+    st.markdown(acc_table_html, unsafe_allow_html=True)
+else:
+    st.info("No accumulation rating data available.")
+
+# ==============================================================================
 # 23. MARKET VERDICT — Composite Breakout / Pullback / Neutral / Defensive Read
 # Read-only, additive. Synthesizes every signal already computed above plus
 # two standalone fetches (VIX term structure, HYG/LQD credit spread) into a
@@ -13131,22 +13380,35 @@ def compute_market_verdict():
         p14_score, p14_label = 50, "Insufficient data"
     breakdown.append(("Sector Heatmap Breadth", p14_score, p14_label, ""))
 
+    # ── Pillar: Accumulation Rating (Up/Down Volume Ratio breadth) ────────
+    accumulation_rows_v = _safe("accumulation_rows", [])
+    valid_accum_vals = [r["Avg Value"] for r in accumulation_rows_v if r.get("Avg Value") is not None]
+    if valid_accum_vals:
+        above1_count = sum(1 for v in valid_accum_vals if v >= 1.0)
+        p_accum_score = (above1_count / len(valid_accum_vals)) * 100
+        avg_accum_val = sum(valid_accum_vals) / len(valid_accum_vals)
+        p_accum_label = f"{above1_count}/{len(valid_accum_vals)} watchlist groups accumulating (avg {avg_accum_val:.2f})"
+    else:
+        p_accum_score, p_accum_label = 50, "Insufficient data"
+    breakdown.append(("Accumulation Rating", p_accum_score, p_accum_label, ""))
+
     # ── Weighted Composite ──────────────────────────────────────────────────
     weights = {
-        "Market Regime": 0.12,
-        "Distribution Days": 0.15,
-        "Stage Breadth": 0.08,
-        "RS Quadrant Map": 0.08,
-        "Minervini Breadth Trend": 0.08,
-        "ETF Risk Appetite": 0.06,
-        "VIX Term Structure": 0.05,
-        "Credit Spread (HYG/LQD)": 0.05,
-        "RRG Rotation": 0.08,
-        "ETF Stage2/4 (watchlist)": 0.06,
         "1 Month Leading Theme": 0.06,
         "Pine RS Table Breadth": 0.05,
+        "RS Quadrant Map": 0.07,
         "Pie Chart RSI (Sector Momentum)": 0.04,
+        "ETF Risk Appetite": 0.05,
         "Sector Heatmap Breadth": 0.04,
+        "RRG Rotation": 0.07,
+        "Stage Breadth": 0.07,
+        "ETF Stage2/4 (watchlist)": 0.05,
+        "Market Regime": 0.12,
+        "Minervini Breadth Trend": 0.07,
+        "Distribution Days": 0.14,
+        "Accumulation Rating": 0.05,
+        "VIX Term Structure": 0.05,
+        "Credit Spread (HYG/LQD)": 0.05,
     }
 
     # ── Reorder pillars for display ──────────────────────────────────────
@@ -13163,6 +13425,7 @@ def compute_market_verdict():
         "Market Regime",
         "Minervini Breadth Trend",
         "Distribution Days",
+        "Accumulation Rating",
         "VIX Term Structure",
         "Credit Spread (HYG/LQD)",
     ]
@@ -13273,255 +13536,6 @@ st.markdown(
 
 if dist_triggered:
     st.caption(f"⚠️ Distribution-day override active on: {', '.join(dist_triggered)} — this caps the verdict regardless of other pillars.")    
-
-# ==============================================================================
-# 26. ACCUMULATION RATING — Up/Down Volume Ratio by STAGE_PCT_WATCHLIST group
-# Read-only, additive. Mirrors the Pine Script "Up/Down Volume Ratio" logic:
-#   upVol/downVol over a 50-day lookback, smoothed with a 10-day SMA,
-#   rated IBD-style (A+ / A / B / C / D / E). For each STAGE_PCT_WATCHLIST
-#   ticker, averages this smoothed ratio across every member of that
-#   ticker's industry group (same industry mapping used by the Stage %
-#   table), and renders a small sparkline colored green/red by the >=1
-#   threshold. Does not touch any other section or shared variable.
-# ==============================================================================
-
-@st.cache_data(ttl=3600)
-def compute_up_down_vol_ratio_series(ticker, _ticker_dfs, udvr_len=50, ma_len=10):
-    """
-    Mirrors the Pine Script Up/Down Volume Ratio indicator:
-      upVol   = sum(volume where close > close[1], udvr_len)
-      downVol = sum(volume where close < close[1], udvr_len)
-      ratio   = upVol / downVol
-      smoothed = SMA(ratio, ma_len)
-    Returns the full smoothed ratio Series (indexed same as price), or
-    None if insufficient data.
-    """
-    df = _ticker_dfs.get(ticker)
-    if df is None or len(df) < udvr_len + ma_len + 2:
-        return None
-    try:
-        close = df['Close']
-        volume = df['Volume']
-
-        is_up = close > close.shift(1)
-        is_down = close < close.shift(1)
-
-        up_vol = (volume.where(is_up, 0)).rolling(udvr_len).sum()
-        down_vol = (volume.where(is_down, 0)).rolling(udvr_len).sum()
-
-        ratio = up_vol / down_vol.replace(0, np.nan)
-        smoothed = ratio.rolling(ma_len).mean() if ma_len > 0 else ratio
-        return smoothed.dropna()
-    except Exception:
-        return None
-
-
-def _udvr_rating(value):
-    if value is None or pd.isna(value):
-        return "-"
-    if value >= 1.75:
-        return "A+"
-    if value >= 1.50:
-        return "A"
-    if value >= 1.25:
-        return "B"
-    if value >= 1.00:
-        return "C"
-    if value >= 0.75:
-        return "D"
-    return "E"
-
-
-@st.cache_data(ttl=3600)
-def compute_accumulation_rating_by_industry(watchlist_tuple, industries_dict, _ticker_dfs, udvr_len=50, ma_len=10):
-    """
-    For each ticker in watchlist_tuple, find its industry group (same
-    membership logic used elsewhere for the Stage % table), then average
-    the smoothed Up/Down Volume Ratio (last ~30 points, for the sparkline)
-    across every member of that industry group. Returns a list of dicts:
-      { "Ticker": ..., "Industry": ..., "Avg Value": float|None,
-        "Rating": str, "Sparkline": [floats],
-        "Above1": [tickers with ratio >= 1], "Below1": [tickers with ratio < 1] }
-    Sorted by Avg Value descending (None values last).
-    """
-    rows = []
-
-    # Pre-compute each unique ticker's ratio series once (avoid recompute
-    # across overlapping industry groups)
-    all_group_tickers = set()
-    for tkr in watchlist_tuple:
-        industry_name = next((ind for ind, members in industries_dict.items() if tkr in members), None)
-        if industry_name:
-            all_group_tickers.update(industries_dict[industry_name])
-
-    ratio_series_map = {}
-    for t in all_group_tickers:
-        ratio_series_map[t] = compute_up_down_vol_ratio_series(t, _ticker_dfs, udvr_len, ma_len)
-
-    for tkr in watchlist_tuple:
-        industry_name = next((ind for ind, members in industries_dict.items() if tkr in members), None)
-
-        if industry_name is None:
-            rows.append({
-                "Ticker": tkr, "Industry": "—",
-                "Avg Value": None, "Rating": "-", "Sparkline": [],
-                "Above1": [], "Below1": [],
-            })
-            continue
-
-        members = industries_dict[industry_name]
-        member_series = [ratio_series_map.get(m) for m in members]
-        member_series = [s for s in member_series if s is not None and not s.empty]
-
-        # Per-member latest ratio -> split above/below 1
-        above_1 = []
-        below_1 = []
-        for m in members:
-            s = ratio_series_map.get(m)
-            if s is None or s.empty:
-                continue
-            latest_m = float(s.iloc[-1])
-            if latest_m >= 1.0:
-                above_1.append(m)
-            else:
-                below_1.append(m)
-
-        if not member_series:
-            rows.append({
-                "Ticker": tkr, "Industry": industry_name,
-                "Avg Value": None, "Rating": "-", "Sparkline": [],
-                "Above1": above_1, "Below1": below_1,
-            })
-            continue
-
-        # Align all member series on their common trailing window (last 30 pts)
-        combined = pd.concat(
-            [s.tail(30).reset_index(drop=True) for s in member_series], axis=1
-        )
-        avg_series = combined.mean(axis=1, skipna=True).dropna()
-
-        if avg_series.empty:
-            rows.append({
-                "Ticker": tkr, "Industry": industry_name,
-                "Avg Value": None, "Rating": "-", "Sparkline": [],
-                "Above1": above_1, "Below1": below_1,
-            })
-            continue
-
-        latest_val = float(avg_series.iloc[-1])
-        rows.append({
-            "Ticker": tkr,
-            "Industry": industry_name,
-            "Avg Value": round(latest_val, 2),
-            "Rating": _udvr_rating(latest_val),
-            "Sparkline": avg_series.tolist(),
-            "Above1": above_1,
-            "Below1": below_1,
-        })
-
-    rows.sort(key=lambda r: (r["Avg Value"] is None, -(r["Avg Value"] or 0)))
-    return rows
-
-
-def _render_accumulation_sparkline_svg(values, width=140, height=32):
-    """Tiny inline SVG line chart: green if latest value >= 1, else red."""
-    if not values or len(values) < 2:
-        return "<span style='color:#555;font-size:11px;'>—</span>"
-
-    vals = values[-30:]  # cap to last 30 points
-    n = len(vals)
-    v_min, v_max = min(vals), max(vals)
-    v_range = (v_max - v_min) or 1.0
-
-    color = "#00FF00" if vals[-1] >= 1.0 else "#FF4B4B"
-
-    pad = 3
-    plot_w = width - pad * 2
-    plot_h = height - pad * 2
-
-    points = []
-    for i, v in enumerate(vals):
-        x = pad + (i / (n - 1)) * plot_w
-        y = pad + (1 - (v - v_min) / v_range) * plot_h
-        points.append(f"{x:.1f},{y:.1f}")
-    points_str = " ".join(points)
-
-    last_x, last_y = points[-1].split(",")
-    svg = (
-        f'<svg width="{width}" height="{height}" style="display:block;">'
-        f'<polyline points="{points_str}" fill="none" stroke="{color}" stroke-width="1.6"/>'
-        f'<circle cx="{last_x}" cy="{last_y}" r="2.2" fill="{color}"/>'
-        f'</svg>'
-    )
-    return svg
-
-
-st.markdown("---")
-st.markdown("#### 🧮 Accumulation Rating")
-
-with st.spinner("Computing Up/Down Volume Ratio by industry group..."):
-    accumulation_rows = timed(
-        "compute_accumulation_rating_by_industry",
-        compute_accumulation_rating_by_industry,
-        tuple(STAGE_PCT_WATCHLIST), INDUSTRIES, ticker_dfs_shared, 50, 10
-    )
-
-if accumulation_rows:
-    acc_table_rows_html = ""
-    for row_num, r in enumerate(accumulation_rows, start=1):
-        bg = "#262730" if row_num % 2 == 0 else "#0e1117"
-        val = r["Avg Value"]
-        rating = r["Rating"]
-
-        if val is None:
-            val_str = "-"
-            val_color = "#888888"
-        else:
-            val_str = f"{val:.2f} ({rating})"
-            val_color = "#00FF00" if val >= 1.0 else "#FF4B4B"
-
-        sparkline_html = _render_accumulation_sparkline_svg(r["Sparkline"])
-
-        above1_str = ", ".join(r.get("Above1", [])) or "-"
-        below1_str = ", ".join(r.get("Below1", [])) or "-"
-
-        acc_table_rows_html += (
-            f"<tr style='background-color:{bg};'>"
-            f"<td style='text-align:center;color:#888888;padding:4px 8px;'>{row_num}</td>"
-            f"<td style='font-weight:bold;color:#ffffff;padding:4px 8px;white-space:nowrap;'>{r['Ticker']}</td>"
-            f"<td style='text-align:center;color:{val_color};font-weight:bold;padding:4px 8px;white-space:nowrap;'>{val_str}</td>"
-            f"<td style='padding:4px 8px;'>{sparkline_html}</td>"
-            f"<td style='padding:4px 8px;color:#00FF00;font-size:11px;'>{above1_str}</td>"
-            f"<td style='padding:4px 8px;color:#FF4B4B;font-size:11px;'>{below1_str}</td>"
-            f"</tr>"
-        )
-
-    acc_table_html = f"""
-    <style>
-    .accum-rating-table tbody tr:nth-child(21) td {{
-        border-top: none !important;
-    }}
-    .accum-rating-table th, .accum-rating-table td {{
-        border-right: none !important;
-    }}
-    </style>
-    <div class="accum-rating-table" style="overflow-x:auto; background:#0e1117; border-radius:6px;">
-    <table style="width:100%; border-collapse:collapse;">
-    <thead><tr>
-    <th style="width:30px; text-align:center; padding:4px 8px;">#</th>
-    <th style="text-align:left; padding:4px 8px;">Ticker</th>
-    <th style="text-align:center; padding:4px 8px;">Avg Accum (Rating)</th>
-    <th style="text-align:left; padding:4px 8px;">Trend</th>
-    <th style="text-align:left; padding:4px 8px;">Ratio &gt; 1</th>
-    <th style="text-align:left; padding:4px 8px;">Ratio &lt; 1</th>
-    </tr></thead>
-    <tbody>{acc_table_rows_html}</tbody>
-    </table>
-    </div>
-    """
-    st.markdown(acc_table_html, unsafe_allow_html=True)
-else:
-    st.info("No accumulation rating data available.")
 
 # Most sections first, then alphabetical tiebreaker
 master_rows.sort(key=lambda r: (-r["Count"], r["Ticker"]))
