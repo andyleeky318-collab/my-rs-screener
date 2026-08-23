@@ -10922,7 +10922,7 @@ with st.spinner("Computing Setup Count history..."):
         stocks_tuple, ticker_dfs_shared
     )
 
-st.markdown(f"#### 📐 Pullback Setup Quality")
+st.markdown(f"#### 📐 Pullback Setup Quality ({global_setup_count})")
 
 if not setup_avgrank_hist.empty:
     chart_df_rank = setup_avgrank_hist.merge(setup_count_hist, on="Date", how="left")
