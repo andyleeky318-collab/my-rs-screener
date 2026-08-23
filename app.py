@@ -12171,7 +12171,7 @@ else:
         fig_rrg.update_layout(
             #title=dict(text="Relative Rotation Graph (vs SPY)", font=dict(size=16, color="#cccccc"), x=0.5, xanchor="center"),
             height=800,
-            margin=dict(l=50, r=50, t=60, b=50),
+            margin=dict(l=50, r=50, t=20, b=50),
             plot_bgcolor="rgba(20,22,30,1)",
             paper_bgcolor="rgba(13,17,23,0)",
             font=dict(color="#cccccc"),
