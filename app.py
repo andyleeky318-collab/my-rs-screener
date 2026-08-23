@@ -12718,7 +12718,6 @@ else:
 # it appears in (most -> least). Also flags whether ANY industry the ticker
 # belongs to is currently in the top 20 by Group RS.
 # ==============================================================================
-st.markdown("---")
 
 # Global "21ema_valid" set = the underlying buyable/cloud-eligible list
 # (item["Cloud"] per industry), same pool that feeds 21ema_cloud/wick/50ma_bounce.
@@ -13277,6 +13276,7 @@ if dist_triggered:
 
 # Most sections first, then alphabetical tiebreaker
 master_rows.sort(key=lambda r: (-r["Count"], r["Ticker"]))
+st.markdown("---")
 st.markdown(f"#### 📋 Lazy Table ({len(master_rows)})")
 
 if master_rows:
@@ -15279,7 +15279,15 @@ if accumulation_rows:
         )
 
     acc_table_html = f"""
-    <div style="overflow-x:auto; background:#0e1117; border-radius:6px;">
+    <style>
+    .accum-rating-table tbody tr:nth-child(21) td {{
+        border-top: none !important;
+    }}
+    .accum-rating-table th, .accum-rating-table td {{
+        border-right: none !important;
+    }}
+    </style>
+    <div class="accum-rating-table" style="overflow-x:auto; background:#0e1117; border-radius:6px;">
     <table style="width:100%; border-collapse:collapse;">
     <thead><tr>
     <th style="width:30px; text-align:center; padding:4px 8px;">#</th>
