@@ -12669,6 +12669,34 @@ def compute_market_verdict():
         "Pie Chart RSI (Sector Momentum)": 0.04,
         "Sector Heatmap Breadth": 0.04,
     }
+    
+    # ── Reorder pillars for display ──────────────────────────────────────
+    PILLAR_DISPLAY_ORDER = [
+        "1 Month Leading Theme",
+        "Pine RS Table Breadth",
+        "RS Quadrant Map",
+        "Pie Chart RSI (Sector Momentum)",
+        "ETF Risk Appetite",
+        "Sector Heatmap Breadth",
+        "RRG Rotation",
+        "Stage Breadth",
+        "ETF Stage2/4 (watchlist)",
+        "Market Regime",
+        "Minervini Breadth Trend",
+        "Distribution Days",
+        "VIX Term Structure",
+        "Credit Spread (HYG/LQD)",
+    ]
+
+    def _pillar_sort_key(item):
+        name = item[0]
+        if name in PILLAR_DISPLAY_ORDER:
+            return (0, PILLAR_DISPLAY_ORDER.index(name))
+        return (1, 0)
+
+    breakdown.sort(key=_pillar_sort_key)
+
+    # ── Weighted Composite ──
     composite = sum(score * weights[name] for name, score, _, _ in breakdown)
 
     # ── Setup-Style Tilt (breakout scanners vs pullback scanners) ─────────
