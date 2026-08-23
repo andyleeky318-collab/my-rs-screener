@@ -13093,6 +13093,7 @@ if master_rows:
         border-top: none !important;
     }}
     .master-setup-table th:nth-child(3), .master-setup-table td:nth-child(3),
+    .master-setup-table th:nth-child(5), .master-setup-table td:nth-child(5),
     .master-setup-table th:nth-child(6), .master-setup-table td:nth-child(6),
     .master-setup-table th:nth-child(7), .master-setup-table td:nth-child(7) {{
         border-right: none !important;
