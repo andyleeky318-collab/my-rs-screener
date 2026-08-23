@@ -6137,7 +6137,7 @@ with st.spinner("Scanning for Leader History..."):
 
 # --- LEADERS SECTION ---
 st.markdown(
-    f"#### 🏆 RS Leader ({len(leader_list)}) "
+    f"#### 🏆 RS Leader = Long Term ({len(leader_list)}) "
     f"<span style='color:#888; font-size:12px;'>(Be vigilant of the strikethrough)</span>",
     unsafe_allow_html=True,
 )
@@ -11485,7 +11485,7 @@ valid_breakout_history_v1, today_breakout_tickers_v1 = timed(
 )
 
 st.markdown(
-    f"### 📉 Breakout Count ({len(today_breakout_tickers_v1)})"
+    f"### 📈 Breakout Count ({len(today_breakout_tickers_v1)})"
 )
 if today_breakout_tickers_v1:
     breakout_industry_counts, breakout_ticker_industry = build_leader_industry_map(
@@ -12261,7 +12261,7 @@ st.markdown(
 # calculation. Does not touch any other section or shared variable.
 # ==============================================================================
 st.markdown("---")
-st.markdown("#### 🔄 Relative Rotation Graph (RRG)")
+st.markdown('#### 🔄 Relative Rotation Graph <span style="color:#888; font-size:12px;">(Short Term)</span>', unsafe_allow_html=True)
 
 RRG_BENCHMARK = "SPY"
 RRG_EXCLUDE = {"SPY", "QQQ", "RSP"}
@@ -12506,7 +12506,7 @@ else:
 # absolute-return money-flow coloring (so a broad bear market shows all red)
 # ==============================================================================
 st.markdown("---")
-st.markdown("#### 🌡️ Sector Strength Heatmap")
+st.markdown('#### 🌡️ Sector Strength Heatmap <span style="color:#888; font-size:12px;">(Short Term)</span>', unsafe_allow_html=True)
 
 
 
