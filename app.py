@@ -5291,6 +5291,8 @@ else:
 #     'XME', 'XRT', 'FOTO',
 # ]
 
+st.markdown("---")
+
 STAGE_PCT_WATCHLIST = [
     'CIBR', 'DRAM', 'FOTO', 'IBIT', 'IGV', 'IHF', 'IHI',
     'IPAY', 'ITB', 'JETS', 'KRE', 'KWEB', 'LIT', 'MAGS',
@@ -12506,7 +12508,7 @@ else:
 # absolute-return money-flow coloring (so a broad bear market shows all red)
 # ==============================================================================
 st.markdown("---")
-st.markdown('#### 🌡️ Sector Strength Heatmap <span style="color:#888; font-size:12px;">(Short Term)</span>', unsafe_allow_html=True)
+st.markdown('#### 🌡️ Sector Strength Heatmap <span style="color:#888; font-size:12px;">(Long Term)</span>', unsafe_allow_html=True)
 
 
 
@@ -13416,6 +13418,19 @@ if isinstance(_setup_avgrank_hist, pd.DataFrame) and not _setup_avgrank_hist.emp
     st.plotly_chart(_fig_setup, use_container_width=True, config={"displayModeBar": False})
 else:
     st.caption("**Setup Avg Rank** — no data")
+
+# ── 17. Breakout Count (min/max highlight only, no z-score — matches original) ──
+if isinstance(globals().get("valid_breakout_history_v1", None), pd.DataFrame) and not valid_breakout_history_v1.empty:
+    _colors = _zscore_outlier_colors(
+        valid_breakout_history_v1["Valid Breakout Count"],
+        check_max=True, check_min=True, z_check=False
+    )
+    _render_bar_chart(
+        "Breakout Count", valid_breakout_history_v1, "Date", "Valid Breakout Count",
+        _colors, height=_NARROW_HEIGHT, days=_compare_days
+    )
+else:
+    st.caption("**Breakout Count** — no data")
 
 # ==============================================================================
 # 25. RAPID ROTATION DETECTOR — high-sensitivity, 1-2 day rotation confirmation
