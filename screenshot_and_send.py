@@ -160,7 +160,7 @@ SECTION_KEYWORDS = [
     "Lazy Table",
     "Lazy Charts",
     "Stage 2 vs Stage 4",
-    "Accumulation Rating",
+    #"Accumulation Rating",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the
