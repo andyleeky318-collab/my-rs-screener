@@ -9321,15 +9321,15 @@ def _render_volume_badges(sym_list, vol_map):  # CHANGED: dropped badge_color_st
         html_v += setup_badge(sym, extra_style=glow_style)  # CHANGED: base = precedence
     st.markdown(html_v, unsafe_allow_html=True)
 
-st.markdown(f"**🔴 HVE ({len(hve_syms)})**")
+st.markdown(f"**🔴 HVE Cluster ({len(hve_syms)})**")
 _render_volume_badges(hve_syms, unusual_vol_map)  # CHANGED: removed style arg
 
 st.write("")
-st.markdown(f"**🟠 HVQ ({len(hvq_syms)})**")
+st.markdown(f"**🟠 HVQ Cluster ({len(hvq_syms)})**")
 _render_volume_badges(hvq_syms, unusual_vol_map)  # CHANGED: removed style arg
 
 st.write("")
-st.markdown(f"**🟡 HVM ({len(hvm_syms)})**")
+st.markdown(f"**🟡 HVM Cluster ({len(hvm_syms)})**")
 _render_volume_badges(hvm_syms, unusual_vol_map)  # CHANGED: removed style arg
 
 #st.markdown(html_e2, unsafe_allow_html=True)
@@ -12239,6 +12239,91 @@ smh_dist_count, smh_dist_dates = timed("compute_smh_distribution_days",
 iwm_dist_count, iwm_dist_dates = timed("compute_iwm_distribution_days",
     lambda: compute_market_distribution_days("IWM", dist_threshold=-0.2))
 
+SECTOR_ETFS_HEATMAP = ["XLK", "XLV", "XLF", "XLC", "XLY", "XLE", "XLI", "XLB", "XLP", "XLU"]
+HEATMAP_DAYS = 60
+HEATMAP_RETURN_LENGTH = 21  # ~1 month price return, used as the money-flow proxy
+
+@st.cache_data(ttl=3600)
+def get_sector_distribution_status(sector_etfs):
+    result = {}
+
+    for ticker in sector_etfs:
+        df = yf.download(
+            ticker, period="2mo", interval="1d",
+            progress=False, auto_adjust=True
+        )
+        df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
+        df = df[["Close", "Volume"]].dropna()
+
+        df["Pct_Chg"] = df["Close"].pct_change() * 100
+        df["Vol_Higher"] = df["Volume"] > df["Volume"].shift(1)
+        df["Is_Dist"] = (df["Pct_Chg"] <= -0.2) & df["Vol_Higher"]
+
+        count = 0
+
+        for date, row in df[df["Is_Dist"]].iterrows():
+            subsequent = df.loc[date:]
+
+            if len(subsequent) - 1 >= 25:
+                continue
+
+            if ((subsequent["Close"].max() - row["Close"]) / row["Close"]) * 100 >= 5:
+                continue
+
+            count += 1
+
+        result[ticker] = count >= 5
+
+    return result
+
+
+sector_dist_triggered = timed(
+    "get_sector_distribution_status",
+    get_sector_distribution_status,
+    SECTOR_ETFS_HEATMAP
+)
+
+@st.cache_data(ttl=3600)
+def compute_sector_heatmap_df_v2(sector_etfs, _ticker_dfs, length=21, days=60):
+    """
+    Two parallel grids, same shape:
+      - rank_wide: cross-sectional percentile rank (0-100) of each sector's
+        `length`-day return vs the OTHER sectors on that SAME day. This is
+        the number displayed in each cell.
+      - ret_wide: each sector's raw absolute `length`-day % return. This
+        drives cell COLOR — so if every sector's absolute return is
+        negative (broad selloff), every cell renders red regardless of
+        how the ranks shake out among them.
+    """
+    returns = {}
+    for etf in sector_etfs:
+        df = _ticker_dfs.get(etf)
+        if df is None:
+            continue
+        returns[etf] = df['Close'].pct_change(length) * 100
+
+    if not returns:
+        return pd.DataFrame(), pd.DataFrame()
+
+    ret_wide = pd.DataFrame(returns).dropna(how='all').tail(days)
+    rank_wide = ret_wide.rank(axis=1, pct=True) * 100
+
+    ret_wide = ret_wide.iloc[::-1]
+    rank_wide = rank_wide.iloc[::-1]
+
+    ret_wide.index = pd.to_datetime(ret_wide.index).strftime("%y-%m-%d")
+    rank_wide.index = ret_wide.index
+
+    ret_wide = ret_wide.reset_index().rename(columns={"index": "Date"})
+    rank_wide = rank_wide.reset_index().rename(columns={"index": "Date"})
+    return rank_wide, ret_wide
+
+rank_df, ret_df = timed(
+    "compute_sector_heatmap_df_v2",
+    compute_sector_heatmap_df_v2,
+    SECTOR_ETFS_HEATMAP, ticker_dfs_shared, HEATMAP_RETURN_LENGTH, HEATMAP_DAYS
+)
+
 # ==============================================================================
 # 23. MARKET VERDICT — Composite Breakout / Pullback / Neutral / Defensive Read
 # Read-only, additive. Synthesizes every signal already computed above plus
@@ -12496,18 +12581,93 @@ def compute_market_verdict():
         p10_score, p10_label = 50, "Insufficient data"
     breakdown.append(("ETF Stage2/4 (watchlist)", p10_score, p10_label, ""))
 
+    # ── Pillar 11: 1-Month Leading Theme (LIME_STOCKS momentum breadth) ────
+    rows_1m_v = _safe("rows_1m", [])
+    if rows_1m_v:
+        up_1m = sum(1 for r in rows_1m_v if r.get("pct_1m") is not None and r["pct_1m"] > 0)
+        p11_score = (up_1m / len(rows_1m_v)) * 100
+        top3 = ", ".join(r["sym"] for r in rows_1m_v[:3])
+        p11_label = f"{up_1m}/{len(rows_1m_v)} names up on the month | Leaders: {top3}"
+    else:
+        p11_score, p11_label = 50, "Insufficient data"
+    breakdown.append(("1 Month Leading Theme", p11_score, p11_label, ""))
+
+    # ── Pillar 12: Pine RS Table (RS21 >= 80 breadth across theme ETFs) ────
+    pine_rows_v = _safe("pine_rs_rows", [])
+    if pine_rows_v:
+        rs21_vals = [r["RS21"] for r in pine_rows_v if r.get("RS21") is not None and not pd.isna(r["RS21"])]
+        if rs21_vals:
+            strong_count = sum(1 for v in rs21_vals if v >= 80)
+            p12_score = (strong_count / len(rs21_vals)) * 100
+            p12_label = f"{strong_count}/{len(rs21_vals)} theme ETFs with RS21 >= 80"
+        else:
+            p12_score, p12_label = 50, "Insufficient data"
+    else:
+        p12_score, p12_label = 50, "Insufficient data"
+    breakdown.append(("Pine RS Table Breadth", p12_score, p12_label, ""))
+
+    # ── Pillar 13: Pie Chart RSI (avg 14D RSI across sector ETFs) ──────────
+    def _p13_rsi(close_series, period=14):
+        delta = close_series.diff()
+        gain = delta.clip(lower=0)
+        loss = -delta.clip(upper=0)
+        avg_gain = gain.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
+        avg_loss = loss.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
+        rs = avg_gain / avg_loss.replace(0, np.nan)
+        return 100 - (100 / (1 + rs))
+
+    ticker_dfs_v13 = _safe("ticker_dfs_shared", {})
+    sector_etfs_v13 = INDUSTRIES.get('ETF', [])
+    rsi_vals = []
+    for sym in sector_etfs_v13:
+        df_sym = ticker_dfs_v13.get(sym)
+        if df_sym is None or len(df_sym) < 15:
+            continue
+        rsi_series = _p13_rsi(df_sym['Close'], period=14).dropna()
+        if not rsi_series.empty:
+            rsi_vals.append(float(rsi_series.iloc[-1]))
+    if rsi_vals:
+        avg_rsi = sum(rsi_vals) / len(rsi_vals)
+        p13_score = max(0, min(100, avg_rsi))
+        p13_label = f"Sector ETF avg RSI = {avg_rsi:.1f}"
+    else:
+        p13_score, p13_label = 50, "Insufficient data"
+    breakdown.append(("Pie Chart RSI (Sector Momentum)", p13_score, p13_label, ""))
+
+    # ── Pillar 14: Sector Heatmap (21D return breadth across sector ETFs) ──
+    heat_returns = []
+    for sym in sector_etfs_v13:
+        df_sym = ticker_dfs_v13.get(sym)
+        if df_sym is None or len(df_sym) < 22:
+            continue
+        ret_series = df_sym['Close'].pct_change(21) * 100
+        val = ret_series.iloc[-1]
+        if pd.notna(val):
+            heat_returns.append(float(val))
+    if heat_returns:
+        positive_sectors = sum(1 for v in heat_returns if v > 0)
+        p14_score = (positive_sectors / len(heat_returns)) * 100
+        p14_label = f"{positive_sectors}/{len(heat_returns)} sectors with positive 21D return"
+    else:
+        p14_score, p14_label = 50, "Insufficient data"
+    breakdown.append(("Sector Heatmap Breadth", p14_score, p14_label, ""))
+
     # ── Weighted Composite ──────────────────────────────────────────────────
     weights = {
-        "Market Regime": 0.15,
-        "Distribution Days": 0.18,
-        "Stage Breadth": 0.10,
-        "RS Quadrant Map": 0.10,
-        "Minervini Breadth Trend": 0.10,
-        "ETF Risk Appetite": 0.07,
-        "VIX Term Structure": 0.06,
-        "Credit Spread (HYG/LQD)": 0.06,
-        "RRG Rotation": 0.10,
-        "ETF Stage2/4 (watchlist)": 0.08,
+        "Market Regime": 0.12,
+        "Distribution Days": 0.15,
+        "Stage Breadth": 0.08,
+        "RS Quadrant Map": 0.08,
+        "Minervini Breadth Trend": 0.08,
+        "ETF Risk Appetite": 0.06,
+        "VIX Term Structure": 0.05,
+        "Credit Spread (HYG/LQD)": 0.05,
+        "RRG Rotation": 0.08,
+        "ETF Stage2/4 (watchlist)": 0.06,
+        "1 Month Leading Theme": 0.06,
+        "Pine RS Table Breadth": 0.05,
+        "Pie Chart RSI (Sector Momentum)": 0.04,
+        "Sector Heatmap Breadth": 0.04,
     }
     composite = sum(score * weights[name] for name, score, _, _ in breakdown)
 
@@ -12615,91 +12775,6 @@ st.markdown("---")
 st.markdown('#### 🌡️ Sector Strength Heatmap <span style="color:#888; font-size:12px;">(Long Term)</span>', unsafe_allow_html=True)
 
 
-
-SECTOR_ETFS_HEATMAP = ["XLK", "XLV", "XLF", "XLC", "XLY", "XLE", "XLI", "XLB", "XLP", "XLU"]
-HEATMAP_DAYS = 60
-HEATMAP_RETURN_LENGTH = 21  # ~1 month price return, used as the money-flow proxy
-
-@st.cache_data(ttl=3600)
-def get_sector_distribution_status(sector_etfs):
-    result = {}
-
-    for ticker in sector_etfs:
-        df = yf.download(
-            ticker, period="2mo", interval="1d",
-            progress=False, auto_adjust=True
-        )
-        df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
-        df = df[["Close", "Volume"]].dropna()
-
-        df["Pct_Chg"] = df["Close"].pct_change() * 100
-        df["Vol_Higher"] = df["Volume"] > df["Volume"].shift(1)
-        df["Is_Dist"] = (df["Pct_Chg"] <= -0.2) & df["Vol_Higher"]
-
-        count = 0
-
-        for date, row in df[df["Is_Dist"]].iterrows():
-            subsequent = df.loc[date:]
-
-            if len(subsequent) - 1 >= 25:
-                continue
-
-            if ((subsequent["Close"].max() - row["Close"]) / row["Close"]) * 100 >= 5:
-                continue
-
-            count += 1
-
-        result[ticker] = count >= 5
-
-    return result
-
-
-sector_dist_triggered = timed(
-    "get_sector_distribution_status",
-    get_sector_distribution_status,
-    SECTOR_ETFS_HEATMAP
-)
-
-@st.cache_data(ttl=3600)
-def compute_sector_heatmap_df_v2(sector_etfs, _ticker_dfs, length=21, days=60):
-    """
-    Two parallel grids, same shape:
-      - rank_wide: cross-sectional percentile rank (0-100) of each sector's
-        `length`-day return vs the OTHER sectors on that SAME day. This is
-        the number displayed in each cell.
-      - ret_wide: each sector's raw absolute `length`-day % return. This
-        drives cell COLOR — so if every sector's absolute return is
-        negative (broad selloff), every cell renders red regardless of
-        how the ranks shake out among them.
-    """
-    returns = {}
-    for etf in sector_etfs:
-        df = _ticker_dfs.get(etf)
-        if df is None:
-            continue
-        returns[etf] = df['Close'].pct_change(length) * 100
-
-    if not returns:
-        return pd.DataFrame(), pd.DataFrame()
-
-    ret_wide = pd.DataFrame(returns).dropna(how='all').tail(days)
-    rank_wide = ret_wide.rank(axis=1, pct=True) * 100
-
-    ret_wide = ret_wide.iloc[::-1]
-    rank_wide = rank_wide.iloc[::-1]
-
-    ret_wide.index = pd.to_datetime(ret_wide.index).strftime("%y-%m-%d")
-    rank_wide.index = ret_wide.index
-
-    ret_wide = ret_wide.reset_index().rename(columns={"index": "Date"})
-    rank_wide = rank_wide.reset_index().rename(columns={"index": "Date"})
-    return rank_wide, ret_wide
-
-rank_df, ret_df = timed(
-    "compute_sector_heatmap_df_v2",
-    compute_sector_heatmap_df_v2,
-    SECTOR_ETFS_HEATMAP, ticker_dfs_shared, HEATMAP_RETURN_LENGTH, HEATMAP_DAYS
-)
 
 def _heatmap_cell_color_v2(ret_val, cap=8.0):
     """Color = absolute-return money-flow direction, NOT the cross-sectional rank."""
