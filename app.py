@@ -4382,8 +4382,8 @@ if all_data:
             )
             lower_wick_html += (
                 f"<div style='margin-bottom:5px;'>"
-                f"<span style='color:#90EE90; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
-                f"<span style='color:#90EE90; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;'>{industry}</span>"
+                f"<span style='color:#29B5E8; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
+                f"<span style='color:#29B5E8; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;'>{industry}</span>"
                 f"<span>{ticker_badges}</span>"
                 f"</div>"
             )
