@@ -3298,7 +3298,7 @@ SECTOR_KEYWORDS = {
     "Rails": "#FF69B4", "finance": "#FF69B4", "metals": "#FF69B4", "Payment Processing": "#FF69B4", 
     "travel": "#FF69B4", "airline": "#FF69B4", "fintech": "#FF69B4", "uranium": "#FF69B4", "mega-cap": "#FF69B4",
     "apparel": "#FF69B4", "risk-on": "#FF69B4", "risk-off": "#FF69B4", "New Highs": "#FF69B4", "New Lows": "#FF69B4", 
-    "biotechnology": "#FF69B4", "Commodities": "#FF69B4", "commodity": "#FF69B4", 
+    "biotechnology": "#FF69B4", "Commodities": "#FF69B4", "commodity": "#FF69B4", "mining": "#FF69B4", 
 }
 
 def format_ai_analysis_text(text, tickers=None, industries=None):
@@ -3828,6 +3828,24 @@ if all_data:
         if (_is_botak or _is_pct) and _c > 20:
             _botak_today_set.add(_t)
 
+    # Quick long-upper-wick / long-lower-wick today sets (single bar, for cluster highlight)
+    _long_upper_wick_today_set = set()
+    _long_lower_wick_today_set = set()
+    for _t in KNOWN_STOCKS:
+        _df = ticker_dfs_shared.get(_t)
+        if _df is None or len(_df) < 1:
+            continue
+        _o, _h, _l, _c = _df['Open'].iloc[-1], _df['High'].iloc[-1], _df['Low'].iloc[-1], _df['Close'].iloc[-1]
+        _rng = _h - _l
+        if _rng <= 0 or _c <= 20:
+            continue
+        _upper_wick = _h - max(_o, _c)
+        _lower_wick = min(_o, _c) - _l
+        if (_upper_wick / _rng) > 0.5:
+            _long_upper_wick_today_set.add(_t)
+        if (_lower_wick / _rng) > 0.5:
+            _long_lower_wick_today_set.add(_t)
+
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
         item = next(d for d in all_data if d["Industry"] == row["Industry"])
         rs_lookup = dict(zip(item["Tickers"]["Ticker"], item["Tickers"]["RS Score"]))
@@ -4292,6 +4310,84 @@ if all_data:
                 f"</div>"
             )
     st.markdown(botak_html, unsafe_allow_html=True)
+
+    # ── Long Upper Wick summary (industries with >2 long-upper-wick-today tickers) ──
+    upper_wick_industry_tickers = {}
+    for _, row_uw in df_main.iterrows():
+        item_uw = next((d for d in all_data if d["Industry"] == row_uw["Industry"]), None)
+        if item_uw is None:
+            continue
+        tickers_uw = sorted(t for t in item_uw["Tickers"]["Ticker"] if t in _long_upper_wick_today_set)
+        if len(tickers_uw) > 2:
+            upper_wick_industry_tickers[row_uw["Industry"]] = tickers_uw
+
+    all_upper_wick_tickers = set()
+    for tickers_list in upper_wick_industry_tickers.values():
+        all_upper_wick_tickers.update(tickers_list)
+
+    upper_wick_html = (
+        f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
+        f"❌❌❌ Long Upper Wick Cluster (Selling pressure into strength)"
+        f"</div>"
+    )
+    if upper_wick_industry_tickers:
+        sorted_upper_wick = sorted(upper_wick_industry_tickers.keys(), key=lambda ind: industry_rank_map.get(ind, 9999))
+        for industry in sorted_upper_wick:
+            rank = industry_rank_map.get(industry, "-")
+            tickers_for_ind = upper_wick_industry_tickers[industry]
+            ticker_badges = "".join(
+                f'<span style="display:inline-block;margin:1px 3px;padding:1px 5px;'
+                f'border:1px solid #663300;border-radius:3px;font-size:11px;'
+                f'background-color:#2d1f0f;color:#FFB266;font-weight:600;">{t}</span>'
+                for t in tickers_for_ind
+            )
+            upper_wick_html += (
+                f"<div style='margin-bottom:5px;'>"
+                f"<span style='color:#EF9F27; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
+                f"<span style='color:#EF9F27; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;'>{industry}</span>"
+                f"<span>{ticker_badges}</span>"
+                f"</div>"
+            )
+    st.markdown(upper_wick_html, unsafe_allow_html=True)
+
+    # ── Long Bottom Wick summary (industries with >2 long-bottom-wick-today tickers) ──
+    lower_wick_industry_tickers = {}
+    for _, row_lw in df_main.iterrows():
+        item_lw = next((d for d in all_data if d["Industry"] == row_lw["Industry"]), None)
+        if item_lw is None:
+            continue
+        tickers_lw = sorted(t for t in item_lw["Tickers"]["Ticker"] if t in _long_lower_wick_today_set)
+        if len(tickers_lw) > 2:
+            lower_wick_industry_tickers[row_lw["Industry"]] = tickers_lw
+
+    all_lower_wick_tickers = set()
+    for tickers_list in lower_wick_industry_tickers.values():
+        all_lower_wick_tickers.update(tickers_list)
+
+    lower_wick_html = (
+        f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
+        f"✅✅✅ Long Bottom Wick Cluster (Buying support into weakness)"
+        f"</div>"
+    )
+    if lower_wick_industry_tickers:
+        sorted_lower_wick = sorted(lower_wick_industry_tickers.keys(), key=lambda ind: industry_rank_map.get(ind, 9999))
+        for industry in sorted_lower_wick:
+            rank = industry_rank_map.get(industry, "-")
+            tickers_for_ind = lower_wick_industry_tickers[industry]
+            ticker_badges = "".join(
+                f'<span style="display:inline-block;margin:1px 3px;padding:1px 5px;'
+                f'border:1px solid #1a4d66;border-radius:3px;font-size:11px;'
+                f'background-color:#0f2733;color:#66CCFF;font-weight:600;">{t}</span>'
+                for t in tickers_for_ind
+            )
+            lower_wick_html += (
+                f"<div style='margin-bottom:5px;'>"
+                f"<span style='color:#90EE90; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
+                f"<span style='color:#90EE90; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;'>{industry}</span>"
+                f"<span>{ticker_badges}</span>"
+                f"</div>"
+            )
+    st.markdown(lower_wick_html, unsafe_allow_html=True)
 
     st.markdown(
         f'<div style="text-align: right; font-size: 20px; color: #888888; margin-bottom: 4px; font-family: monospace;">'
@@ -8067,7 +8163,7 @@ if b_list or b_yest:
         extra_note="2 consecutive daily bullish candles where the close is at or almost at the high of the day"
     )
 else:
-    st.info("No active setups discovered.")
+    st.info("None")
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 #st.markdown("---")
@@ -13060,7 +13156,7 @@ else:
 # section or shared variable — all new names are unique.
 # ==============================================================================
 st.markdown("---")
-st.markdown("## 🧭 Lazy Verdict/Internal")
+st.markdown("## 🧭 Lazy Verdict/Internal/Percentage Invested")
 
 # ── Standalone data fetches used only by the verdict (run first so they're
 # available when compute_market_verdict() executes) ─────────────────────────
