@@ -8074,7 +8074,7 @@ if early_bull_no_filter_list:
             "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
             if is_top20_industry else ""
         )
-        badge_style = "background:#C71585;" if sym in early_bull_set else ""
+        badge_style = "background:#378ADD;" if sym in early_bull_set else ""
 
         html_eb_nf += setup_badge(sym, extra_style=glow_style + badge_style)
 
