@@ -4214,74 +4214,6 @@ if all_data:
             industries=combined_industries
         )
 
-    all_vol_tickers = set()
-    for tickers_list in industry_vol_tickers.values():
-        all_vol_tickers.update(tickers_list)
-    total_vol_ticker_count = len(all_vol_tickers)
-
-    dist_html = (
-        f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"📉📉📉 Distribution Cluster "
-        #f"<span style='color:#FF4B4B;'>({len(vol_flagged_industries)} industries, {total_vol_ticker_count} tickers)</span>"
-        f"</div>"
-    )
-    if vol_flagged_industries:
-        # Order by current table rank so it reads top-to-bottom like the main table
-        sorted_flagged = sorted(
-            vol_flagged_industries,
-            key=lambda ind: industry_rank_map.get(ind, 9999)
-        )
-        for industry in sorted_flagged:
-            rank = industry_rank_map.get(industry, "-")
-            tickers_for_ind = sorted(industry_vol_tickers.get(industry, []))
-            ticker_badges = "".join(
-                _render_cluster_badge(t, "#663333", "#2d1a1a", "#FF9999")
-                for t in tickers_for_ind
-            )
-            _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
-            dist_html += (
-                f"<div style='margin-bottom:5px;'>"
-                f"<span style='color:#FF4B4B; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
-                f"<span style='color:#FF4B4B; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;{_ul}'>{industry}</span>"
-                f"<span>{ticker_badges}</span>"
-                f"</div>"
-            )
-    st.markdown(dist_html, unsafe_allow_html=True)
-
-    # ── Volume Cluster summary (industries with >=3 volume-above-50MA tickers) ──
-    all_volume_tickers = set()
-    for tickers_list in industry_volume_tickers.values():
-        all_volume_tickers.update(tickers_list)
-    total_volume_ticker_count = len(all_volume_tickers)
-
-    volume_html = (
-        f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"📊📊📊 Volume Cluster "
-        #f"<span style='color:#29B5E8;'>({len(vol_flagged_industries_volume)} industries, {total_volume_ticker_count} tickers)</span>"
-        f"</div>"
-    )
-    if vol_flagged_industries_volume:
-        sorted_flagged_volume = sorted(
-            vol_flagged_industries_volume,
-            key=lambda ind: industry_rank_map.get(ind, 9999)
-        )
-        for industry in sorted_flagged_volume:
-            rank = industry_rank_map.get(industry, "-")
-            tickers_for_ind = sorted(industry_volume_tickers.get(industry, []))
-            ticker_badges = "".join(
-                _render_cluster_badge(t, "#1a4d66", "#0f2733", "#66CCFF")
-                for t in tickers_for_ind
-            )
-            _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
-            volume_html += (
-                f"<div style='margin-bottom:5px;'>"
-                f"<span style='color:#29B5E8; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
-                f"<span style='color:#29B5E8; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;{_ul}'>{industry}</span>"
-                f"<span>{ticker_badges}</span>"
-                f"</div>"
-            )
-    st.markdown(volume_html, unsafe_allow_html=True)
-
     # ── Engulfing summary (industries with >1 bullish-engulfing-today ticker) ──
     engulf_industry_tickers = {}
     for _, row_e in df_main.iterrows():
@@ -4363,6 +4295,44 @@ if all_data:
             )
     st.markdown(botak_html, unsafe_allow_html=True)
 
+    # ── Long Bottom Wick summary (industries with >2 long-bottom-wick-today tickers) ──
+    lower_wick_industry_tickers = {}
+    for _, row_lw in df_main.iterrows():
+        item_lw = next((d for d in all_data if d["Industry"] == row_lw["Industry"]), None)
+        if item_lw is None:
+            continue
+        tickers_lw = sorted(t for t in item_lw["Tickers"]["Ticker"] if t in _long_lower_wick_today_set)
+        if len(tickers_lw) > 2:
+            lower_wick_industry_tickers[row_lw["Industry"]] = tickers_lw
+
+    all_lower_wick_tickers = set()
+    for tickers_list in lower_wick_industry_tickers.values():
+        all_lower_wick_tickers.update(tickers_list)
+
+    lower_wick_html = (
+        f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
+        f"✅✅✅ Long Bottom Wick Cluster (Buying support into weakness)"
+        f"</div>"
+    )
+    if lower_wick_industry_tickers:
+        sorted_lower_wick = sorted(lower_wick_industry_tickers.keys(), key=lambda ind: industry_rank_map.get(ind, 9999))
+        for industry in sorted_lower_wick:
+            rank = industry_rank_map.get(industry, "-")
+            tickers_for_ind = lower_wick_industry_tickers[industry]
+            ticker_badges = "".join(
+                _render_cluster_badge(t, "#1a4d66", "#0f2733", "#66CCFF")
+                for t in tickers_for_ind
+            )
+            _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
+            lower_wick_html += (
+                f"<div style='margin-bottom:5px;'>"
+                f"<span style='color:#29B5E8; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
+                f"<span style='color:#29B5E8; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;{_ul}'>{industry}</span>"
+                f"<span>{ticker_badges}</span>"
+                f"</div>"
+            )
+    st.markdown(lower_wick_html, unsafe_allow_html=True)
+
     # ── Long Upper Wick summary (industries with >2 long-upper-wick-today tickers) ──
     upper_wick_industry_tickers = {}
     for _, row_uw in df_main.iterrows():
@@ -4401,43 +4371,73 @@ if all_data:
             )
     st.markdown(upper_wick_html, unsafe_allow_html=True)
 
-    # ── Long Bottom Wick summary (industries with >2 long-bottom-wick-today tickers) ──
-    lower_wick_industry_tickers = {}
-    for _, row_lw in df_main.iterrows():
-        item_lw = next((d for d in all_data if d["Industry"] == row_lw["Industry"]), None)
-        if item_lw is None:
-            continue
-        tickers_lw = sorted(t for t in item_lw["Tickers"]["Ticker"] if t in _long_lower_wick_today_set)
-        if len(tickers_lw) > 2:
-            lower_wick_industry_tickers[row_lw["Industry"]] = tickers_lw
+    all_vol_tickers = set()
+    for tickers_list in industry_vol_tickers.values():
+        all_vol_tickers.update(tickers_list)
+    total_vol_ticker_count = len(all_vol_tickers)
 
-    all_lower_wick_tickers = set()
-    for tickers_list in lower_wick_industry_tickers.values():
-        all_lower_wick_tickers.update(tickers_list)
-
-    lower_wick_html = (
+    dist_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"✅✅✅ Long Bottom Wick Cluster (Buying support into weakness)"
+        f"📉📉📉 Distribution Cluster "
+        #f"<span style='color:#FF4B4B;'>({len(vol_flagged_industries)} industries, {total_vol_ticker_count} tickers)</span>"
         f"</div>"
     )
-    if lower_wick_industry_tickers:
-        sorted_lower_wick = sorted(lower_wick_industry_tickers.keys(), key=lambda ind: industry_rank_map.get(ind, 9999))
-        for industry in sorted_lower_wick:
+    if vol_flagged_industries:
+        # Order by current table rank so it reads top-to-bottom like the main table
+        sorted_flagged = sorted(
+            vol_flagged_industries,
+            key=lambda ind: industry_rank_map.get(ind, 9999)
+        )
+        for industry in sorted_flagged:
             rank = industry_rank_map.get(industry, "-")
-            tickers_for_ind = lower_wick_industry_tickers[industry]
+            tickers_for_ind = sorted(industry_vol_tickers.get(industry, []))
+            ticker_badges = "".join(
+                _render_cluster_badge(t, "#663333", "#2d1a1a", "#FF9999")
+                for t in tickers_for_ind
+            )
+            _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
+            dist_html += (
+                f"<div style='margin-bottom:5px;'>"
+                f"<span style='color:#FF4B4B; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
+                f"<span style='color:#FF4B4B; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;{_ul}'>{industry}</span>"
+                f"<span>{ticker_badges}</span>"
+                f"</div>"
+            )
+    st.markdown(dist_html, unsafe_allow_html=True)
+
+    # ── Volume Cluster summary (industries with >=3 volume-above-50MA tickers) ──
+    all_volume_tickers = set()
+    for tickers_list in industry_volume_tickers.values():
+        all_volume_tickers.update(tickers_list)
+    total_volume_ticker_count = len(all_volume_tickers)
+
+    volume_html = (
+        f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
+        f"📊📊📊 Volume Cluster "
+        #f"<span style='color:#29B5E8;'>({len(vol_flagged_industries_volume)} industries, {total_volume_ticker_count} tickers)</span>"
+        f"</div>"
+    )
+    if vol_flagged_industries_volume:
+        sorted_flagged_volume = sorted(
+            vol_flagged_industries_volume,
+            key=lambda ind: industry_rank_map.get(ind, 9999)
+        )
+        for industry in sorted_flagged_volume:
+            rank = industry_rank_map.get(industry, "-")
+            tickers_for_ind = sorted(industry_volume_tickers.get(industry, []))
             ticker_badges = "".join(
                 _render_cluster_badge(t, "#1a4d66", "#0f2733", "#66CCFF")
                 for t in tickers_for_ind
             )
             _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
-            lower_wick_html += (
+            volume_html += (
                 f"<div style='margin-bottom:5px;'>"
                 f"<span style='color:#29B5E8; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
                 f"<span style='color:#29B5E8; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;{_ul}'>{industry}</span>"
                 f"<span>{ticker_badges}</span>"
                 f"</div>"
             )
-    st.markdown(lower_wick_html, unsafe_allow_html=True)
+    st.markdown(volume_html, unsafe_allow_html=True)
 
     st.markdown(
         f'<div style="text-align: right; font-size: 20px; color: #888888; margin-bottom: 4px; font-family: monospace;">'
