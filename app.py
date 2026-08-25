@@ -2919,7 +2919,7 @@ def setup_badge(sym, is_new=False, is_removed=False, extra_prefix="", extra_suff
         return (f'<div class="ticker-badge purple-badge" style="{extra_style}">{extra_prefix}'
                 f'<span style="color:#000000;font-weight:bold;">{sym}</span>{suffix_html}</div>')
     if sym in cloud_valid_syms:
-        return (f'<div class="ticker-badge" style="background-color:#FF69B4; border:1px solid #C71585;{extra_style}">{extra_prefix}'
+        return (f'<div class="ticker-badge" style="background-color:#FF69B4 ; border:1px solid #FF69B4 ;{extra_style}">{extra_prefix}'
                 f'<span style="color:#111111;font-weight:bold;">{sym}</span>{suffix_html}</div>')
     if is_new:
         text_color = extra_text_color or "#111111"
@@ -7371,7 +7371,7 @@ if gapper_list or gapper_yest:
             "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
             if is_top20_industry else ""
         )
-        quality_style = "background:#C71585;" if sym in gapper_quality_pass else ""  # NEW
+        quality_style = "background:#FF69B4;" if sym in gapper_quality_pass else ""  # NEW
         html_g += setup_badge(sym, is_new=(sym not in gapper_yest), extra_style=glow_style + quality_style)
 
     st.markdown(html_g, unsafe_allow_html=True)
