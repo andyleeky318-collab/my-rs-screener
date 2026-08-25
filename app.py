@@ -3881,6 +3881,27 @@ if all_data:
         ]) >= 2
     }
 
+    def _cluster_badge_colors(t):
+        """4-condition priority coloring for cluster ticker badges: orange > aqua > purple > blue, black text."""
+        if t in ma50bounce_all:
+            return "#FFE5CC", "#FFA500", "#000000"
+        if t in cloudwick_all:
+            return "#99e6e6", "#99e6e6", "#000000"
+        if t in cloud21ema_all:
+            return "#c084fc", "#c084fc", "#000000"
+        if t in cloud_valid_syms:
+            return "#378ADD", "#378ADD", "#000000"
+        return None
+
+    def _render_cluster_badge(t, default_border, default_bg, default_color):
+        override = _cluster_badge_colors(t)
+        bg, border, color = override if override else (default_bg, default_border, default_color)
+        return (
+            f'<span style="display:inline-block;margin:1px 3px;padding:1px 5px;'
+            f'border:1px solid {border};border-radius:3px;font-size:11px;'
+            f'background-color:{bg};color:{color};font-weight:600;">{t}</span>'
+        )
+
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
         item = next(d for d in all_data if d["Industry"] == row["Industry"])
         rs_lookup = dict(zip(item["Tickers"]["Ticker"], item["Tickers"]["RS Score"]))
@@ -4214,9 +4235,7 @@ if all_data:
             rank = industry_rank_map.get(industry, "-")
             tickers_for_ind = sorted(industry_vol_tickers.get(industry, []))
             ticker_badges = "".join(
-                f'<span style="display:inline-block;margin:1px 3px;padding:1px 5px;'
-                f'border:1px solid #663333;border-radius:3px;font-size:11px;'
-                f'background-color:#2d1a1a;color:#FF9999;font-weight:600;">{t}</span>'
+                _render_cluster_badge(t, "#663333", "#2d1a1a", "#FF9999")
                 for t in tickers_for_ind
             )
             _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
@@ -4250,9 +4269,7 @@ if all_data:
             rank = industry_rank_map.get(industry, "-")
             tickers_for_ind = sorted(industry_volume_tickers.get(industry, []))
             ticker_badges = "".join(
-                f'<span style="display:inline-block;margin:1px 3px;padding:1px 5px;'
-                f'border:1px solid #1a4d66;border-radius:3px;font-size:11px;'
-                f'background-color:#0f2733;color:#66CCFF;font-weight:600;">{t}</span>'
+                _render_cluster_badge(t, "#1a4d66", "#0f2733", "#66CCFF")
                 for t in tickers_for_ind
             )
             _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
@@ -4294,9 +4311,7 @@ if all_data:
             rank = industry_rank_map.get(industry, "-")
             tickers_for_ind = engulf_industry_tickers[industry]
             ticker_badges = "".join(
-                f'<span style="display:inline-block;margin:1px 3px;padding:1px 5px;'
-                f'border:1px solid #8a6d00;border-radius:3px;font-size:11px;'
-                f'background-color:#3a2f00;color:#ffe066;font-weight:600;">{t}</span>'
+                _render_cluster_badge(t, "#8a6d00", "#3a2f00", "#ffe066")
                 for t in tickers_for_ind
             )
             _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
@@ -4335,9 +4350,7 @@ if all_data:
             rank = industry_rank_map.get(industry, "-")
             tickers_for_ind = botak_industry_tickers[industry]
             ticker_badges = "".join(
-                f'<span style="display:inline-block;margin:1px 3px;padding:1px 5px;'
-                f'border:1px solid #336633;border-radius:3px;font-size:11px;'
-                f'background-color:#1a2d1a;color:#99FF99;font-weight:600;">{t}</span>'
+                _render_cluster_badge(t, "#336633", "#1a2d1a", "#99FF99")
                 for t in tickers_for_ind
             )
             _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
@@ -4375,9 +4388,7 @@ if all_data:
             rank = industry_rank_map.get(industry, "-")
             tickers_for_ind = upper_wick_industry_tickers[industry]
             ticker_badges = "".join(
-                f'<span style="display:inline-block;margin:1px 3px;padding:1px 5px;'
-                f'border:1px solid #663300;border-radius:3px;font-size:11px;'
-                f'background-color:#2d1f0f;color:#FFB266;font-weight:600;">{t}</span>'
+                _render_cluster_badge(t, "#663300", "#2d1f0f", "#FFB266")
                 for t in tickers_for_ind
             )
             _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
@@ -4415,9 +4426,7 @@ if all_data:
             rank = industry_rank_map.get(industry, "-")
             tickers_for_ind = lower_wick_industry_tickers[industry]
             ticker_badges = "".join(
-                f'<span style="display:inline-block;margin:1px 3px;padding:1px 5px;'
-                f'border:1px solid #1a4d66;border-radius:3px;font-size:11px;'
-                f'background-color:#0f2733;color:#66CCFF;font-weight:600;">{t}</span>'
+                _render_cluster_badge(t, "#1a4d66", "#0f2733", "#66CCFF")
                 for t in tickers_for_ind
             )
             _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
