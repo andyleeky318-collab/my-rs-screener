@@ -3849,6 +3849,38 @@ if all_data:
         if (_lower_wick / _rng) > 0.5:
             _long_lower_wick_today_set.add(_t)
 
+    # Industries appearing in 2+ of the 6 clusters below get their name underlined
+    _engulf_cluster_industries = set()
+    _botak_cluster_industries = set()
+    _upper_wick_cluster_industries = set()
+    _lower_wick_cluster_industries = set()
+    for item_c in all_data:
+        ind_tickers = item_c["Tickers"]["Ticker"]
+        if sum(1 for t in ind_tickers if t in _engulf_today_set) > 1:
+            _engulf_cluster_industries.add(item_c["Industry"])
+        if sum(1 for t in ind_tickers if t in _botak_today_set) > 2:
+            _botak_cluster_industries.add(item_c["Industry"])
+        if sum(1 for t in ind_tickers if t in _long_upper_wick_today_set) > 2:
+            _upper_wick_cluster_industries.add(item_c["Industry"])
+        if sum(1 for t in ind_tickers if t in _long_lower_wick_today_set) > 2:
+            _lower_wick_cluster_industries.add(item_c["Industry"])
+
+    _multi_cluster_industries = {
+        ind for ind in (
+            set(vol_flagged_industries) | set(vol_flagged_industries_volume)
+            | _engulf_cluster_industries | _botak_cluster_industries
+            | _upper_wick_cluster_industries | _lower_wick_cluster_industries
+        )
+        if sum([
+            ind in vol_flagged_industries,
+            ind in vol_flagged_industries_volume,
+            ind in _engulf_cluster_industries,
+            ind in _botak_cluster_industries,
+            ind in _upper_wick_cluster_industries,
+            ind in _lower_wick_cluster_industries,
+        ]) >= 2
+    }
+
     for row_num, (i, row) in enumerate(df_main.iterrows(), start=1):
         item = next(d for d in all_data if d["Industry"] == row["Industry"])
         rs_lookup = dict(zip(item["Tickers"]["Ticker"], item["Tickers"]["RS Score"]))
@@ -4187,10 +4219,11 @@ if all_data:
                 f'background-color:#2d1a1a;color:#FF9999;font-weight:600;">{t}</span>'
                 for t in tickers_for_ind
             )
+            _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
             dist_html += (
                 f"<div style='margin-bottom:5px;'>"
                 f"<span style='color:#FF4B4B; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
-                f"<span style='color:#FF4B4B; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;'>{industry}</span>"
+                f"<span style='color:#FF4B4B; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;{_ul}'>{industry}</span>"
                 f"<span>{ticker_badges}</span>"
                 f"</div>"
             )
@@ -4222,10 +4255,11 @@ if all_data:
                 f'background-color:#0f2733;color:#66CCFF;font-weight:600;">{t}</span>'
                 for t in tickers_for_ind
             )
+            _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
             volume_html += (
                 f"<div style='margin-bottom:5px;'>"
                 f"<span style='color:#29B5E8; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
-                f"<span style='color:#29B5E8; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;'>{industry}</span>"
+                f"<span style='color:#29B5E8; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;{_ul}'>{industry}</span>"
                 f"<span>{ticker_badges}</span>"
                 f"</div>"
             )
@@ -4265,10 +4299,11 @@ if all_data:
                 f'background-color:#3a2f00;color:#ffe066;font-weight:600;">{t}</span>'
                 for t in tickers_for_ind
             )
+            _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
             engulf_html += (
                 f"<div style='margin-bottom:5px;'>"
                 f"<span style='color:#FFFF00; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
-                f"<span style='color:#FFFF00; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;'>{industry}</span>"
+                f"<span style='color:#FFFF00; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;{_ul}'>{industry}</span>"
                 f"<span>{ticker_badges}</span>"
                 f"</div>"
             )
@@ -4305,10 +4340,11 @@ if all_data:
                 f'background-color:#1a2d1a;color:#99FF99;font-weight:600;">{t}</span>'
                 for t in tickers_for_ind
             )
+            _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
             botak_html += (
                 f"<div style='margin-bottom:5px;'>"
                 f"<span style='color:#00FF00; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
-                f"<span style='color:#00FF00; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;'>{industry}</span>"
+                f"<span style='color:#00FF00; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;{_ul}'>{industry}</span>"
                 f"<span>{ticker_badges}</span>"
                 f"</div>"
             )
@@ -4344,10 +4380,11 @@ if all_data:
                 f'background-color:#2d1f0f;color:#FFB266;font-weight:600;">{t}</span>'
                 for t in tickers_for_ind
             )
+            _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
             upper_wick_html += (
                 f"<div style='margin-bottom:5px;'>"
                 f"<span style='color:#EF9F27; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
-                f"<span style='color:#EF9F27; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;'>{industry}</span>"
+                f"<span style='color:#EF9F27; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;{_ul}'>{industry}</span>"
                 f"<span>{ticker_badges}</span>"
                 f"</div>"
             )
@@ -4383,10 +4420,11 @@ if all_data:
                 f'background-color:#0f2733;color:#66CCFF;font-weight:600;">{t}</span>'
                 for t in tickers_for_ind
             )
+            _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
             lower_wick_html += (
                 f"<div style='margin-bottom:5px;'>"
                 f"<span style='color:#29B5E8; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
-                f"<span style='color:#29B5E8; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;'>{industry}</span>"
+                f"<span style='color:#29B5E8; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;{_ul}'>{industry}</span>"
                 f"<span>{ticker_badges}</span>"
                 f"</div>"
             )
@@ -12114,7 +12152,7 @@ else:
             "#00BFFF",  # Bright blue
             "#FFD700",  # Bright yellow
             "#32CD32",  # Lime green
-            "#FF3333",  # Bright red
+            "#FFFFFF",  # Bright red
             "#BF5FFF",  # Bright purple
             "#00FFFF",  # Cyan
             "#FF69B4",  # Hot pink
@@ -12134,7 +12172,7 @@ else:
             "#4169E1",  # Royal blue
             "#7CFC00",  # Lawn green
             "#FFA500",  # Bright orange
-            "#FF4500",  # Orange red
+            "#00B8D4",  # Orange red
             "#EE82EE",  # Violet
             "#1E90FF",  # Dodger blue
             "#FF6347",  # Tomato
