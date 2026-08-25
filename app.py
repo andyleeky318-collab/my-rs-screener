@@ -2904,7 +2904,7 @@ for item in all_data:
 
 def setup_badge(sym, is_new=False, is_removed=False, extra_prefix="", extra_suffix="", extra_suffix_color="#888888", extra_style="", extra_text_color=None):
     """Render a ticker badge, colored by setup-category precedence:
-    50ma_bounce (orange) > 21ema_wick (aqua) > 21ema_cloud (purple) > new (gold) > default.
+    50ma_bounce (orange) > 21ema_wick (aqua) > 21ema_cloud (purple) > cloud_valid (maroon/pink) > new (gold) > default.
     extra_text_color: if given, overrides just the ticker-name text color."""
     suffix_html = f'<span style="margin-left:4px; color:{extra_suffix_color}; font-weight:bold;"> {extra_suffix}</span>' if extra_suffix else ""
     if is_removed:
@@ -2918,6 +2918,9 @@ def setup_badge(sym, is_new=False, is_removed=False, extra_prefix="", extra_suff
     if sym in cloud21ema_all:
         return (f'<div class="ticker-badge purple-badge" style="{extra_style}">{extra_prefix}'
                 f'<span style="color:#000000;font-weight:bold;">{sym}</span>{suffix_html}</div>')
+    if sym in cloud_valid_syms:
+        return (f'<div class="ticker-badge" style="background-color:#FF69B4; border:1px solid #C71585;{extra_style}">{extra_prefix}'
+                f'<span style="color:#111111;font-weight:bold;">{sym}</span>{suffix_html}</div>')
     if is_new:
         text_color = extra_text_color or "#111111"
         return (f'<div class="ticker-badge new-pattern-badge" style="{extra_style}">{extra_prefix}'
