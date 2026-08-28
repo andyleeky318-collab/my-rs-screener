@@ -4230,7 +4230,7 @@ if all_data:
 
     engulf_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"🐳🐳 Engulfing Cluster "
+        f"🐳🐳 Engulfing Cluster [{len(engulf_industry_tickers)}] "
         #f"<span style='color:#FFFF00;'>({len(engulf_industry_tickers)} industries, {len(all_engulf_tickers)} tickers)</span>"
         f"</div>"
     )
@@ -4272,7 +4272,7 @@ if all_data:
 
     botak_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"🧑‍🦲🧑‍🦲🧑‍🦲 Botak Cluster (Not suitable on sideway market)"
+        f"🧑‍🦲🧑‍🦲🧑‍🦲 Botak Cluster [{len(botak_industry_tickers)}] (Not suitable on sideway market)"
         #f"<span style='color:#00FF00;'>({len(botak_industry_tickers)} industries, {len(all_botak_tickers)} tickers)</span>"
         f"</div>"
     )
@@ -4311,7 +4311,7 @@ if all_data:
 
     lower_wick_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"✅✅✅ Long Bottom Wick Cluster (Buying support into weakness)"
+        f"✅✅✅ Long Bottom Wick Cluster [{len(lower_wick_industry_tickers)}] (Buying support into weakness)"
         f"</div>"
     )
     if lower_wick_industry_tickers:
@@ -4349,7 +4349,7 @@ if all_data:
 
     upper_wick_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"❌❌❌ Long Upper Wick Cluster (Selling pressure into strength)"
+        f"❌❌❌ Long Upper Wick Cluster [{len(upper_wick_industry_tickers)}] (Selling pressure into strength)"
         f"</div>"
     )
     if upper_wick_industry_tickers:
@@ -4378,7 +4378,7 @@ if all_data:
 
     dist_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"📉📉📉 Distribution Cluster "
+        f"📉📉📉 Distribution Cluster [{len(vol_flagged_industries)}] "
         #f"<span style='color:#FF4B4B;'>({len(vol_flagged_industries)} industries, {total_vol_ticker_count} tickers)</span>"
         f"</div>"
     )
@@ -4413,7 +4413,7 @@ if all_data:
 
     volume_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"📊📊📊 Volume Cluster "
+        f"📊📊📊 Volume Cluster [{len(vol_flagged_industries_volume)}] "
         #f"<span style='color:#29B5E8;'>({len(vol_flagged_industries_volume)} industries, {total_volume_ticker_count} tickers)</span>"
         f"</div>"
     )
@@ -9671,8 +9671,14 @@ def _etf_pie_chart():
                         bg, border, txt = "#1e1e1e", "#444", "#eeeeee"
                     if sym == "XLK":
                         txt = "#ff0000"
+                    if sym == etf_symbols[strongest_idx]:
+                        glow = "box-shadow:0 0 8px 2px #FFD700, 0 0 16px 5px rgba(255,215,0,0.75);"
+                    elif sym == etf_symbols[weakest_idx]:
+                        glow = "box-shadow:0 0 8px 2px #FF3B3B, 0 0 16px 5px rgba(255,0,0,0.75);"
+                    else:
+                        glow = "box-shadow:0 0 6px 1px rgba(255,255,255,0.45);"
                     rsi_html += (
-                        f'<div class="ticker-badge" style="background:{bg}; border:1px solid {border};">'
+                        f'<div class="ticker-badge" style="background:{bg}; border:1px solid {border}; {glow}">'
                         f'<span class="ticker-name" style="color:{txt};">{sym}</span>'
                         #f'<span class="ticker-rs" style="color:{txt}; margin-left:4px;">{rsi_val:.1f}</span>'
                         f'</div>'
@@ -12129,7 +12135,7 @@ else:
 
     default_top_movers = sorted(
         rrg_data_full.keys(), key=lambda t: -_dist_from_center(rrg_data_full[t])
-    )[:10]
+    )[:15]
     #default_top_movers = all_rrg_tickers_sorted
 
     rrg_col_a, rrg_col_b = st.columns([4, 1.4])
@@ -13206,7 +13212,7 @@ else:
 # section or shared variable — all new names are unique.
 # ==============================================================================
 st.markdown("---")
-st.markdown("## 🧭 Lazy Verdict/Internal/Percentage Invested")
+st.markdown("## 🧭 Lazy Verdict-Internal / % Invested / 2R or 1.5R / 2-stops or 3-stops")
 
 # ── Standalone data fetches used only by the verdict (run first so they're
 # available when compute_market_verdict() executes) ─────────────────────────
