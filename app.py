@@ -13164,8 +13164,8 @@ if accumulation_rows:
 
         sparkline_html = _render_accumulation_sparkline_svg(r["Sparkline"])
 
-        above1_str = ", ".join(r.get("Above1", [])) or "-"
-        below1_str = ", ".join(r.get("Below1", [])) or "-"
+        above1_str = "".join(setup_badge(s) for s in r.get("Above1", [])) or "-"
+        below1_str = "".join(setup_badge(s) for s in r.get("Below1", [])) or "-"
 
         acc_table_rows_html += (
             f"<tr style='background-color:{bg};'>"
@@ -13192,7 +13192,7 @@ if accumulation_rows:
     <thead><tr>
     <th style="width:30px; text-align:center; padding:4px 8px;">#</th>
     <th style="text-align:left; padding:4px 8px;">Ticker</th>
-    <th style="text-align:center; padding:4px 8px;">Avg Accum (Rating)</th>
+    <th style="text-align:center; padding:4px 8px;">Avg Accum</th>
     <th style="text-align:left; padding:4px 8px;">Trend</th>
     <th style="text-align:left; padding:4px 8px;">Ratio &gt; 1</th>
     <th style="text-align:left; padding:4px 8px;">Ratio &lt; 1</th>
