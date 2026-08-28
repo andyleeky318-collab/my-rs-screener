@@ -1473,19 +1473,20 @@ for i, (label, val) in enumerate(zip(bucket_order, vals)):
 # Losers / Gainer labels on separate row
 losers_val = breadth_stats.get('decline', 0)
 gainers_val = breadth_stats.get('advance', 0)
+gl_color = "#26a69a" if gainers_val > losers_val else "#ef5350"
 
 labels_svg += (
     f'<text x="2" y="{SVG_H - 2}" '
     f'text-anchor="start" font-size="8" '
     f'font-family="Source Sans Pro,sans-serif" '
-    f'fill="#888888">Losers {losers_val:,}</text>'
+    f'fill="{gl_color}">Losers {losers_val:,}</text>'
 )
 
 labels_svg += (
     f'<text x="{SVG_W - 2}" y="{SVG_H - 2}" '
     f'text-anchor="end" font-size="8" '
     f'font-family="Source Sans Pro,sans-serif" '
-    f'fill="#888888">Gainers {gainers_val:,}</text>'
+    f'fill="{gl_color}">Gainers {gainers_val:,}</text>'
 )
 
 # Baseline
@@ -4135,7 +4136,7 @@ if all_data:
             "#FF4B4B" if row["Industry"] in vol_flagged_industries
             else "#FFFF00" if engulf_industry_count > 1
             else "#00FF00" if botak_industry_count > 2
-            else "#29B5E8" if len(industry_volume_tickers.get(row["Industry"], [])) > 2
+            else "#B266FF" if len(industry_volume_tickers.get(row["Industry"], [])) > 2
             else "#ffffff"
         )
         
@@ -4426,14 +4427,14 @@ if all_data:
             rank = industry_rank_map.get(industry, "-")
             tickers_for_ind = sorted(industry_volume_tickers.get(industry, []))
             ticker_badges = "".join(
-                _render_cluster_badge(t, "#1a4d66", "#0f2733", "#66CCFF")
+                _render_cluster_badge(t, "#5a2d8f", "#241436", "#D8B4FE")
                 for t in tickers_for_ind
             )
             _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
             volume_html += (
                 f"<div style='margin-bottom:5px;'>"
-                f"<span style='color:#29B5E8; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
-                f"<span style='color:#29B5E8; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;{_ul}'>{industry}</span>"
+                f"<span style='color:#B266FF; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
+                f"<span style='color:#B266FF; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;{_ul}'>{industry}</span>"
                 f"<span>{ticker_badges}</span>"
                 f"</div>"
             )
