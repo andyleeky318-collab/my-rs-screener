@@ -15664,19 +15664,22 @@ lev_dollar_vol = timed(
 
 def _lev_badge(display_sym, underlying_sym, direction):
     """Colored like setup_badge(), but keyed off the UNDERLYING ticker's
-    current setup category — so e.g. MU aqua -> MUU renders aqua too."""
-    if underlying_sym in ma50bounce_all:
-        return (f'<div class="ticker-badge orange-badge">'
-                f'<span style="color:#111111;font-weight:bold;">{display_sym}</span></div>')
-    if underlying_sym in cloudwick_all:
-        return (f'<div class="ticker-badge aqua-badge">'
-                f'<span style="color:#000000;font-weight:bold;">{display_sym}</span></div>')
-    if underlying_sym in cloud21ema_all:
-        return (f'<div class="ticker-badge purple-badge">'
-                f'<span style="color:#000000;font-weight:bold;">{display_sym}</span></div>')
-    if underlying_sym in cloud_valid_syms:
-        return (f'<div class="ticker-badge" style="background-color:#378ADD;border:1px solid #378ADD;">'
-                f'<span style="color:#111111;font-weight:bold;">{display_sym}</span></div>')
+    current setup category — only applied to the Bull side. Bear badges
+    always use the neutral red styling regardless of underlying setup."""
+    if direction == "bull":
+        if underlying_sym in ma50bounce_all:
+            return (f'<div class="ticker-badge orange-badge">'
+                    f'<span style="color:#111111;font-weight:bold;">{display_sym}</span></div>')
+        if underlying_sym in cloudwick_all:
+            return (f'<div class="ticker-badge aqua-badge">'
+                    f'<span style="color:#000000;font-weight:bold;">{display_sym}</span></div>')
+        if underlying_sym in cloud21ema_all:
+            return (f'<div class="ticker-badge purple-badge">'
+                    f'<span style="color:#000000;font-weight:bold;">{display_sym}</span></div>')
+        if underlying_sym in cloud_valid_syms:
+            return (f'<div class="ticker-badge" style="background-color:#378ADD;border:1px solid #378ADD;">'
+                    f'<span style="color:#111111;font-weight:bold;">{display_sym}</span></div>')
+
     default_bg, default_border, default_color = (
         ("#1b3a2e", "#2e7d52", "#9be8b8") if direction == "bull" else ("#3a1b1b", "#a13a3a", "#f0a8a8")
     )
