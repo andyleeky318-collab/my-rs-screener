@@ -15472,3 +15472,157 @@ if _timing_log:
     total_ms = sum(_timing_log.values())
     st.caption(f"Total measured wall-clock time: **{total_ms/1000:.2f}s** across {len(_timing_log)} tracked calls")
 
+# ==============================================================================
+# 27. LEVERAGED ETF BULL/BEAR TABLE — badge colored by underlying's setup category
+# NOTE: financecharts.com's screener blocks automated fetches (bot detection),
+# so this uses a curated list of major/liquid leveraged & single-stock ETFs
+# (Direxion/ProShares/GraniteShares/T-Rex) instead of scraping that page live.
+# This corner of the ETF market delists/splits often — verify periodically.
+# ==============================================================================
+st.markdown("---")
+st.markdown("#### 🎢 Leveraged ETF Bull / Bear Table")
+
+LEVERAGED_ETF_MAP = {
+    # ticker: (underlying_proxy, "bull"/"bear")
+    # Index / sector
+    "TQQQ": ("QQQ", "bull"),  "SQQQ": ("QQQ", "bear"),
+    "QLD":  ("QQQ", "bull"),  "QID":  ("QQQ", "bear"),
+    "SPXL": ("SPY", "bull"),  "SPXS": ("SPY", "bear"),
+    "UPRO": ("SPY", "bull"),  "SPXU": ("SPY", "bear"),
+    "SSO":  ("SPY", "bull"),  "SDS":  ("SPY", "bear"),
+    "TNA":  ("IWM", "bull"),  "TZA":  ("IWM", "bear"),
+    "URTY": ("IWM", "bull"),  "SRTY": ("IWM", "bear"),
+    "UDOW": ("DIA", "bull"),  "SDOW": ("DIA", "bear"),
+    "SOXL": ("SMH", "bull"),  "SOXS": ("SMH", "bear"),
+    "TECL": ("XLK", "bull"),  "TECS": ("XLK", "bear"),
+    "FAS":  ("XLF", "bull"),  "FAZ":  ("XLF", "bear"),
+    "LABU": ("XBI", "bull"),  "LABD": ("XBI", "bear"),
+    "CURE": ("XLV", "bull"),
+    "NUGT": ("GDX", "bull"),  "DUST": ("GDX", "bear"),
+    "JNUG": ("GDXJ", "bull"), "JDST": ("GDXJ", "bear"),
+    "TMF":  ("TLT", "bull"),  "TMV":  ("TLT", "bear"),
+    "YINN": ("KWEB", "bull"), "YANG": ("KWEB", "bear"),
+    "UCO":  ("USO", "bull"),  "SCO":  ("USO", "bear"),
+    "BOIL": ("UNG", "bull"),  "KOLD": ("UNG", "bear"),
+    "ERX":  ("XLE", "bull"),  "ERY":  ("XLE", "bear"),
+    "DPST": ("KRE", "bull"),
+    "DRN":  ("IYR", "bull"),  "DRV":  ("IYR", "bear"),
+    "BITU": ("BITO", "bull"), "SBIT": ("BITO", "bear"),
+
+    # Single-stock
+    "NVDL": ("NVDA", "bull"), "NVD":  ("NVDA", "bear"),
+    "TSLL": ("TSLA", "bull"), "TSLR": ("TSLA", "bull"),
+    "TSLS": ("TSLA", "bear"), "TSLQ": ("TSLA", "bear"), "TSLZ": ("TSLA", "bear"),
+    "MSTU": ("MSTR", "bull"), "MSTX": ("MSTR", "bull"), "MSTZ": ("MSTR", "bear"),
+    "MUU":  ("MU", "bull"),
+    "AMDL": ("AMD", "bull"),  "AMDS": ("AMD", "bear"),
+    "CONL": ("COIN", "bull"), "CONI": ("COIN", "bear"),
+    "GGLL": ("GOOGL", "bull"),
+    "METU": ("META", "bull"), "METD": ("META", "bear"),
+    "AMZU": ("AMZN", "bull"), "AMZD": ("AMZN", "bear"),
+    "MSFU": ("MSFT", "bull"), "MSFD": ("MSFT", "bear"),
+    "AAPU": ("AAPL", "bull"), "AAPD": ("AAPL", "bear"),
+    "PLTU": ("PLTR", "bull"), "PLTD": ("PLTR", "bear"),
+    "NFLU": ("NFLX", "bull"), "NFLD": ("NFLX", "bear"),
+    "AVL":  ("AVGO", "bull"),
+}
+
+@st.cache_data(ttl=3600)
+def fetch_leveraged_etf_dollar_volume(lev_tuple):
+    """20-day avg dollar volume (Close * Volume) per ticker. Silently skips
+    any ticker yfinance can't resolve (delisted/renamed) instead of failing."""
+    try:
+        raw = yf.download(list(lev_tuple), period="1mo", interval="1d",
+                           progress=False, auto_adjust=True)
+    except Exception:
+        return {}
+    result = {}
+    for t in lev_tuple:
+        try:
+            if isinstance(raw.columns, pd.MultiIndex):
+                c = raw['Close'][t].dropna()
+                v = raw['Volume'][t].dropna()
+            else:
+                c = raw['Close'].dropna()
+                v = raw['Volume'].dropna()
+            if c.empty or v.empty:
+                continue
+            dv = (c * v).tail(20).mean()
+            if pd.notna(dv) and dv > 0:
+                result[t] = float(dv)
+        except Exception:
+            continue
+    return result
+
+_lev_tickers_tuple = tuple(LEVERAGED_ETF_MAP.keys())
+lev_dollar_vol = timed(
+    "fetch_leveraged_etf_dollar_volume", fetch_leveraged_etf_dollar_volume, _lev_tickers_tuple
+)
+
+def _lev_badge(display_sym, underlying_sym, direction):
+    """Colored like setup_badge(), but keyed off the UNDERLYING ticker's
+    current setup category — so e.g. MU aqua -> MUU renders aqua too."""
+    if underlying_sym in ma50bounce_all:
+        return (f'<div class="ticker-badge orange-badge">'
+                f'<span style="color:#111111;font-weight:bold;">{display_sym}</span></div>')
+    if underlying_sym in cloudwick_all:
+        return (f'<div class="ticker-badge aqua-badge">'
+                f'<span style="color:#000000;font-weight:bold;">{display_sym}</span></div>')
+    if underlying_sym in cloud21ema_all:
+        return (f'<div class="ticker-badge purple-badge">'
+                f'<span style="color:#000000;font-weight:bold;">{display_sym}</span></div>')
+    if underlying_sym in cloud_valid_syms:
+        return (f'<div class="ticker-badge" style="background-color:#378ADD;border:1px solid #378ADD;">'
+                f'<span style="color:#111111;font-weight:bold;">{display_sym}</span></div>')
+    default_bg, default_border, default_color = (
+        ("#1b3a2e", "#2e7d52", "#9be8b8") if direction == "bull" else ("#3a1b1b", "#a13a3a", "#f0a8a8")
+    )
+    return (f'<div class="ticker-badge" style="background-color:{default_bg};border:1px solid {default_border};">'
+            f'<span style="color:{default_color};font-weight:bold;">{display_sym}</span></div>')
+
+VOL_TIERS = [
+    (">$500M", lambda v: v > 500_000_000),
+    ("$100M – $500M", lambda v: 100_000_000 <= v <= 500_000_000),
+    ("<$100M", lambda v: v < 100_000_000),
+]
+
+bull_map = {t: u for t, (u, d) in LEVERAGED_ETF_MAP.items() if d == "bull"}
+bear_map = {t: u for t, (u, d) in LEVERAGED_ETF_MAP.items() if d == "bear"}
+
+rows_html = ""
+for tier_label, tier_fn in VOL_TIERS:
+    bull_syms = sorted([t for t in bull_map if t in lev_dollar_vol and tier_fn(lev_dollar_vol[t])],
+                        key=lambda t: -lev_dollar_vol[t])
+    bear_syms = sorted([t for t in bear_map if t in lev_dollar_vol and tier_fn(lev_dollar_vol[t])],
+                        key=lambda t: -lev_dollar_vol[t])
+    bull_html = "".join(_lev_badge(t, bull_map[t], "bull") for t in bull_syms) or "<span style='color:#555;'>—</span>"
+    bear_html = "".join(_lev_badge(t, bear_map[t], "bear") for t in bear_syms) or "<span style='color:#555;'>—</span>"
+    rows_html += (
+        f"<tr>"
+        f"<td style='padding:8px;color:#888;font-weight:bold;white-space:nowrap;vertical-align:top;'>{tier_label}</td>"
+        f"<td style='padding:8px;vertical-align:top;'>{bull_html}</td>"
+        f"<td style='padding:8px;vertical-align:top;'>{bear_html}</td>"
+        f"</tr>"
+    )
+
+st.markdown(
+    f"""
+    <div style="overflow-x:auto; background:#0e1117; border-radius:6px;">
+    <table style="width:100%; border-collapse:collapse;">
+    <thead><tr>
+    <th style="text-align:left; padding:8px; width:130px;">Avg $ Volume</th>
+    <th style="text-align:left; padding:8px; color:#00FF00;">🟢 Bull</th>
+    <th style="text-align:left; padding:8px; color:#FF4B4B;">🔴 Bear</th>
+    </tr></thead>
+    <tbody>{rows_html}</tbody>
+    </table>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+st.caption(
+    "Badge color follows the underlying ticker's current setup (aqua=21ema_wick, "
+    "purple=21ema_cloud, orange=50ma_bounce, blue=cloud_valid); neutral green/red "
+    "otherwise. Curated list, not live-scraped from financecharts.com — verify "
+    "tickers before trading, this corner of the ETF market delists/splits often."
+)
