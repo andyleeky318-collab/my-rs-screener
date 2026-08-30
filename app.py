@@ -13282,25 +13282,59 @@ def fetch_equity_risk_premium_v0():
     A shrinking or negative ERP means equities are richly priced versus the
     risk-free rate — a valuation headwind for taking fresh equity risk.
 
-    Forward P/E is pulled live from Yahoo Finance's SPY aggregate (analyst
-    consensus forward earnings), with ^GSPC as a secondary source and a
-    conservative static value as a last-resort fallback. The 10Y yield comes
-    from ^TNX (auto-scaled: ^TNX is sometimes quoted as yield x10).
+    Forward P/E is resolved from a chain of free sources, stopping at the first
+    sane value:
+        1. Yahoo Finance consensus `forwardPE` across S&P 500 proxies
+           (SPY, ^GSPC, IVV, VOO, SPLG)
+        2. historyofmarket.com JSON API — cap-weighted blended FY1/FY2 forward
+           P/E (no API key)
+        3. static value near the 5y median forward P/E (last resort only)
+    The 10Y yield comes from ^TNX (auto-scaled: ^TNX is sometimes quoted x10).
     """
-    fwd_pe = None
-    pe_source = "SPY consensus (Yahoo)"
-    for sym, label in (("SPY", "SPY consensus (Yahoo)"), ("^GSPC", "^GSPC consensus (Yahoo)")):
+    def _sane_pe(x):
         try:
-            info = yf.Ticker(sym).info or {}
-            cand = info.get("forwardPE")
-            if cand is not None and np.isfinite(cand) and cand > 0:
-                fwd_pe, pe_source = float(cand), label
-                break
-        except Exception:
-            continue
+            x = float(x)
+        except (TypeError, ValueError):
+            return None
+        return x if np.isfinite(x) and 5.0 < x < 60.0 else None
 
+    fwd_pe = None
+    pe_source = None
+
+    # Source 1: Yahoo Finance consensus forward P/E across S&P 500 proxies
+    for sym, label in (
+        ("SPY", "SPY forwardPE (Yahoo)"),
+        ("^GSPC", "^GSPC forwardPE (Yahoo)"),
+        ("IVV", "IVV forwardPE (Yahoo)"),
+        ("VOO", "VOO forwardPE (Yahoo)"),
+        ("SPLG", "SPLG forwardPE (Yahoo)"),
+    ):
+        try:
+            cand = _sane_pe((yf.Ticker(sym).info or {}).get("forwardPE"))
+        except Exception:
+            cand = None
+        if cand is not None:
+            fwd_pe, pe_source = cand, label
+            break
+
+    # Source 2: historyofmarket.com cap-weighted blended FY1/FY2 forward P/E
     if fwd_pe is None:
-        fwd_pe, pe_source = 22.0, "static fallback (22.0)"
+        try:
+            r = requests.get(
+                "https://historyofmarket.com/api/sp500/forward-pe.json",
+                timeout=8, headers={"User-Agent": "Mozilla/5.0"},
+            )
+            if r.ok:
+                cur = (r.json() or {}).get("current", {}) or {}
+                cand = _sane_pe(cur.get("forward")) or _sane_pe(cur.get("forwardOwn"))
+                if cand is not None:
+                    fwd_pe, pe_source = cand, "historyofmarket.com forward P/E"
+        except Exception:
+            pass
+
+    # Source 3: last-resort static value (~5y median S&P 500 forward P/E)
+    if fwd_pe is None:
+        fwd_pe, pe_source = 21.0, "static fallback (21.0)"
 
     tnx_yield = None
     try:
@@ -13649,7 +13683,7 @@ def compute_market_verdict():
         "ETF Stage2/4 (watchlist)": 0.05,
         "Market Regime": 0.11,
         "Minervini Breadth Trend": 0.07,
-        "Distribution Days": 0.12,
+        "Distribution Days": 0.14,
         "Accumulation Rating": 0.05,
         "VIX Term Structure": 0.04,
         "Credit Spread (HYG/LQD)": 0.04,
