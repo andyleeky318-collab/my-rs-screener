@@ -15970,7 +15970,13 @@ try:
         if net >= -40:  return ("Neutral", "#a9a9a9")
         return ("Weak", "#FF4B4B")
 
-    _rows = list(stage_pct_rows)  # already in STAGE_PCT_WATCHLIST order
+    # Default sort: health strongest -> weakest (by Stage 2 - Stage 4);
+    # rows with no stage data sink to the bottom.
+    def _net_key(_r):
+        _s2, _s4 = _r.get("Stage2 %"), _r.get("Stage4 %")
+        return (_s2 - _s4) if (_s2 is not None and _s4 is not None) else -1e9
+
+    _rows = sorted(stage_pct_rows, key=_net_key, reverse=True)
 
     if not _rows:
         st.info("No industry stage distribution available.")
@@ -16025,8 +16031,8 @@ try:
         _h.append("</table>")
         st.markdown("".join(_h), unsafe_allow_html=True)
         st.caption(
-            f"One row per STAGE_PCT_WATCHLIST ticker ({len(_rows)}), in watchlist order — the Stage 1-4 %s "
-            "are the same values shown in the table under the RS Quadrant Map. Bar segments: "
+            f"One row per STAGE_PCT_WATCHLIST ticker ({len(_rows)}), sorted by health strongest→weakest — "
+            "the Stage 1-4 %s are the same values shown in the table under the RS Quadrant Map. Bar segments: "
             "Stage 1 (grey) · Stage 2 (blue) · Stage 3 (orange) · Stage 4 (pink). "
             "Health from Stage 2 − Stage 4: ≥10 Strong · ≥−15 Healthy · ≥−40 Neutral · else Weak."
         )
