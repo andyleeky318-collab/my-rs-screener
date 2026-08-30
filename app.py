@@ -13271,9 +13271,71 @@ def fetch_credit_spread_ratio_v0(period="6mo"):
         return pd.DataFrame()
 
 
-with st.spinner("Fetching VIX term structure and credit spread..."):
+@st.cache_data(ttl=3600)
+def fetch_equity_risk_premium_v0():
+    """
+    Equity Risk Premium (ERP) = S&P 500 forward earnings yield − 10Y Treasury yield.
+
+        S&P 500 Earnings Yield = 1 / Forward P/E
+        ERP                    = Earnings Yield − 10Y Treasury Yield
+
+    A shrinking or negative ERP means equities are richly priced versus the
+    risk-free rate — a valuation headwind for taking fresh equity risk.
+
+    Forward P/E is pulled live from Yahoo Finance's SPY aggregate (analyst
+    consensus forward earnings), with ^GSPC as a secondary source and a
+    conservative static value as a last-resort fallback. The 10Y yield comes
+    from ^TNX (auto-scaled: ^TNX is sometimes quoted as yield x10).
+    """
+    fwd_pe = None
+    pe_source = "SPY consensus (Yahoo)"
+    for sym, label in (("SPY", "SPY consensus (Yahoo)"), ("^GSPC", "^GSPC consensus (Yahoo)")):
+        try:
+            info = yf.Ticker(sym).info or {}
+            cand = info.get("forwardPE")
+            if cand is not None and np.isfinite(cand) and cand > 0:
+                fwd_pe, pe_source = float(cand), label
+                break
+        except Exception:
+            continue
+
+    if fwd_pe is None:
+        fwd_pe, pe_source = 22.0, "static fallback (22.0)"
+
+    tnx_yield = None
+    try:
+        raw = yf.download("^TNX", period="5d", interval="1d",
+                          progress=False, auto_adjust=False)
+        tclose = raw["Close"]
+        if isinstance(tclose, pd.DataFrame):
+            tclose = tclose.iloc[:, 0]
+        tclose = tclose.dropna()
+        if not tclose.empty:
+            raw_y = float(tclose.iloc[-1])
+            tnx_yield = raw_y / 10.0 if raw_y > 20 else raw_y
+    except Exception:
+        tnx_yield = None
+
+    tnx_source = "^TNX (Yahoo)"
+    if tnx_yield is None or not np.isfinite(tnx_yield) or tnx_yield <= 0:
+        tnx_yield, tnx_source = 4.5, "static fallback (4.5%)"
+
+    earnings_yield = 100.0 / fwd_pe
+    erp = earnings_yield - tnx_yield
+    return {
+        "forward_pe": fwd_pe,
+        "earnings_yield": earnings_yield,
+        "tnx_yield": tnx_yield,
+        "erp": erp,
+        "pe_source": pe_source,
+        "tnx_source": tnx_source,
+    }
+
+
+with st.spinner("Fetching VIX term structure, credit spread and equity risk premium..."):
     verdict_vix_df = timed("fetch_vix_term_structure_v0", fetch_vix_term_structure_v0)
     verdict_credit_df = timed("fetch_credit_spread_ratio_v0", fetch_credit_spread_ratio_v0)
+    verdict_erp = timed("fetch_equity_risk_premium_v0", fetch_equity_risk_premium_v0)
 
 
 def _safe(name, default=None):
@@ -13417,6 +13479,35 @@ def compute_market_verdict():
         p8_score, p8_label, p8_detail = 50, "Insufficient data", ""
     breakdown.append(("Credit Spread (HYG/LQD)", p8_score, p8_label, p8_detail))
 
+    # ── Pillar 8b: Equity Risk Premium (S&P 500 fwd earnings yield − 10Y) ──
+    erp_v = _safe("verdict_erp", {})
+    erp_val = erp_v.get("erp") if isinstance(erp_v, dict) else None
+    if erp_val is not None and np.isfinite(erp_val):
+        # Continuous map calibrated to the ERP signal bands:
+        #   -0.5% -> ~18   0% -> 30   +1.0% -> 55   +1.75% -> ~74   +2.64% -> ~96
+        p_erp_score = max(0, min(100, 30 + erp_val * 25))
+        if erp_val < 0:
+            p_erp_label = "🔴 Bonds more attractive"
+        elif erp_val < 0.5:
+            p_erp_label = "🔴 High risk"
+        elif erp_val < 1.0:
+            p_erp_label = "🟠 Very tight"
+        elif erp_val < 1.75:
+            p_erp_label = "🟡 Moderate"
+        elif erp_val < 2.5:
+            p_erp_label = "🟢 Better"
+        else:
+            p_erp_label = "🟢 Attractive"
+        p_erp_detail = (
+            f"Fwd P/E {erp_v.get('forward_pe', float('nan')):.1f} → "
+            f"EY {erp_v.get('earnings_yield', float('nan')):.2f}% − "
+            f"10Y {erp_v.get('tnx_yield', float('nan')):.2f}% = ERP {erp_val:+.2f}% "
+            f"({erp_v.get('pe_source', 'n/a')})"
+        )
+    else:
+        p_erp_score, p_erp_label, p_erp_detail = 50, "Insufficient data", ""
+    breakdown.append(("Equity Risk Premium (ERP)", p_erp_score, p_erp_label, p_erp_detail))
+
     # ── Pillar 9: RRG Rotation (Leading + Improving quadrant %) ───────────
     rrg_full_v = _safe("rrg_data_full", {})
     leading_count = improving_count = weakening_count = lagging_count = total_rrg = 0
@@ -13556,12 +13647,13 @@ def compute_market_verdict():
         "RRG Rotation": 0.07,
         "Stage Breadth": 0.07,
         "ETF Stage2/4 (watchlist)": 0.05,
-        "Market Regime": 0.12,
+        "Market Regime": 0.11,
         "Minervini Breadth Trend": 0.07,
-        "Distribution Days": 0.14,
+        "Distribution Days": 0.12,
         "Accumulation Rating": 0.05,
-        "VIX Term Structure": 0.05,
-        "Credit Spread (HYG/LQD)": 0.05,
+        "VIX Term Structure": 0.04,
+        "Credit Spread (HYG/LQD)": 0.04,
+        "Equity Risk Premium (ERP)": 0.05,
     }
 
     # ── Reorder pillars for display ──────────────────────────────────────
@@ -13581,6 +13673,7 @@ def compute_market_verdict():
         "Distribution Days",
         "VIX Term Structure",
         "Credit Spread (HYG/LQD)",
+        "Equity Risk Premium (ERP)",
     ]
 
     def _pillar_sort_key(item):
