@@ -15983,9 +15983,13 @@ try:
     else:
         _thr = "padding:5px 10px;text-align:right;"
         _h = [
+            # Scoped reset: a global rule (tbody tr:nth-child(21) td) draws a
+            # red border-top on row 21 of every table — kill it for this one.
+            "<style>#stage-dist-tbl td{border-top:0 !important;border-bottom:1px solid #21262d !important;}"
+            "#stage-dist-tbl th{border:0 !important;background:transparent !important;}</style>",
             # width:auto -> the table only spans its content; first column
             # (Industry) shrinks to the longest name instead of stretching.
-            "<table style='width:auto;border-collapse:collapse;font-size:12px;'>",
+            "<table id='stage-dist-tbl' style='width:auto;border-collapse:collapse;font-size:12px;'>",
             "<tr style='color:#8b949e;border-bottom:1px solid #30363d;'>"
             "<th style='padding:5px 10px;text-align:left;white-space:nowrap;'>Industry</th>"
             "<th style='padding:5px 10px;text-align:left;white-space:nowrap;'>Ticker</th>"
