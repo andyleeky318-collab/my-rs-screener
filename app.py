@@ -15954,74 +15954,81 @@ except Exception as _e:
 
 # ── Stage Distribution by Industry ──────────────────────────────────────────
 # Renders compute_stage_pct_by_industry output (already computed above as
-# stage_pct_rows) as a vertical MarketSmith-style table: one row per industry,
-# a stacked Stage 1-4 distribution bar, the four stage %s, and a derived health.
+# stage_pct_rows): ONE ROW PER STAGE_PCT_WATCHLIST TICKER, in watchlist order,
+# with the exact same Stage 1-4 %s shown in the table under the RS Quadrant Map,
+# plus a stacked distribution bar and a derived health label.
 st.markdown("---")
 st.markdown("#### 🧭 Stage Distribution by Industry")
 
 try:
     _STAGE_COLORS = {1: "#a9a9a9", 2: "#378ADD", 3: "#EF9F27", 4: "#FF69B4"}  # matches app stage_colors
 
-    # Dedupe stage_pct_rows -> one entry per industry
-    _ind_seen = {}
-    for _r in stage_pct_rows:
-        _ind = _r.get("Industry")
-        if not _ind or _ind == "—" or _ind in _ind_seen:
-            continue
-        _s1, _s2, _s3, _s4 = _r.get("Stage1 %"), _r.get("Stage2 %"), _r.get("Stage3 %"), _r.get("Stage4 %")
-        if None in (_s1, _s2, _s3, _s4):
-            continue
-        _ind_seen[_ind] = {"n": _r.get("N", 0), "s1": _s1, "s2": _s2, "s3": _s3, "s4": _s4,
-                           "net": _s2 - _s4}
+    def _health(net):
+        if net is None: return ("n/a", "#8b949e")
+        if net >= 10:   return ("Strong",  "#00FF00")
+        if net >= -15:  return ("Healthy", "#4ecdc4")
+        if net >= -40:  return ("Neutral", "#a9a9a9")
+        return ("Weak", "#FF4B4B")
 
-    if not _ind_seen:
+    _rows = list(stage_pct_rows)  # already in STAGE_PCT_WATCHLIST order
+
+    if not _rows:
         st.info("No industry stage distribution available.")
     else:
-        def _health(net):
-            if net >= 10:   return ("Strong",  "#00FF00")
-            if net >= -15:  return ("Healthy", "#4ecdc4")
-            if net >= -40:  return ("Neutral", "#a9a9a9")
-            return ("Weak", "#FF4B4B")
-
-        _ordered = sorted(_ind_seen.items(), key=lambda kv: kv[1]["net"], reverse=True)
-
+        _thr = "padding:5px 10px;text-align:right;"
         _h = [
-            "<table style='width:100%;border-collapse:collapse;font-size:12px;'>",
-            "<tr style='color:#8b949e;text-align:left;border-bottom:1px solid #30363d;'>"
-            "<th style='padding:6px 8px;'>Industry</th>"
-            "<th style='padding:6px 8px;width:40%;'>Distribution</th>"
-            "<th style='padding:6px 8px;text-align:right;'>S1</th>"
-            "<th style='padding:6px 8px;text-align:right;'>S2</th>"
-            "<th style='padding:6px 8px;text-align:right;'>S3</th>"
-            "<th style='padding:6px 8px;text-align:right;'>S4</th>"
-            "<th style='padding:6px 8px;text-align:right;'>Health</th></tr>",
+            # width:auto -> the table only spans its content; first column
+            # (Industry) shrinks to the longest name instead of stretching.
+            "<table style='width:auto;border-collapse:collapse;font-size:12px;'>",
+            "<tr style='color:#8b949e;border-bottom:1px solid #30363d;'>"
+            "<th style='padding:5px 10px;text-align:left;white-space:nowrap;'>Industry</th>"
+            "<th style='padding:5px 10px;text-align:left;white-space:nowrap;'>Ticker</th>"
+            "<th style='padding:5px 10px;text-align:left;'>Distribution</th>"
+            f"<th style='{_thr}'>S1</th><th style='{_thr}'>S2</th>"
+            f"<th style='{_thr}'>S3</th><th style='{_thr}'>S4</th>"
+            f"<th style='{_thr}'>Health</th></tr>",
         ]
-        for _ind, _v in _ordered:
-            _parts = []
-            for _i, _key in ((1, "s1"), (2, "s2"), (3, "s3"), (4, "s4")):
-                _parts.append(
-                    f"<span style='display:inline-block;height:11px;width:{_v[_key]:.2f}%;"
-                    f"background:{_STAGE_COLORS[_i]};'></span>"
+        for _r in _rows:
+            _tkr = _r.get("Ticker", "")
+            _ind = _r.get("Industry") or "—"
+            _n   = _r.get("N", 0)
+            _s = [_r.get("Stage1 %"), _r.get("Stage2 %"), _r.get("Stage3 %"), _r.get("Stage4 %")]
+            _has = all(v is not None for v in _s)
+            _net = (_s[1] - _s[3]) if _has else None
+            _lbl, _clr = _health(_net)
+
+            if _has:
+                _bar = "".join(
+                    f"<span style='display:inline-block;height:11px;width:{_s[_i]:.2f}%;"
+                    f"background:{_STAGE_COLORS[_i + 1]};'></span>"
+                    for _i in range(4)
                 )
-            _lbl, _clr = _health(_v["net"])
+                _bar_cell = (f"<span style='display:block;width:240px;line-height:0;"
+                             f"white-space:nowrap;border-radius:3px;overflow:hidden;'>{_bar}</span>")
+                _cells = "".join(
+                    f"<td style='padding:5px 10px;text-align:right;color:{_STAGE_COLORS[_i + 1]};'>{_s[_i]:.0f}%</td>"
+                    for _i in range(4)
+                )
+            else:
+                _bar_cell = "<span style='color:#8b949e;'>—</span>"
+                _cells = "<td style='padding:5px 10px;text-align:right;color:#8b949e;'>—</td>" * 4
+
             _h.append(
                 "<tr style='border-bottom:1px solid #21262d;'>"
-                f"<td style='padding:6px 8px;color:#e6edf3;font-weight:bold;white-space:nowrap;'>{_ind} "
-                f"<span style='color:#8b949e;font-weight:normal;'>({_v['n']})</span></td>"
-                f"<td style='padding:6px 8px;'><span style='display:block;width:100%;line-height:0;"
-                f"white-space:nowrap;border-radius:3px;overflow:hidden;'>{''.join(_parts)}</span></td>"
-                f"<td style='padding:6px 8px;text-align:right;color:{_STAGE_COLORS[1]};'>{_v['s1']:.0f}%</td>"
-                f"<td style='padding:6px 8px;text-align:right;color:{_STAGE_COLORS[2]};'>{_v['s2']:.0f}%</td>"
-                f"<td style='padding:6px 8px;text-align:right;color:{_STAGE_COLORS[3]};'>{_v['s3']:.0f}%</td>"
-                f"<td style='padding:6px 8px;text-align:right;color:{_STAGE_COLORS[4]};'>{_v['s4']:.0f}%</td>"
-                f"<td style='padding:6px 8px;text-align:right;color:{_clr};font-weight:bold;'>{_lbl}</td></tr>"
+                f"<td style='padding:5px 10px;color:#e6edf3;font-weight:bold;white-space:nowrap;'>{_ind} "
+                f"<span style='color:#8b949e;font-weight:normal;'>({_n})</span></td>"
+                f"<td style='padding:5px 10px;color:#c9d1d9;white-space:nowrap;'>{_tkr}</td>"
+                f"<td style='padding:5px 10px;'>{_bar_cell}</td>"
+                f"{_cells}"
+                f"<td style='padding:5px 10px;text-align:right;color:{_clr};font-weight:bold;'>{_lbl}</td></tr>"
             )
         _h.append("</table>")
         st.markdown("".join(_h), unsafe_allow_html=True)
         st.caption(
-            f"All {len(_ordered)} industries from compute_stage_pct_by_industry, sorted strongest first. "
-            "Bar segments: Stage 1 (grey) · Stage 2 (blue) · Stage 3 (orange) · Stage 4 (pink). "
-            "Health is derived from Stage 2 − Stage 4: ≥10 Strong · ≥−15 Healthy · ≥−40 Neutral · else Weak."
+            f"One row per STAGE_PCT_WATCHLIST ticker ({len(_rows)}), in watchlist order — the Stage 1-4 %s "
+            "are the same values shown in the table under the RS Quadrant Map. Bar segments: "
+            "Stage 1 (grey) · Stage 2 (blue) · Stage 3 (orange) · Stage 4 (pink). "
+            "Health from Stage 2 − Stage 4: ≥10 Strong · ≥−15 Healthy · ≥−40 Neutral · else Weak."
         )
 except Exception as _e:
     st.warning(f"Stage distribution by industry error: {_e}")
