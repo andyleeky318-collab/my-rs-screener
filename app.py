@@ -13366,10 +13366,90 @@ def fetch_equity_risk_premium_v0():
     }
 
 
-with st.spinner("Fetching VIX term structure, credit spread and equity risk premium..."):
+@st.cache_data(ttl=3600)
+def fetch_index_valuation_v0():
+    """
+    S&P 500 valuation: where today's forward and trailing P/E sit inside their
+    own trailing-10-year distributions (percentile rank).
+
+    Primary data: historyofmarket.com JSON API (free, no key) — a cap-weighted
+    S&P 500 trailing-P/E series plus a 12-month-forward consensus P/E series,
+    each with 10+ years of history, refreshed daily/weekly. This is the same
+    "market P/E vs its own history" read as Yardeni's *Stock Market P/E Ratios*
+    chartbook — Yardeni's site only embeds Datastream charts and exposes no
+    machine-readable feed, so it cannot be pulled directly.
+
+    Fallback: Yahoo Finance current SPY forward P/E mapped onto a static 10y
+    (p10 / median / p90) band.
+
+    Returns {"metrics": {label: {pe, pctl, n}}, "source": str}. A high
+    percentile means the index is expensive versus its own decade (overvalued).
+    """
+    FALLBACK_BAND = (16.5, 20.5, 24.5)  # ~10y S&P 500 forward P/E p10/median/p90
+
+    def _pct_rank(values, x):
+        vals = sorted(v for v in values
+                      if isinstance(v, (int, float)) and np.isfinite(v) and v > 0)
+        if not vals or x is None or not np.isfinite(x):
+            return None
+        return 100.0 * sum(1 for v in vals if v <= x) / len(vals)
+
+    result = {"metrics": {}, "source": None}
+
+    # ── Primary: historyofmarket.com forward + trailing P/E, 10y percentile ──
+    try:
+        r = requests.get(
+            "https://historyofmarket.com/api/sp500/forward-pe.json",
+            timeout=8, headers={"User-Agent": "Mozilla/5.0"},
+        )
+        if r.ok:
+            d = r.json() or {}
+            cur = d.get("current", {}) or {}
+            cutoff = (datetime.date.today() - datetime.timedelta(days=3660)).isoformat()
+            for key, nice in (("forward", "Forward P/E"), ("trailing", "Trailing P/E")):
+                hist = d.get(key) or []
+                window = [pt.get("value") for pt in hist
+                          if isinstance(pt, dict) and str(pt.get("date", "")) >= cutoff]
+                cur_val = cur.get(key)
+                pr = _pct_rank(window, cur_val)
+                if pr is not None and cur_val and np.isfinite(cur_val):
+                    result["metrics"][nice] = {
+                        "pe": float(cur_val), "pctl": pr, "n": len(window),
+                    }
+            if result["metrics"]:
+                result["source"] = "historyofmarket.com (10y history)"
+                return result
+    except Exception:
+        pass
+
+    # ── Fallback: Yahoo current forward P/E vs static 10y band ──
+    try:
+        info = yf.Ticker("SPY").info or {}
+        pe = info.get("forwardPE") or info.get("trailingPE")
+        if pe and np.isfinite(pe) and 5.0 < pe < 60.0:
+            p10, p50, p90 = FALLBACK_BAND
+            if pe <= p10:
+                pr = 10.0 * pe / p10
+            elif pe <= p50:
+                pr = 10.0 + 40.0 * (pe - p10) / (p50 - p10)
+            elif pe <= p90:
+                pr = 50.0 + 40.0 * (pe - p50) / (p90 - p50)
+            else:
+                pr = 90.0 + 20.0 * (pe - p90) / max(p90 - p50, 1e-6)
+            result["metrics"]["Forward P/E"] = {
+                "pe": float(pe), "pctl": max(0.0, min(100.0, pr)), "n": 0,
+            }
+            result["source"] = "Yahoo current P/E vs static 10y band"
+    except Exception:
+        pass
+    return result
+
+
+with st.spinner("Fetching VIX term structure, credit spread, equity risk premium and index valuation..."):
     verdict_vix_df = timed("fetch_vix_term_structure_v0", fetch_vix_term_structure_v0)
     verdict_credit_df = timed("fetch_credit_spread_ratio_v0", fetch_credit_spread_ratio_v0)
     verdict_erp = timed("fetch_equity_risk_premium_v0", fetch_equity_risk_premium_v0)
+    verdict_index_val = timed("fetch_index_valuation_v0", fetch_index_valuation_v0)
 
 
 def _safe(name, default=None):
@@ -13542,6 +13622,32 @@ def compute_market_verdict():
         p_erp_score, p_erp_label, p_erp_detail = 50, "Insufficient data", ""
     breakdown.append(("Equity Risk Premium (ERP)", p_erp_score, p_erp_label, p_erp_detail))
 
+    # ── Pillar 8c: S&P 500 Valuation (fwd & trailing P/E vs own 10Y range) ─
+    idxval_v = _safe("verdict_index_val", {})
+    metrics = idxval_v.get("metrics", {}) if isinstance(idxval_v, dict) else {}
+    subs, parts = [], []
+    for nice, m in metrics.items():
+        subs.append(100.0 - m["pctl"])              # richer valuation -> lower score
+        parts.append(f"{nice} {m['pe']:.1f}x = {m['pctl']:.0f}th pctl")
+    if subs:
+        p_idxval_score = sum(subs) / len(subs)
+        avg_pctl = 100.0 - p_idxval_score
+        if avg_pctl >= 90:
+            p_idxval_label = "🔴 Richly valued vs 10Y"
+        elif avg_pctl >= 70:
+            p_idxval_label = "🟠 Above-average valuation"
+        elif avg_pctl >= 45:
+            p_idxval_label = "🟡 In line with 10Y norm"
+        elif avg_pctl >= 25:
+            p_idxval_label = "🟢 Below-average valuation"
+        else:
+            p_idxval_label = "🟢 Cheap vs 10Y"
+        src = idxval_v.get("source") or ""
+        p_idxval_detail = " · ".join(parts) + (f"  ({src})" if src else "")
+    else:
+        p_idxval_score, p_idxval_label, p_idxval_detail = 50, "Insufficient data", ""
+    breakdown.append(("S&P 500 Valuation (P/E vs 10Y)", p_idxval_score, p_idxval_label, p_idxval_detail))
+
     # ── Pillar 9: RRG Rotation (Leading + Improving quadrant %) ───────────
     rrg_full_v = _safe("rrg_data_full", {})
     leading_count = improving_count = weakening_count = lagging_count = total_rrg = 0
@@ -13672,7 +13778,7 @@ def compute_market_verdict():
 
     # ── Weighted Composite ──────────────────────────────────────────────────
     weights = {
-        "1 Month Leading Theme": 0.06,
+        "1 Month Leading Theme": 0.05,
         "Pine RS Table Breadth": 0.05,
         "RS Quadrant Map": 0.07,
         "Pie Chart RSI (Sector Momentum)": 0.04,
@@ -13683,11 +13789,12 @@ def compute_market_verdict():
         "ETF Stage2/4 (watchlist)": 0.05,
         "Market Regime": 0.11,
         "Minervini Breadth Trend": 0.07,
-        "Distribution Days": 0.14,
+        "Distribution Days": 0.12,
         "Accumulation Rating": 0.05,
         "VIX Term Structure": 0.04,
         "Credit Spread (HYG/LQD)": 0.04,
         "Equity Risk Premium (ERP)": 0.05,
+        "S&P 500 Valuation (P/E vs 10Y)": 0.03,
     }
 
     # ── Reorder pillars for display ──────────────────────────────────────
@@ -13708,6 +13815,7 @@ def compute_market_verdict():
         "VIX Term Structure",
         "Credit Spread (HYG/LQD)",
         "Equity Risk Premium (ERP)",
+        "S&P 500 Valuation (P/E vs 10Y)",
     ]
 
     def _pillar_sort_key(item):
