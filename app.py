@@ -15787,169 +15787,169 @@ except Exception as _e:
 # Cross-check     : Nasdaq Data (api.nasdaq.com, free, NO key/account). Confirms
 #                  the latest reported quarter's EPS value and whether it beat
 #                  consensus.
-st.markdown("---")
-st.markdown("#### 🏆 Model Stock Market Winners Screen — Quarterly EPS (traits 1-5)")
+# st.markdown("---")
+# st.markdown("#### 🏆 Model Stock Market Winners Screen — Quarterly EPS (traits 1-5)")
 
-_EPS_MIN_YOY = 20.0   # foreword point 2
-_EPS_BIG_YOY = 70.0   # foreword point 3
+# _EPS_MIN_YOY = 20.0   # foreword point 2
+# _EPS_BIG_YOY = 70.0   # foreword point 3
 
-@st.cache_data(ttl=604800)
-def _sec_cik_map():
-    """{TICKER: '##########'} from SEC's public ticker->CIK file. No key/account."""
-    try:
-        _r = requests.get(
-            "https://www.sec.gov/files/company_tickers.json",
-            headers={"User-Agent": "my-rs-screener (contact: andyleeky318@gmail.com)"},
-            timeout=15,
-        )
-        _r.raise_for_status()
-        return {str(v["ticker"]).upper(): str(v["cik_str"]).zfill(10)
-                for v in _r.json().values()}
-    except Exception:
-        return {}
-
-
-@st.cache_data(ttl=86400)
-def fetch_eps_growth_sec(ticker):
-    """Latest & prior reported-quarter YoY diluted-EPS growth from SEC EDGAR
-    XBRL frame-tagged quarterly values. Returns a dict or None. Never raises."""
-    _cik = _sec_cik_map().get(str(ticker).upper())
-    if not _cik:
-        return None
-    try:
-        _r = requests.get(
-            f"https://data.sec.gov/api/xbrl/companyconcept/CIK{_cik}/us-gaap/EarningsPerShareDiluted.json",
-            headers={"User-Agent": "my-rs-screener (contact: andyleeky318@gmail.com)"},
-            timeout=15,
-        )
-        _r.raise_for_status()
-        _units = _r.json().get("units", {})
-        _entries = _units.get("USD/shares") or next(iter(_units.values()), [])
-        _bf = {}
-        for _e in _entries:
-            _fr = _e.get("frame", "") or ""
-            if re.match(r"^CY\d{4}Q[1-4]$", _fr) and isinstance(_e.get("val"), (int, float)):
-                _bf[_fr] = _e["val"]
-        _fr_sorted = sorted(_bf)
-        if len(_fr_sorted) < 2:
-            return None
-
-        def _yoy(frame):
-            _prev = f"CY{int(frame[2:6]) - 1}{frame[6:]}"
-            if not _bf.get(_prev):
-                return None
-            return (_bf[frame] - _bf[_prev]) / abs(_bf[_prev]) * 100.0
-
-        _latest = _fr_sorted[-1]
-        return {
-            "curr":       _yoy(_latest),
-            "prior":      _yoy(_fr_sorted[-2]),
-            "frame":      _latest,
-            "eps_latest": _bf[_latest],
-        }
-    except Exception:
-        return None
+# @st.cache_data(ttl=604800)
+# def _sec_cik_map():
+#     """{TICKER: '##########'} from SEC's public ticker->CIK file. No key/account."""
+#     try:
+#         _r = requests.get(
+#             "https://www.sec.gov/files/company_tickers.json",
+#             headers={"User-Agent": "my-rs-screener (contact: andyleeky318@gmail.com)"},
+#             timeout=15,
+#         )
+#         _r.raise_for_status()
+#         return {str(v["ticker"]).upper(): str(v["cik_str"]).zfill(10)
+#                 for v in _r.json().values()}
+#     except Exception:
+#         return {}
 
 
-@st.cache_data(ttl=86400)
-def fetch_eps_nasdaq(ticker):
-    """Latest reported-quarter EPS + consensus from Nasdaq Data. No key/account.
-    Returns a dict or None. Never raises."""
-    try:
-        _r = requests.get(
-            f"https://api.nasdaq.com/api/quote/{ticker}/eps",
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept": "application/json",
-                "Referer": "https://www.nasdaq.com/",
-            },
-            timeout=10,
-        )
-        _r.raise_for_status()
-        _rows = ((_r.json() or {}).get("data") or {}).get("earningsPerShare") or []
-        _prev = [q for q in _rows if str(q.get("type", "")).lower().startswith("previous")]
-        if not _prev:
-            return None
-        _q = _prev[-1]
-        _eps, _cons = _q.get("earnings"), _q.get("consensus")
-        return {
-            "eps":    _eps if isinstance(_eps, (int, float)) else None,
-            "cons":   _cons if isinstance(_cons, (int, float)) else None,
-            "period": _q.get("period", ""),
-        }
-    except Exception:
-        return None
+# @st.cache_data(ttl=86400)
+# def fetch_eps_growth_sec(ticker):
+#     """Latest & prior reported-quarter YoY diluted-EPS growth from SEC EDGAR
+#     XBRL frame-tagged quarterly values. Returns a dict or None. Never raises."""
+#     _cik = _sec_cik_map().get(str(ticker).upper())
+#     if not _cik:
+#         return None
+#     try:
+#         _r = requests.get(
+#             f"https://data.sec.gov/api/xbrl/companyconcept/CIK{_cik}/us-gaap/EarningsPerShareDiluted.json",
+#             headers={"User-Agent": "my-rs-screener (contact: andyleeky318@gmail.com)"},
+#             timeout=15,
+#         )
+#         _r.raise_for_status()
+#         _units = _r.json().get("units", {})
+#         _entries = _units.get("USD/shares") or next(iter(_units.values()), [])
+#         _bf = {}
+#         for _e in _entries:
+#             _fr = _e.get("frame", "") or ""
+#             if re.match(r"^CY\d{4}Q[1-4]$", _fr) and isinstance(_e.get("val"), (int, float)):
+#                 _bf[_fr] = _e["val"]
+#         _fr_sorted = sorted(_bf)
+#         if len(_fr_sorted) < 2:
+#             return None
+
+#         def _yoy(frame):
+#             _prev = f"CY{int(frame[2:6]) - 1}{frame[6:]}"
+#             if not _bf.get(_prev):
+#                 return None
+#             return (_bf[frame] - _bf[_prev]) / abs(_bf[_prev]) * 100.0
+
+#         _latest = _fr_sorted[-1]
+#         return {
+#             "curr":       _yoy(_latest),
+#             "prior":      _yoy(_fr_sorted[-2]),
+#             "frame":      _latest,
+#             "eps_latest": _bf[_latest],
+#         }
+#     except Exception:
+#         return None
 
 
-try:
-    _all_syms = sorted({s for s in KNOWN_STOCKS if s and s != benchmark})
-    with st.spinner(f"Screening {len(_all_syms)} stocks on quarterly EPS (SEC EDGAR)..."):
-        _sec = {}
-        for _s in _all_syms:
-            _d = fetch_eps_growth_sec(_s)
-            if _d and _d["curr"] is not None and _d["prior"] is not None:
-                _sec[_s] = _d
+# @st.cache_data(ttl=86400)
+# def fetch_eps_nasdaq(ticker):
+#     """Latest reported-quarter EPS + consensus from Nasdaq Data. No key/account.
+#     Returns a dict or None. Never raises."""
+#     try:
+#         _r = requests.get(
+#             f"https://api.nasdaq.com/api/quote/{ticker}/eps",
+#             headers={
+#                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+#                 "Accept": "application/json",
+#                 "Referer": "https://www.nasdaq.com/",
+#             },
+#             timeout=10,
+#         )
+#         _r.raise_for_status()
+#         _rows = ((_r.json() or {}).get("data") or {}).get("earningsPerShare") or []
+#         _prev = [q for q in _rows if str(q.get("type", "")).lower().startswith("previous")]
+#         if not _prev:
+#             return None
+#         _q = _prev[-1]
+#         _eps, _cons = _q.get("earnings"), _q.get("consensus")
+#         return {
+#             "eps":    _eps if isinstance(_eps, (int, float)) else None,
+#             "cons":   _cons if isinstance(_cons, (int, float)) else None,
+#             "period": _q.get("period", ""),
+#         }
+#     except Exception:
+#         return None
 
-    # Traits 1-2: latest quarter EPS up >= 20% YoY AND accelerating vs prior quarter
-    _cands = [
-        (_s, _d) for _s, _d in _sec.items()
-        if _d["curr"] >= _EPS_MIN_YOY and _d["curr"] > _d["prior"]
-    ]
-    _cands.sort(key=lambda x: x[1]["curr"], reverse=True)
 
-    if not _cands:
-        st.info("No stock currently shows ≥20% accelerating quarterly EPS growth (SEC EDGAR).")
-    else:
-        _rows_out = []
-        with st.spinner(f"Cross-checking {len(_cands)} candidates against Nasdaq..."):
-            for _s, _d in _cands:
-                _nq = fetch_eps_nasdaq(_s)
-                if not _nq or _nq["eps"] is None:
-                    _status, _surp = "– no Nasdaq data", None
-                else:
-                    _tol = max(0.05, 0.15 * abs(_d["eps_latest"]))
-                    _match = abs(_nq["eps"] - _d["eps_latest"]) <= _tol
-                    _beat = _nq["cons"] is not None and _nq["eps"] > _nq["cons"]
-                    _surp = (round((_nq["eps"] - _nq["cons"]) / abs(_nq["cons"]) * 100, 1)
-                             if _nq["cons"] else None)
-                    if _match and _beat:
-                        _status = "✔ beat & matches"
-                    elif _match:
-                        _status = "~ matches"
-                    else:
-                        _status = "⚠ EPS mismatch"
-                _rows_out.append({
-                    "Ticker":              _s,
-                    "SEC Quarter":         _d["frame"],
-                    "EPS YoY % (SEC)":     round(_d["curr"], 1),
-                    "Prior Q YoY % (SEC)": round(_d["prior"], 1),
-                    "Accelerating":        "✅",
-                    "≥70% (pt 3)":         "⭐" if _d["curr"] >= _EPS_BIG_YOY else "",
-                    "SEC EPS":             round(_d["eps_latest"], 2),
-                    "Nasdaq EPS":          round(_nq["eps"], 2) if _nq and _nq["eps"] is not None else None,
-                    "Consensus":           round(_nq["cons"], 2) if _nq and _nq["cons"] is not None else None,
-                    "Surprise %":          _surp,
-                    "Cross-check":         _status,
-                })
+# try:
+#     _all_syms = sorted({s for s in KNOWN_STOCKS if s and s != benchmark})
+#     with st.spinner(f"Screening {len(_all_syms)} stocks on quarterly EPS (SEC EDGAR)..."):
+#         _sec = {}
+#         for _s in _all_syms:
+#             _d = fetch_eps_growth_sec(_s)
+#             if _d and _d["curr"] is not None and _d["prior"] is not None:
+#                 _sec[_s] = _d
 
-        _badges = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
-        for _r in _rows_out:
-            _cls = "ticker-badge lime-badge" if _r["Cross-check"].startswith("✔") else "ticker-badge new-pattern-badge"
-            _badges += f'<div class="{_cls}">{_r["Ticker"]} · {_r["EPS YoY % (SEC)"]:+.0f}%</div>'
-        _badges += "</div>"
-        st.markdown(_badges, unsafe_allow_html=True)
+#     # Traits 1-2: latest quarter EPS up >= 20% YoY AND accelerating vs prior quarter
+#     _cands = [
+#         (_s, _d) for _s, _d in _sec.items()
+#         if _d["curr"] >= _EPS_MIN_YOY and _d["curr"] > _d["prior"]
+#     ]
+#     _cands.sort(key=lambda x: x[1]["curr"], reverse=True)
 
-        st.dataframe(pd.DataFrame(_rows_out), use_container_width=True, hide_index=True)
-        st.caption(
-            "Traits 1-5 only: latest reported quarterly diluted EPS up ≥ 20% YoY **and** accelerating "
-            "vs the prior reported quarter (pts 1-2); ⭐ marks ≥ 70% YoY (pt 3). "
-            "Primary source **SEC EDGAR** XBRL filings. The **Cross-check** column compares the latest "
-            "quarter's EPS against **Nasdaq Data** and whether it beat consensus: "
-            "✔ beat & matches, ~ matches (in-line / miss), ⚠ EPS mismatch, – no Nasdaq data. "
-            "Lime badge = Nasdaq-confirmed beat. Neither source needs an API key or account."
-        )
-except Exception as _e:
-    st.warning(f"Model winners screen error: {_e}")
+#     if not _cands:
+#         st.info("No stock currently shows ≥20% accelerating quarterly EPS growth (SEC EDGAR).")
+#     else:
+#         _rows_out = []
+#         with st.spinner(f"Cross-checking {len(_cands)} candidates against Nasdaq..."):
+#             for _s, _d in _cands:
+#                 _nq = fetch_eps_nasdaq(_s)
+#                 if not _nq or _nq["eps"] is None:
+#                     _status, _surp = "– no Nasdaq data", None
+#                 else:
+#                     _tol = max(0.05, 0.15 * abs(_d["eps_latest"]))
+#                     _match = abs(_nq["eps"] - _d["eps_latest"]) <= _tol
+#                     _beat = _nq["cons"] is not None and _nq["eps"] > _nq["cons"]
+#                     _surp = (round((_nq["eps"] - _nq["cons"]) / abs(_nq["cons"]) * 100, 1)
+#                              if _nq["cons"] else None)
+#                     if _match and _beat:
+#                         _status = "✔ beat & matches"
+#                     elif _match:
+#                         _status = "~ matches"
+#                     else:
+#                         _status = "⚠ EPS mismatch"
+#                 _rows_out.append({
+#                     "Ticker":              _s,
+#                     "SEC Quarter":         _d["frame"],
+#                     "EPS YoY % (SEC)":     round(_d["curr"], 1),
+#                     "Prior Q YoY % (SEC)": round(_d["prior"], 1),
+#                     "Accelerating":        "✅",
+#                     "≥70% (pt 3)":         "⭐" if _d["curr"] >= _EPS_BIG_YOY else "",
+#                     "SEC EPS":             round(_d["eps_latest"], 2),
+#                     "Nasdaq EPS":          round(_nq["eps"], 2) if _nq and _nq["eps"] is not None else None,
+#                     "Consensus":           round(_nq["cons"], 2) if _nq and _nq["cons"] is not None else None,
+#                     "Surprise %":          _surp,
+#                     "Cross-check":         _status,
+#                 })
+
+#         _badges = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+#         for _r in _rows_out:
+#             _cls = "ticker-badge lime-badge" if _r["Cross-check"].startswith("✔") else "ticker-badge new-pattern-badge"
+#             _badges += f'<div class="{_cls}">{_r["Ticker"]} · {_r["EPS YoY % (SEC)"]:+.0f}%</div>'
+#         _badges += "</div>"
+#         st.markdown(_badges, unsafe_allow_html=True)
+
+#         st.dataframe(pd.DataFrame(_rows_out), use_container_width=True, hide_index=True)
+#         st.caption(
+#             "Traits 1-5 only: latest reported quarterly diluted EPS up ≥ 20% YoY **and** accelerating "
+#             "vs the prior reported quarter (pts 1-2); ⭐ marks ≥ 70% YoY (pt 3). "
+#             "Primary source **SEC EDGAR** XBRL filings. The **Cross-check** column compares the latest "
+#             "quarter's EPS against **Nasdaq Data** and whether it beat consensus: "
+#             "✔ beat & matches, ~ matches (in-line / miss), ⚠ EPS mismatch, – no Nasdaq data. "
+#             "Lime badge = Nasdaq-confirmed beat. Neither source needs an API key or account."
+#         )
+# except Exception as _e:
+#     st.warning(f"Model winners screen error: {_e}")
 
 
 # ── Stage Distribution by Industry ──────────────────────────────────────────
