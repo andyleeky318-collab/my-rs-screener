@@ -13806,9 +13806,9 @@ def compute_market_verdict():
         "ETF Risk Appetite",
         "Sector Heatmap Breadth",
         "RRG Rotation",
-        "Stage Breadth",
-        "ETF Stage2/4 (watchlist)",
         "Accumulation Rating",
+        "ETF Stage2/4 (watchlist)",
+        "Stage Breadth",
         "Market Regime",
         "Minervini Breadth Trend",
         "Distribution Days",
@@ -16279,3 +16279,168 @@ try:
 except Exception as _e:
     st.warning(f"Stage distribution by industry error: {_e}")
 
+
+# ==============================================================================
+# 99. MINI ALPHA FACTOR RANK — qlib-style cross-sectional factor model
+# Read-only and fully additive. Reuses ticker_dfs_shared (already downloaded near
+# the top of the app) — no new fetch, no new dependency (pandas/numpy only). It
+# mirrors qlib's core loop: build a small Alpha158-flavoured factor panel over
+# KNOWN_STOCKS, cross-sectionally z-score each factor, equal-weight into a
+# composite, then rank. Wrapped in try/except so it can never affect the rest of
+# the page; every new name is prefixed _qmf_ to avoid collisions.
+# ==============================================================================
+# try:
+#     st.markdown("---")
+#     st.subheader("🧪 Mini Alpha Factor Rank (qlib-style)")
+
+#     _qmf_rows = []
+#     for _qmf_sym in KNOWN_STOCKS:
+#         _qmf_df = ticker_dfs_shared.get(_qmf_sym)
+#         if _qmf_df is None or len(_qmf_df) < 65:
+#             continue
+#         try:
+#             _qmf_c = _qmf_df["Close"].astype(float)
+#             _qmf_v = _qmf_df["Volume"].astype(float)
+#             _qmf_ret = _qmf_c.pct_change()
+#             if not np.isfinite(_qmf_c.iloc[-1]) or _qmf_c.iloc[-1] <= 0:
+#                 continue
+#             _qmf_v60 = _qmf_v.tail(60).mean()
+#             _qmf_rows.append({
+#                 "sym": _qmf_sym,
+#                 "MOM20": _qmf_c.iloc[-1] / _qmf_c.iloc[-21] - 1.0,
+#                 "MOM60": _qmf_c.iloc[-1] / _qmf_c.iloc[-61] - 1.0,
+#                 "LOWVOL20": -_qmf_ret.tail(20).std(ddof=0),
+#                 "CALM20": -_qmf_ret.tail(20).max(),          # negated "lottery/MAX" factor
+#                 "VOLTREND": (_qmf_v.tail(5).mean() / _qmf_v60 - 1.0) if _qmf_v60 > 0 else 0.0,
+#             })
+#         except Exception:
+#             continue
+
+#     _qmf_cols = ["MOM20", "MOM60", "LOWVOL20", "CALM20", "VOLTREND"]
+#     _qmf_fac = pd.DataFrame(_qmf_rows).set_index("sym") if _qmf_rows else pd.DataFrame()
+
+#     if len(_qmf_fac) >= 20:
+#         # cross-sectional z-score per factor, winsorized to +/-3
+#         _qmf_z = _qmf_fac[_qmf_cols].apply(
+#             lambda s: (((s - s.mean()) / s.std(ddof=0)).clip(-3, 3)
+#                        if s.std(ddof=0) and np.isfinite(s.std(ddof=0)) and s.std(ddof=0) > 0
+#                        else s * 0.0)
+#         )
+#         _qmf_fac["Score"] = _qmf_z.mean(axis=1)
+#         _qmf_fac["Rank"] = _qmf_fac["Score"].rank(ascending=False, method="min").astype(int)
+#         _qmf_sorted = _qmf_fac.sort_values("Score", ascending=False)
+
+#         def _qmf_fmt(_d):
+#             _o = _d.copy()
+#             for _cc in ("MOM20", "MOM60", "VOLTREND"):
+#                 _o[_cc] = (_o[_cc] * 100).map(lambda x: f"{x:+.1f}%")
+#             for _cc in ("LOWVOL20", "CALM20", "Score"):
+#                 _o[_cc] = _o[_cc].map(lambda x: f"{x:+.2f}")
+#             return _o[["Rank"] + _qmf_cols + ["Score"]]
+
+#         _qmf_c1, _qmf_c2 = st.columns(2)
+#         with _qmf_c1:
+#             st.caption(f"Top 15 composite (of {len(_qmf_fac)} names)")
+#             st.dataframe(_qmf_fmt(_qmf_sorted.head(15)), use_container_width=True)
+#         with _qmf_c2:
+#             st.caption("Bottom 15 composite")
+#             st.dataframe(_qmf_fmt(_qmf_sorted.tail(15)[::-1]), use_container_width=True)
+
+#         st.caption(
+#             "qlib-style workflow on the price panel already downloaded above: five "
+#             "Alpha158-flavoured factors — 20d & 60d momentum, 20d low-volatility, 20d "
+#             "'calm' (negated max daily return), and 5d/60d volume trend — each "
+#             "cross-sectionally z-scored (winsorized ±3) and equal-weighted into the "
+#             "composite Score. Ranking only; not a trade signal and not fed into the "
+#             "Market Verdict."
+#         )
+#     else:
+#         st.caption("Mini Alpha Factor Rank: not enough symbols with sufficient history.")
+# except Exception as _qmf_e:
+#     st.warning(f"Mini Alpha Factor Rank error: {_qmf_e}")
+
+# ── Top Analyst Upgrades / Downgrades (Finnhub) ──────────────────────────────
+st.markdown("---")
+st.markdown("#### 🎓 Analyst Upgrades / Downgrades (Recent)")
+
+@st.cache_data(ttl=21600)
+def fetch_analyst_grade_changes(stocks_tuple, days_back=3, max_tickers=80):
+    """
+    Loops FINNHUB_API_KEY's /stock/upgrade-downgrade per ticker (free tier,
+    60 req/min) — capped at max_tickers with a small sleep to stay under the
+    rate limit. Cached 6h since this is a slow, sequential fetch.
+    """
+    finnhub_key = st.secrets.get("FINNHUB_API_KEY")
+    if not finnhub_key:
+        return pd.DataFrame()
+    cutoff = datetime.date.today() - datetime.timedelta(days=days_back)
+    rows = []
+    for sym in stocks_tuple[:max_tickers]:
+        try:
+            resp = requests.get(
+                "https://finnhub.io/api/v1/stock/upgrade-downgrade",
+                params={"symbol": sym, "token": finnhub_key},
+                timeout=8,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if not isinstance(data, list):
+                continue
+            for g in data:
+                gts = g.get("gradeTime")
+                if not gts:
+                    continue
+                try:
+                    gdate = datetime.date.fromtimestamp(gts)
+                except Exception:
+                    continue
+                if gdate < cutoff:
+                    continue
+                action = g.get("action", "")
+                if action not in ("up", "down"):
+                    continue
+                rows.append({
+                    "Ticker": sym,
+                    "Date": gdate.isoformat(),
+                    "Firm": g.get("company", ""),
+                    "Action": "Upgrade" if action == "up" else "Downgrade",
+                    "From": g.get("fromGrade", ""),
+                    "To": g.get("toGrade", ""),
+                })
+        except Exception:
+            continue
+        time.sleep(1.1)  # stay under Finnhub's 60 calls/min free-tier limit
+    return pd.DataFrame(rows)
+
+
+with st.spinner("Fetching recent analyst upgrades/downgrades..."):
+    analyst_grades_df = timed(
+        "fetch_analyst_grade_changes",
+        fetch_analyst_grade_changes,
+        tuple(KNOWN_STOCKS)
+    )
+
+if analyst_grades_df.empty:
+    st.info("No recent analyst grade changes found (or FINNHUB_API_KEY missing).")
+else:
+    grade_counts = analyst_grades_df.groupby(["Ticker", "Action"]).size().unstack(fill_value=0)
+    grade_counts["Total"] = grade_counts.sum(axis=1)
+    top_movers = grade_counts.sort_values("Total", ascending=False).head(10)
+
+    html_grades = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+    for sym, row in top_movers.iterrows():
+        ups = int(row.get("Upgrade", 0))
+        downs = int(row.get("Downgrade", 0))
+        color = "#00FF00" if ups > downs else "#FF4B4B" if downs > ups else "#FFD700"
+        html_grades += (
+            f'<div class="ticker-badge"><span class="ticker-name">{sym}</span>'
+            f'<span class="ticker-rs" style="color:{color};margin-left:5px;">▲{ups} ▼{downs}</span></div>'
+        )
+    html_grades += "</div>"
+    st.markdown(html_grades, unsafe_allow_html=True)
+
+    with st.expander("Full grade change log"):
+        st.dataframe(
+            analyst_grades_df.sort_values("Date", ascending=False),
+            use_container_width=True, hide_index=True
+        )
