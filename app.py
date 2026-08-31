@@ -16444,3 +16444,104 @@ else:
             analyst_grades_df.sort_values("Date", ascending=False),
             use_container_width=True, hide_index=True
         )
+
+# ── X Most Mentioned Tickers (Adanos Trending API) ───────────────────────────
+st.markdown("---")
+st.markdown("#### 💬 Most Mentioned Tickers (X / Adanos)")
+
+@st.cache_data(ttl=3600)  # Adanos updates hourly
+def fetch_trending_mentions_api(limit=20):
+    api_key = st.secrets.get("ADANOS_API_KEY")
+
+    if not api_key:
+        st.warning("ADANOS_API_KEY is not configured in Streamlit Secrets.")
+        return []
+
+    try:
+        resp = requests.get(
+            "https://api.adanos.org/x/stocks/v1/trending",
+            params={
+                "limit": min(limit, 100),
+                "type": "stock",
+            },
+            headers={
+                "X-API-Key": api_key,
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+
+        data = resp.json()
+        return data if isinstance(data, list) else []
+
+    except requests.RequestException as e:
+        st.warning(f"Adanos X sentiment API error: {e}")
+        return []
+    except Exception as e:
+        st.warning(f"Unexpected X sentiment API error: {e}")
+        return []
+
+
+trending_mentions_data = timed(
+    "fetch_trending_mentions_api",
+    fetch_trending_mentions_api,
+    20,
+)
+
+if trending_mentions_data:
+    html_mentions = (
+        "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+    )
+
+    for item in trending_mentions_data:
+        sym = str(item.get("ticker", "?")).upper()
+        mentions = item.get("mentions", 0)
+        trend = str(item.get("trend", "stable")).lower()
+        buzz = item.get("buzz_score")
+        sentiment = item.get("sentiment_score")
+        bullish = item.get("bullish_pct")
+
+        # Trend color
+        if trend == "rising":
+            trend_color = "#00FF00"
+            trend_icon = "↑"
+        elif trend == "falling":
+            trend_color = "#FF4B4B"
+            trend_icon = "↓"
+        else:
+            trend_color = "#FFD700"
+            trend_icon = "→"
+
+        # Format optional metrics
+        buzz_str = f" · Buzz {buzz:.0f}" if buzz is not None else ""
+
+        sentiment_str = (
+            f" · Sent {sentiment:+.2f}"
+            if sentiment is not None
+            else ""
+        )
+
+        bullish_str = (
+            f" · 🟢 {bullish:.0f}%"
+            if bullish is not None
+            else ""
+        )
+
+        html_mentions += (
+            f'<div class="ticker-badge">'
+            f'<span class="ticker-name">${sym}</span>'
+            f'<span class="ticker-rs" '
+            f'style="color:{trend_color};margin-left:5px;">'
+            f'{trend_icon} {mentions} mentions'
+            f'{buzz_str}'
+            f'{bullish_str}'
+            f'{sentiment_str}'
+            f'</span>'
+            f'</div>'
+        )
+
+    html_mentions += "</div>"
+    st.markdown(html_mentions, unsafe_allow_html=True)
+
+else:
+    st.info("No X trending ticker data available.")
