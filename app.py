@@ -16545,3 +16545,173 @@ if trending_mentions_data:
 
 else:
     st.info("No X trending ticker data available.")
+
+# ==============================================================================
+# 24. MCCLELLAN OSCILLATOR (MCO) & SUMMATION INDEX (MCSI) — BREADTH TIMING
+# Read-only, additive. Computed from the existing KNOWN_STOCKS universe
+# (proxy breadth universe via ticker_dfs_shared, already downloaded) since a
+# live NDX-constituent advance/decline feed isn't available. Does not touch
+# any other section or shared variable.
+# ==============================================================================
+st.markdown("---")
+st.markdown("## 🌊 McClellan Oscillator & Summation Index")
+
+@st.cache_data(ttl=3600)
+def compute_mcclellan_indicators(_ticker_dfs, stocks_list, z_window=252, mcsi_sma_len=10):
+    close_map = {}
+    for t in stocks_list:
+        df = _ticker_dfs.get(t)
+        if df is None or len(df) < 60:
+            continue
+        close_map[t] = df['Close']
+
+    if not close_map:
+        return pd.DataFrame()
+
+    close_wide = pd.DataFrame(close_map).sort_index().dropna(how='all')
+    daily_chg = close_wide.diff()
+    advances = (daily_chg > 0).sum(axis=1)
+    declines = (daily_chg < 0).sum(axis=1)
+    net_adv = (advances - declines).astype(float)
+
+    ema19 = net_adv.ewm(span=19, adjust=False).mean()
+    ema39 = net_adv.ewm(span=39, adjust=False).mean()
+    mco = ema19 - ema39
+    mcsi = mco.cumsum()
+
+    def _zscore(series, window):
+        mean = series.rolling(window, min_periods=max(20, window // 4)).mean()
+        std  = series.rolling(window, min_periods=max(20, window // 4)).std()
+        return (series - mean) / std.replace(0, np.nan)
+
+    mco_z = _zscore(mco, z_window)
+    mcsi_z = _zscore(mcsi, z_window)
+    mcsi_z_sma = mcsi_z.rolling(mcsi_sma_len).mean()
+
+    out = pd.DataFrame({"MCO_Z": mco_z, "MCSI_Z": mcsi_z, "MCSI_Z_SMA": mcsi_z_sma}).dropna(how='all')
+    return out
+
+
+with st.spinner("Computing McClellan Oscillator / Summation Index..."):
+    mcclellan_df = timed(
+        "compute_mcclellan_indicators",
+        compute_mcclellan_indicators,
+        ticker_dfs_shared, stocks_tuple
+    )
+
+if mcclellan_df.empty or len(mcclellan_df) < 30:
+    st.info("Insufficient data to compute McClellan indicators.")
+else:
+    plot_mc_df = mcclellan_df.tail(260).reset_index().rename(columns={"index": "Date"})
+    plot_mc_df["Date"] = pd.to_datetime(plot_mc_df["Date"]).dt.strftime("%Y-%m-%d")
+
+    fig_mc = make_subplots(
+        rows=2, cols=1, shared_xaxes=True,
+        row_heights=[0.5, 0.5], vertical_spacing=0.08,
+        subplot_titles=("Normalized McClellan Summation Index (MCSI)",
+                         "Normalized McClellan Oscillator (MCO)")
+    )
+
+    fig_mc.add_trace(go.Scatter(
+        x=plot_mc_df["Date"], y=plot_mc_df["MCSI_Z"], mode="lines",
+        name="MCSI (z)", line=dict(color="#FF4B4B", width=1.6)
+    ), row=1, col=1)
+    fig_mc.add_trace(go.Scatter(
+        x=plot_mc_df["Date"], y=plot_mc_df["MCSI_Z_SMA"], mode="lines",
+        name="MCSI 10SMA", line=dict(color="#888888", width=1.2, dash="dot")
+    ), row=1, col=1)
+    fig_mc.add_trace(go.Scatter(
+        x=plot_mc_df["Date"], y=plot_mc_df["MCO_Z"], mode="lines",
+        name="MCO (z)", line=dict(color="#2ca02c", width=1.4)
+    ), row=2, col=1)
+
+    for r in (1, 2):
+        for level, color, dash in [(2, "#FF4B4B", "solid"), (1, "#FF4B4B", "dot"),
+                                    (-1, "#00C076", "dot"), (-2, "#00C076", "solid"),
+                                    (0, "#666666", "dash")]:
+            fig_mc.add_hline(y=level, line_color=color, line_dash=dash, line_width=1, row=r, col=1)
+
+    fig_mc.update_layout(
+        height=650, margin=dict(l=40, r=40, t=50, b=30),
+        plot_bgcolor="rgba(20,22,30,1)", paper_bgcolor="rgba(13,17,23,0)",
+        font=dict(color="#cccccc"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+        hovermode="x unified",
+    )
+    fig_mc.update_xaxes(type="category", showgrid=False, tickfont=dict(size=9))
+    fig_mc.update_yaxes(showgrid=True, gridcolor="rgba(120,120,120,0.15)", range=[-3, 3])
+
+    st.plotly_chart(fig_mc, use_container_width=True)
+
+    # ── Trigger / verdict logic (mirrors MCO -> MCSI -> 21dma flow) ────────
+    latest_mco = mcclellan_df["MCO_Z"].iloc[-1]
+    latest_mcsi = mcclellan_df["MCSI_Z"].iloc[-1]
+    latest_mcsi_sma = mcclellan_df["MCSI_Z_SMA"].iloc[-1]
+    mcsi_5ago = mcclellan_df["MCSI_Z"].iloc[-6] if len(mcclellan_df) >= 6 else latest_mcsi
+    mcsi_curling_up = latest_mcsi > mcsi_5ago
+    mcsi_above_sma = pd.notna(latest_mcsi_sma) and latest_mcsi > latest_mcsi_sma
+    mcsi_was_below_sma = (
+        len(mcclellan_df) >= 2
+        and pd.notna(mcclellan_df["MCSI_Z_SMA"].iloc[-2])
+        and mcclellan_df["MCSI_Z"].iloc[-2] <= mcclellan_df["MCSI_Z_SMA"].iloc[-2]
+    )
+    mcsi_10sma_reclaim = mcsi_above_sma and mcsi_was_below_sma
+
+    qqq_df_mc = ticker_dfs_shared.get("QQQ")
+    price_above_21dma = None
+    if qqq_df_mc is not None and len(qqq_df_mc) >= 21:
+        ema21_mc = qqq_df_mc['Close'].ewm(span=21, adjust=False).mean().iloc[-1]
+        price_above_21dma = qqq_df_mc['Close'].iloc[-1] >= ema21_mc
+
+    lines = []
+    if latest_mco <= -2:
+        lines.append(("🔴", "#FF4B4B", "MCO ≤ -2σ (deep oversold)",
+                       "Deeper cycle reversal zone — wait for MCSI to curl up before acting."))
+    elif latest_mco <= -1:
+        lines.append(("🟠", "#FFA500", "MCO ≤ -1σ (oversold / alert)",
+                       "Rubber-band stretched. If price also retests/reclaims the 21dma-structure, prepare pullback trades."))
+    else:
+        lines.append(("⚪", "#888888", "MCO not oversold", "No timing signal from MCO right now — stay patient."))
+
+    if mcsi_10sma_reclaim:
+        lines.append(("🟢", "#00FF00", "MCSI just reclaimed its 10-day SMA",
+                       "Real confirmation — participation is broadening. Press with conviction / size up."))
+    elif mcsi_curling_up and price_above_21dma:
+        lines.append(("🟡", "#FFD700", "MCSI curling up + price reclaiming 21dma-structure",
+                       "Early confirmation only — test the turn with a small starter position."))
+    elif not mcsi_curling_up and latest_mcsi >= 1:
+        lines.append(("🔴", "#FF4B4B", "MCSI curling down from +1σ to +2σ (overbought)",
+                       "Late-stage trend weakening — trim into strength, don't chase."))
+    elif not mcsi_curling_up:
+        lines.append(("🟠", "#FFA500", "MCSI curling down",
+                       "Participation fading — stop adding new risk. Hold existing, no new trades."))
+    else:
+        lines.append(("⚪", "#888888", "MCSI drifting sideways", "No fresh breadth confirmation yet."))
+
+    verdict_rows_html = ""
+    for icon, color, label, note in lines:
+        verdict_rows_html += (
+            f"<div style='margin-bottom:8px;padding:8px 12px;border-left:4px solid {color};"
+            f"background:#1a1c23;border-radius:4px;'>"
+            f"<span style='font-size:1.05em;'>{icon}</span> "
+            f"<span style='color:{color};font-weight:bold;'>{label}</span>"
+            f"<div style='color:#ccc;font-size:0.85em;margin-top:2px;'>{note}</div>"
+            f"</div>"
+        )
+
+    mcsi_sma_str = f"{latest_mcsi_sma:.2f}σ" if pd.notna(latest_mcsi_sma) else "n/a"
+    st.markdown(
+        f"<div style='margin-bottom:6px;font-size:13px;color:#888;'>"
+        f"MCO: <span style='color:#4ecdc4;font-weight:bold;'>{latest_mco:.2f}σ</span> &nbsp;|&nbsp; "
+        f"MCSI: <span style='color:#4ecdc4;font-weight:bold;'>{latest_mcsi:.2f}σ</span> &nbsp;|&nbsp; "
+        f"MCSI 10SMA: <span style='color:#4ecdc4;font-weight:bold;'>{mcsi_sma_str}</span>"
+        f"</div>",
+        unsafe_allow_html=True
+    )
+    st.markdown(verdict_rows_html, unsafe_allow_html=True)
+
+    st.caption(
+        "Breadth universe: KNOWN_STOCKS (proxy for Nasdaq 100 constituents — a live NDX "
+        "advance/decline feed isn't available). Z-scores computed on a trailing 252-day "
+        "window, mirroring the normalized MCO/MCSI approach shown in the reference chart."
+    )
