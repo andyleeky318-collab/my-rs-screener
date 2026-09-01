@@ -9716,6 +9716,33 @@ def _etf_pie_chart():
                     )
                 rsi_html += "</div>"
                 st.markdown(rsi_html, unsafe_allow_html=True)
+
+                # NEW: 2nd RSI row — MAG7 + SPY, sorted high to low, SPY in red
+                mag7_symbols = ['AAPL', 'GOOGL', 'NVDA', 'META', 'MSFT', 'AMZN', 'TSLA', 'SPY']
+                mag7_rsi_rows = []
+                for sym in mag7_symbols:
+                    df_sym = ticker_dfs_shared.get(sym)
+                    if df_sym is None or len(df_sym) < 15:
+                        continue
+                    rsi_series = compute_rsi(df_sym['Close'], period=14)
+                    rsi_val = rsi_series.iloc[-1]
+                    if pd.isna(rsi_val):
+                        continue
+                    mag7_rsi_rows.append((sym, round(float(rsi_val), 1)))
+
+                if mag7_rsi_rows:
+                    mag7_rsi_rows.sort(key=lambda x: -x[1])
+                    mag7_html = "<div style='display:flex;flex-wrap:wrap;justify-content:center;gap:4px;padding:6px 0;'>"
+                    for sym, rsi_val in mag7_rsi_rows:
+                        txt = "#ff0000" if sym == "SPY" else "#eeeeee"
+                        mag7_html += (
+                            f'<div class="ticker-badge" style="background:#1e1e1e; border:1px solid #444;">'
+                            f'<span class="ticker-name" style="color:{txt};">{sym}</span>'
+                            f'<span class="ticker-rs" style="color:{txt}; margin-left:4px;">{rsi_val:.1f}</span>'
+                            f'</div>'
+                        )
+                    mag7_html += "</div>"
+                    st.markdown(mag7_html, unsafe_allow_html=True)
         else:
             st.info('ETF daily direction data unavailable.')
 
