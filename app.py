@@ -351,6 +351,19 @@ def normalize_ticker(sym):
     sym = sym.strip().upper()
     return TICKER_ALIASES.get(sym, sym)
 
+def _avg_pct_change(tickers, _ticker_dfs):
+    """Average latest daily % change across tickers — reuses already-loaded data, no new fetch."""
+    vals = []
+    for t in tickers:
+        df = _ticker_dfs.get(t)
+        if df is None or len(df) < 2:
+            continue
+        c0, c1 = df['Close'].iloc[-1], df['Close'].iloc[-2]
+        if pd.isna(c0) or pd.isna(c1) or c1 == 0:
+            continue
+        vals.append((c0 - c1) / c1 * 100)
+    return sum(vals) / len(vals) if vals else None
+
 # ============================================================
 # SHARED DOWNLOAD: runs once, feeds all history compute fns
 # ============================================================
@@ -6004,12 +6017,17 @@ with col_regime_gauge:
 st.markdown("---")
 
 pct_color = "#00FF00" if know_pos_pct >= 50 else "#FF4B4B"
+_minervini_avg = _avg_pct_change([sym for sym, _, _ in email_content_stocks], ticker_dfs_shared)
+_avg_color = "#00FF00" if _minervini_avg is not None and _minervini_avg >= 0 else "#FF4B4B"
+_minervini_avg_str = (
+    f", <span style='color:{_avg_color};'>{_minervini_avg:+.2f}%</span>"
+    if _minervini_avg is not None else ""
+)
 st.markdown(
     f"#### ⭐ Minervini ("
     f"Positive Pct = <span style='color:{pct_color};'>{know_pos_pct:.1f}%</span> ... "
-    #f"+ve Count: {know_positive_count} ... "
     f"Total = {know_total_count} ... "
-    f"ATH = {len(ath_list)})",
+    f"ATH = {len(ath_list)}{_minervini_avg_str})",
     unsafe_allow_html=True,
 )
 
@@ -6285,8 +6303,14 @@ with st.spinner("Scanning for Leader History..."):
 #st.write(f"Percentage of stock above EMA200: {pct_above_ema200:.2f}%")
 
 # --- LEADERS SECTION ---
+_rsleader_avg = _avg_pct_change(leader_list, ticker_dfs_shared)
+_rsleader_avg_color = "#00FF00" if _rsleader_avg is not None and _rsleader_avg >= 0 else "#FF4B4B"
+_rsleader_avg_str = (
+    f", <span style='color:{_rsleader_avg_color};'>{_rsleader_avg:+.2f}%</span>"
+    if _rsleader_avg is not None else ""
+)
 st.markdown(
-    f"#### 🏆 RS Leader = Long Term ({len(leader_list)}) "
+    f"#### 🏆 RS Leader = Long Term ({len(leader_list)}{_rsleader_avg_str}) "
     f"<span style='color:#888; font-size:12px;'>(Be vigilant of the strikethrough)</span>",
     unsafe_allow_html=True,
 )
@@ -7014,7 +7038,13 @@ with st.spinner("Scanning for True Market Leaders (healthyPct >= 69.5%)..."):
 
 tml_count = len(tml_list)
 tml_count_color = "#FF4B4B" if tml_count == 0 else "#FFFFFF"
-st.markdown(f"#### 👑 True Market Leader = A+ Leader on weakness is a gift (<span style='color:{tml_count_color};'>{tml_count}</span>) <span style='color:#888; font-size:12px;'>(Be vigilant of the strikethrough)</span>", unsafe_allow_html=True)
+_tml_avg = _avg_pct_change(tml_list, ticker_dfs_shared)
+_tml_avg_color = "#00FF00" if _tml_avg is not None and _tml_avg >= 0 else "#FF4B4B"
+_tml_avg_str = (
+    f", <span style='color:{_tml_avg_color};'>{_tml_avg:+.2f}%</span>"
+    if _tml_avg is not None else ""
+)
+st.markdown(f"#### 👑 True Market Leader = A+ Leader on weakness is a gift (<span style='color:{tml_count_color};'>{tml_count}</span>{_tml_avg_str}) <span style='color:#888; font-size:12px;'>(Be vigilant of the strikethrough)</span>", unsafe_allow_html=True)
 
 if tml_list or tml_yest:
     tml_industry_counts, tml_ticker_industry = build_leader_industry_map(tml_list, INDUSTRIES)
