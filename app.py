@@ -13270,7 +13270,7 @@ else:
 # section or shared variable — all new names are unique.
 # ==============================================================================
 st.markdown("---")
-st.markdown("## 🧭 Lazy Verdict-Internal / % Invested / 2R or 1.5R / 2-stops or 3-stops")
+st.markdown("## 🧭 Lazy Verdict-Internal / % Invested / 21ema or 50ma / 2R or 1.5R TP / 2-stops or 3-stops")
 
 # ── Standalone data fetches used only by the verdict (run first so they're
 # available when compute_market_verdict() executes) ─────────────────────────
@@ -13590,7 +13590,7 @@ def compute_market_verdict():
             p5_score, p5_label = 15, "Deteriorating breadth"
         else:
             p5_score, p5_label = 50, "Choppy / transitional"
-        p5_detail = f"Count {current_c} | 5D {ma5:.1f} vs 20D {ma20:.1f}"
+        p5_detail = f"Count = {current_c} | 5D = {ma5:.1f} vs 20D = {ma20:.1f}"
     else:
         p5_score, p5_label, p5_detail = 50, "Insufficient data", ""
     breakdown.append(("Minervini Breadth Trend", p5_score, p5_label, p5_detail))
@@ -13617,7 +13617,7 @@ def compute_market_verdict():
     if slopes:
         avg_slope = np.mean(slopes)
         p6_score = max(0, min(100, 50 + avg_slope * 5000))
-        risk_direction = "Risk-ON rotation" if avg_slope > 0 else "Risk-OFF rotation"
+        risk_direction = "Risk-ON" if avg_slope > 0 else "Risk-OFF"
         p6_label = f"{risk_direction} ({sum(1 for s in slopes if s > 0)}/{len(slopes)} pairs up)"
     else:
         p6_score, p6_label = 50, "Insufficient data"
@@ -13643,7 +13643,7 @@ def compute_market_verdict():
             pct_diff = (ratio_now - ratio_ma20) / ratio_ma20 * 100
             p8_score = max(0, min(100, 50 + pct_diff * 40))
             p8_label = "Risk-on (above 20D MA)" if pct_diff > 0 else "Risk-off (below 20D MA)"
-            p8_detail = f"HYG/LQD {ratio_now:.4f} vs MA {ratio_ma20:.4f}"
+            p8_detail = f"HYG/LQD = {ratio_now:.4f} vs MA = {ratio_ma20:.4f}"
         else:
             p8_score, p8_label, p8_detail = 50, "Insufficient data", ""
     else:
@@ -13671,7 +13671,7 @@ def compute_market_verdict():
             p_erp_label = "🟢 Attractive"
         p_erp_detail = (
             f"Fwd P/E {erp_v.get('forward_pe', float('nan')):.1f} → "
-            f"EY {erp_v.get('earnings_yield', float('nan')):.2f}% − "
+            f"EY {erp_v.get('earnings_yield', float('nan')):.2f}% , "
             f"10Y {erp_v.get('tnx_yield', float('nan')):.2f}% = ERP {erp_val:+.2f}% "
             f"({erp_v.get('pe_source', 'n/a')})"
         )
@@ -13733,7 +13733,7 @@ def compute_market_verdict():
         p9_label = f"Leading {leading_count} / Improving {improving_count} / Weakening {weakening_count} / Lagging {lagging_count}"
     else:
         p9_score, p9_label = 50, "Insufficient data"
-    breakdown.append(("RRG Rotation", p9_score, p9_label, f"{total_rrg} tickers tracked"))
+    breakdown.append(("RRG Rotation", p9_score, p9_label, f"({total_rrg} tickers tracked)"))
 
     # ── Pillar 10: ETF Stage2/4 Watchlist (stg2 % vs stg4 %) ───────────────
     stage_pct_t_v = _safe("stage_pct_df_t", pd.DataFrame())
@@ -13743,7 +13743,7 @@ def compute_market_verdict():
         stg4_avg = pd.to_numeric(stage_pct_t_v.loc["stg4 %"], errors="coerce").mean()
         if pd.notna(stg2_avg) and pd.notna(stg4_avg):
             p10_score = max(0, min(100, 50 + (stg2_avg - stg4_avg)))
-            p10_label = f"Stage2 avg {stg2_avg:.1f}% vs Stage4 avg {stg4_avg:.1f}%"
+            p10_label = f"Stage2 = {stg2_avg:.1f}% vs Stage4 = {stg4_avg:.1f}%"
         else:
             p10_score, p10_label = 50, "Insufficient data"
     else:
@@ -13756,7 +13756,7 @@ def compute_market_verdict():
         up_1m = sum(1 for r in rows_1m_v if r.get("pct_1m") is not None and r["pct_1m"] > 0)
         p11_score = (up_1m / len(rows_1m_v)) * 100
         top3 = ", ".join(r["sym"] for r in rows_1m_v[:3])
-        p11_label = f"{up_1m}/{len(rows_1m_v)} names up on the month | Leaders: {top3}"
+        p11_label = f"{up_1m}/{len(rows_1m_v)} themes up on the month | Leaders: {top3}"
     else:
         p11_score, p11_label = 50, "Insufficient data"
     breakdown.append(("1 Month Leading Theme", p11_score, p11_label, ""))
@@ -13768,7 +13768,7 @@ def compute_market_verdict():
         if rs21_vals:
             strong_count = sum(1 for v in rs21_vals if v >= 80)
             p12_score = (strong_count / len(rs21_vals)) * 100
-            p12_label = f"{strong_count}/{len(rs21_vals)} theme ETFs with RS21 >= 80"
+            p12_label = f"{strong_count}/{len(rs21_vals)} themes with RS21 >= 80"
         else:
             p12_score, p12_label = 50, "Insufficient data"
     else:
@@ -13798,7 +13798,7 @@ def compute_market_verdict():
     if rsi_vals:
         avg_rsi = sum(rsi_vals) / len(rsi_vals)
         p13_score = max(0, min(100, avg_rsi))
-        p13_label = f"Sector ETF avg RSI = {avg_rsi:.1f}"
+        p13_label = f"Avg RSI = {avg_rsi:.1f}"
     else:
         p13_score, p13_label = 50, "Insufficient data"
     breakdown.append(("Pie Chart RSI (Sector Momentum)", p13_score, p13_label, ""))
@@ -13816,7 +13816,7 @@ def compute_market_verdict():
     if heat_returns:
         positive_sectors = sum(1 for v in heat_returns if v > 0)
         p14_score = (positive_sectors / len(heat_returns)) * 100
-        p14_label = f"{positive_sectors}/{len(heat_returns)} sectors with positive 21D return"
+        p14_label = f"{positive_sectors}/{len(heat_returns)} sectors with +ve 21D return"
     else:
         p14_score, p14_label = 50, "Insufficient data"
     breakdown.append(("Sector Heatmap Breadth", p14_score, p14_label, ""))
@@ -13828,7 +13828,7 @@ def compute_market_verdict():
         above1_count = sum(1 for v in valid_accum_vals if v >= 1.0)
         p_accum_score = (above1_count / len(valid_accum_vals)) * 100
         avg_accum_val = sum(valid_accum_vals) / len(valid_accum_vals)
-        p_accum_label = f"{above1_count}/{len(valid_accum_vals)} watchlist groups accumulating (avg {avg_accum_val:.2f})"
+        p_accum_label = f"{above1_count}/{len(valid_accum_vals)} themes accumulating (avg {avg_accum_val:.2f})"
     else:
         p_accum_score, p_accum_label = 50, "Insufficient data"
     breakdown.append(("Accumulation Rating", p_accum_score, p_accum_label, ""))
@@ -16040,7 +16040,7 @@ try:
         _vol = _df["Volume"].dropna()
         _avg_vol = _vol.iloc[-51:-1].mean()
         _last_vol = _vol.iloc[-1]
-        if not _avg_vol or _avg_vol <= 0 or pd.isna(_last_vol):
+        if not _avg_vol or _avg_vol <= 0 or pd.isna(_last_vol) or _df["Close"].iloc[-1] < 20:
             continue
         _turnover_rows.append((_sym, _last_vol / _avg_vol))
 
@@ -16327,12 +16327,12 @@ try:
             )
         _h.append("</table>")
         st.markdown("".join(_h), unsafe_allow_html=True)
-        st.caption(
-            f"One row per STAGE_PCT_WATCHLIST ticker ({len(_rows)}), sorted by health strongest→weakest — "
-            "the Stage 1-4 %s are the same values shown in the table under the RS Quadrant Map. Bar segments: "
-            "Stage 1 (grey) · Stage 2 (blue) · Stage 3 (orange) · Stage 4 (pink). "
-            "Health from Stage 2 − Stage 4: ≥10 Strong · ≥−15 Healthy · ≥−40 Neutral · else Weak."
-        )
+        # st.caption(
+        #     f"One row per STAGE_PCT_WATCHLIST ticker ({len(_rows)}), sorted by health strongest→weakest — "
+        #     "the Stage 1-4 %s are the same values shown in the table under the RS Quadrant Map. Bar segments: "
+        #     "Stage 1 (grey) · Stage 2 (blue) · Stage 3 (orange) · Stage 4 (pink). "
+        #     "Health from Stage 2 − Stage 4: ≥10 Strong · ≥−15 Healthy · ≥−40 Neutral · else Weak."
+        # )
 except Exception as _e:
     st.warning(f"Stage distribution by industry error: {_e}")
 
@@ -16767,8 +16767,8 @@ else:
     )
     st.markdown(verdict_rows_html, unsafe_allow_html=True)
 
-    st.caption(
-        "Breadth universe: KNOWN_STOCKS (proxy for Nasdaq 100 constituents — a live NDX "
-        "advance/decline feed isn't available). Z-scores computed on a trailing 252-day "
-        "window, mirroring the normalized MCO/MCSI approach shown in the reference chart."
-    )
+    # st.caption(
+    #     "Breadth universe: KNOWN_STOCKS (proxy for Nasdaq 100 constituents — a live NDX "
+    #     "advance/decline feed isn't available). Z-scores computed on a trailing 252-day "
+    #     "window, mirroring the normalized MCO/MCSI approach shown in the reference chart."
+    # )
