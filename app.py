@@ -16665,21 +16665,24 @@ else:
     fig_mc = make_subplots(
         rows=2, cols=1, shared_xaxes=True,
         row_heights=[0.5, 0.5], vertical_spacing=0.08,
-        subplot_titles=("Normalized McClellan Summation Index (MCSI)",
-                         "Normalized McClellan Oscillator (MCO)")
+        subplot_titles=("Normalized McClellan Oscillator (MCO)",
+                         "Normalized McClellan Summation Index (MCSI)")
     )
 
-    fig_mc.add_trace(go.Scatter(
-        x=plot_mc_df["Date"], y=plot_mc_df["MCSI_Z"], mode="lines",
-        name="MCSI (z)", line=dict(color="#FF4B4B", width=1.6)
-    ), row=1, col=1)
-    fig_mc.add_trace(go.Scatter(
-        x=plot_mc_df["Date"], y=plot_mc_df["MCSI_Z_SMA"], mode="lines",
-        name="MCSI 10SMA", line=dict(color="#888888", width=1.2, dash="dot")
-    ), row=1, col=1)
+    # ── MCO FIRST / TOP ───────────────────────────────────────────────────
     fig_mc.add_trace(go.Scatter(
         x=plot_mc_df["Date"], y=plot_mc_df["MCO_Z"], mode="lines",
         name="MCO (z)", line=dict(color="#2ca02c", width=1.4)
+    ), row=1, col=1)
+
+    # ── MCSI SECOND / BOTTOM ─────────────────────────────────────────────
+    fig_mc.add_trace(go.Scatter(
+        x=plot_mc_df["Date"], y=plot_mc_df["MCSI_Z"], mode="lines",
+        name="MCSI (z)", line=dict(color="#FF4B4B", width=1.6)
+    ), row=2, col=1)
+    fig_mc.add_trace(go.Scatter(
+        x=plot_mc_df["Date"], y=plot_mc_df["MCSI_Z_SMA"], mode="lines",
+        name="MCSI 10SMA", line=dict(color="#888888", width=1.2, dash="dot")
     ), row=2, col=1)
 
     for r in (1, 2):
