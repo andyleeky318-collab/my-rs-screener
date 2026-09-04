@@ -2,7 +2,10 @@ name: Daily RS Screener Screenshot
 
 on:
   schedule:
-    # 23:00 UTC = 07:00 SGT (UTC+8) the next day
+    # 14:00 UTC = 12:00 AM SGT (based on your observed offset)
+    - cron: "0 14 * * *"
+
+    # 22:00 UTC = 8:00 AM SGT (based on your observed offset)
     - cron: "0 22 * * *"
   workflow_dispatch: {}   # lets you trigger it manually from the Actions tab
 
