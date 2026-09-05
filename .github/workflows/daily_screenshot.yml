@@ -3,7 +3,7 @@ name: Daily RS Screener Screenshot
 on:
   schedule:
     # 14:00 UTC = 12:00 AM SGT (based on your observed offset)
-    - cron: "0 16 * * *"
+    - cron: "0 12 * * 1-5"
 
     # 22:00 UTC = 8:00 AM SGT (based on your observed offset)
     - cron: "0 22 * * *"
