@@ -463,16 +463,17 @@ def fetch_ratio_chart_data(ratio_pairs, period="1y"):
     if not symbols:
         return pd.DataFrame()
 
-    td_key = st.secrets.get("TWELVEDATA_API_KEY")
-    if not td_key:
+    td_keys = [k for k in [st.secrets.get("TWELVEDATA_API_KEY"), st.secrets.get("TWELVEDATA_API_KEY_2")] if k]
+    if not td_keys:
         st.warning("TWELVEDATA_API_KEY missing from secrets.")
         return pd.DataFrame()
 
-    CHUNK_SIZE = 7  # stay under the 8-credits/minute free-tier ceiling
+    CHUNK_SIZE = 7  # stay under the 8-credits/minute free-tier ceiling per key
     chunks = [symbols[i:i + CHUNK_SIZE] for i in range(0, len(symbols), CHUNK_SIZE)]
     all_data = {}
 
     for i, chunk in enumerate(chunks):
+        td_key = td_keys[i % len(td_keys)]  # alternate keys per chunk
         try:
             resp = requests.get(
                 "https://api.twelvedata.com/time_series",
@@ -492,7 +493,8 @@ def fetch_ratio_chart_data(ratio_pairs, period="1y"):
         except Exception as e:
             st.warning(f"Twelve Data fetch error (chunk {i+1}): {e}")
 
-        if i < len(chunks) - 1:
+        # Only wait if the NEXT chunk would reuse a key that was just used
+        if i < len(chunks) - 1 and len(td_keys) < 2:
             time.sleep(61)  # wait for credit quota to reset before next chunk
 
     close_series_map = {}
