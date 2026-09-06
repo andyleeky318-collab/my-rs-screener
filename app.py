@@ -3317,7 +3317,7 @@ SECTOR_KEYWORDS = {
     "Rails": "#FF69B4", "finance": "#FF69B4", "metals": "#FF69B4", "Payment Processing": "#FF69B4", 
     "travel": "#FF69B4", "airline": "#FF69B4", "fintech": "#FF69B4", "uranium": "#FF69B4", "mega-cap": "#FF69B4",
     "apparel": "#FF69B4", "risk-on": "#FF69B4", "risk-off": "#FF69B4", "New Highs": "#FF69B4", "New Lows": "#FF69B4", 
-    "biotechnology": "#FF69B4", "Commodities": "#FF69B4", "commodity": "#FF69B4", "mining": "#FF69B4", 
+    "biotechnology": "#FF69B4", "Commodities": "#FF69B4", "commodity": "#FF69B4", "mining": "#FF69B4", "pharmaceutical": "#FF69B4", 
 }
 
 def format_ai_analysis_text(text, tickers=None, industries=None):
@@ -6022,7 +6022,7 @@ pct_color = "#00FF00" if know_pos_pct >= 50 else "#FF4B4B"
 _minervini_avg = _avg_pct_change([sym for sym, _, _ in email_content_stocks], ticker_dfs_shared)
 _avg_color = "#00FF00" if _minervini_avg is not None and _minervini_avg >= 0 else "#FF4B4B"
 _minervini_avg_str = (
-    f", <span style='color:{_avg_color};'>{_minervini_avg:+.2f}%</span>"
+    f" , <span style='color:{_avg_color};'>{_minervini_avg:+.2f}%</span>"
     if _minervini_avg is not None else ""
 )
 st.markdown(
@@ -6308,7 +6308,7 @@ with st.spinner("Scanning for Leader History..."):
 _rsleader_avg = _avg_pct_change(leader_list, ticker_dfs_shared)
 _rsleader_avg_color = "#00FF00" if _rsleader_avg is not None and _rsleader_avg >= 0 else "#FF4B4B"
 _rsleader_avg_str = (
-    f", <span style='color:{_rsleader_avg_color};'>{_rsleader_avg:+.2f}%</span>"
+    f" , <span style='color:{_rsleader_avg_color};'>{_rsleader_avg:+.2f}%</span>"
     if _rsleader_avg is not None else ""
 )
 st.markdown(
@@ -7043,7 +7043,7 @@ tml_count_color = "#FF4B4B" if tml_count == 0 else "#FFFFFF"
 _tml_avg = _avg_pct_change(tml_list, ticker_dfs_shared)
 _tml_avg_color = "#00FF00" if _tml_avg is not None and _tml_avg >= 0 else "#FF4B4B"
 _tml_avg_str = (
-    f", <span style='color:{_tml_avg_color};'>{_tml_avg:+.2f}%</span>"
+    f" , <span style='color:{_tml_avg_color};'>{_tml_avg:+.2f}%</span>"
     if _tml_avg is not None else ""
 )
 st.markdown(f"#### 👑 True Market Leader = A+ Leader on weakness is a gift (<span style='color:{tml_count_color};'>{tml_count}</span>{_tml_avg_str}) <span style='color:#888; font-size:12px;'>(Be vigilant of the strikethrough)</span>", unsafe_allow_html=True)
@@ -13346,9 +13346,9 @@ def compute_accumulation_rating_by_industry(watchlist_tuple, industries_dict, _t
                 continue
             latest_m = float(s.iloc[-1])
             if latest_m >= 1.0:
-                above_1.append(m)
+                above_1.append((m, latest_m))
             else:
-                below_1.append(m)
+                below_1.append((m, latest_m))
 
         if not member_series:
             rows.append({
@@ -13446,8 +13446,13 @@ if accumulation_rows:
 
         sparkline_html = _render_accumulation_sparkline_svg(r["Sparkline"])
 
-        above1_str = "".join(setup_badge(s) for s in r.get("Above1", [])) or "-"
-        below1_str = "".join(setup_badge(s) for s in r.get("Below1", [])) or "-"
+        GOLD_GLOW_STYLE = "box-shadow:0 0 8px 2px #FFD700; border:1px solid #FFD700;"
+
+        above1_str = "".join(
+            setup_badge(s, extra_style=GOLD_GLOW_STYLE if v >= 2 else "")
+            for s, v in r.get("Above1", [])
+        ) or "-"
+        below1_str = "".join(setup_badge(s) for s, v in r.get("Below1", [])) or "-"
 
         acc_table_rows_html += (
             f"<tr style='background-color:{bg};'>"
