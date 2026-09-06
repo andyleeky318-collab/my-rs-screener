@@ -337,7 +337,7 @@ STAGE_PCT_WATCHLIST = [
     'IPAY', 'ITB', 'JETS', 'KRE', 'KWEB', 'LIT', 'MAGS',
     'PBW', 'REMX', 'SHLD', 'SMH', 'TAN',
     'UFO', 'URA', 'USO', 'WGMI', 'XBI',
-    'XME', 'XRT', 'XOP', 'XTN', 'IYT', 'BOAT', 'MOO', 'BLOK', 'PICK', 'BOTZ', 'MJ', 'WQTM', 'IBB', 'KIE', 'IAI', 'SOXX', 'PEJ'
+    'XME', 'XRT', 'XOP', 'XTN', 'IYT', 'BOAT', 'MOO', 'PICK', 'BOTZ', 'MJ', 'WQTM', 'IBB', 'KIE', 'IAI', 'SOXX', 'PEJ'
 ]
 
 TICKER_ALIASES = {
@@ -16777,14 +16777,13 @@ else:
     #     "window, mirroring the normalized MCO/MCSI approach shown in the reference chart."
     # )
 
-# ── ARK Funds — Daily / 1 Week / 1 Month ────────────────────────────────────
+# ── ARK Funds — Daily / 1 Week / 1 Month (same SVG design as LIME_STOCKS) ──
 st.markdown("---")
-st.markdown("#### 🚀 ARK Funds — Daily / 1 Week / 1 Month")
 
 ARK_TICKERS = ['ARKG', 'ARKK', 'ARKQ', 'ARKW', 'ARKF', 'ARKX']
 
 @st.cache_data(ttl=3600)
-def download_ark_data(tickers_tuple):
+def download_ark_stocks_data(tickers_tuple):
     raw = yf.download(list(tickers_tuple), period="2mo", interval="1d", progress=False, auto_adjust=True)
     dfs = {}
     for t in tickers_tuple:
@@ -16796,39 +16795,167 @@ def download_ark_data(tickers_tuple):
             continue
     return dfs
 
-ark_dfs = timed("download_ark_data", download_ark_data, tuple(ARK_TICKERS))
+ark_ticker_dfs = timed("download_ark_stocks_data", download_ark_stocks_data, tuple(ARK_TICKERS))
 
-ark_rows = []
+ark_perf_rows = []
 for sym in ARK_TICKERS:
-    df_sym = ark_dfs.get(sym)
+    df_sym = ark_ticker_dfs.get(sym)
     if df_sym is None or len(df_sym) < 2:
         continue
     c_today = df_sym['Close'].iloc[-1]
-    c_prev = df_sym['Close'].iloc[-2]
+    c_prev  = df_sym['Close'].iloc[-2]
     if pd.isna(c_today) or pd.isna(c_prev) or c_prev == 0:
         continue
     pct_1d = round((c_today - c_prev) / c_prev * 100, 2)
+
     c_1w = df_sym['Close'].iloc[-6] if len(df_sym) >= 6 else None
     pct_1w = round((c_today - c_1w) / c_1w * 100, 2) if (c_1w is not None and not pd.isna(c_1w) and c_1w != 0) else None
+
     c_1m = df_sym['Close'].iloc[-22] if len(df_sym) >= 22 else None
     pct_1m = round((c_today - c_1m) / c_1m * 100, 2) if (c_1m is not None and not pd.isna(c_1m) and c_1m != 0) else None
-    ark_rows.append({"sym": sym, "pct": pct_1d, "pct_1w": pct_1w, "pct_1m": pct_1m})
 
-if ark_rows:
-    col_ark_1d, col_ark_1w, col_ark_1m = st.columns(3)
-    for col, key, label in [(col_ark_1d, "pct", "Daily"), (col_ark_1w, "pct_1w", "1 Week"), (col_ark_1m, "pct_1m", "1 Month")]:
-        rows_sorted = sorted([r for r in ark_rows if r[key] is not None], key=lambda x: -x[key])
-        with col:
-            st.markdown(f"**{label}**")
-            for r in rows_sorted:
-                v = r[key]
-                c = "#378ADD" if v >= 0 else "#FF69B4"
-                st.markdown(
-                    f"<div style='display:flex;justify-content:space-between;padding:3px 8px;"
-                    f"margin:2px 0;background:#1e1e1e;border-radius:4px;border:1px solid {c};'>"
-                    f"<span style='color:#ccc;font-weight:bold;'>{r['sym']}</span>"
-                    f"<span style='color:{c};font-weight:bold;'>{v:+.2f}%</span></div>",
-                    unsafe_allow_html=True
-                )
+    ark_perf_rows.append({
+        "sym": sym, "pct": pct_1d, "pct_1w": pct_1w, "pct_1m": pct_1m,
+        "is_2m_high": bool(c_today >= df_sym['Close'].max())
+    })
+
+if ark_perf_rows:
+
+    ark_two_month_high_syms = {r["sym"] for r in ark_perf_rows if r.get("is_2m_high")}
+
+    ark_pattern_defs = """
+    <defs>
+    <pattern id="ark-stripe-blue" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+        <rect width="6" height="6" fill="#9CC4EA"/>
+        <line x1="0" y1="0" x2="0" y2="6" stroke="#378ADD" stroke-width="3"/>
+    </pattern>
+    <pattern id="ark-stripe-pink" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+        <rect width="6" height="6" fill="#FFC2DE"/>
+        <line x1="0" y1="0" x2="0" y2="6" stroke="#FF69B4" stroke-width="3"/>
+    </pattern>
+    </defs>
+    """
+
+    ARK_BAR_MAX_PX = 175
+
+    ark_rows_1d = sorted(ark_perf_rows, key=lambda x: -x["pct"])
+    ark_rows_1w = sorted([r for r in ark_perf_rows if r["pct_1w"] is not None], key=lambda x: -x["pct_1w"])
+    ark_rows_1m = sorted([r for r in ark_perf_rows if r["pct_1m"] is not None], key=lambda x: -x["pct_1m"])
+
+    ark_max_abs_1d = max(abs(r["pct"])     for r in ark_rows_1d) or 1
+    ark_max_abs_1w = max(abs(r["pct_1w"])  for r in ark_rows_1w) or 1
+    ark_max_abs_1m = max(abs(r["pct_1m"])  for r in ark_rows_1m) or 1
+
+    ARK_ROW_H   = 21
+    ARK_LABEL_W = 120
+    ARK_COL_W   = ARK_LABEL_W + ARK_BAR_MAX_PX
+    ARK_GAP     = 55
+    ARK_PADDING = 13
+    ARK_FS      = 13
+
+    ark_N      = max(len(ark_rows_1d), len(ark_rows_1w), len(ark_rows_1m))
+    ARK_SVG_W  = ARK_COL_W * 3 + ARK_GAP * 2 + ARK_PADDING * 2
+
+    ARK_X0_1d = ARK_PADDING
+    ARK_X0_1w = ARK_PADDING + ARK_COL_W + ARK_GAP
+    ARK_X0_1m = ARK_PADDING + (ARK_COL_W + ARK_GAP) * 2
+
+    ARK_HEADER_H = 20
+    ARK_SVG_H    = ark_N * ARK_ROW_H + ARK_PADDING * 2 + ARK_HEADER_H
+
+    def ark_col_header(col_x, label):
+        center_x = col_x + ARK_LABEL_W // 2 + ARK_BAR_MAX_PX // 2
+        return (
+            f'<text x="{center_x}" y="{ARK_PADDING + 12}" '
+            f'font-size="10" font-family="Source Sans Pro,sans-serif" '
+            f'font-weight="700" fill="#888888" text-anchor="middle" '
+            f'letter-spacing="1">{label}</text>'
+        )
+
+    ark_sgt_now_str = datetime.datetime.now(ZoneInfo("Asia/Singapore")).strftime("%Y-%m-%d %H:%M")
+
+    ark_headers_html = (
+        ark_col_header(ARK_X0_1d, f"DAILY ({ark_sgt_now_str})") +
+        ark_col_header(ARK_X0_1w, "1 WEEK (Developing)") +
+        ark_col_header(ARK_X0_1m, "1 MONTH (Leading Theme)")
+    )
+
+    def ark_row_y(i):
+        return ARK_PADDING + ARK_HEADER_H + i * ARK_ROW_H + ARK_ROW_H
+
+    def ark_bar_end_x(col_x, pct, max_abs):
+        return col_x + ARK_LABEL_W + int(abs(pct) / max_abs * ARK_BAR_MAX_PX)
+
+    def ark_color(pct):
+        return "#378ADD" if pct >= 0 else "#FF69B4"
+
+    def ark_sign(pct):
+        return f"+{pct:.2f}%" if pct >= 0 else f"{pct:.2f}%"
+
+    def ark_build_index(rows, pct_key, max_abs, col_x):
+        return {
+            r["sym"]: (i, ark_bar_end_x(col_x, r[pct_key], max_abs))
+            for i, r in enumerate(rows)
+        }
+
+    ark_idx_1d = ark_build_index(ark_rows_1d, "pct",    ark_max_abs_1d, ARK_X0_1d)
+    ark_idx_1w = ark_build_index(ark_rows_1w, "pct_1w", ark_max_abs_1w, ARK_X0_1w)
+    ark_idx_1m = ark_build_index(ark_rows_1m, "pct_1m", ark_max_abs_1m, ARK_X0_1m)
+
+    def ark_draw_col(rows, pct_key, max_abs, col_x, stripe_syms=None):
+        html = ""
+        for i, r in enumerate(rows):
+            pct   = r[pct_key]
+            sym   = r["sym"]
+            bw    = max(int(abs(pct) / max_abs * ARK_BAR_MAX_PX), 2)
+            c     = ark_color(pct)
+            y     = ark_row_y(i)
+            label = ark_sign(pct)
+
+            bar_fill = c
+            if stripe_syms and sym in stripe_syms:
+                bar_fill = "url(#ark-stripe-blue)" if c == "#378ADD" else "url(#ark-stripe-pink)"
+
+            html += (
+                f'<rect x="{col_x + ARK_LABEL_W}" y="{y - 4}" '
+                f'width="{bw}" height="11" rx="2" fill="{bar_fill}"/>'
+            )
+            html += (
+                f'<text x="{col_x + 58}" y="{y + 4}" '
+                f'font-size="{ARK_FS}" font-family="Source Sans Pro,sans-serif" '
+                f'font-weight="600" fill="{c}" '
+                f'text-anchor="end">{label}</text>'
+            )
+            ticker_color = (
+                "#FFD700" if sym == "SPY"
+                else "#ADFF2F" if sym == "QQQ"
+                else "#FFD700" if sym == "RSP"
+                else "#cccccc"
+            )
+            html += (
+                f'<text x="{col_x + 62}" y="{y + 4}" '
+                f'font-size="{ARK_FS}" font-family="Source Sans Pro,sans-serif" '
+                f'font-weight="600" fill="{ticker_color}" '
+                f'text-anchor="start">{sym}</text>'
+            )
+        return html
+
+    ark_cols_html  = ark_draw_col(ark_rows_1d, "pct",    ark_max_abs_1d, ARK_X0_1d, stripe_syms=ark_two_month_high_syms)
+    ark_cols_html += ark_draw_col(ark_rows_1w, "pct_1w", ark_max_abs_1w, ARK_X0_1w, stripe_syms=ark_two_month_high_syms)
+    ark_cols_html += ark_draw_col(ark_rows_1m, "pct_1m", ark_max_abs_1m, ARK_X0_1m, stripe_syms=ark_two_month_high_syms)
+
+    ark_html_out = f"""
+    <div style="background:#0e1117; border-radius:6px;">
+    <svg xmlns="http://www.w3.org/2000/svg"
+        width="{ARK_SVG_W}" height="{ARK_SVG_H}"
+        style="display:block;">
+        {ark_pattern_defs}
+        {ark_headers_html}
+        {ark_cols_html}
+    </svg>
+    </div>
+    """
+
+    st.components.v1.html(ark_html_out, height=ARK_SVG_H + 24, scrolling=False)
 else:
     st.info("No ARK Funds performance data available.")
