@@ -9704,6 +9704,7 @@ _render_volume_badges(hvm_syms, unusual_vol_map)  # CHANGED: removed style arg
 # Read-only, additive. Reuses ticker_dfs_shared + existing badge CSS.
 # Turnover rate = latest session volume / 50-day average volume.
 #st.markdown("---")
+st.write("")
 st.markdown("#### 🔥 High Turnover Rate")
 
 try:
