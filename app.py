@@ -9693,7 +9693,43 @@ _render_volume_badges(hvm_syms, unusual_vol_map)  # CHANGED: removed style arg
 #         st.dataframe(debug_df, use_container_width=True)
 # # END DEBUG ENGULFING
 
+# ── High Turnover Rate Highlight ─────────────────────────────────────────────
+# Read-only, additive. Reuses ticker_dfs_shared + existing badge CSS.
+# Turnover rate = latest session volume / 50-day average volume.
+st.markdown("---")
+st.markdown("#### 🔥 High Turnover Rate")
 
+try:
+    _turnover_rows = []
+    for _sym, _df in ticker_dfs_shared.items():
+        if _sym == benchmark or _df is None or "Volume" not in _df or len(_df) < 51:
+            continue
+        _vol = _df["Volume"].dropna()
+        _avg_vol = _vol.iloc[-51:-1].mean()
+        _last_vol = _vol.iloc[-1]
+        if not _avg_vol or _avg_vol <= 0 or pd.isna(_last_vol) or _df["Close"].iloc[-1] < 20:
+            continue
+        _turnover_rows.append((_sym, _last_vol / _avg_vol))
+
+    _turnover_rows.sort(key=lambda x: x[1], reverse=True)
+    _top_turnover = _turnover_rows[:25]
+
+    if _top_turnover:
+        _HIGH_TURNOVER = 2.0  # today's volume >= 2x its 50-day average
+        _badges = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+        for _sym, _ratio in _top_turnover:
+            _cls = "ticker-badge lime-badge" if _ratio >= _HIGH_TURNOVER else "ticker-badge"
+            _badges += f'<div class="{_cls}">{_sym} · {_ratio:.1f}x</div>'
+        _badges += "</div>"
+        st.markdown(_badges, unsafe_allow_html=True)
+        st.caption(
+            f"Turnover rate = latest volume ÷ 50-day average volume. "
+            f"Lime badges = ≥ {_HIGH_TURNOVER:.0f}x (high turnover)."
+        )
+    else:
+        st.info("Not enough volume history to compute turnover rate.")
+except Exception as _e:
+    st.warning(f"High turnover section error: {_e}")
 
 stocks_tuple = tuple(KNOWN_STOCKS)
 
@@ -9734,7 +9770,6 @@ def download_all_industry_stocks_data(stocks_tuple, known_ticker_dfs):
             benchmark_df = pd.DataFrame({'Close': raw_data['Close'][benchmark_symbol]}).dropna()
 
     return ticker_dfs, benchmark_df
-
 
 st.markdown("---")
 st.markdown(
@@ -11029,6 +11064,107 @@ if spikepanel_tickers:
 else:
     st.info("None")
 
+# ── X Most Mentioned Tickers (Adanos Trending API) ───────────────────────────
+#st.markdown("---")
+st.markdown("#### 💬 Most Mentioned Tickers (X / Adanos)")
+
+@st.cache_data(ttl=3600)  # Adanos updates hourly
+def fetch_trending_mentions_api(limit=20):
+    api_key = st.secrets.get("ADANOS_API_KEY")
+
+    if not api_key:
+        st.warning("ADANOS_API_KEY is not configured in Streamlit Secrets.")
+        return []
+
+    try:
+        resp = requests.get(
+            "https://api.adanos.org/x/stocks/v1/trending",
+            params={
+                "limit": min(limit, 100),
+                "type": "stock",
+            },
+            headers={
+                "X-API-Key": api_key,
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+
+        data = resp.json()
+        return data if isinstance(data, list) else []
+
+    except requests.RequestException as e:
+        st.warning(f"Adanos X sentiment API error: {e}")
+        return []
+    except Exception as e:
+        st.warning(f"Unexpected X sentiment API error: {e}")
+        return []
+
+
+trending_mentions_data = timed(
+    "fetch_trending_mentions_api",
+    fetch_trending_mentions_api,
+    20,
+)
+
+if trending_mentions_data:
+    html_mentions = (
+        "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+    )
+
+    for item in trending_mentions_data:
+        sym = str(item.get("ticker", "?")).upper()
+        mentions = item.get("mentions", 0)
+        trend = str(item.get("trend", "stable")).lower()
+        buzz = item.get("buzz_score")
+        sentiment = item.get("sentiment_score")
+        bullish = item.get("bullish_pct")
+
+        # Trend color
+        if trend == "rising":
+            trend_color = "#00FF00"
+            trend_icon = "↑"
+        elif trend == "falling":
+            trend_color = "#FF4B4B"
+            trend_icon = "↓"
+        else:
+            trend_color = "#FFD700"
+            trend_icon = "→"
+
+        # Format optional metrics
+        buzz_str = f" · Buzz {buzz:.0f}" if buzz is not None else ""
+
+        sentiment_str = (
+            f" · Sent {sentiment:+.2f}"
+            if sentiment is not None
+            else ""
+        )
+
+        bullish_str = (
+            f" · 🟢 {bullish:.0f}%"
+            if bullish is not None
+            else ""
+        )
+
+        html_mentions += (
+            f'<div class="ticker-badge">'
+            f'<span class="ticker-name">${sym}</span>'
+            f'<span class="ticker-rs" '
+            f'style="color:{trend_color};margin-left:5px;">'
+            f'{trend_icon} {mentions} mentions'
+            f'{buzz_str}'
+            f'{bullish_str}'
+            f'{sentiment_str}'
+            f'</span>'
+            f'</div>'
+        )
+
+    html_mentions += "</div>"
+    st.markdown(html_mentions, unsafe_allow_html=True)
+
+else:
+    st.info("No X trending ticker data available.")
+
 # ==============================================================================
 # IBD "STOCK MARKET TODAY" — TICKER EXTRACTION FROM LATEST YOUTUBE VIDEO
 # Read-only scrape of IBD's YouTube Streams tab. Skips videos whose title
@@ -12107,6 +12243,92 @@ else:
             #     for e in earnings[:2]:
             #         when = {"bmo": "Before Open", "amc": "After Close"}.get(e.get("time"), e.get("time", ""))
             #         st.markdown(f"- {e.get('date','?')} ({when})")
+
+# ── Top Analyst Upgrades / Downgrades (Finnhub) ──────────────────────────────
+st.markdown("---")
+st.markdown("#### 🎓 Analyst Upgrades / Downgrades (Recent)")
+
+@st.cache_data(ttl=21600)
+def fetch_analyst_grade_changes(stocks_tuple, days_back=3, max_tickers=80):
+    """
+    Loops FINNHUB_API_KEY's /stock/upgrade-downgrade per ticker (free tier,
+    60 req/min) — capped at max_tickers with a small sleep to stay under the
+    rate limit. Cached 6h since this is a slow, sequential fetch.
+    """
+    finnhub_key = st.secrets.get("FINNHUB_API_KEY")
+    if not finnhub_key:
+        return pd.DataFrame()
+    cutoff = datetime.date.today() - datetime.timedelta(days=days_back)
+    rows = []
+    for sym in stocks_tuple[:max_tickers]:
+        try:
+            resp = requests.get(
+                "https://finnhub.io/api/v1/stock/upgrade-downgrade",
+                params={"symbol": sym, "token": finnhub_key},
+                timeout=8,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if not isinstance(data, list):
+                continue
+            for g in data:
+                gts = g.get("gradeTime")
+                if not gts:
+                    continue
+                try:
+                    gdate = datetime.date.fromtimestamp(gts)
+                except Exception:
+                    continue
+                if gdate < cutoff:
+                    continue
+                action = g.get("action", "")
+                if action not in ("up", "down"):
+                    continue
+                rows.append({
+                    "Ticker": sym,
+                    "Date": gdate.isoformat(),
+                    "Firm": g.get("company", ""),
+                    "Action": "Upgrade" if action == "up" else "Downgrade",
+                    "From": g.get("fromGrade", ""),
+                    "To": g.get("toGrade", ""),
+                })
+        except Exception:
+            continue
+        time.sleep(1.1)  # stay under Finnhub's 60 calls/min free-tier limit
+    return pd.DataFrame(rows)
+
+
+with st.spinner("Fetching recent analyst upgrades/downgrades..."):
+    analyst_grades_df = timed(
+        "fetch_analyst_grade_changes",
+        fetch_analyst_grade_changes,
+        tuple(KNOWN_STOCKS)
+    )
+
+if analyst_grades_df.empty:
+    st.info("No recent analyst grade changes found (or FINNHUB_API_KEY missing).")
+else:
+    grade_counts = analyst_grades_df.groupby(["Ticker", "Action"]).size().unstack(fill_value=0)
+    grade_counts["Total"] = grade_counts.sum(axis=1)
+    top_movers = grade_counts.sort_values("Total", ascending=False).head(10)
+
+    html_grades = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+    for sym, row in top_movers.iterrows():
+        ups = int(row.get("Upgrade", 0))
+        downs = int(row.get("Downgrade", 0))
+        color = "#00FF00" if ups > downs else "#FF4B4B" if downs > ups else "#FFD700"
+        html_grades += (
+            f'<div class="ticker-badge"><span class="ticker-name">{sym}</span>'
+            f'<span class="ticker-rs" style="color:{color};margin-left:5px;">▲{ups} ▼{downs}</span></div>'
+        )
+    html_grades += "</div>"
+    st.markdown(html_grades, unsafe_allow_html=True)
+
+    with st.expander("Full grade change log"):
+        st.dataframe(
+            analyst_grades_df.sort_values("Date", ascending=False),
+            use_container_width=True, hide_index=True
+        )
 
 # ==============================================================================
 # 22. RELATIVE ROTATION GRAPH (RRG) — LIME_STOCKS vs SPY
@@ -16027,43 +16249,7 @@ if _timing_log:
     total_ms = sum(_timing_log.values())
     st.caption(f"Total measured wall-clock time: **{total_ms/1000:.2f}s** across {len(_timing_log)} tracked calls")
 
-# ── High Turnover Rate Highlight ─────────────────────────────────────────────
-# Read-only, additive. Reuses ticker_dfs_shared + existing badge CSS.
-# Turnover rate = latest session volume / 50-day average volume.
-st.markdown("---")
-st.markdown("#### 🔥 High Turnover Rate")
 
-try:
-    _turnover_rows = []
-    for _sym, _df in ticker_dfs_shared.items():
-        if _sym == benchmark or _df is None or "Volume" not in _df or len(_df) < 51:
-            continue
-        _vol = _df["Volume"].dropna()
-        _avg_vol = _vol.iloc[-51:-1].mean()
-        _last_vol = _vol.iloc[-1]
-        if not _avg_vol or _avg_vol <= 0 or pd.isna(_last_vol) or _df["Close"].iloc[-1] < 20:
-            continue
-        _turnover_rows.append((_sym, _last_vol / _avg_vol))
-
-    _turnover_rows.sort(key=lambda x: x[1], reverse=True)
-    _top_turnover = _turnover_rows[:25]
-
-    if _top_turnover:
-        _HIGH_TURNOVER = 2.0  # today's volume >= 2x its 50-day average
-        _badges = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
-        for _sym, _ratio in _top_turnover:
-            _cls = "ticker-badge lime-badge" if _ratio >= _HIGH_TURNOVER else "ticker-badge"
-            _badges += f'<div class="{_cls}">{_sym} · {_ratio:.1f}x</div>'
-        _badges += "</div>"
-        st.markdown(_badges, unsafe_allow_html=True)
-        st.caption(
-            f"Turnover rate = latest volume ÷ 50-day average volume. "
-            f"Lime badges = ≥ {_HIGH_TURNOVER:.0f}x (high turnover)."
-        )
-    else:
-        st.info("Not enough volume history to compute turnover rate.")
-except Exception as _e:
-    st.warning(f"High turnover section error: {_e}")
 
 
 # ── Model Stock Market Winners Screen — Quarterly EPS traits 1-5 only ────────
@@ -16417,192 +16603,7 @@ except Exception as _e:
 # except Exception as _qmf_e:
 #     st.warning(f"Mini Alpha Factor Rank error: {_qmf_e}")
 
-# ── Top Analyst Upgrades / Downgrades (Finnhub) ──────────────────────────────
-st.markdown("---")
-st.markdown("#### 🎓 Analyst Upgrades / Downgrades (Recent)")
 
-@st.cache_data(ttl=21600)
-def fetch_analyst_grade_changes(stocks_tuple, days_back=3, max_tickers=80):
-    """
-    Loops FINNHUB_API_KEY's /stock/upgrade-downgrade per ticker (free tier,
-    60 req/min) — capped at max_tickers with a small sleep to stay under the
-    rate limit. Cached 6h since this is a slow, sequential fetch.
-    """
-    finnhub_key = st.secrets.get("FINNHUB_API_KEY")
-    if not finnhub_key:
-        return pd.DataFrame()
-    cutoff = datetime.date.today() - datetime.timedelta(days=days_back)
-    rows = []
-    for sym in stocks_tuple[:max_tickers]:
-        try:
-            resp = requests.get(
-                "https://finnhub.io/api/v1/stock/upgrade-downgrade",
-                params={"symbol": sym, "token": finnhub_key},
-                timeout=8,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            if not isinstance(data, list):
-                continue
-            for g in data:
-                gts = g.get("gradeTime")
-                if not gts:
-                    continue
-                try:
-                    gdate = datetime.date.fromtimestamp(gts)
-                except Exception:
-                    continue
-                if gdate < cutoff:
-                    continue
-                action = g.get("action", "")
-                if action not in ("up", "down"):
-                    continue
-                rows.append({
-                    "Ticker": sym,
-                    "Date": gdate.isoformat(),
-                    "Firm": g.get("company", ""),
-                    "Action": "Upgrade" if action == "up" else "Downgrade",
-                    "From": g.get("fromGrade", ""),
-                    "To": g.get("toGrade", ""),
-                })
-        except Exception:
-            continue
-        time.sleep(1.1)  # stay under Finnhub's 60 calls/min free-tier limit
-    return pd.DataFrame(rows)
-
-
-with st.spinner("Fetching recent analyst upgrades/downgrades..."):
-    analyst_grades_df = timed(
-        "fetch_analyst_grade_changes",
-        fetch_analyst_grade_changes,
-        tuple(KNOWN_STOCKS)
-    )
-
-if analyst_grades_df.empty:
-    st.info("No recent analyst grade changes found (or FINNHUB_API_KEY missing).")
-else:
-    grade_counts = analyst_grades_df.groupby(["Ticker", "Action"]).size().unstack(fill_value=0)
-    grade_counts["Total"] = grade_counts.sum(axis=1)
-    top_movers = grade_counts.sort_values("Total", ascending=False).head(10)
-
-    html_grades = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
-    for sym, row in top_movers.iterrows():
-        ups = int(row.get("Upgrade", 0))
-        downs = int(row.get("Downgrade", 0))
-        color = "#00FF00" if ups > downs else "#FF4B4B" if downs > ups else "#FFD700"
-        html_grades += (
-            f'<div class="ticker-badge"><span class="ticker-name">{sym}</span>'
-            f'<span class="ticker-rs" style="color:{color};margin-left:5px;">▲{ups} ▼{downs}</span></div>'
-        )
-    html_grades += "</div>"
-    st.markdown(html_grades, unsafe_allow_html=True)
-
-    with st.expander("Full grade change log"):
-        st.dataframe(
-            analyst_grades_df.sort_values("Date", ascending=False),
-            use_container_width=True, hide_index=True
-        )
-
-# ── X Most Mentioned Tickers (Adanos Trending API) ───────────────────────────
-st.markdown("---")
-st.markdown("#### 💬 Most Mentioned Tickers (X / Adanos)")
-
-@st.cache_data(ttl=3600)  # Adanos updates hourly
-def fetch_trending_mentions_api(limit=20):
-    api_key = st.secrets.get("ADANOS_API_KEY")
-
-    if not api_key:
-        st.warning("ADANOS_API_KEY is not configured in Streamlit Secrets.")
-        return []
-
-    try:
-        resp = requests.get(
-            "https://api.adanos.org/x/stocks/v1/trending",
-            params={
-                "limit": min(limit, 100),
-                "type": "stock",
-            },
-            headers={
-                "X-API-Key": api_key,
-            },
-            timeout=15,
-        )
-        resp.raise_for_status()
-
-        data = resp.json()
-        return data if isinstance(data, list) else []
-
-    except requests.RequestException as e:
-        st.warning(f"Adanos X sentiment API error: {e}")
-        return []
-    except Exception as e:
-        st.warning(f"Unexpected X sentiment API error: {e}")
-        return []
-
-
-trending_mentions_data = timed(
-    "fetch_trending_mentions_api",
-    fetch_trending_mentions_api,
-    20,
-)
-
-if trending_mentions_data:
-    html_mentions = (
-        "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
-    )
-
-    for item in trending_mentions_data:
-        sym = str(item.get("ticker", "?")).upper()
-        mentions = item.get("mentions", 0)
-        trend = str(item.get("trend", "stable")).lower()
-        buzz = item.get("buzz_score")
-        sentiment = item.get("sentiment_score")
-        bullish = item.get("bullish_pct")
-
-        # Trend color
-        if trend == "rising":
-            trend_color = "#00FF00"
-            trend_icon = "↑"
-        elif trend == "falling":
-            trend_color = "#FF4B4B"
-            trend_icon = "↓"
-        else:
-            trend_color = "#FFD700"
-            trend_icon = "→"
-
-        # Format optional metrics
-        buzz_str = f" · Buzz {buzz:.0f}" if buzz is not None else ""
-
-        sentiment_str = (
-            f" · Sent {sentiment:+.2f}"
-            if sentiment is not None
-            else ""
-        )
-
-        bullish_str = (
-            f" · 🟢 {bullish:.0f}%"
-            if bullish is not None
-            else ""
-        )
-
-        html_mentions += (
-            f'<div class="ticker-badge">'
-            f'<span class="ticker-name">${sym}</span>'
-            f'<span class="ticker-rs" '
-            f'style="color:{trend_color};margin-left:5px;">'
-            f'{trend_icon} {mentions} mentions'
-            f'{buzz_str}'
-            f'{bullish_str}'
-            f'{sentiment_str}'
-            f'</span>'
-            f'</div>'
-        )
-
-    html_mentions += "</div>"
-    st.markdown(html_mentions, unsafe_allow_html=True)
-
-else:
-    st.info("No X trending ticker data available.")
 
 # ==============================================================================
 # 24. MCCLELLAN OSCILLATOR (MCO) & SUMMATION INDEX (MCSI) — BREADTH TIMING
@@ -16778,7 +16779,7 @@ else:
     # )
 
 # ── ARK Funds — Daily / 1 Week / 1 Month (same SVG design as LIME_STOCKS) ──
-st.markdown("---")
+#st.markdown("---")
 
 ARK_TICKERS = ['ARKG', 'ARKK', 'ARKQ', 'ARKW', 'ARKF', 'ARKX']
 
@@ -17146,7 +17147,7 @@ Write a rotation report in this exact style and structure (use only real numbers
 
 🚀 EMERGING LEADERSHIP (freshest 1W movers not yet confirmed in 1M/3M)
 👑 CONFIRMED LEADERSHIP (strong across 1W AND 1M AND 3M)
-👀 EARLY LEADERSHIP RADAR (1W movers just outside top 10 or borderline)
+🧭 EARLY LEADERSHIP RADAR (1W movers just outside top 10 or borderline)
 ⚠️ COOLING LEADERSHIP (industries with strong 1Y/YTD but weak 1W/1M — likely fading leadership)
 🎯 HUNTING PRIORITIES (rank the best 3 industries to focus on next week)
 
