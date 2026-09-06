@@ -13053,9 +13053,9 @@ st.markdown("---")
 
 def _dist_box_html(label, count, dates, triggered):
     if triggered:
-        bg, border, text_color = "#2a1212", "#4a1f1f", "#888888"
+        bg, border, text_color = "#2a1212", "#4a1f1f", "#ff5252"
     else:
-        bg, border, text_color = "#0d2818", "#1a4a2e", "#888888"
+        bg, border, text_color = "#0d2818", "#1a4a2e", "#00e676"
 
     dates_str = ", ".join(dates) if dates else "None"
 
