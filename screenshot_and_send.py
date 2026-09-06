@@ -94,6 +94,8 @@ EXTRA_SCREENSHOTS = [
     #  "Sector RS", 8, False, None),
     ("https://aistockbubbleindex.com/",
      "AI Bubble", 8, False, None),
+    ("https://edition.cnn.com/markets/fear-and-greed",
+     "Fear & Greed", 8, False, None),
     ("https://finviz.com/map",
      "S&P 500 Map", 12, True, None),
 ]
