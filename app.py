@@ -7116,6 +7116,154 @@ if not tml_hist.empty:
 
 st.markdown("---")
 
+# ==============================================================================
+# 13. SEND SETUP SUMMARY TEXT DIRECTLY TO TELEGRAM
+# ==============================================================================
+def send_telegram_text(text, bot_token, chat_id, parse_mode="HTML"):
+    """Send a plain text message to Telegram, chunked under the 4096-char limit."""
+    if not text:
+        return
+    MAX_LEN = 4000  # leave headroom below Telegram's 4096 hard limit
+
+    chunks = []
+    current = ""
+    for line in text.split("\n"):
+        if len(current) + len(line) + 1 > MAX_LEN:
+            chunks.append(current)
+            current = line
+        else:
+            current = f"{current}\n{line}" if current else line
+    if current:
+        chunks.append(current)
+
+    for chunk in chunks:
+        try:
+            resp = requests.post(
+                f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                data={
+                    "chat_id": chat_id,
+                    "text": chunk,
+                    "parse_mode": parse_mode,
+                    "disable_web_page_preview": True,
+                },
+                timeout=20,
+            )
+            if resp.status_code != 200:
+                print(f"Telegram sendMessage failed: {resp.status_code} {resp.text}")
+        except Exception as e:
+            print(f"Telegram sendMessage error: {e}")
+
+
+def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
+                               industry_rank_map, all_data,
+                               cloud21ema_all, cloudwick_all, ma50bounce_all,
+                               ticker_dfs_shared, leader_list=None, tml_list=None, nan_ticker_count=0):
+    if not global_setup_tickers:
+        return None
+
+    leader_set = set(leader_list or []) | set(tml_list or [])
+
+    # Global RS lookup
+    global_rs_lookup = {}
+    for item in all_data:
+        for t, s in zip(item["Tickers"]["Ticker"], item["Tickers"]["RS Score"]):
+            global_rs_lookup[t] = s
+
+    # Risk %: distance to 21ema-low by default, but distance to SMA50
+    # if the ticker's ONLY setup type is 50ma_bounce.
+    risk_map = {}
+    for sym in global_setup_tickers:
+        try:
+            df = ticker_dfs_shared.get(sym)
+            if df is None or len(df) < 50:
+                continue
+            close = df['Close']
+            low   = df['Low']
+            c = close.iloc[-1]
+
+            setup_types_for_risk = []
+            if sym in cloud21ema_all: setup_types_for_risk.append("21ema_cloud")
+            if sym in cloudwick_all:  setup_types_for_risk.append("21ema_wick")
+            if sym in ma50bounce_all: setup_types_for_risk.append("50ma_bounce")
+
+            if setup_types_for_risk == ["50ma_bounce"]:
+                sma50 = close.rolling(50).mean().iloc[-1]
+                risk_map[sym] = round(float(((c - sma50) / c) * 100), 1)
+            else:
+                ema21_low = low.ewm(span=21, adjust=False).mean().iloc[-1]
+                risk_map[sym] = round(float(((c - ema21_low) / c) * 100), 1)
+        except Exception:
+            continue
+
+    rows = []
+    for sym in global_setup_tickers:
+        industries = global_setup_ticker_groups.get(sym, [])
+        ranks = [(ind, industry_rank_map[ind]) for ind in industries if ind in industry_rank_map]
+        best_industry, best_rank = min(ranks, key=lambda x: x[1]) if ranks else ("-", 9999)
+
+        setup_types = []
+        if sym in cloud21ema_all: setup_types.append("21_cloud")
+        if sym in cloudwick_all:  setup_types.append("21_wick")
+        if sym in ma50bounce_all: setup_types.append("50ma_b")
+
+        rows.append({
+            "rank": best_rank,
+            "ticker": sym,
+            "rs": global_rs_lookup.get(sym, 0),
+            "setups": setup_types,
+            "risk": risk_map.get(sym),
+            "is_leader": sym in leader_set,
+        })
+
+    rows.sort(key=lambda r: r["rank"])
+
+    # ── NEW: count how many setups are in a top-20 industry ──
+    strong_count = sum(1 for r in rows if r["rank"] <= 20)
+
+    lines = [f"<b>🔥 Setup Summary ({strong_count}/{len(rows)})</b>", ""]
+    separator_inserted = False
+    for r in rows:
+        if not separator_inserted and r["rank"] > 20:
+            lines.append("------------------------------")
+            separator_inserted = True
+
+        setup_str = ",".join(r["setups"])
+        risk_str  = f'{r["risk"]:.1f}%' if r["risk"] is not None else "n/a"
+        ticker_str = f'<b><i><u>{r["ticker"]}</u></i></b>' if r["is_leader"] else r["ticker"]
+        lines.append(
+            f'#{r["rank"]} | {ticker_str} ({r["rs"]:.0f}) | '
+            f'{setup_str} | {risk_str}'
+        )
+
+    # NEW: last line — NaN-today ticker count
+    lines.append("")
+    lines.append(f"⚠️ NaN-today: {nan_ticker_count}")
+
+    return "\n".join(lines)
+
+sgt_now = datetime.datetime.now(ZoneInfo("Asia/Singapore"))
+in_send_window = (7 <= sgt_now.hour <= 8)  # 17:00–17:59 SGT
+
+today_str = sgt_now.strftime("%Y-%m-%d")
+setup_summary_sig = f"{today_str}_{sorted(global_setup_tickers)}"
+
+if in_send_window and st.session_state.get("telegram_setup_summary_sig") != setup_summary_sig:
+    summary_text = build_setup_summary_text(
+        global_setup_tickers, global_setup_ticker_groups, industry_rank_map,
+        all_data, cloud21ema_all, cloudwick_all, ma50bounce_all, ticker_dfs_shared,
+        leader_list=leader_list,
+        tml_list=tml_list,
+        nan_ticker_count=len(_latest_nan_tickers),   # NEW
+    )
+    tg_token = st.secrets.get("TELEGRAM_BOT_TOKEN")
+    tg_chat  = st.secrets.get("TELEGRAM_CHAT_ID")
+
+    if summary_text and tg_token and tg_chat:
+        send_telegram_text(summary_text, tg_token, tg_chat)
+        st.session_state["telegram_setup_summary_sig"] = setup_summary_sig
+    elif not (tg_token and tg_chat):
+        st.sidebar.warning("Telegram secrets missing — Setup Summary not sent.")
+
 # --- 2. TIGHT PPP (Full Horizontal Row Below Two Botak) ---
 st.markdown(f"#### 📉 PPP = Opportunity ({len(ppp_list)})")
 
@@ -11549,153 +11697,6 @@ else:
             tick_str = ", ".join(art["tickers"]) if art["tickers"] else "—"
             st.markdown(f"- [{art['title']}]({art['url']}) → **{tick_str}**")
 
-# ==============================================================================
-# 13. SEND SETUP SUMMARY TEXT DIRECTLY TO TELEGRAM
-# ==============================================================================
-def send_telegram_text(text, bot_token, chat_id, parse_mode="HTML"):
-    """Send a plain text message to Telegram, chunked under the 4096-char limit."""
-    if not text:
-        return
-    MAX_LEN = 4000  # leave headroom below Telegram's 4096 hard limit
-
-    chunks = []
-    current = ""
-    for line in text.split("\n"):
-        if len(current) + len(line) + 1 > MAX_LEN:
-            chunks.append(current)
-            current = line
-        else:
-            current = f"{current}\n{line}" if current else line
-    if current:
-        chunks.append(current)
-
-    for chunk in chunks:
-        try:
-            resp = requests.post(
-                f"https://api.telegram.org/bot{bot_token}/sendMessage",
-                data={
-                    "chat_id": chat_id,
-                    "text": chunk,
-                    "parse_mode": parse_mode,
-                    "disable_web_page_preview": True,
-                },
-                timeout=20,
-            )
-            if resp.status_code != 200:
-                print(f"Telegram sendMessage failed: {resp.status_code} {resp.text}")
-        except Exception as e:
-            print(f"Telegram sendMessage error: {e}")
-
-
-def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
-                               industry_rank_map, all_data,
-                               cloud21ema_all, cloudwick_all, ma50bounce_all,
-                               ticker_dfs_shared, leader_list=None, tml_list=None, nan_ticker_count=0):
-    if not global_setup_tickers:
-        return None
-
-    leader_set = set(leader_list or []) | set(tml_list or [])
-
-    # Global RS lookup
-    global_rs_lookup = {}
-    for item in all_data:
-        for t, s in zip(item["Tickers"]["Ticker"], item["Tickers"]["RS Score"]):
-            global_rs_lookup[t] = s
-
-    # Risk %: distance to 21ema-low by default, but distance to SMA50
-    # if the ticker's ONLY setup type is 50ma_bounce.
-    risk_map = {}
-    for sym in global_setup_tickers:
-        try:
-            df = ticker_dfs_shared.get(sym)
-            if df is None or len(df) < 50:
-                continue
-            close = df['Close']
-            low   = df['Low']
-            c = close.iloc[-1]
-
-            setup_types_for_risk = []
-            if sym in cloud21ema_all: setup_types_for_risk.append("21ema_cloud")
-            if sym in cloudwick_all:  setup_types_for_risk.append("21ema_wick")
-            if sym in ma50bounce_all: setup_types_for_risk.append("50ma_bounce")
-
-            if setup_types_for_risk == ["50ma_bounce"]:
-                sma50 = close.rolling(50).mean().iloc[-1]
-                risk_map[sym] = round(float(((c - sma50) / c) * 100), 1)
-            else:
-                ema21_low = low.ewm(span=21, adjust=False).mean().iloc[-1]
-                risk_map[sym] = round(float(((c - ema21_low) / c) * 100), 1)
-        except Exception:
-            continue
-
-    rows = []
-    for sym in global_setup_tickers:
-        industries = global_setup_ticker_groups.get(sym, [])
-        ranks = [(ind, industry_rank_map[ind]) for ind in industries if ind in industry_rank_map]
-        best_industry, best_rank = min(ranks, key=lambda x: x[1]) if ranks else ("-", 9999)
-
-        setup_types = []
-        if sym in cloud21ema_all: setup_types.append("21_cloud")
-        if sym in cloudwick_all:  setup_types.append("21_wick")
-        if sym in ma50bounce_all: setup_types.append("50ma_b")
-
-        rows.append({
-            "rank": best_rank,
-            "ticker": sym,
-            "rs": global_rs_lookup.get(sym, 0),
-            "setups": setup_types,
-            "risk": risk_map.get(sym),
-            "is_leader": sym in leader_set,
-        })
-
-    rows.sort(key=lambda r: r["rank"])
-
-    # ── NEW: count how many setups are in a top-20 industry ──
-    strong_count = sum(1 for r in rows if r["rank"] <= 20)
-
-    lines = [f"<b>🔥 Setup Summary ({strong_count}/{len(rows)})</b>", ""]
-    separator_inserted = False
-    for r in rows:
-        if not separator_inserted and r["rank"] > 20:
-            lines.append("------------------------------")
-            separator_inserted = True
-
-        setup_str = ",".join(r["setups"])
-        risk_str  = f'{r["risk"]:.1f}%' if r["risk"] is not None else "n/a"
-        ticker_str = f'<b><i><u>{r["ticker"]}</u></i></b>' if r["is_leader"] else r["ticker"]
-        lines.append(
-            f'#{r["rank"]} | {ticker_str} ({r["rs"]:.0f}) | '
-            f'{setup_str} | {risk_str}'
-        )
-
-    # NEW: last line — NaN-today ticker count
-    lines.append("")
-    lines.append(f"⚠️ NaN-today: {nan_ticker_count}")
-
-    return "\n".join(lines)
-
-sgt_now = datetime.datetime.now(ZoneInfo("Asia/Singapore"))
-in_send_window = (7 <= sgt_now.hour <= 8)  # 17:00–17:59 SGT
-
-today_str = sgt_now.strftime("%Y-%m-%d")
-setup_summary_sig = f"{today_str}_{sorted(global_setup_tickers)}"
-
-if in_send_window and st.session_state.get("telegram_setup_summary_sig") != setup_summary_sig:
-    summary_text = build_setup_summary_text(
-        global_setup_tickers, global_setup_ticker_groups, industry_rank_map,
-        all_data, cloud21ema_all, cloudwick_all, ma50bounce_all, ticker_dfs_shared,
-        leader_list=leader_list,
-        tml_list=tml_list,
-        nan_ticker_count=len(_latest_nan_tickers),   # NEW
-    )
-    tg_token = st.secrets.get("TELEGRAM_BOT_TOKEN")
-    tg_chat  = st.secrets.get("TELEGRAM_CHAT_ID")
-
-    if summary_text and tg_token and tg_chat:
-        send_telegram_text(summary_text, tg_token, tg_chat)
-        st.session_state["telegram_setup_summary_sig"] = setup_summary_sig
-    elif not (tg_token and tg_chat):
-        st.sidebar.warning("Telegram secrets missing — Setup Summary not sent.")
 
 def massive_get(endpoint, params=None, timeout=15):
     massive_key = st.secrets.get("MASSIVE_API_KEY")
@@ -12863,61 +12864,37 @@ iwm_status_text = (
 
 st.markdown("---")
 
-st.markdown(
-    f"#### 🚨 SPY Distribution Days ({spy_dist_count}/25) — "
-    f"<span style='color:{spy_status_color};font-weight:bold;'>"
-    f"{spy_status_text}</span>",
-    unsafe_allow_html=True,
-)
+def _dist_box(label, count, triggered):
+    color  = "#f85149" if triggered else "#3fb950"
+    bg     = "rgba(248,81,73,0.10)" if triggered else "rgba(63,185,80,0.08)"
+    border = "rgba(248,81,73,0.40)" if triggered else "rgba(63,185,80,0.35)"
+    status = "Triggered" if triggered else "Not Triggered"
+    return f"""
+    <div style="flex:1;min-width:160px;background:{bg};border:1px solid {border};
+                border-radius:10px;padding:14px 16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;
+                    color:#8b949e;font-size:12px;margin-bottom:12px;">
+            <span>{label}</span><span>🚨</span>
+        </div>
+        <div style="color:{color};font-weight:700;font-size:14px;">
+            <span style="margin-right:6px;">●</span>{count}/25 · {status}
+        </div>
+    </div>
+    """
 
-if spy_dist_dates:
-    st.markdown(", ".join(spy_dist_dates))
-else:
-    st.info(
-        "No SPY distribution days in the trailing 25 sessions."
-    )
+dist_boxes_html = "<div style='display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;'>" + "".join([
+    _dist_box("SPY Distribution", spy_dist_count, spy_triggered),
+    _dist_box("QQQ Distribution", qqq_dist_count, qqq_triggered),
+    _dist_box("SMH Distribution", smh_dist_count, smh_triggered),
+    _dist_box("IWM Distribution", iwm_dist_count, iwm_triggered),
+]) + "</div>"
 
-st.markdown(
-    f"#### 🚨 QQQ Distribution Days ({qqq_dist_count}/25) — "
-    f"<span style='color:{qqq_status_color};font-weight:bold;'>"
-    f"{qqq_status_text}</span>",
-    unsafe_allow_html=True,
-)
+st.markdown(dist_boxes_html, unsafe_allow_html=True)
 
-if qqq_dist_dates:
-    st.markdown(", ".join(qqq_dist_dates))
-else:
-    st.info(
-        "No QQQ distribution days in the trailing 25 sessions."
-    )
-
-st.markdown(
-    f"#### 🚨 SMH Distribution Days ({smh_dist_count}/25) — "
-    f"<span style='color:{smh_status_color};font-weight:bold;'>"
-    f"{smh_status_text}</span>",
-    unsafe_allow_html=True,
-)
-
-if smh_dist_dates:
-    st.markdown(", ".join(smh_dist_dates))
-else:
-    st.info(
-        "No SMH distribution days in the trailing 25 sessions."
-    )
-
-st.markdown(
-    f"#### 🚨 IWM Distribution Days ({iwm_dist_count}/25) — "
-    f"<span style='color:{iwm_status_color};font-weight:bold;'>"
-    f"{iwm_status_text}</span>",
-    unsafe_allow_html=True,
-)
-
-if iwm_dist_dates:
-    st.markdown(", ".join(iwm_dist_dates))
-else:
-    st.info(
-        "No IWM distribution days in the trailing 25 sessions."
-    )
+with st.expander("Distribution day dates"):
+    for label, dates in [("SPY", spy_dist_dates), ("QQQ", qqq_dist_dates),
+                          ("SMH", smh_dist_dates), ("IWM", iwm_dist_dates)]:
+        st.markdown(f"**{label}:** " + (", ".join(dates) if dates else "None"))
 
 
 
