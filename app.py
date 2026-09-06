@@ -16967,6 +16967,78 @@ else:
 st.markdown("---")
 st.markdown("## 🔄 Finviz Industry Rotation Report")
 
+def _github_filepath_finviz(date_obj):
+    return f"finviz_history/finviz_{date_obj.isoformat()}.json"
+
+def save_finviz_snapshot_github(date_obj, perf_df):
+    """Commit today's full industry performance table to the GitHub data repo."""
+    repo   = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+
+    if not repo or not st.secrets.get("GITHUB_TOKEN"):
+        return  # silent — same as save_trending_list_github's soft-fail pattern
+
+    path = _github_filepath_finviz(date_obj)
+    url  = f"{GITHUB_API}/repos/{repo}/contents/{path}"
+
+    content_str = perf_df.to_json(orient="records")
+    content_b64 = base64.b64encode(content_str.encode()).decode()
+
+    sha = None
+    try:
+        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
+        if resp.status_code == 200:
+            sha = resp.json().get("sha")
+    except Exception:
+        pass
+
+    payload = {
+        "message": f"Finviz industry snapshot {date_obj.isoformat()}",
+        "content": content_b64,
+        "branch": branch,
+    }
+    if sha:
+        payload["sha"] = sha
+
+    try:
+        requests.put(url, headers=_github_headers(), json=payload, timeout=10)
+    except Exception:
+        pass
+
+@st.cache_data(ttl=3600)
+def load_finviz_snapshot_github(date_obj):
+    """Load the exact-date snapshot. Returns None if not found."""
+    repo   = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    if not repo or not st.secrets.get("GITHUB_TOKEN"):
+        return None
+
+    path = _github_filepath_finviz(date_obj)
+    url  = f"{GITHUB_API}/repos/{repo}/contents/{path}"
+    try:
+        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
+        if resp.status_code != 200:
+            return None
+        decoded = base64.b64decode(resp.json()["content"]).decode()
+        return pd.read_json(decoded, orient="records")
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=3600)
+def find_nearest_backward_finviz_snapshot_github(start_date, min_days_back=5, max_lookback_days=14):
+    """
+    Walk backward from start_date looking for a saved snapshot, but only
+    accept ones at least min_days_back away — otherwise "last week" would
+    just be yesterday's noise. Returns (df, date_found) or (None, None).
+    """
+    for i in range(min_days_back, max_lookback_days + 1):
+        check_date = start_date - datetime.timedelta(days=i)
+        df = load_finviz_snapshot_github(check_date)
+        if df is not None and not df.empty:
+            return df, check_date
+    return None, None
+
 @st.cache_data(ttl=3600)
 def fetch_finviz_industry_perf():
     # NOTE: v=210 ("Performance Chart") renders bars client-side via JS/canvas —
@@ -17028,11 +17100,25 @@ else:
     top10_1m = finviz_perf_df.sort_values("1M", ascending=False).head(10)
     top10_3m = finviz_perf_df.sort_values("3M", ascending=False).head(10)
 
-    _prev_key = "finviz_prev_top10_1w"
-    _prev_1w_set = set(st.session_state.get(_prev_key, []))
-    _curr_1w_set = set(top10_1w["Industry"].tolist())
-    _new_this_week = sorted(_curr_1w_set - _prev_1w_set)
-    st.session_state[_prev_key] = list(_curr_1w_set)
+    # --- Step 3: save today's snapshot + load prior one ---
+    today_date = datetime.date.today()
+    timed("save_finviz_snapshot_github", save_finviz_snapshot_github, today_date, finviz_perf_df)
+    prior_finviz_df, prior_finviz_date = timed(
+        "find_nearest_backward_finviz_snapshot_github",
+        find_nearest_backward_finviz_snapshot_github,
+        today_date
+    )
+
+    # --- REPLACES the old _prev_key / st.session_state block ---
+    if prior_finviz_df is not None:
+        prior_top10_1w = set(prior_finviz_df.sort_values("1W", ascending=False).head(10)["Industry"])
+        curr_1w_set = set(top10_1w["Industry"].tolist())
+        new_this_week = sorted(curr_1w_set - prior_top10_1w)
+        dropped_this_week = sorted(prior_top10_1w - curr_1w_set)
+        comparison_label = f"vs {prior_finviz_date.isoformat()}"
+    else:
+        new_this_week, dropped_this_week = [], []
+        comparison_label = "no prior snapshot available yet"
 
     def _finviz_fmt_block(df, cols):
         lines = []
@@ -17053,7 +17139,8 @@ TOP 10 by 1-Month performance:
 TOP 10 by 3-Month performance:
 {_finviz_fmt_block(top10_3m, ['3M','6M','1Y'])}
 
-New industries entering the 1-Week Top 10 since the last check: {', '.join(_new_this_week) if _new_this_week else 'none detected yet (first run or no change)'}
+New industries entering the 1-Week Top 10 ({comparison_label}): {', '.join(new_this_week) if new_this_week else 'none'}
+Industries that DROPPED OUT of the 1-Week Top 10 since then: {', '.join(dropped_this_week) if dropped_this_week else 'none'}
 
 Write a rotation report in this exact style and structure (use only real numbers/industries from above — never invent tickers, name industries only):
 

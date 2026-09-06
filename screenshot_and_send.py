@@ -165,6 +165,7 @@ SECTION_KEYWORDS = [
     "Stage 2 vs Stage 4",
     "Stage Distribution by Industry",
     "McClellan Oscillator & Summation Index",
+    "Finviz Industry Rotation Report",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the
