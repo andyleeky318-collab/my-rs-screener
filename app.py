@@ -13057,7 +13057,7 @@ def _dist_box_html(label, count, dates, triggered):
     else:
         bg, border, text_color = "#0d2818", "#1a4a2e", "#00e676"
 
-    dates_str = ", ".join(dates) if dates else "None"
+    dates_str = ", ".join(dates) if dates else "--"
 
     return f"""
     <div style="background:{bg}; border:2px solid {border}; border-radius:8px;
