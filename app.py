@@ -12834,7 +12834,7 @@ def compute_market_stalling_days(ticker, max_gain=0.4):
 
     return len(active_stalling_days), active_stalling_days
 
-st.markdown("---")
+#st.markdown("---")
 
 # ============================================================
 # STALLING DAY COUNTS — SPY / QQQ / SMH / IWM
@@ -12884,49 +12884,7 @@ iwm_stall_text = (
     if iwm_stall_triggered else "Not Triggered"
 )
 
-st.markdown(
-    f"#### 🛑 SPY Stalling Days ({spy_stall_count}/25) — "
-    f"<span style='color:{spy_stall_color};font-weight:bold;'>"
-    f"{spy_stall_text}</span>",
-    unsafe_allow_html=True,
-)
-if spy_stall_dates:
-    st.markdown(", ".join(spy_stall_dates))
-else:
-    st.info("None")
 
-st.markdown(
-    f"#### 🛑 QQQ Stalling Days ({qqq_stall_count}/25) — "
-    f"<span style='color:{qqq_stall_color};font-weight:bold;'>"
-    f"{qqq_stall_text}</span>",
-    unsafe_allow_html=True,
-)
-if qqq_stall_dates:
-    st.markdown(", ".join(qqq_stall_dates))
-else:
-    st.info("None")
-
-st.markdown(
-    f"#### 🛑 SMH Stalling Days ({smh_stall_count}/25) — "
-    f"<span style='color:{smh_stall_color};font-weight:bold;'>"
-    f"{smh_stall_text}</span>",
-    unsafe_allow_html=True,
-)
-if smh_stall_dates:
-    st.markdown(", ".join(smh_stall_dates))
-else:
-    st.info("None")
-
-st.markdown(
-    f"#### 🛑 IWM Stalling Days ({iwm_stall_count}/25) — "
-    f"<span style='color:{iwm_stall_color};font-weight:bold;'>"
-    f"{iwm_stall_text}</span>",
-    unsafe_allow_html=True,
-)
-if iwm_stall_dates:
-    st.markdown(", ".join(iwm_stall_dates))
-else:
-    st.info("None")
 
 # ==============================================================================
 # 20. SECTOR STRENGTH HEATMAP — cross-sectional rank (display) +
@@ -13127,7 +13085,18 @@ with dist_col3:
 with dist_col4:
     st.markdown(_dist_box_html("🚨 IWM Distribution", iwm_dist_count, iwm_dist_dates, iwm_triggered), unsafe_allow_html=True)
 
+st.write("")
 
+stall_col1, stall_col2, stall_col3, stall_col4 = st.columns(4)
+
+with stall_col1:
+    st.markdown(_dist_box_html("🛑 SPY Stalling", spy_stall_count, spy_stall_dates, spy_stall_triggered), unsafe_allow_html=True)
+with stall_col2:
+    st.markdown(_dist_box_html("🛑 QQQ Stalling", qqq_stall_count, qqq_stall_dates, qqq_stall_triggered), unsafe_allow_html=True)
+with stall_col3:
+    st.markdown(_dist_box_html("🛑 SMH Stalling", smh_stall_count, smh_stall_dates, smh_stall_triggered), unsafe_allow_html=True)
+with stall_col4:
+    st.markdown(_dist_box_html("🛑 IWM Stalling", iwm_stall_count, iwm_stall_dates, iwm_stall_triggered), unsafe_allow_html=True)
 
 # ==============================================================================
 # MASTER SETUP CONSOLIDATION TABLE
