@@ -16959,3 +16959,185 @@ if ark_perf_rows:
     st.components.v1.html(ark_html_out, height=ARK_SVG_H + 24, scrolling=False)
 else:
     st.info("No ARK Funds performance data available.")
+
+# ==============================================================================
+# 27. FINVIZ INDUSTRY ROTATION REPORT — group performance (1W/1M/3M) + AI narrative
+# Read-only, additive. Appended at the very bottom; touches nothing else.
+# ==============================================================================
+st.markdown("---")
+st.markdown("## 🔄 Finviz Industry Rotation Report")
+
+@st.cache_data(ttl=3600)
+def fetch_finviz_industry_perf():
+    # NOTE: v=210 ("Performance Chart") renders chart images only, no scrapable
+    # numeric table. v=140 ("Performance") has the actual Perf Week/Month/
+    # Quarter/Half/Year/YTD columns needed for this report.
+    url = "https://finviz.com/groups?g=industry&v=140&o=name&st=d1"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"}
+    try:
+        resp = requests.get(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.content, "html.parser")
+        table = soup.find("table", class_=lambda c: c and "table-light" in c) or soup.find("table")
+        rows = []
+        for tr in table.find_all("tr"):
+            cells = tr.find_all("td")
+            if len(cells) < 8:
+                continue
+            texts = [c.get_text(strip=True) for c in cells]
+            if not texts[0].isdigit():
+                continue
+            def pf(v):
+                try: return float(v.replace("%", ""))
+                except Exception: return None
+            rows.append({
+                "Industry": texts[1],
+                "1W": pf(texts[2]), "1M": pf(texts[3]), "3M": pf(texts[4]),
+                "6M": pf(texts[5]), "1Y": pf(texts[6]), "YTD": pf(texts[7]),
+            })
+        return pd.DataFrame(rows)
+    except Exception as e:
+        st.warning(f"Finviz industry fetch error: {e}")
+        return pd.DataFrame()
+
+finviz_perf_df = timed("fetch_finviz_industry_perf", fetch_finviz_industry_perf)
+
+if finviz_perf_df.empty:
+    st.info("Finviz industry performance data unavailable.")
+else:
+    top10_1w = finviz_perf_df.sort_values("1W", ascending=False).head(10)
+    top10_1m = finviz_perf_df.sort_values("1M", ascending=False).head(10)
+    top10_3m = finviz_perf_df.sort_values("3M", ascending=False).head(10)
+
+    _prev_key = "finviz_prev_top10_1w"
+    _prev_1w_set = set(st.session_state.get(_prev_key, []))
+    _curr_1w_set = set(top10_1w["Industry"].tolist())
+    _new_this_week = sorted(_curr_1w_set - _prev_1w_set)
+    st.session_state[_prev_key] = list(_curr_1w_set)
+
+    def _finviz_fmt_block(df, cols):
+        lines = []
+        for _, r in df.iterrows():
+            parts = " | ".join(f"{c}: {r[c]:+.2f}%" for c in cols if pd.notna(r[c]))
+            lines.append(f"  - {r['Industry']} — {parts}")
+        return "\n".join(lines)
+
+    finviz_prompt = f"""
+You are a concise IBD-style sector-rotation analyst. Below is Finviz industry group performance data (144 industries).
+
+TOP 10 by 1-Week performance:
+{_finviz_fmt_block(top10_1w, ['1W','1M','3M'])}
+
+TOP 10 by 1-Month performance:
+{_finviz_fmt_block(top10_1m, ['1M','3M','6M'])}
+
+TOP 10 by 3-Month performance:
+{_finviz_fmt_block(top10_3m, ['3M','6M','1Y'])}
+
+New industries entering the 1-Week Top 10 since the last check: {', '.join(_new_this_week) if _new_this_week else 'none detected yet (first run or no change)'}
+
+Write a rotation report in this exact style and structure (use only real numbers/industries from above — never invent tickers, name industries only):
+
+🚀 EMERGING LEADERSHIP (freshest 1W movers not yet confirmed in 1M/3M)
+👑 CONFIRMED LEADERSHIP (strong across 1W AND 1M AND 3M)
+👀 EARLY LEADERSHIP RADAR (1W movers just outside top 10 or borderline)
+⚠️ COOLING LEADERSHIP (industries with strong 1Y/YTD but weak 1W/1M — likely fading leadership)
+🎯 HUNTING PRIORITIES (rank the best 3 industries to focus on next week)
+
+Keep it tight, data-driven, cite the actual % numbers, no fluff, no disclaimers.
+"""
+
+    def generate_finviz_rotation_report(prompt):
+        TRANSIENT_CODES = ["503","UNAVAILABLE","429","RESOURCE_EXHAUSTED","quota","overloaded","high demand","rate_limit","capacity","timeout","502","529"]
+        def is_transient(e): return any(c.lower() in e.lower() for c in TRANSIENT_CODES)
+        failures = {}
+        for label, key, model in [
+            ("Gemini 2.5 Flash [GEMINI_API_KEY]", st.secrets.get("GEMINI_API_KEY"), "gemini-2.5-flash"),
+            ("Gemini 3.5 Flash [GEMINI_API_KEY_2]", st.secrets.get("GEMINI_API_KEY_2"), "gemini-3.5-flash"),
+            ("Gemini 3.5 Flash [GEMINI_API_KEY_3]", st.secrets.get("GEMINI_API_KEY_3"), "gemini-3.5-flash"),
+        ]:
+            if not key:
+                failures[label] = "No key in secrets"; continue
+            try:
+                from google import genai as google_genai
+                client = google_genai.Client(api_key=key)
+                response = client.models.generate_content(model=model, contents=prompt)
+                return f"🟦 **{label}**\n\n{response.text}"
+            except Exception as e:
+                failures[label] = str(e)[:120]
+
+        openrouter_key = st.secrets.get("OPENROUTER_API_KEY")
+        if openrouter_key:
+            try:
+                from openai import OpenAI as OpenAIClient
+                or_client = OpenAIClient(api_key=openrouter_key, base_url="https://openrouter.ai/api/v1",
+                    default_headers={"HTTP-Referer": "https://your-app-name.streamlit.app", "X-Title": "Theme Tracker"})
+                completion = or_client.chat.completions.create(
+                    model="meta-llama/llama-3.1-8b-instruct",
+                    messages=[{"role":"system","content":"You are a concise IBD-style sector-rotation analyst."},
+                              {"role":"user","content":prompt}],
+                    max_tokens=800, temperature=0.4)
+                summary = format_unavailable_reasons(failures)
+                return f"🟣 **OpenRouter / Llama-3.1-8b** *({summary})*\n\n{completion.choices[0].message.content}"
+            except Exception as e:
+                failures["OpenRouter"] = str(e)[:120]
+        else:
+            failures["OpenRouter"] = "No OPENROUTER_API_KEY"
+
+        groq_key = st.secrets.get("GROQ_API_KEY")
+        if groq_key:
+            try:
+                from openai import OpenAI as OpenAIClient
+                groq_client = OpenAIClient(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
+                completion = groq_client.chat.completions.create(
+                    model="openai/gpt-oss-120b",
+                    messages=[{"role":"system","content":"You are a concise IBD-style sector-rotation analyst."},
+                              {"role":"user","content":prompt}],
+                    max_tokens=900, temperature=0.4)
+                result = completion.choices[0].message.content
+                if not result or not result.strip():
+                    raise ValueError("Empty content from Groq")
+                summary = format_unavailable_reasons(failures)
+                return f"🟧 **Groq / gpt-oss-120b** *({summary})*\n\n{result}"
+            except Exception as e:
+                failures["Groq"] = str(e)[:120]
+        else:
+            failures["Groq"] = "No GROQ_API_KEY"
+
+        github_token = st.secrets.get("GITHUB_MODELS_TOKEN")
+        if github_token:
+            try:
+                from openai import OpenAI as OpenAIClient
+                github_client = OpenAIClient(api_key=github_token, base_url="https://models.inference.ai.azure.com")
+                completion = github_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role":"system","content":"You are a concise IBD-style sector-rotation analyst."},
+                              {"role":"user","content":prompt}],
+                    max_tokens=800, temperature=0.4)
+                summary = format_unavailable_reasons(failures)
+                return f"⬜ **GitHub Models / gpt-4o-mini** *({summary})*\n\n{completion.choices[0].message.content}"
+            except Exception as e:
+                failures["GitHub Models"] = str(e)[:120]
+        else:
+            failures["GitHub Models"] = "No GITHUB_MODELS_TOKEN"
+
+        failure_lines = "\n".join(f"- {p}: {r}" for p, r in failures.items())
+        return f"🔴 **All AI providers failed**\n\n{failure_lines}"
+
+    _finviz_sig = f"{datetime.date.today().isoformat()}_{','.join(top10_1w['Industry'].tolist())}"
+    _force_finviz = st.button("🔄 Refresh Rotation Report", key="retry_finviz_rotation")
+    if _force_finviz or st.session_state.get("finviz_rotation_sig") != _finviz_sig:
+        with st.spinner("Generating industry rotation report..."):
+            _finviz_result = timed("generate_finviz_rotation_report", generate_finviz_rotation_report, finviz_prompt)
+        if _finviz_result:
+            st.session_state["finviz_rotation_result"] = _finviz_result
+            st.session_state["finviz_rotation_sig"] = _finviz_sig
+
+    if "finviz_rotation_result" in st.session_state:
+        render_ai_points_table(
+            st.session_state["finviz_rotation_result"],
+            industries=finviz_perf_df["Industry"].tolist()
+        )
+
+    with st.expander("Raw Finviz industry performance table"):
+        st.dataframe(finviz_perf_df.sort_values("1W", ascending=False), use_container_width=True, hide_index=True)
