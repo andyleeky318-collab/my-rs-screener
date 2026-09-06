@@ -12335,7 +12335,7 @@ else:
                 x=[xs[-1]], y=[ys[-1]], mode="markers+text",
                 marker=dict(size=13, symbol="star", color=color, line=dict(color="#000000", width=1)),
                 text=[ticker], textposition="middle right",
-                textfont=dict(size=11, color=color),
+                textfont=dict(size=13, color=color),
                 showlegend=False,
                 hovertemplate=f"<b>{ticker}</b><br>RS-Ratio: %{{x:.2f}}<br>RS-Momentum: %{{y:.2f}}<extra></extra>",
             ))
@@ -16969,33 +16969,52 @@ st.markdown("## 🔄 Finviz Industry Rotation Report")
 
 @st.cache_data(ttl=3600)
 def fetch_finviz_industry_perf():
-    # NOTE: v=210 ("Performance Chart") renders chart images only, no scrapable
-    # numeric table. v=140 ("Performance") has the actual Perf Week/Month/
-    # Quarter/Half/Year/YTD columns needed for this report.
+    # NOTE: v=210 ("Performance Chart") renders bars client-side via JS/canvas —
+    # the numbers aren't in the server HTML at all. v=140 ("Performance") is the
+    # plain-HTML table with the same Perf Week/Month/Quarter/Half/Year/YTD data.
     url = "https://finviz.com/groups?g=industry&v=140&o=name&st=d1"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
     try:
         resp = requests.get(url, headers=headers, timeout=15)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.content, "html.parser")
-        table = soup.find("table", class_=lambda c: c and "table-light" in c) or soup.find("table")
-        rows = []
-        for tr in table.find_all("tr"):
-            cells = tr.find_all("td")
-            if len(cells) < 8:
-                continue
-            texts = [c.get_text(strip=True) for c in cells]
-            if not texts[0].isdigit():
-                continue
-            def pf(v):
-                try: return float(v.replace("%", ""))
-                except Exception: return None
-            rows.append({
-                "Industry": texts[1],
-                "1W": pf(texts[2]), "1M": pf(texts[3]), "3M": pf(texts[4]),
-                "6M": pf(texts[5]), "1Y": pf(texts[6]), "YTD": pf(texts[7]),
-            })
-        return pd.DataFrame(rows)
+
+        def pf(v):
+            try: return float(v.replace("%", ""))
+            except Exception: return None
+
+        # Don't guess a specific class name — Finviz's markup changes it over
+        # time. Instead, parse every <table> on the page and keep whichever one
+        # actually yields industry rows (the real data table will have ~144
+        # rows; unrelated tables like the filter/dropdown header will have 0).
+        best_rows = []
+        for table in soup.find_all("table"):
+            tmp_rows = []
+            for tr in table.find_all("tr"):
+                cells = tr.find_all("td")
+                if len(cells) < 8:
+                    continue
+                texts = [c.get_text(strip=True) for c in cells]
+                if not texts[0].isdigit():
+                    continue
+                tmp_rows.append({
+                    "Industry": texts[1],
+                    "1W": pf(texts[2]), "1M": pf(texts[3]), "3M": pf(texts[4]),
+                    "6M": pf(texts[5]), "1Y": pf(texts[6]), "YTD": pf(texts[7]),
+                })
+            if len(tmp_rows) > len(best_rows):
+                best_rows = tmp_rows
+
+        if not best_rows:
+            st.warning(
+                f"Finviz industry table not found (status {resp.status_code}, "
+                f"{len(soup.find_all('table'))} tables on page, {len(resp.content)} bytes). "
+                f"Finviz may be blocking this server's IP."
+            )
+        return pd.DataFrame(best_rows)
     except Exception as e:
         st.warning(f"Finviz industry fetch error: {e}")
         return pd.DataFrame()
