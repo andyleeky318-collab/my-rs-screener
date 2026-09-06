@@ -12864,61 +12864,37 @@ iwm_status_text = (
 
 st.markdown("---")
 
-st.markdown(
-    f"#### 🚨 SPY Distribution Days ({spy_dist_count}/25) — "
-    f"<span style='color:{spy_status_color};font-weight:bold;'>"
-    f"{spy_status_text}</span>",
-    unsafe_allow_html=True,
-)
+def _dist_box(label, count, triggered):
+    color  = "#f85149" if triggered else "#3fb950"
+    bg     = "rgba(248,81,73,0.10)" if triggered else "rgba(63,185,80,0.08)"
+    border = "rgba(248,81,73,0.40)" if triggered else "rgba(63,185,80,0.35)"
+    status = "Triggered" if triggered else "Not Triggered"
+    return f"""
+    <div style="flex:1;min-width:160px;background:{bg};border:1px solid {border};
+                border-radius:10px;padding:14px 16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;
+                    color:#8b949e;font-size:12px;margin-bottom:12px;">
+            <span>{label}</span><span>🚨</span>
+        </div>
+        <div style="color:{color};font-weight:700;font-size:14px;">
+            <span style="margin-right:6px;">●</span>{count}/25 · {status}
+        </div>
+    </div>
+    """
 
-if spy_dist_dates:
-    st.markdown(", ".join(spy_dist_dates))
-else:
-    st.info(
-        "No SPY distribution days in the trailing 25 sessions."
-    )
+dist_boxes_html = "<div style='display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;'>" + "".join([
+    _dist_box("SPY Distribution", spy_dist_count, spy_triggered),
+    _dist_box("QQQ Distribution", qqq_dist_count, qqq_triggered),
+    _dist_box("SMH Distribution", smh_dist_count, smh_triggered),
+    _dist_box("IWM Distribution", iwm_dist_count, iwm_triggered),
+]) + "</div>"
 
-st.markdown(
-    f"#### 🚨 QQQ Distribution Days ({qqq_dist_count}/25) — "
-    f"<span style='color:{qqq_status_color};font-weight:bold;'>"
-    f"{qqq_status_text}</span>",
-    unsafe_allow_html=True,
-)
+st.markdown(dist_boxes_html, unsafe_allow_html=True)
 
-if qqq_dist_dates:
-    st.markdown(", ".join(qqq_dist_dates))
-else:
-    st.info(
-        "No QQQ distribution days in the trailing 25 sessions."
-    )
-
-st.markdown(
-    f"#### 🚨 SMH Distribution Days ({smh_dist_count}/25) — "
-    f"<span style='color:{smh_status_color};font-weight:bold;'>"
-    f"{smh_status_text}</span>",
-    unsafe_allow_html=True,
-)
-
-if smh_dist_dates:
-    st.markdown(", ".join(smh_dist_dates))
-else:
-    st.info(
-        "No SMH distribution days in the trailing 25 sessions."
-    )
-
-st.markdown(
-    f"#### 🚨 IWM Distribution Days ({iwm_dist_count}/25) — "
-    f"<span style='color:{iwm_status_color};font-weight:bold;'>"
-    f"{iwm_status_text}</span>",
-    unsafe_allow_html=True,
-)
-
-if iwm_dist_dates:
-    st.markdown(", ".join(iwm_dist_dates))
-else:
-    st.info(
-        "No IWM distribution days in the trailing 25 sessions."
-    )
+with st.expander("Distribution day dates"):
+    for label, dates in [("SPY", spy_dist_dates), ("QQQ", qqq_dist_dates),
+                          ("SMH", smh_dist_dates), ("IWM", iwm_dist_dates)]:
+        st.markdown(f"**{label}:** " + (", ".join(dates) if dates else "None"))
 
 
 
