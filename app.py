@@ -17110,15 +17110,27 @@ TOP 10 by 3-Month performance:
 New industries entering the 1-Week Top 10 ({comparison_label}): {', '.join(new_this_week) if new_this_week else 'none'}
 Industries that DROPPED OUT of the 1-Week Top 10 since then: {', '.join(dropped_this_week) if dropped_this_week else 'none'}
 
-Write a rotation report in this exact style and structure (use only real numbers/industries from above — never invent tickers, name industries only):
+Write a rotation report in this exact structure. Use only real numbers/industries from above — never invent tickers, name industries only.
 
-🚀 EMERGING LEADERSHIP (freshest 1W movers not yet confirmed in 1M/3M)
-👑 CONFIRMED LEADERSHIP (strong across 1W AND 1M AND 3M)
-🧭 EARLY LEADERSHIP RADAR (1W movers just outside top 10 or borderline)
-⚠️ COOLING LEADERSHIP (industries with strong 1Y/YTD but weak 1W/1M — likely fading leadership)
-🎯 HUNTING PRIORITIES (rank the best 3 industries to focus on next week)
+CRITICAL FORMATTING RULE: Each of the 5 section titles below MUST be its own line, prefixed with "### " (three hash symbols and a space), on a line by itself with NOTHING else on that line — no industry data, no bullets. Then list the industries for that section as separate bullet lines starting with "- " directly underneath it.
 
-Keep it tight, data-driven, cite the actual % numbers, no fluff, no disclaimers.
+### 🚀 EMERGING LEADERSHIP (freshest 1W movers not yet confirmed in 1M/3M)
+- Industry Name — 1W: +X% | 1M: +X% | 3M: +X%
+(repeat for each industry in this section)
+
+### 👑 CONFIRMED LEADERSHIP (strong across 1W AND 1M AND 3M)
+- Industry Name — 1W: +X% | 1M: +X% | 3M: +X%
+
+### 🧭 EARLY LEADERSHIP RADAR (1W movers just outside top 10 or borderline)
+- Industry Name — 1W: +X% | 1M: +X% | 3M: +X%
+
+### ⚠️ COOLING LEADERSHIP (industries with strong 1Y/YTD but weak 1W/1M — likely fading leadership)
+- Industry Name — 1Y: +X% | YTD: +X%
+
+### 🎯 HUNTING PRIORITIES (rank the best 3 industries to focus on next week)
+- Industry Name — one-line reason with real numbers
+
+Keep it tight, data-driven, cite the actual % numbers, no fluff, no disclaimers. Never merge a section title onto the same line as an industry bullet.
 """
 
     def generate_finviz_rotation_report(prompt):
