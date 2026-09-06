@@ -8599,7 +8599,7 @@ with st.spinner("Scanning for PowerTrend History..."):
 # --- 4. POWERTREND (Full Horizontal Row) ---
 powertrend_count_color = "#FF6B6B" if len(pt_list) == 0 else "inherit"
 st.markdown(
-    f"<h4>⚡ PowerTrend = Thematic Extended <span style='color:{powertrend_count_color}; font-weight:bold;'>({len(pt_list)})</span></h4>",
+    f"<h4>⚡ PowerTrend = Thematic Parabolic <span style='color:{powertrend_count_color}; font-weight:bold;'>({len(pt_list)})</span></h4>",
     unsafe_allow_html=True
 )
 if pt_list or pt_yest:
@@ -8611,7 +8611,12 @@ if pt_list or pt_yest:
         sym = item[0] if isinstance(item, tuple) else item
         atr_value = item[1] if isinstance(item, tuple) else None
         suffix = f"{atr_value:.1f}x" if atr_value is not None else ""
-        suffix_color = "#00FF00" if (atr_value is not None and atr_value < 4) else "#888888"
+        if atr_value is not None and atr_value < 4:
+            suffix_color = "#00FF00"
+        elif atr_value is not None and atr_value >= 10:
+            suffix_color = "#D8B4FE"  # light purple
+        else:
+            suffix_color = "#888888"
         # NEW: top-20 industry glow
         industries = pt_ticker_industry.get(sym, [])
         ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
@@ -8976,59 +8981,59 @@ if not value_trap_hist.empty:
 # ==============================================================================
 # 19. 10x ATR ABOVE MA50 — dollar distance from 50-day MA >= 10x ATR(14)
 # ==============================================================================
-st.markdown("---")
+# st.markdown("---")
 
-@st.cache_data(ttl=3600)
-def compute_10x_atr_above_ma50(stocks_list, ticker_dfs):
-    matches = []
-    for ticker in stocks_list:
-        try:
-            df = ticker_dfs.get(ticker)
-            if df is None or len(df) < 50:
-                continue
-            close, high, low = df['Close'], df['High'], df['Low']
-            sma50 = close.rolling(50).mean().iloc[-1]
-            tr = pd.concat([
-                high - low,
-                (high - close.shift(1)).abs(),
-                (low - close.shift(1)).abs()
-            ], axis=1).max(axis=1)
-            atr = tr.rolling(14).mean().iloc[-1]
-            c = close.iloc[-1]
-            if pd.isna(sma50) or pd.isna(atr) or atr <= 0 or sma50 <= 0:
-                continue
-            # CHANGED: use the same atr_multiple formula as the PowerTrend badge
-            # (pct-gain-from-MA50 / ATR%-of-price), instead of raw dollar distance,
-            # so a ticker showing "10.x" in the PowerTrend badge also shows up here.
-            pct_gain = ((c - sma50) / sma50) * 100
-            atr_pct = (atr / c) * 100
-            if atr_pct <= 0:
-                continue
-            atr_multiple = pct_gain / atr_pct
-            if atr_multiple >= 10:
-                matches.append(ticker)
-        except Exception:
-            continue
-    return sorted(matches)
+# @st.cache_data(ttl=3600)
+# def compute_10x_atr_above_ma50(stocks_list, ticker_dfs):
+#     matches = []
+#     for ticker in stocks_list:
+#         try:
+#             df = ticker_dfs.get(ticker)
+#             if df is None or len(df) < 50:
+#                 continue
+#             close, high, low = df['Close'], df['High'], df['Low']
+#             sma50 = close.rolling(50).mean().iloc[-1]
+#             tr = pd.concat([
+#                 high - low,
+#                 (high - close.shift(1)).abs(),
+#                 (low - close.shift(1)).abs()
+#             ], axis=1).max(axis=1)
+#             atr = tr.rolling(14).mean().iloc[-1]
+#             c = close.iloc[-1]
+#             if pd.isna(sma50) or pd.isna(atr) or atr <= 0 or sma50 <= 0:
+#                 continue
+#             # CHANGED: use the same atr_multiple formula as the PowerTrend badge
+#             # (pct-gain-from-MA50 / ATR%-of-price), instead of raw dollar distance,
+#             # so a ticker showing "10.x" in the PowerTrend badge also shows up here.
+#             pct_gain = ((c - sma50) / sma50) * 100
+#             atr_pct = (atr / c) * 100
+#             if atr_pct <= 0:
+#                 continue
+#             atr_multiple = pct_gain / atr_pct
+#             if atr_multiple >= 10:
+#                 matches.append(ticker)
+#         except Exception:
+#             continue
+#     return sorted(matches)
 
-atr10_list = timed(
-    "compute_10x_atr_above_ma50",
-    compute_10x_atr_above_ma50,
-    stocks_tuple, ticker_dfs_shared
-)
+# atr10_list = timed(
+#     "compute_10x_atr_above_ma50",
+#     compute_10x_atr_above_ma50,
+#     stocks_tuple, ticker_dfs_shared
+# )
 
-count_color = "#ff4b4b" if len(atr10_list) >= 10 else "#e0e0e0"
-st.markdown(
-    f"#### 🚀 10x ATR Parabolic <span style='color:{count_color};'>({len(atr10_list)})</span>",
-    unsafe_allow_html=True,
-)
-if atr10_list:
-    html_atr10 = ""
-    for sym in atr10_list:
-        html_atr10 += setup_badge(sym)
-    st.markdown(html_atr10, unsafe_allow_html=True)
-else:
-    st.info("None")
+# count_color = "#ff4b4b" if len(atr10_list) >= 10 else "#e0e0e0"
+# st.markdown(
+#     f"#### 🚀 10x ATR Parabolic <span style='color:{count_color};'>({len(atr10_list)})</span>",
+#     unsafe_allow_html=True,
+# )
+# if atr10_list:
+#     html_atr10 = ""
+#     for sym in atr10_list:
+#         html_atr10 += setup_badge(sym)
+#     st.markdown(html_atr10, unsafe_allow_html=True)
+# else:
+#     st.info("None")
 
 # ============================================================
 # CHANGE OF CHARACTER (scoreUp20) — Composite Score Δ≥20 Scan
@@ -9632,7 +9637,7 @@ total_unusual_vol = len(hve_syms) + len(hvq_syms) + len(hvm_syms)
 
 def _render_volume_badges(sym_list, vol_map):  # CHANGED: dropped badge_color_style param
     if not sym_list:
-        st.info("None")
+        #st.info("None")
         return
     vol_industry_counts, vol_ticker_industry = build_leader_industry_map(sym_list, INDUSTRIES)  # NEW
     html_v = ""
@@ -13238,6 +13243,398 @@ for sym in master_ticker_set:
         **section_flags,
     })
 
+# ── Stage Distribution by Industry ──────────────────────────────────────────
+# Renders compute_stage_pct_by_industry output (already computed above as
+# stage_pct_rows): ONE ROW PER STAGE_PCT_WATCHLIST TICKER, in watchlist order,
+# with the exact same Stage 1-4 %s shown in the table under the RS Quadrant Map,
+# plus a stacked distribution bar and a derived health label.
+st.markdown("---")
+st.markdown("#### 🧭 Stage Distribution by Industry")
+
+try:
+    _STAGE_COLORS = {1: "#a9a9a9", 2: "#378ADD", 3: "#EF9F27", 4: "#FF69B4"}  # matches app stage_colors
+
+    def _health(net):
+        if net is None: return ("n/a", "#8b949e")
+        if net >= 10:   return ("Strong",  "#00FF00")
+        if net >= -15:  return ("Healthy", "#4ecdc4")
+        if net >= -40:  return ("Neutral", "#a9a9a9")
+        return ("Weak", "#FF4B4B")
+
+    # Default sort: health strongest -> weakest (by Stage 2 - Stage 4);
+    # rows with no stage data sink to the bottom.
+    def _net_key(_r):
+        _s2, _s4 = _r.get("Stage2 %"), _r.get("Stage4 %")
+        return (_s2 - _s4) if (_s2 is not None and _s4 is not None) else -1e9
+
+    _rows = sorted(stage_pct_rows, key=_net_key, reverse=True)
+
+    if not _rows:
+        st.info("No industry stage distribution available.")
+    else:
+        _thr = "padding:5px 10px;text-align:right;"
+        _h = [
+            # Scoped reset: global rules draw a red border-top on row 21 and
+            # red/white border-right on the 3rd/6th/7th columns of every table
+            # — kill all of them for this one.
+            "<style>#stage-dist-tbl td{border:0 !important;border-bottom:1px solid #21262d !important;}"
+            "#stage-dist-tbl th{border:0 !important;background:transparent !important;}</style>",
+            # width:auto -> the table only spans its content; first column
+            # (Industry) shrinks to the longest name instead of stretching.
+            "<table id='stage-dist-tbl' style='width:auto;border-collapse:collapse;font-size:12px;'>",
+            "<tr style='color:#8b949e;border-bottom:1px solid #30363d;'>"
+            "<th style='padding:5px 10px;text-align:left;white-space:nowrap;'>Industry</th>"
+            "<th style='padding:5px 10px;text-align:left;white-space:nowrap;'>Ticker</th>"
+            "<th style='padding:5px 10px;text-align:left;'>Distribution</th>"
+            f"<th style='{_thr}'>S1</th><th style='{_thr}'>S2</th>"
+            f"<th style='{_thr}'>S3</th><th style='{_thr}'>S4</th>"
+            f"<th style='{_thr}'>Health</th></tr>",
+        ]
+        for _r in _rows:
+            _tkr = _r.get("Ticker", "")
+            _ind = _r.get("Industry") or "—"
+            _n   = _r.get("N", 0)
+            _s = [_r.get("Stage1 %"), _r.get("Stage2 %"), _r.get("Stage3 %"), _r.get("Stage4 %")]
+            _has = all(v is not None for v in _s)
+            _net = (_s[1] - _s[3]) if _has else None
+            _lbl, _clr = _health(_net)
+
+            if _has:
+                _bar = "".join(
+                    f"<span style='display:inline-block;height:11px;width:{_s[_i]:.2f}%;"
+                    f"background:{_STAGE_COLORS[_i + 1]};'></span>"
+                    for _i in range(4)
+                )
+                _bar_cell = (f"<span style='display:block;width:240px;line-height:0;"
+                             f"white-space:nowrap;border-radius:3px;overflow:hidden;'>{_bar}</span>")
+                _cells = "".join(
+                    f"<td style='padding:5px 10px;text-align:right;color:{_STAGE_COLORS[_i + 1]};'>{_s[_i]:.0f}%</td>"
+                    for _i in range(4)
+                )
+            else:
+                _bar_cell = "<span style='color:#8b949e;'>—</span>"
+                _cells = "<td style='padding:5px 10px;text-align:right;color:#8b949e;'>—</td>" * 4
+
+            _h.append(
+                "<tr style='border-bottom:1px solid #21262d;'>"
+                f"<td style='padding:5px 10px;color:#e6edf3;font-weight:bold;white-space:nowrap;'>{_ind} "
+                f"<span style='color:#8b949e;font-weight:normal;'>({_n})</span></td>"
+                f"<td style='padding:5px 10px;color:#c9d1d9;white-space:nowrap;'>{_tkr}</td>"
+                f"<td style='padding:5px 10px;'>{_bar_cell}</td>"
+                f"{_cells}"
+                f"<td style='padding:5px 10px;text-align:right;color:{_clr};font-weight:bold;'>{_lbl}</td></tr>"
+            )
+        _h.append("</table>")
+        st.markdown("".join(_h), unsafe_allow_html=True)
+        # st.caption(
+        #     f"One row per STAGE_PCT_WATCHLIST ticker ({len(_rows)}), sorted by health strongest→weakest — "
+        #     "the Stage 1-4 %s are the same values shown in the table under the RS Quadrant Map. Bar segments: "
+        #     "Stage 1 (grey) · Stage 2 (blue) · Stage 3 (orange) · Stage 4 (pink). "
+        #     "Health from Stage 2 − Stage 4: ≥10 Strong · ≥−15 Healthy · ≥−40 Neutral · else Weak."
+        # )
+except Exception as _e:
+    st.warning(f"Stage distribution by industry error: {_e}")
+
+# ==============================================================================
+# 27. FINVIZ INDUSTRY ROTATION REPORT — group performance (1W/1M/3M) + AI narrative
+# Read-only, additive. Appended at the very bottom; touches nothing else.
+# ==============================================================================
+st.markdown("---")
+st.markdown("## 🔄 Finviz Industry Rotation Report")
+
+def _github_filepath_finviz(date_obj):
+    return f"finviz_history/finviz_{date_obj.isoformat()}.json"
+
+def save_finviz_snapshot_github(date_obj, perf_df):
+    """Commit today's full industry performance table to the GitHub data repo."""
+    repo   = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+
+    if not repo or not st.secrets.get("GITHUB_TOKEN"):
+        return  # silent — same as save_trending_list_github's soft-fail pattern
+
+    path = _github_filepath_finviz(date_obj)
+    url  = f"{GITHUB_API}/repos/{repo}/contents/{path}"
+
+    content_str = perf_df.to_json(orient="records")
+    content_b64 = base64.b64encode(content_str.encode()).decode()
+
+    sha = None
+    try:
+        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
+        if resp.status_code == 200:
+            sha = resp.json().get("sha")
+    except Exception:
+        pass
+
+    payload = {
+        "message": f"Finviz industry snapshot {date_obj.isoformat()}",
+        "content": content_b64,
+        "branch": branch,
+    }
+    if sha:
+        payload["sha"] = sha
+
+    try:
+        requests.put(url, headers=_github_headers(), json=payload, timeout=10)
+    except Exception:
+        pass
+
+@st.cache_data(ttl=3600)
+def load_finviz_snapshot_github(date_obj):
+    """Load the exact-date snapshot. Returns None if not found."""
+    repo   = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    if not repo or not st.secrets.get("GITHUB_TOKEN"):
+        return None
+
+    path = _github_filepath_finviz(date_obj)
+    url  = f"{GITHUB_API}/repos/{repo}/contents/{path}"
+    try:
+        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
+        if resp.status_code != 200:
+            return None
+        decoded = base64.b64decode(resp.json()["content"]).decode()
+        return pd.read_json(decoded, orient="records")
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=3600)
+def find_nearest_backward_finviz_snapshot_github(start_date, min_days_back=5, max_lookback_days=14):
+    """
+    Walk backward from start_date looking for a saved snapshot, but only
+    accept ones at least min_days_back away — otherwise "last week" would
+    just be yesterday's noise. Returns (df, date_found) or (None, None).
+    """
+    for i in range(min_days_back, max_lookback_days + 1):
+        check_date = start_date - datetime.timedelta(days=i)
+        df = load_finviz_snapshot_github(check_date)
+        if df is not None and not df.empty:
+            return df, check_date
+    return None, None
+
+@st.cache_data(ttl=3600)
+def fetch_finviz_industry_perf():
+    # NOTE: v=210 ("Performance Chart") renders bars client-side via JS/canvas —
+    # the numbers aren't in the server HTML at all. v=140 ("Performance") is the
+    # plain-HTML table with the same Perf Week/Month/Quarter/Half/Year/YTD data.
+    url = "https://finviz.com/groups?g=industry&v=140&o=name&st=d1"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.content, "html.parser")
+
+        def pf(v):
+            try: return float(v.replace("%", ""))
+            except Exception: return None
+
+        # Don't guess a specific class name — Finviz's markup changes it over
+        # time. Instead, parse every <table> on the page and keep whichever one
+        # actually yields industry rows (the real data table will have ~144
+        # rows; unrelated tables like the filter/dropdown header will have 0).
+        best_rows = []
+        for table in soup.find_all("table"):
+            tmp_rows = []
+            for tr in table.find_all("tr"):
+                cells = tr.find_all("td")
+                if len(cells) < 8:
+                    continue
+                texts = [c.get_text(strip=True) for c in cells]
+                if not texts[0].isdigit():
+                    continue
+                tmp_rows.append({
+                    "Industry": texts[1],
+                    "1W": pf(texts[2]), "1M": pf(texts[3]), "3M": pf(texts[4]),
+                    "6M": pf(texts[5]), "1Y": pf(texts[6]), "YTD": pf(texts[7]),
+                })
+            if len(tmp_rows) > len(best_rows):
+                best_rows = tmp_rows
+
+        if not best_rows:
+            st.warning(
+                f"Finviz industry table not found (status {resp.status_code}, "
+                f"{len(soup.find_all('table'))} tables on page, {len(resp.content)} bytes). "
+                f"Finviz may be blocking this server's IP."
+            )
+        return pd.DataFrame(best_rows)
+    except Exception as e:
+        st.warning(f"Finviz industry fetch error: {e}")
+        return pd.DataFrame()
+
+finviz_perf_df = timed("fetch_finviz_industry_perf", fetch_finviz_industry_perf)
+
+if finviz_perf_df.empty:
+    st.info("Finviz industry performance data unavailable.")
+else:
+    top10_1w = finviz_perf_df.sort_values("1W", ascending=False).head(10)
+    top10_1m = finviz_perf_df.sort_values("1M", ascending=False).head(10)
+    top10_3m = finviz_perf_df.sort_values("3M", ascending=False).head(10)
+
+    # --- Step 3: save today's snapshot + load prior one ---
+    today_date = datetime.date.today()
+    timed("save_finviz_snapshot_github", save_finviz_snapshot_github, today_date, finviz_perf_df)
+    prior_finviz_df, prior_finviz_date = timed(
+        "find_nearest_backward_finviz_snapshot_github",
+        find_nearest_backward_finviz_snapshot_github,
+        today_date
+    )
+
+    # --- REPLACES the old _prev_key / st.session_state block ---
+    if prior_finviz_df is not None:
+        prior_top10_1w = set(prior_finviz_df.sort_values("1W", ascending=False).head(10)["Industry"])
+        curr_1w_set = set(top10_1w["Industry"].tolist())
+        new_this_week = sorted(curr_1w_set - prior_top10_1w)
+        dropped_this_week = sorted(prior_top10_1w - curr_1w_set)
+        comparison_label = f"vs {prior_finviz_date.isoformat()}"
+    else:
+        new_this_week, dropped_this_week = [], []
+        comparison_label = "no prior snapshot available yet"
+
+    def _finviz_fmt_block(df, cols):
+        lines = []
+        for _, r in df.iterrows():
+            parts = " | ".join(f"{c}: {r[c]:+.2f}%" for c in cols if pd.notna(r[c]))
+            lines.append(f"  - {r['Industry']} — {parts}")
+        return "\n".join(lines)
+
+    finviz_prompt = f"""
+You are a concise IBD-style sector-rotation analyst. Below is Finviz industry group performance data (144 industries).
+
+TOP 10 by 1-Week performance:
+{_finviz_fmt_block(top10_1w, ['1W','1M','3M'])}
+
+TOP 10 by 1-Month performance:
+{_finviz_fmt_block(top10_1m, ['1M','3M','6M'])}
+
+TOP 10 by 3-Month performance:
+{_finviz_fmt_block(top10_3m, ['3M','6M','1Y'])}
+
+New industries entering the 1-Week Top 10 ({comparison_label}): {', '.join(new_this_week) if new_this_week else 'none'}
+Industries that DROPPED OUT of the 1-Week Top 10 since then: {', '.join(dropped_this_week) if dropped_this_week else 'none'}
+
+Write a rotation report in this exact structure. Use only real numbers/industries from above — never invent tickers, name industries only.
+
+CRITICAL FORMATTING RULE: Each of the 5 section titles below MUST be its own line, prefixed with "### " (three hash symbols and a space), on a line by itself with NOTHING else on that line — no industry data, no bullets. Then list the industries for that section as separate bullet lines starting with "- " directly underneath it.
+
+### 🚀 EMERGING LEADERSHIP (freshest 1W movers not yet confirmed in 1M/3M)
+- Industry Name — 1W: +X% | 1M: +X% | 3M: +X%
+(repeat for each industry in this section)
+
+### 👑 CONFIRMED LEADERSHIP (strong across 1W AND 1M AND 3M)
+- Industry Name — 1W: +X% | 1M: +X% | 3M: +X%
+
+### 🧭 EARLY LEADERSHIP RADAR (1W movers just outside top 10 or borderline)
+- Industry Name — 1W: +X% | 1M: +X% | 3M: +X%
+
+### ⚠️ COOLING LEADERSHIP (industries with strong 1Y/YTD but weak 1W/1M — likely fading leadership)
+- Industry Name — 1Y: +X% | YTD: +X%
+
+### 🎯 HUNTING PRIORITIES (rank the best 3 industries to focus on next week)
+- Industry Name — one-line reason with real numbers
+
+Keep it tight, data-driven, cite the actual % numbers, no fluff, no disclaimers. Never merge a section title onto the same line as an industry bullet.
+"""
+
+    def generate_finviz_rotation_report(prompt):
+        TRANSIENT_CODES = ["503","UNAVAILABLE","429","RESOURCE_EXHAUSTED","quota","overloaded","high demand","rate_limit","capacity","timeout","502","529"]
+        def is_transient(e): return any(c.lower() in e.lower() for c in TRANSIENT_CODES)
+        failures = {}
+        for label, key, model in [
+            ("Gemini 2.5 Flash [GEMINI_API_KEY]", st.secrets.get("GEMINI_API_KEY"), "gemini-2.5-flash"),
+            ("Gemini 3.5 Flash [GEMINI_API_KEY_2]", st.secrets.get("GEMINI_API_KEY_2"), "gemini-3.5-flash"),
+            ("Gemini 3.5 Flash [GEMINI_API_KEY_3]", st.secrets.get("GEMINI_API_KEY_3"), "gemini-3.5-flash"),
+        ]:
+            if not key:
+                failures[label] = "No key in secrets"; continue
+            try:
+                from google import genai as google_genai
+                client = google_genai.Client(api_key=key)
+                response = client.models.generate_content(model=model, contents=prompt)
+                return f"🟦 **{label}**\n\n{response.text}"
+            except Exception as e:
+                failures[label] = str(e)[:120]
+
+        openrouter_key = st.secrets.get("OPENROUTER_API_KEY")
+        if openrouter_key:
+            try:
+                from openai import OpenAI as OpenAIClient
+                or_client = OpenAIClient(api_key=openrouter_key, base_url="https://openrouter.ai/api/v1",
+                    default_headers={"HTTP-Referer": "https://your-app-name.streamlit.app", "X-Title": "Theme Tracker"})
+                completion = or_client.chat.completions.create(
+                    model="meta-llama/llama-3.1-8b-instruct",
+                    messages=[{"role":"system","content":"You are a concise IBD-style sector-rotation analyst."},
+                              {"role":"user","content":prompt}],
+                    max_tokens=800, temperature=0.4)
+                summary = format_unavailable_reasons(failures)
+                return f"🟣 **OpenRouter / Llama-3.1-8b** *({summary})*\n\n{completion.choices[0].message.content}"
+            except Exception as e:
+                failures["OpenRouter"] = str(e)[:120]
+        else:
+            failures["OpenRouter"] = "No OPENROUTER_API_KEY"
+
+        groq_key = st.secrets.get("GROQ_API_KEY")
+        if groq_key:
+            try:
+                from openai import OpenAI as OpenAIClient
+                groq_client = OpenAIClient(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
+                completion = groq_client.chat.completions.create(
+                    model="openai/gpt-oss-120b",
+                    messages=[{"role":"system","content":"You are a concise IBD-style sector-rotation analyst."},
+                              {"role":"user","content":prompt}],
+                    max_tokens=900, temperature=0.4)
+                result = completion.choices[0].message.content
+                if not result or not result.strip():
+                    raise ValueError("Empty content from Groq")
+                summary = format_unavailable_reasons(failures)
+                return f"🟧 **Groq / gpt-oss-120b** *({summary})*\n\n{result}"
+            except Exception as e:
+                failures["Groq"] = str(e)[:120]
+        else:
+            failures["Groq"] = "No GROQ_API_KEY"
+
+        github_token = st.secrets.get("GITHUB_MODELS_TOKEN")
+        if github_token:
+            try:
+                from openai import OpenAI as OpenAIClient
+                github_client = OpenAIClient(api_key=github_token, base_url="https://models.inference.ai.azure.com")
+                completion = github_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role":"system","content":"You are a concise IBD-style sector-rotation analyst."},
+                              {"role":"user","content":prompt}],
+                    max_tokens=800, temperature=0.4)
+                summary = format_unavailable_reasons(failures)
+                return f"⬜ **GitHub Models / gpt-4o-mini** *({summary})*\n\n{completion.choices[0].message.content}"
+            except Exception as e:
+                failures["GitHub Models"] = str(e)[:120]
+        else:
+            failures["GitHub Models"] = "No GITHUB_MODELS_TOKEN"
+
+        failure_lines = "\n".join(f"- {p}: {r}" for p, r in failures.items())
+        return f"🔴 **All AI providers failed**\n\n{failure_lines}"
+
+    _finviz_sig = f"{datetime.date.today().isoformat()}_{','.join(top10_1w['Industry'].tolist())}"
+    _force_finviz = st.button("🔄 Refresh Rotation Report", key="retry_finviz_rotation")
+    if _force_finviz or st.session_state.get("finviz_rotation_sig") != _finviz_sig:
+        with st.spinner("Generating industry rotation report..."):
+            _finviz_result = timed("generate_finviz_rotation_report", generate_finviz_rotation_report, finviz_prompt)
+        if _finviz_result:
+            st.session_state["finviz_rotation_result"] = _finviz_result
+            st.session_state["finviz_rotation_sig"] = _finviz_sig
+
+    if "finviz_rotation_result" in st.session_state:
+        render_ai_points_table(
+            st.session_state["finviz_rotation_result"],
+            industries=finviz_perf_df["Industry"].tolist()
+        )
+
+    with st.expander("Raw Finviz industry performance table"):
+        st.dataframe(finviz_perf_df.sort_values("1W", ascending=False), use_container_width=True, hide_index=True)
+
 # ==============================================================================
 # 26. ACCUMULATION RATING — Up/Down Volume Ratio by STAGE_PCT_WATCHLIST group
 # Read-only, additive. Mirrors the Pine Script "Up/Down Volume Ratio" logic:
@@ -13491,6 +13888,362 @@ if accumulation_rows:
     st.markdown(acc_table_html, unsafe_allow_html=True)
 else:
     st.info("No accumulation rating data available.")
+
+# ==============================================================================
+# 24. MCCLELLAN OSCILLATOR (MCO) & SUMMATION INDEX (MCSI) — BREADTH TIMING
+# Read-only, additive. Computed from the existing KNOWN_STOCKS universe
+# (proxy breadth universe via ticker_dfs_shared, already downloaded) since a
+# live NDX-constituent advance/decline feed isn't available. Does not touch
+# any other section or shared variable.
+# ==============================================================================
+st.markdown("---")
+st.markdown("### 🌊 McClellan Oscillator & Summation Index")
+
+@st.cache_data(ttl=3600)
+def compute_mcclellan_indicators(_ticker_dfs, stocks_list, z_window=252, mcsi_sma_len=10):
+    close_map = {}
+    for t in stocks_list:
+        df = _ticker_dfs.get(t)
+        if df is None or len(df) < 60:
+            continue
+        close_map[t] = df['Close']
+
+    if not close_map:
+        return pd.DataFrame()
+
+    close_wide = pd.DataFrame(close_map).sort_index().dropna(how='all')
+    daily_chg = close_wide.diff()
+    advances = (daily_chg > 0).sum(axis=1)
+    declines = (daily_chg < 0).sum(axis=1)
+    net_adv = (advances - declines).astype(float)
+
+    ema19 = net_adv.ewm(span=19, adjust=False).mean()
+    ema39 = net_adv.ewm(span=39, adjust=False).mean()
+    mco = ema19 - ema39
+    mcsi = mco.cumsum()
+
+    def _zscore(series, window):
+        mean = series.rolling(window, min_periods=max(20, window // 4)).mean()
+        std  = series.rolling(window, min_periods=max(20, window // 4)).std()
+        return (series - mean) / std.replace(0, np.nan)
+
+    mco_z = _zscore(mco, z_window)
+    mcsi_z = _zscore(mcsi, z_window)
+    mcsi_z_sma = mcsi_z.rolling(mcsi_sma_len).mean()
+
+    out = pd.DataFrame({"MCO_Z": mco_z, "MCSI_Z": mcsi_z, "MCSI_Z_SMA": mcsi_z_sma}).dropna(how='all')
+    return out
+
+
+with st.spinner("Computing McClellan Oscillator / Summation Index..."):
+    mcclellan_df = timed(
+        "compute_mcclellan_indicators",
+        compute_mcclellan_indicators,
+        ticker_dfs_shared, stocks_tuple
+    )
+
+if mcclellan_df.empty or len(mcclellan_df) < 30:
+    st.info("Insufficient data to compute McClellan indicators.")
+else:
+    plot_mc_df = mcclellan_df.tail(260).reset_index().rename(columns={"index": "Date"})
+    plot_mc_df["Date"] = pd.to_datetime(plot_mc_df["Date"]).dt.strftime("%Y-%m-%d")
+
+    fig_mc = make_subplots(
+        rows=2, cols=1, shared_xaxes=True,
+        row_heights=[0.5, 0.5], vertical_spacing=0.08,
+        subplot_titles=("Normalized McClellan Oscillator (MCO)",
+                         "Normalized McClellan Summation Index (MCSI)")
+    )
+
+    # ── MCO FIRST / TOP ───────────────────────────────────────────────────
+    fig_mc.add_trace(go.Scatter(
+        x=plot_mc_df["Date"], y=plot_mc_df["MCO_Z"], mode="lines",
+        name="MCO (z)", line=dict(color="#2ca02c", width=1.4)
+    ), row=1, col=1)
+
+    # ── MCSI SECOND / BOTTOM ─────────────────────────────────────────────
+    fig_mc.add_trace(go.Scatter(
+        x=plot_mc_df["Date"], y=plot_mc_df["MCSI_Z"], mode="lines",
+        name="MCSI (z)", line=dict(color="#FF4B4B", width=1.6)
+    ), row=2, col=1)
+    fig_mc.add_trace(go.Scatter(
+        x=plot_mc_df["Date"], y=plot_mc_df["MCSI_Z_SMA"], mode="lines",
+        name="MCSI 10SMA", line=dict(color="#888888", width=1.2, dash="dot")
+    ), row=2, col=1)
+
+    for r in (1, 2):
+        for level, color, dash in [(2, "#FF4B4B", "solid"), (1, "#FF4B4B", "dot"),
+                                    (-1, "#00C076", "dot"), (-2, "#00C076", "solid"),
+                                    (0, "#666666", "dash")]:
+            fig_mc.add_hline(y=level, line_color=color, line_dash=dash, line_width=1, row=r, col=1)
+
+    fig_mc.update_layout(
+        height=650, margin=dict(l=40, r=40, t=50, b=30),
+        plot_bgcolor="rgba(20,22,30,1)", paper_bgcolor="rgba(13,17,23,0)",
+        font=dict(color="#cccccc"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+        hovermode="x unified",
+    )
+    fig_mc.update_xaxes(type="category", showgrid=False, tickfont=dict(size=9))
+    fig_mc.update_yaxes(showgrid=True, gridcolor="rgba(120,120,120,0.15)", range=[-3, 3])
+
+    st.plotly_chart(fig_mc, use_container_width=True)
+
+    # ── Trigger / verdict logic (mirrors MCO -> MCSI -> 21dma flow) ────────
+    latest_mco = mcclellan_df["MCO_Z"].iloc[-1]
+    latest_mcsi = mcclellan_df["MCSI_Z"].iloc[-1]
+    latest_mcsi_sma = mcclellan_df["MCSI_Z_SMA"].iloc[-1]
+    mcsi_5ago = mcclellan_df["MCSI_Z"].iloc[-6] if len(mcclellan_df) >= 6 else latest_mcsi
+    mcsi_curling_up = latest_mcsi > mcsi_5ago
+    mcsi_above_sma = pd.notna(latest_mcsi_sma) and latest_mcsi > latest_mcsi_sma
+    mcsi_was_below_sma = (
+        len(mcclellan_df) >= 2
+        and pd.notna(mcclellan_df["MCSI_Z_SMA"].iloc[-2])
+        and mcclellan_df["MCSI_Z"].iloc[-2] <= mcclellan_df["MCSI_Z_SMA"].iloc[-2]
+    )
+    mcsi_10sma_reclaim = mcsi_above_sma and mcsi_was_below_sma
+
+    qqq_df_mc = ticker_dfs_shared.get("QQQ")
+    price_above_21dma = None
+    if qqq_df_mc is not None and len(qqq_df_mc) >= 21:
+        ema21_mc = qqq_df_mc['Close'].ewm(span=21, adjust=False).mean().iloc[-1]
+        price_above_21dma = qqq_df_mc['Close'].iloc[-1] >= ema21_mc
+
+    lines = []
+    if latest_mco <= -2:
+        lines.append(("🔴", "#FF4B4B", "MCO ≤ -2σ (deep oversold)",
+                       "Deeper cycle reversal zone — wait for MCSI to curl up before acting."))
+    elif latest_mco <= -1:
+        lines.append(("🟠", "#FFA500", "MCO ≤ -1σ (oversold / alert)",
+                       "Rubber-band stretched. If price also retests/reclaims the 21dma-structure, prepare pullback trades."))
+    else:
+        lines.append(("⚪", "#888888", "MCO not oversold", "No timing signal from MCO right now — stay patient."))
+
+    if mcsi_10sma_reclaim:
+        lines.append(("🟢", "#00FF00", "MCSI just reclaimed its 10-day SMA",
+                       "Real confirmation — participation is broadening. Press with conviction / size up."))
+    elif mcsi_curling_up and price_above_21dma:
+        lines.append(("🟡", "#FFD700", "MCSI curling up + price reclaiming 21dma-structure",
+                       "Early confirmation only — test the turn with a small starter position."))
+    elif not mcsi_curling_up and latest_mcsi >= 1:
+        lines.append(("🔴", "#FF4B4B", "MCSI curling down from +1σ to +2σ (overbought)",
+                       "Late-stage trend weakening — trim into strength, don't chase."))
+    elif not mcsi_curling_up:
+        lines.append(("🟠", "#FFA500", "MCSI curling down",
+                       "Participation fading — stop adding new risk. Hold existing, no new trades."))
+    else:
+        lines.append(("⚪", "#888888", "MCSI drifting sideways", "No fresh breadth confirmation yet."))
+
+    verdict_rows_html = ""
+    for icon, color, label, note in lines:
+        verdict_rows_html += (
+            f"<div style='margin-bottom:8px;padding:8px 12px;border-left:4px solid {color};"
+            f"background:#1a1c23;border-radius:4px;'>"
+            f"<span style='font-size:1.05em;'>{icon}</span> "
+            f"<span style='color:{color};font-weight:bold;'>{label}</span>"
+            f"<div style='color:#ccc;font-size:0.85em;margin-top:2px;'>{note}</div>"
+            f"</div>"
+        )
+
+    mcsi_sma_str = f"{latest_mcsi_sma:.2f}σ" if pd.notna(latest_mcsi_sma) else "n/a"
+    st.markdown(
+        f"<div style='margin-bottom:6px;font-size:13px;color:#888;'>"
+        f"MCO: <span style='color:#4ecdc4;font-weight:bold;'>{latest_mco:.2f}σ</span> &nbsp;|&nbsp; "
+        f"MCSI: <span style='color:#4ecdc4;font-weight:bold;'>{latest_mcsi:.2f}σ</span> &nbsp;|&nbsp; "
+        f"MCSI 10SMA: <span style='color:#4ecdc4;font-weight:bold;'>{mcsi_sma_str}</span>"
+        f"</div>",
+        unsafe_allow_html=True
+    )
+    st.markdown(verdict_rows_html, unsafe_allow_html=True)
+
+    # st.caption(
+    #     "Breadth universe: KNOWN_STOCKS (proxy for Nasdaq 100 constituents — a live NDX "
+    #     "advance/decline feed isn't available). Z-scores computed on a trailing 252-day "
+    #     "window, mirroring the normalized MCO/MCSI approach shown in the reference chart."
+    # )
+
+# ── ARK Funds — Daily / 1 Week / 1 Month (same SVG design as LIME_STOCKS) ──
+#st.markdown("---")
+
+ARK_TICKERS = ['ARKG', 'ARKK', 'ARKQ', 'ARKW', 'ARKF', 'ARKX']
+
+@st.cache_data(ttl=3600)
+def download_ark_stocks_data(tickers_tuple):
+    raw = yf.download(list(tickers_tuple), period="2mo", interval="1d", progress=False, auto_adjust=True)
+    dfs = {}
+    for t in tickers_tuple:
+        try:
+            df = pd.DataFrame({'Close': raw['Close'][t]}).dropna()
+            if not df.empty:
+                dfs[t] = df
+        except Exception:
+            continue
+    return dfs
+
+ark_ticker_dfs = timed("download_ark_stocks_data", download_ark_stocks_data, tuple(ARK_TICKERS))
+
+ark_perf_rows = []
+for sym in ARK_TICKERS:
+    df_sym = ark_ticker_dfs.get(sym)
+    if df_sym is None or len(df_sym) < 2:
+        continue
+    c_today = df_sym['Close'].iloc[-1]
+    c_prev  = df_sym['Close'].iloc[-2]
+    if pd.isna(c_today) or pd.isna(c_prev) or c_prev == 0:
+        continue
+    pct_1d = round((c_today - c_prev) / c_prev * 100, 2)
+
+    c_1w = df_sym['Close'].iloc[-6] if len(df_sym) >= 6 else None
+    pct_1w = round((c_today - c_1w) / c_1w * 100, 2) if (c_1w is not None and not pd.isna(c_1w) and c_1w != 0) else None
+
+    c_1m = df_sym['Close'].iloc[-22] if len(df_sym) >= 22 else None
+    pct_1m = round((c_today - c_1m) / c_1m * 100, 2) if (c_1m is not None and not pd.isna(c_1m) and c_1m != 0) else None
+
+    ark_perf_rows.append({
+        "sym": sym, "pct": pct_1d, "pct_1w": pct_1w, "pct_1m": pct_1m,
+        "is_2m_high": bool(c_today >= df_sym['Close'].max())
+    })
+
+if ark_perf_rows:
+
+    ark_two_month_high_syms = {r["sym"] for r in ark_perf_rows if r.get("is_2m_high")}
+
+    ark_pattern_defs = """
+    <defs>
+    <pattern id="ark-stripe-blue" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+        <rect width="6" height="6" fill="#9CC4EA"/>
+        <line x1="0" y1="0" x2="0" y2="6" stroke="#378ADD" stroke-width="3"/>
+    </pattern>
+    <pattern id="ark-stripe-pink" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+        <rect width="6" height="6" fill="#FFC2DE"/>
+        <line x1="0" y1="0" x2="0" y2="6" stroke="#FF69B4" stroke-width="3"/>
+    </pattern>
+    </defs>
+    """
+
+    ARK_BAR_MAX_PX = 175
+
+    ark_rows_1d = sorted(ark_perf_rows, key=lambda x: -x["pct"])
+    ark_rows_1w = sorted([r for r in ark_perf_rows if r["pct_1w"] is not None], key=lambda x: -x["pct_1w"])
+    ark_rows_1m = sorted([r for r in ark_perf_rows if r["pct_1m"] is not None], key=lambda x: -x["pct_1m"])
+
+    ark_max_abs_1d = max(abs(r["pct"])     for r in ark_rows_1d) or 1
+    ark_max_abs_1w = max(abs(r["pct_1w"])  for r in ark_rows_1w) or 1
+    ark_max_abs_1m = max(abs(r["pct_1m"])  for r in ark_rows_1m) or 1
+
+    ARK_ROW_H   = 21
+    ARK_LABEL_W = 120
+    ARK_COL_W   = ARK_LABEL_W + ARK_BAR_MAX_PX
+    ARK_GAP     = 55
+    ARK_PADDING = 13
+    ARK_FS      = 13
+
+    ark_N      = max(len(ark_rows_1d), len(ark_rows_1w), len(ark_rows_1m))
+    ARK_SVG_W  = ARK_COL_W * 3 + ARK_GAP * 2 + ARK_PADDING * 2
+
+    ARK_X0_1d = ARK_PADDING
+    ARK_X0_1w = ARK_PADDING + ARK_COL_W + ARK_GAP
+    ARK_X0_1m = ARK_PADDING + (ARK_COL_W + ARK_GAP) * 2
+
+    ARK_HEADER_H = 20
+    ARK_SVG_H    = ark_N * ARK_ROW_H + ARK_PADDING * 2 + ARK_HEADER_H
+
+    def ark_col_header(col_x, label):
+        center_x = col_x + ARK_LABEL_W // 2 + ARK_BAR_MAX_PX // 2
+        return (
+            f'<text x="{center_x}" y="{ARK_PADDING + 12}" '
+            f'font-size="10" font-family="Source Sans Pro,sans-serif" '
+            f'font-weight="700" fill="#888888" text-anchor="middle" '
+            f'letter-spacing="1">{label}</text>'
+        )
+
+    ark_sgt_now_str = datetime.datetime.now(ZoneInfo("Asia/Singapore")).strftime("%Y-%m-%d %H:%M")
+
+    ark_headers_html = (
+        ark_col_header(ARK_X0_1d, f"DAILY ({ark_sgt_now_str})") +
+        ark_col_header(ARK_X0_1w, "1 WEEK (Developing)") +
+        ark_col_header(ARK_X0_1m, "1 MONTH (Leading Theme)")
+    )
+
+    def ark_row_y(i):
+        return ARK_PADDING + ARK_HEADER_H + i * ARK_ROW_H + ARK_ROW_H
+
+    def ark_bar_end_x(col_x, pct, max_abs):
+        return col_x + ARK_LABEL_W + int(abs(pct) / max_abs * ARK_BAR_MAX_PX)
+
+    def ark_color(pct):
+        return "#378ADD" if pct >= 0 else "#FF69B4"
+
+    def ark_sign(pct):
+        return f"+{pct:.2f}%" if pct >= 0 else f"{pct:.2f}%"
+
+    def ark_build_index(rows, pct_key, max_abs, col_x):
+        return {
+            r["sym"]: (i, ark_bar_end_x(col_x, r[pct_key], max_abs))
+            for i, r in enumerate(rows)
+        }
+
+    ark_idx_1d = ark_build_index(ark_rows_1d, "pct",    ark_max_abs_1d, ARK_X0_1d)
+    ark_idx_1w = ark_build_index(ark_rows_1w, "pct_1w", ark_max_abs_1w, ARK_X0_1w)
+    ark_idx_1m = ark_build_index(ark_rows_1m, "pct_1m", ark_max_abs_1m, ARK_X0_1m)
+
+    def ark_draw_col(rows, pct_key, max_abs, col_x, stripe_syms=None):
+        html = ""
+        for i, r in enumerate(rows):
+            pct   = r[pct_key]
+            sym   = r["sym"]
+            bw    = max(int(abs(pct) / max_abs * ARK_BAR_MAX_PX), 2)
+            c     = ark_color(pct)
+            y     = ark_row_y(i)
+            label = ark_sign(pct)
+
+            bar_fill = c
+            if stripe_syms and sym in stripe_syms:
+                bar_fill = "url(#ark-stripe-blue)" if c == "#378ADD" else "url(#ark-stripe-pink)"
+
+            html += (
+                f'<rect x="{col_x + ARK_LABEL_W}" y="{y - 4}" '
+                f'width="{bw}" height="11" rx="2" fill="{bar_fill}"/>'
+            )
+            html += (
+                f'<text x="{col_x + 58}" y="{y + 4}" '
+                f'font-size="{ARK_FS}" font-family="Source Sans Pro,sans-serif" '
+                f'font-weight="600" fill="{c}" '
+                f'text-anchor="end">{label}</text>'
+            )
+            ticker_color = (
+                "#FFD700" if sym == "SPY"
+                else "#ADFF2F" if sym == "QQQ"
+                else "#FFD700" if sym == "RSP"
+                else "#cccccc"
+            )
+            html += (
+                f'<text x="{col_x + 62}" y="{y + 4}" '
+                f'font-size="{ARK_FS}" font-family="Source Sans Pro,sans-serif" '
+                f'font-weight="600" fill="{ticker_color}" '
+                f'text-anchor="start">{sym}</text>'
+            )
+        return html
+
+    ark_cols_html  = ark_draw_col(ark_rows_1d, "pct",    ark_max_abs_1d, ARK_X0_1d, stripe_syms=ark_two_month_high_syms)
+    ark_cols_html += ark_draw_col(ark_rows_1w, "pct_1w", ark_max_abs_1w, ARK_X0_1w, stripe_syms=ark_two_month_high_syms)
+    ark_cols_html += ark_draw_col(ark_rows_1m, "pct_1m", ark_max_abs_1m, ARK_X0_1m, stripe_syms=ark_two_month_high_syms)
+
+    ark_html_out = f"""
+    <div style="background:#0e1117; border-radius:6px;">
+    <svg xmlns="http://www.w3.org/2000/svg"
+        width="{ARK_SVG_W}" height="{ARK_SVG_H}"
+        style="display:block;">
+        {ark_pattern_defs}
+        {ark_headers_html}
+        {ark_cols_html}
+    </svg>
+    </div>
+    """
+
+    st.components.v1.html(ark_html_out, height=ARK_SVG_H + 24, scrolling=False)
+else:
+    st.info("No ARK Funds performance data available.")
 
 # ==============================================================================
 # 23. MARKET VERDICT — Composite Breakout / Pullback / Neutral / Defensive Read
@@ -16403,97 +17156,6 @@ else:
 #     st.warning(f"Model winners screen error: {_e}")
 
 
-# ── Stage Distribution by Industry ──────────────────────────────────────────
-# Renders compute_stage_pct_by_industry output (already computed above as
-# stage_pct_rows): ONE ROW PER STAGE_PCT_WATCHLIST TICKER, in watchlist order,
-# with the exact same Stage 1-4 %s shown in the table under the RS Quadrant Map,
-# plus a stacked distribution bar and a derived health label.
-st.markdown("---")
-st.markdown("#### 🧭 Stage Distribution by Industry")
-
-try:
-    _STAGE_COLORS = {1: "#a9a9a9", 2: "#378ADD", 3: "#EF9F27", 4: "#FF69B4"}  # matches app stage_colors
-
-    def _health(net):
-        if net is None: return ("n/a", "#8b949e")
-        if net >= 10:   return ("Strong",  "#00FF00")
-        if net >= -15:  return ("Healthy", "#4ecdc4")
-        if net >= -40:  return ("Neutral", "#a9a9a9")
-        return ("Weak", "#FF4B4B")
-
-    # Default sort: health strongest -> weakest (by Stage 2 - Stage 4);
-    # rows with no stage data sink to the bottom.
-    def _net_key(_r):
-        _s2, _s4 = _r.get("Stage2 %"), _r.get("Stage4 %")
-        return (_s2 - _s4) if (_s2 is not None and _s4 is not None) else -1e9
-
-    _rows = sorted(stage_pct_rows, key=_net_key, reverse=True)
-
-    if not _rows:
-        st.info("No industry stage distribution available.")
-    else:
-        _thr = "padding:5px 10px;text-align:right;"
-        _h = [
-            # Scoped reset: global rules draw a red border-top on row 21 and
-            # red/white border-right on the 3rd/6th/7th columns of every table
-            # — kill all of them for this one.
-            "<style>#stage-dist-tbl td{border:0 !important;border-bottom:1px solid #21262d !important;}"
-            "#stage-dist-tbl th{border:0 !important;background:transparent !important;}</style>",
-            # width:auto -> the table only spans its content; first column
-            # (Industry) shrinks to the longest name instead of stretching.
-            "<table id='stage-dist-tbl' style='width:auto;border-collapse:collapse;font-size:12px;'>",
-            "<tr style='color:#8b949e;border-bottom:1px solid #30363d;'>"
-            "<th style='padding:5px 10px;text-align:left;white-space:nowrap;'>Industry</th>"
-            "<th style='padding:5px 10px;text-align:left;white-space:nowrap;'>Ticker</th>"
-            "<th style='padding:5px 10px;text-align:left;'>Distribution</th>"
-            f"<th style='{_thr}'>S1</th><th style='{_thr}'>S2</th>"
-            f"<th style='{_thr}'>S3</th><th style='{_thr}'>S4</th>"
-            f"<th style='{_thr}'>Health</th></tr>",
-        ]
-        for _r in _rows:
-            _tkr = _r.get("Ticker", "")
-            _ind = _r.get("Industry") or "—"
-            _n   = _r.get("N", 0)
-            _s = [_r.get("Stage1 %"), _r.get("Stage2 %"), _r.get("Stage3 %"), _r.get("Stage4 %")]
-            _has = all(v is not None for v in _s)
-            _net = (_s[1] - _s[3]) if _has else None
-            _lbl, _clr = _health(_net)
-
-            if _has:
-                _bar = "".join(
-                    f"<span style='display:inline-block;height:11px;width:{_s[_i]:.2f}%;"
-                    f"background:{_STAGE_COLORS[_i + 1]};'></span>"
-                    for _i in range(4)
-                )
-                _bar_cell = (f"<span style='display:block;width:240px;line-height:0;"
-                             f"white-space:nowrap;border-radius:3px;overflow:hidden;'>{_bar}</span>")
-                _cells = "".join(
-                    f"<td style='padding:5px 10px;text-align:right;color:{_STAGE_COLORS[_i + 1]};'>{_s[_i]:.0f}%</td>"
-                    for _i in range(4)
-                )
-            else:
-                _bar_cell = "<span style='color:#8b949e;'>—</span>"
-                _cells = "<td style='padding:5px 10px;text-align:right;color:#8b949e;'>—</td>" * 4
-
-            _h.append(
-                "<tr style='border-bottom:1px solid #21262d;'>"
-                f"<td style='padding:5px 10px;color:#e6edf3;font-weight:bold;white-space:nowrap;'>{_ind} "
-                f"<span style='color:#8b949e;font-weight:normal;'>({_n})</span></td>"
-                f"<td style='padding:5px 10px;color:#c9d1d9;white-space:nowrap;'>{_tkr}</td>"
-                f"<td style='padding:5px 10px;'>{_bar_cell}</td>"
-                f"{_cells}"
-                f"<td style='padding:5px 10px;text-align:right;color:{_clr};font-weight:bold;'>{_lbl}</td></tr>"
-            )
-        _h.append("</table>")
-        st.markdown("".join(_h), unsafe_allow_html=True)
-        # st.caption(
-        #     f"One row per STAGE_PCT_WATCHLIST ticker ({len(_rows)}), sorted by health strongest→weakest — "
-        #     "the Stage 1-4 %s are the same values shown in the table under the RS Quadrant Map. Bar segments: "
-        #     "Stage 1 (grey) · Stage 2 (blue) · Stage 3 (orange) · Stage 4 (pink). "
-        #     "Health from Stage 2 − Stage 4: ≥10 Strong · ≥−15 Healthy · ≥−40 Neutral · else Weak."
-        # )
-except Exception as _e:
-    st.warning(f"Stage distribution by industry error: {_e}")
 
 
 # ==============================================================================
@@ -16574,664 +17236,6 @@ except Exception as _e:
 #         st.caption("Mini Alpha Factor Rank: not enough symbols with sufficient history.")
 # except Exception as _qmf_e:
 #     st.warning(f"Mini Alpha Factor Rank error: {_qmf_e}")
-
-
-
-# ==============================================================================
-# 24. MCCLELLAN OSCILLATOR (MCO) & SUMMATION INDEX (MCSI) — BREADTH TIMING
-# Read-only, additive. Computed from the existing KNOWN_STOCKS universe
-# (proxy breadth universe via ticker_dfs_shared, already downloaded) since a
-# live NDX-constituent advance/decline feed isn't available. Does not touch
-# any other section or shared variable.
-# ==============================================================================
-st.markdown("---")
-st.markdown("## 🌊 McClellan Oscillator & Summation Index")
-
-@st.cache_data(ttl=3600)
-def compute_mcclellan_indicators(_ticker_dfs, stocks_list, z_window=252, mcsi_sma_len=10):
-    close_map = {}
-    for t in stocks_list:
-        df = _ticker_dfs.get(t)
-        if df is None or len(df) < 60:
-            continue
-        close_map[t] = df['Close']
-
-    if not close_map:
-        return pd.DataFrame()
-
-    close_wide = pd.DataFrame(close_map).sort_index().dropna(how='all')
-    daily_chg = close_wide.diff()
-    advances = (daily_chg > 0).sum(axis=1)
-    declines = (daily_chg < 0).sum(axis=1)
-    net_adv = (advances - declines).astype(float)
-
-    ema19 = net_adv.ewm(span=19, adjust=False).mean()
-    ema39 = net_adv.ewm(span=39, adjust=False).mean()
-    mco = ema19 - ema39
-    mcsi = mco.cumsum()
-
-    def _zscore(series, window):
-        mean = series.rolling(window, min_periods=max(20, window // 4)).mean()
-        std  = series.rolling(window, min_periods=max(20, window // 4)).std()
-        return (series - mean) / std.replace(0, np.nan)
-
-    mco_z = _zscore(mco, z_window)
-    mcsi_z = _zscore(mcsi, z_window)
-    mcsi_z_sma = mcsi_z.rolling(mcsi_sma_len).mean()
-
-    out = pd.DataFrame({"MCO_Z": mco_z, "MCSI_Z": mcsi_z, "MCSI_Z_SMA": mcsi_z_sma}).dropna(how='all')
-    return out
-
-
-with st.spinner("Computing McClellan Oscillator / Summation Index..."):
-    mcclellan_df = timed(
-        "compute_mcclellan_indicators",
-        compute_mcclellan_indicators,
-        ticker_dfs_shared, stocks_tuple
-    )
-
-if mcclellan_df.empty or len(mcclellan_df) < 30:
-    st.info("Insufficient data to compute McClellan indicators.")
-else:
-    plot_mc_df = mcclellan_df.tail(260).reset_index().rename(columns={"index": "Date"})
-    plot_mc_df["Date"] = pd.to_datetime(plot_mc_df["Date"]).dt.strftime("%Y-%m-%d")
-
-    fig_mc = make_subplots(
-        rows=2, cols=1, shared_xaxes=True,
-        row_heights=[0.5, 0.5], vertical_spacing=0.08,
-        subplot_titles=("Normalized McClellan Oscillator (MCO)",
-                         "Normalized McClellan Summation Index (MCSI)")
-    )
-
-    # ── MCO FIRST / TOP ───────────────────────────────────────────────────
-    fig_mc.add_trace(go.Scatter(
-        x=plot_mc_df["Date"], y=plot_mc_df["MCO_Z"], mode="lines",
-        name="MCO (z)", line=dict(color="#2ca02c", width=1.4)
-    ), row=1, col=1)
-
-    # ── MCSI SECOND / BOTTOM ─────────────────────────────────────────────
-    fig_mc.add_trace(go.Scatter(
-        x=plot_mc_df["Date"], y=plot_mc_df["MCSI_Z"], mode="lines",
-        name="MCSI (z)", line=dict(color="#FF4B4B", width=1.6)
-    ), row=2, col=1)
-    fig_mc.add_trace(go.Scatter(
-        x=plot_mc_df["Date"], y=plot_mc_df["MCSI_Z_SMA"], mode="lines",
-        name="MCSI 10SMA", line=dict(color="#888888", width=1.2, dash="dot")
-    ), row=2, col=1)
-
-    for r in (1, 2):
-        for level, color, dash in [(2, "#FF4B4B", "solid"), (1, "#FF4B4B", "dot"),
-                                    (-1, "#00C076", "dot"), (-2, "#00C076", "solid"),
-                                    (0, "#666666", "dash")]:
-            fig_mc.add_hline(y=level, line_color=color, line_dash=dash, line_width=1, row=r, col=1)
-
-    fig_mc.update_layout(
-        height=650, margin=dict(l=40, r=40, t=50, b=30),
-        plot_bgcolor="rgba(20,22,30,1)", paper_bgcolor="rgba(13,17,23,0)",
-        font=dict(color="#cccccc"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
-        hovermode="x unified",
-    )
-    fig_mc.update_xaxes(type="category", showgrid=False, tickfont=dict(size=9))
-    fig_mc.update_yaxes(showgrid=True, gridcolor="rgba(120,120,120,0.15)", range=[-3, 3])
-
-    st.plotly_chart(fig_mc, use_container_width=True)
-
-    # ── Trigger / verdict logic (mirrors MCO -> MCSI -> 21dma flow) ────────
-    latest_mco = mcclellan_df["MCO_Z"].iloc[-1]
-    latest_mcsi = mcclellan_df["MCSI_Z"].iloc[-1]
-    latest_mcsi_sma = mcclellan_df["MCSI_Z_SMA"].iloc[-1]
-    mcsi_5ago = mcclellan_df["MCSI_Z"].iloc[-6] if len(mcclellan_df) >= 6 else latest_mcsi
-    mcsi_curling_up = latest_mcsi > mcsi_5ago
-    mcsi_above_sma = pd.notna(latest_mcsi_sma) and latest_mcsi > latest_mcsi_sma
-    mcsi_was_below_sma = (
-        len(mcclellan_df) >= 2
-        and pd.notna(mcclellan_df["MCSI_Z_SMA"].iloc[-2])
-        and mcclellan_df["MCSI_Z"].iloc[-2] <= mcclellan_df["MCSI_Z_SMA"].iloc[-2]
-    )
-    mcsi_10sma_reclaim = mcsi_above_sma and mcsi_was_below_sma
-
-    qqq_df_mc = ticker_dfs_shared.get("QQQ")
-    price_above_21dma = None
-    if qqq_df_mc is not None and len(qqq_df_mc) >= 21:
-        ema21_mc = qqq_df_mc['Close'].ewm(span=21, adjust=False).mean().iloc[-1]
-        price_above_21dma = qqq_df_mc['Close'].iloc[-1] >= ema21_mc
-
-    lines = []
-    if latest_mco <= -2:
-        lines.append(("🔴", "#FF4B4B", "MCO ≤ -2σ (deep oversold)",
-                       "Deeper cycle reversal zone — wait for MCSI to curl up before acting."))
-    elif latest_mco <= -1:
-        lines.append(("🟠", "#FFA500", "MCO ≤ -1σ (oversold / alert)",
-                       "Rubber-band stretched. If price also retests/reclaims the 21dma-structure, prepare pullback trades."))
-    else:
-        lines.append(("⚪", "#888888", "MCO not oversold", "No timing signal from MCO right now — stay patient."))
-
-    if mcsi_10sma_reclaim:
-        lines.append(("🟢", "#00FF00", "MCSI just reclaimed its 10-day SMA",
-                       "Real confirmation — participation is broadening. Press with conviction / size up."))
-    elif mcsi_curling_up and price_above_21dma:
-        lines.append(("🟡", "#FFD700", "MCSI curling up + price reclaiming 21dma-structure",
-                       "Early confirmation only — test the turn with a small starter position."))
-    elif not mcsi_curling_up and latest_mcsi >= 1:
-        lines.append(("🔴", "#FF4B4B", "MCSI curling down from +1σ to +2σ (overbought)",
-                       "Late-stage trend weakening — trim into strength, don't chase."))
-    elif not mcsi_curling_up:
-        lines.append(("🟠", "#FFA500", "MCSI curling down",
-                       "Participation fading — stop adding new risk. Hold existing, no new trades."))
-    else:
-        lines.append(("⚪", "#888888", "MCSI drifting sideways", "No fresh breadth confirmation yet."))
-
-    verdict_rows_html = ""
-    for icon, color, label, note in lines:
-        verdict_rows_html += (
-            f"<div style='margin-bottom:8px;padding:8px 12px;border-left:4px solid {color};"
-            f"background:#1a1c23;border-radius:4px;'>"
-            f"<span style='font-size:1.05em;'>{icon}</span> "
-            f"<span style='color:{color};font-weight:bold;'>{label}</span>"
-            f"<div style='color:#ccc;font-size:0.85em;margin-top:2px;'>{note}</div>"
-            f"</div>"
-        )
-
-    mcsi_sma_str = f"{latest_mcsi_sma:.2f}σ" if pd.notna(latest_mcsi_sma) else "n/a"
-    st.markdown(
-        f"<div style='margin-bottom:6px;font-size:13px;color:#888;'>"
-        f"MCO: <span style='color:#4ecdc4;font-weight:bold;'>{latest_mco:.2f}σ</span> &nbsp;|&nbsp; "
-        f"MCSI: <span style='color:#4ecdc4;font-weight:bold;'>{latest_mcsi:.2f}σ</span> &nbsp;|&nbsp; "
-        f"MCSI 10SMA: <span style='color:#4ecdc4;font-weight:bold;'>{mcsi_sma_str}</span>"
-        f"</div>",
-        unsafe_allow_html=True
-    )
-    st.markdown(verdict_rows_html, unsafe_allow_html=True)
-
-    # st.caption(
-    #     "Breadth universe: KNOWN_STOCKS (proxy for Nasdaq 100 constituents — a live NDX "
-    #     "advance/decline feed isn't available). Z-scores computed on a trailing 252-day "
-    #     "window, mirroring the normalized MCO/MCSI approach shown in the reference chart."
-    # )
-
-# ── ARK Funds — Daily / 1 Week / 1 Month (same SVG design as LIME_STOCKS) ──
-#st.markdown("---")
-
-ARK_TICKERS = ['ARKG', 'ARKK', 'ARKQ', 'ARKW', 'ARKF', 'ARKX']
-
-@st.cache_data(ttl=3600)
-def download_ark_stocks_data(tickers_tuple):
-    raw = yf.download(list(tickers_tuple), period="2mo", interval="1d", progress=False, auto_adjust=True)
-    dfs = {}
-    for t in tickers_tuple:
-        try:
-            df = pd.DataFrame({'Close': raw['Close'][t]}).dropna()
-            if not df.empty:
-                dfs[t] = df
-        except Exception:
-            continue
-    return dfs
-
-ark_ticker_dfs = timed("download_ark_stocks_data", download_ark_stocks_data, tuple(ARK_TICKERS))
-
-ark_perf_rows = []
-for sym in ARK_TICKERS:
-    df_sym = ark_ticker_dfs.get(sym)
-    if df_sym is None or len(df_sym) < 2:
-        continue
-    c_today = df_sym['Close'].iloc[-1]
-    c_prev  = df_sym['Close'].iloc[-2]
-    if pd.isna(c_today) or pd.isna(c_prev) or c_prev == 0:
-        continue
-    pct_1d = round((c_today - c_prev) / c_prev * 100, 2)
-
-    c_1w = df_sym['Close'].iloc[-6] if len(df_sym) >= 6 else None
-    pct_1w = round((c_today - c_1w) / c_1w * 100, 2) if (c_1w is not None and not pd.isna(c_1w) and c_1w != 0) else None
-
-    c_1m = df_sym['Close'].iloc[-22] if len(df_sym) >= 22 else None
-    pct_1m = round((c_today - c_1m) / c_1m * 100, 2) if (c_1m is not None and not pd.isna(c_1m) and c_1m != 0) else None
-
-    ark_perf_rows.append({
-        "sym": sym, "pct": pct_1d, "pct_1w": pct_1w, "pct_1m": pct_1m,
-        "is_2m_high": bool(c_today >= df_sym['Close'].max())
-    })
-
-if ark_perf_rows:
-
-    ark_two_month_high_syms = {r["sym"] for r in ark_perf_rows if r.get("is_2m_high")}
-
-    ark_pattern_defs = """
-    <defs>
-    <pattern id="ark-stripe-blue" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
-        <rect width="6" height="6" fill="#9CC4EA"/>
-        <line x1="0" y1="0" x2="0" y2="6" stroke="#378ADD" stroke-width="3"/>
-    </pattern>
-    <pattern id="ark-stripe-pink" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
-        <rect width="6" height="6" fill="#FFC2DE"/>
-        <line x1="0" y1="0" x2="0" y2="6" stroke="#FF69B4" stroke-width="3"/>
-    </pattern>
-    </defs>
-    """
-
-    ARK_BAR_MAX_PX = 175
-
-    ark_rows_1d = sorted(ark_perf_rows, key=lambda x: -x["pct"])
-    ark_rows_1w = sorted([r for r in ark_perf_rows if r["pct_1w"] is not None], key=lambda x: -x["pct_1w"])
-    ark_rows_1m = sorted([r for r in ark_perf_rows if r["pct_1m"] is not None], key=lambda x: -x["pct_1m"])
-
-    ark_max_abs_1d = max(abs(r["pct"])     for r in ark_rows_1d) or 1
-    ark_max_abs_1w = max(abs(r["pct_1w"])  for r in ark_rows_1w) or 1
-    ark_max_abs_1m = max(abs(r["pct_1m"])  for r in ark_rows_1m) or 1
-
-    ARK_ROW_H   = 21
-    ARK_LABEL_W = 120
-    ARK_COL_W   = ARK_LABEL_W + ARK_BAR_MAX_PX
-    ARK_GAP     = 55
-    ARK_PADDING = 13
-    ARK_FS      = 13
-
-    ark_N      = max(len(ark_rows_1d), len(ark_rows_1w), len(ark_rows_1m))
-    ARK_SVG_W  = ARK_COL_W * 3 + ARK_GAP * 2 + ARK_PADDING * 2
-
-    ARK_X0_1d = ARK_PADDING
-    ARK_X0_1w = ARK_PADDING + ARK_COL_W + ARK_GAP
-    ARK_X0_1m = ARK_PADDING + (ARK_COL_W + ARK_GAP) * 2
-
-    ARK_HEADER_H = 20
-    ARK_SVG_H    = ark_N * ARK_ROW_H + ARK_PADDING * 2 + ARK_HEADER_H
-
-    def ark_col_header(col_x, label):
-        center_x = col_x + ARK_LABEL_W // 2 + ARK_BAR_MAX_PX // 2
-        return (
-            f'<text x="{center_x}" y="{ARK_PADDING + 12}" '
-            f'font-size="10" font-family="Source Sans Pro,sans-serif" '
-            f'font-weight="700" fill="#888888" text-anchor="middle" '
-            f'letter-spacing="1">{label}</text>'
-        )
-
-    ark_sgt_now_str = datetime.datetime.now(ZoneInfo("Asia/Singapore")).strftime("%Y-%m-%d %H:%M")
-
-    ark_headers_html = (
-        ark_col_header(ARK_X0_1d, f"DAILY ({ark_sgt_now_str})") +
-        ark_col_header(ARK_X0_1w, "1 WEEK (Developing)") +
-        ark_col_header(ARK_X0_1m, "1 MONTH (Leading Theme)")
-    )
-
-    def ark_row_y(i):
-        return ARK_PADDING + ARK_HEADER_H + i * ARK_ROW_H + ARK_ROW_H
-
-    def ark_bar_end_x(col_x, pct, max_abs):
-        return col_x + ARK_LABEL_W + int(abs(pct) / max_abs * ARK_BAR_MAX_PX)
-
-    def ark_color(pct):
-        return "#378ADD" if pct >= 0 else "#FF69B4"
-
-    def ark_sign(pct):
-        return f"+{pct:.2f}%" if pct >= 0 else f"{pct:.2f}%"
-
-    def ark_build_index(rows, pct_key, max_abs, col_x):
-        return {
-            r["sym"]: (i, ark_bar_end_x(col_x, r[pct_key], max_abs))
-            for i, r in enumerate(rows)
-        }
-
-    ark_idx_1d = ark_build_index(ark_rows_1d, "pct",    ark_max_abs_1d, ARK_X0_1d)
-    ark_idx_1w = ark_build_index(ark_rows_1w, "pct_1w", ark_max_abs_1w, ARK_X0_1w)
-    ark_idx_1m = ark_build_index(ark_rows_1m, "pct_1m", ark_max_abs_1m, ARK_X0_1m)
-
-    def ark_draw_col(rows, pct_key, max_abs, col_x, stripe_syms=None):
-        html = ""
-        for i, r in enumerate(rows):
-            pct   = r[pct_key]
-            sym   = r["sym"]
-            bw    = max(int(abs(pct) / max_abs * ARK_BAR_MAX_PX), 2)
-            c     = ark_color(pct)
-            y     = ark_row_y(i)
-            label = ark_sign(pct)
-
-            bar_fill = c
-            if stripe_syms and sym in stripe_syms:
-                bar_fill = "url(#ark-stripe-blue)" if c == "#378ADD" else "url(#ark-stripe-pink)"
-
-            html += (
-                f'<rect x="{col_x + ARK_LABEL_W}" y="{y - 4}" '
-                f'width="{bw}" height="11" rx="2" fill="{bar_fill}"/>'
-            )
-            html += (
-                f'<text x="{col_x + 58}" y="{y + 4}" '
-                f'font-size="{ARK_FS}" font-family="Source Sans Pro,sans-serif" '
-                f'font-weight="600" fill="{c}" '
-                f'text-anchor="end">{label}</text>'
-            )
-            ticker_color = (
-                "#FFD700" if sym == "SPY"
-                else "#ADFF2F" if sym == "QQQ"
-                else "#FFD700" if sym == "RSP"
-                else "#cccccc"
-            )
-            html += (
-                f'<text x="{col_x + 62}" y="{y + 4}" '
-                f'font-size="{ARK_FS}" font-family="Source Sans Pro,sans-serif" '
-                f'font-weight="600" fill="{ticker_color}" '
-                f'text-anchor="start">{sym}</text>'
-            )
-        return html
-
-    ark_cols_html  = ark_draw_col(ark_rows_1d, "pct",    ark_max_abs_1d, ARK_X0_1d, stripe_syms=ark_two_month_high_syms)
-    ark_cols_html += ark_draw_col(ark_rows_1w, "pct_1w", ark_max_abs_1w, ARK_X0_1w, stripe_syms=ark_two_month_high_syms)
-    ark_cols_html += ark_draw_col(ark_rows_1m, "pct_1m", ark_max_abs_1m, ARK_X0_1m, stripe_syms=ark_two_month_high_syms)
-
-    ark_html_out = f"""
-    <div style="background:#0e1117; border-radius:6px;">
-    <svg xmlns="http://www.w3.org/2000/svg"
-        width="{ARK_SVG_W}" height="{ARK_SVG_H}"
-        style="display:block;">
-        {ark_pattern_defs}
-        {ark_headers_html}
-        {ark_cols_html}
-    </svg>
-    </div>
-    """
-
-    st.components.v1.html(ark_html_out, height=ARK_SVG_H + 24, scrolling=False)
-else:
-    st.info("No ARK Funds performance data available.")
-
-# ==============================================================================
-# 27. FINVIZ INDUSTRY ROTATION REPORT — group performance (1W/1M/3M) + AI narrative
-# Read-only, additive. Appended at the very bottom; touches nothing else.
-# ==============================================================================
-st.markdown("---")
-st.markdown("## 🔄 Finviz Industry Rotation Report")
-
-def _github_filepath_finviz(date_obj):
-    return f"finviz_history/finviz_{date_obj.isoformat()}.json"
-
-def save_finviz_snapshot_github(date_obj, perf_df):
-    """Commit today's full industry performance table to the GitHub data repo."""
-    repo   = st.secrets.get("GITHUB_REPO")
-    branch = st.secrets.get("GITHUB_BRANCH", "main")
-
-    if not repo or not st.secrets.get("GITHUB_TOKEN"):
-        return  # silent — same as save_trending_list_github's soft-fail pattern
-
-    path = _github_filepath_finviz(date_obj)
-    url  = f"{GITHUB_API}/repos/{repo}/contents/{path}"
-
-    content_str = perf_df.to_json(orient="records")
-    content_b64 = base64.b64encode(content_str.encode()).decode()
-
-    sha = None
-    try:
-        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
-        if resp.status_code == 200:
-            sha = resp.json().get("sha")
-    except Exception:
-        pass
-
-    payload = {
-        "message": f"Finviz industry snapshot {date_obj.isoformat()}",
-        "content": content_b64,
-        "branch": branch,
-    }
-    if sha:
-        payload["sha"] = sha
-
-    try:
-        requests.put(url, headers=_github_headers(), json=payload, timeout=10)
-    except Exception:
-        pass
-
-@st.cache_data(ttl=3600)
-def load_finviz_snapshot_github(date_obj):
-    """Load the exact-date snapshot. Returns None if not found."""
-    repo   = st.secrets.get("GITHUB_REPO")
-    branch = st.secrets.get("GITHUB_BRANCH", "main")
-    if not repo or not st.secrets.get("GITHUB_TOKEN"):
-        return None
-
-    path = _github_filepath_finviz(date_obj)
-    url  = f"{GITHUB_API}/repos/{repo}/contents/{path}"
-    try:
-        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
-        if resp.status_code != 200:
-            return None
-        decoded = base64.b64decode(resp.json()["content"]).decode()
-        return pd.read_json(decoded, orient="records")
-    except Exception:
-        return None
-
-
-@st.cache_data(ttl=3600)
-def find_nearest_backward_finviz_snapshot_github(start_date, min_days_back=5, max_lookback_days=14):
-    """
-    Walk backward from start_date looking for a saved snapshot, but only
-    accept ones at least min_days_back away — otherwise "last week" would
-    just be yesterday's noise. Returns (df, date_found) or (None, None).
-    """
-    for i in range(min_days_back, max_lookback_days + 1):
-        check_date = start_date - datetime.timedelta(days=i)
-        df = load_finviz_snapshot_github(check_date)
-        if df is not None and not df.empty:
-            return df, check_date
-    return None, None
-
-@st.cache_data(ttl=3600)
-def fetch_finviz_industry_perf():
-    # NOTE: v=210 ("Performance Chart") renders bars client-side via JS/canvas —
-    # the numbers aren't in the server HTML at all. v=140 ("Performance") is the
-    # plain-HTML table with the same Perf Week/Month/Quarter/Half/Year/YTD data.
-    url = "https://finviz.com/groups?g=industry&v=140&o=name&st=d1"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9",
-    }
-    try:
-        resp = requests.get(url, headers=headers, timeout=15)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.content, "html.parser")
-
-        def pf(v):
-            try: return float(v.replace("%", ""))
-            except Exception: return None
-
-        # Don't guess a specific class name — Finviz's markup changes it over
-        # time. Instead, parse every <table> on the page and keep whichever one
-        # actually yields industry rows (the real data table will have ~144
-        # rows; unrelated tables like the filter/dropdown header will have 0).
-        best_rows = []
-        for table in soup.find_all("table"):
-            tmp_rows = []
-            for tr in table.find_all("tr"):
-                cells = tr.find_all("td")
-                if len(cells) < 8:
-                    continue
-                texts = [c.get_text(strip=True) for c in cells]
-                if not texts[0].isdigit():
-                    continue
-                tmp_rows.append({
-                    "Industry": texts[1],
-                    "1W": pf(texts[2]), "1M": pf(texts[3]), "3M": pf(texts[4]),
-                    "6M": pf(texts[5]), "1Y": pf(texts[6]), "YTD": pf(texts[7]),
-                })
-            if len(tmp_rows) > len(best_rows):
-                best_rows = tmp_rows
-
-        if not best_rows:
-            st.warning(
-                f"Finviz industry table not found (status {resp.status_code}, "
-                f"{len(soup.find_all('table'))} tables on page, {len(resp.content)} bytes). "
-                f"Finviz may be blocking this server's IP."
-            )
-        return pd.DataFrame(best_rows)
-    except Exception as e:
-        st.warning(f"Finviz industry fetch error: {e}")
-        return pd.DataFrame()
-
-finviz_perf_df = timed("fetch_finviz_industry_perf", fetch_finviz_industry_perf)
-
-if finviz_perf_df.empty:
-    st.info("Finviz industry performance data unavailable.")
-else:
-    top10_1w = finviz_perf_df.sort_values("1W", ascending=False).head(10)
-    top10_1m = finviz_perf_df.sort_values("1M", ascending=False).head(10)
-    top10_3m = finviz_perf_df.sort_values("3M", ascending=False).head(10)
-
-    # --- Step 3: save today's snapshot + load prior one ---
-    today_date = datetime.date.today()
-    timed("save_finviz_snapshot_github", save_finviz_snapshot_github, today_date, finviz_perf_df)
-    prior_finviz_df, prior_finviz_date = timed(
-        "find_nearest_backward_finviz_snapshot_github",
-        find_nearest_backward_finviz_snapshot_github,
-        today_date
-    )
-
-    # --- REPLACES the old _prev_key / st.session_state block ---
-    if prior_finviz_df is not None:
-        prior_top10_1w = set(prior_finviz_df.sort_values("1W", ascending=False).head(10)["Industry"])
-        curr_1w_set = set(top10_1w["Industry"].tolist())
-        new_this_week = sorted(curr_1w_set - prior_top10_1w)
-        dropped_this_week = sorted(prior_top10_1w - curr_1w_set)
-        comparison_label = f"vs {prior_finviz_date.isoformat()}"
-    else:
-        new_this_week, dropped_this_week = [], []
-        comparison_label = "no prior snapshot available yet"
-
-    def _finviz_fmt_block(df, cols):
-        lines = []
-        for _, r in df.iterrows():
-            parts = " | ".join(f"{c}: {r[c]:+.2f}%" for c in cols if pd.notna(r[c]))
-            lines.append(f"  - {r['Industry']} — {parts}")
-        return "\n".join(lines)
-
-    finviz_prompt = f"""
-You are a concise IBD-style sector-rotation analyst. Below is Finviz industry group performance data (144 industries).
-
-TOP 10 by 1-Week performance:
-{_finviz_fmt_block(top10_1w, ['1W','1M','3M'])}
-
-TOP 10 by 1-Month performance:
-{_finviz_fmt_block(top10_1m, ['1M','3M','6M'])}
-
-TOP 10 by 3-Month performance:
-{_finviz_fmt_block(top10_3m, ['3M','6M','1Y'])}
-
-New industries entering the 1-Week Top 10 ({comparison_label}): {', '.join(new_this_week) if new_this_week else 'none'}
-Industries that DROPPED OUT of the 1-Week Top 10 since then: {', '.join(dropped_this_week) if dropped_this_week else 'none'}
-
-Write a rotation report in this exact structure. Use only real numbers/industries from above — never invent tickers, name industries only.
-
-CRITICAL FORMATTING RULE: Each of the 5 section titles below MUST be its own line, prefixed with "### " (three hash symbols and a space), on a line by itself with NOTHING else on that line — no industry data, no bullets. Then list the industries for that section as separate bullet lines starting with "- " directly underneath it.
-
-### 🚀 EMERGING LEADERSHIP (freshest 1W movers not yet confirmed in 1M/3M)
-- Industry Name — 1W: +X% | 1M: +X% | 3M: +X%
-(repeat for each industry in this section)
-
-### 👑 CONFIRMED LEADERSHIP (strong across 1W AND 1M AND 3M)
-- Industry Name — 1W: +X% | 1M: +X% | 3M: +X%
-
-### 🧭 EARLY LEADERSHIP RADAR (1W movers just outside top 10 or borderline)
-- Industry Name — 1W: +X% | 1M: +X% | 3M: +X%
-
-### ⚠️ COOLING LEADERSHIP (industries with strong 1Y/YTD but weak 1W/1M — likely fading leadership)
-- Industry Name — 1Y: +X% | YTD: +X%
-
-### 🎯 HUNTING PRIORITIES (rank the best 3 industries to focus on next week)
-- Industry Name — one-line reason with real numbers
-
-Keep it tight, data-driven, cite the actual % numbers, no fluff, no disclaimers. Never merge a section title onto the same line as an industry bullet.
-"""
-
-    def generate_finviz_rotation_report(prompt):
-        TRANSIENT_CODES = ["503","UNAVAILABLE","429","RESOURCE_EXHAUSTED","quota","overloaded","high demand","rate_limit","capacity","timeout","502","529"]
-        def is_transient(e): return any(c.lower() in e.lower() for c in TRANSIENT_CODES)
-        failures = {}
-        for label, key, model in [
-            ("Gemini 2.5 Flash [GEMINI_API_KEY]", st.secrets.get("GEMINI_API_KEY"), "gemini-2.5-flash"),
-            ("Gemini 3.5 Flash [GEMINI_API_KEY_2]", st.secrets.get("GEMINI_API_KEY_2"), "gemini-3.5-flash"),
-            ("Gemini 3.5 Flash [GEMINI_API_KEY_3]", st.secrets.get("GEMINI_API_KEY_3"), "gemini-3.5-flash"),
-        ]:
-            if not key:
-                failures[label] = "No key in secrets"; continue
-            try:
-                from google import genai as google_genai
-                client = google_genai.Client(api_key=key)
-                response = client.models.generate_content(model=model, contents=prompt)
-                return f"🟦 **{label}**\n\n{response.text}"
-            except Exception as e:
-                failures[label] = str(e)[:120]
-
-        openrouter_key = st.secrets.get("OPENROUTER_API_KEY")
-        if openrouter_key:
-            try:
-                from openai import OpenAI as OpenAIClient
-                or_client = OpenAIClient(api_key=openrouter_key, base_url="https://openrouter.ai/api/v1",
-                    default_headers={"HTTP-Referer": "https://your-app-name.streamlit.app", "X-Title": "Theme Tracker"})
-                completion = or_client.chat.completions.create(
-                    model="meta-llama/llama-3.1-8b-instruct",
-                    messages=[{"role":"system","content":"You are a concise IBD-style sector-rotation analyst."},
-                              {"role":"user","content":prompt}],
-                    max_tokens=800, temperature=0.4)
-                summary = format_unavailable_reasons(failures)
-                return f"🟣 **OpenRouter / Llama-3.1-8b** *({summary})*\n\n{completion.choices[0].message.content}"
-            except Exception as e:
-                failures["OpenRouter"] = str(e)[:120]
-        else:
-            failures["OpenRouter"] = "No OPENROUTER_API_KEY"
-
-        groq_key = st.secrets.get("GROQ_API_KEY")
-        if groq_key:
-            try:
-                from openai import OpenAI as OpenAIClient
-                groq_client = OpenAIClient(api_key=groq_key, base_url="https://api.groq.com/openai/v1")
-                completion = groq_client.chat.completions.create(
-                    model="openai/gpt-oss-120b",
-                    messages=[{"role":"system","content":"You are a concise IBD-style sector-rotation analyst."},
-                              {"role":"user","content":prompt}],
-                    max_tokens=900, temperature=0.4)
-                result = completion.choices[0].message.content
-                if not result or not result.strip():
-                    raise ValueError("Empty content from Groq")
-                summary = format_unavailable_reasons(failures)
-                return f"🟧 **Groq / gpt-oss-120b** *({summary})*\n\n{result}"
-            except Exception as e:
-                failures["Groq"] = str(e)[:120]
-        else:
-            failures["Groq"] = "No GROQ_API_KEY"
-
-        github_token = st.secrets.get("GITHUB_MODELS_TOKEN")
-        if github_token:
-            try:
-                from openai import OpenAI as OpenAIClient
-                github_client = OpenAIClient(api_key=github_token, base_url="https://models.inference.ai.azure.com")
-                completion = github_client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[{"role":"system","content":"You are a concise IBD-style sector-rotation analyst."},
-                              {"role":"user","content":prompt}],
-                    max_tokens=800, temperature=0.4)
-                summary = format_unavailable_reasons(failures)
-                return f"⬜ **GitHub Models / gpt-4o-mini** *({summary})*\n\n{completion.choices[0].message.content}"
-            except Exception as e:
-                failures["GitHub Models"] = str(e)[:120]
-        else:
-            failures["GitHub Models"] = "No GITHUB_MODELS_TOKEN"
-
-        failure_lines = "\n".join(f"- {p}: {r}" for p, r in failures.items())
-        return f"🔴 **All AI providers failed**\n\n{failure_lines}"
-
-    _finviz_sig = f"{datetime.date.today().isoformat()}_{','.join(top10_1w['Industry'].tolist())}"
-    _force_finviz = st.button("🔄 Refresh Rotation Report", key="retry_finviz_rotation")
-    if _force_finviz or st.session_state.get("finviz_rotation_sig") != _finviz_sig:
-        with st.spinner("Generating industry rotation report..."):
-            _finviz_result = timed("generate_finviz_rotation_report", generate_finviz_rotation_report, finviz_prompt)
-        if _finviz_result:
-            st.session_state["finviz_rotation_result"] = _finviz_result
-            st.session_state["finviz_rotation_sig"] = _finviz_sig
-
-    if "finviz_rotation_result" in st.session_state:
-        render_ai_points_table(
-            st.session_state["finviz_rotation_result"],
-            industries=finviz_perf_df["Industry"].tolist()
-        )
-
-    with st.expander("Raw Finviz industry performance table"):
-        st.dataframe(finviz_perf_df.sort_values("1W", ascending=False), use_container_width=True, hide_index=True)
 
 # ── Timing Summary ───────────────────────────────────────────────────────────
 st.markdown("---")
