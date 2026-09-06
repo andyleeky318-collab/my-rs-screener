@@ -16212,42 +16212,7 @@ else:
 #             "read, not a prediction of direction or magnitude."
 #         )
 
-# ── Timing Summary ───────────────────────────────────────────────────────────
-st.markdown("---")
-st.markdown("#### ⏱ Test Time")
 
-if _timing_log:
-    industry_rows = {k: v for k, v in _timing_log.items() if k.startswith("RS+Cloud")}
-    main_rows     = {k: v for k, v in _timing_log.items() if not k.startswith("RS+Cloud")}
-
-    timing_records = [{"Function": k, "Time (s)": f"{v/1000:.2f}"}
-                      for k, v in main_rows.items()]
-
-    if timing_records:
-        st.dataframe(
-            pd.DataFrame(timing_records),
-            use_container_width=False,
-            width=350,
-            hide_index=True
-        )
-
-    if industry_rows:
-        total_rs_ms = sum(industry_rows.values())
-        with st.expander(f"RS+Cloud per industry — {len(industry_rows)} groups, total {total_rs_ms/1000:.2f}s"):
-            industry_records = [
-                {"Industry": k.replace("RS+Cloud [", "").replace("]", ""),
-                 "Time (s)": f"{v/1000:.2f}"}
-                for k, v in industry_rows.items()
-            ]
-            st.dataframe(
-                pd.DataFrame(industry_records),
-                use_container_width=False,
-                width=350,
-                hide_index=True
-            )
-
-    total_ms = sum(_timing_log.values())
-    st.caption(f"Total measured wall-clock time: **{total_ms/1000:.2f}s** across {len(_timing_log)} tracked calls")
 
 
 
@@ -17248,3 +17213,40 @@ Keep it tight, data-driven, cite the actual % numbers, no fluff, no disclaimers.
 
     with st.expander("Raw Finviz industry performance table"):
         st.dataframe(finviz_perf_df.sort_values("1W", ascending=False), use_container_width=True, hide_index=True)
+
+# ── Timing Summary ───────────────────────────────────────────────────────────
+st.markdown("---")
+st.markdown("#### ⏱ Test Time")
+
+if _timing_log:
+    industry_rows = {k: v for k, v in _timing_log.items() if k.startswith("RS+Cloud")}
+    main_rows     = {k: v for k, v in _timing_log.items() if not k.startswith("RS+Cloud")}
+
+    timing_records = [{"Function": k, "Time (s)": f"{v/1000:.2f}"}
+                      for k, v in main_rows.items()]
+
+    if timing_records:
+        st.dataframe(
+            pd.DataFrame(timing_records),
+            use_container_width=False,
+            width=350,
+            hide_index=True
+        )
+
+    if industry_rows:
+        total_rs_ms = sum(industry_rows.values())
+        with st.expander(f"RS+Cloud per industry — {len(industry_rows)} groups, total {total_rs_ms/1000:.2f}s"):
+            industry_records = [
+                {"Industry": k.replace("RS+Cloud [", "").replace("]", ""),
+                 "Time (s)": f"{v/1000:.2f}"}
+                for k, v in industry_rows.items()
+            ]
+            st.dataframe(
+                pd.DataFrame(industry_records),
+                use_container_width=False,
+                width=350,
+                hide_index=True
+            )
+
+    total_ms = sum(_timing_log.values())
+    st.caption(f"Total measured wall-clock time: **{total_ms/1000:.2f}s** across {len(_timing_log)} tracked calls")        
