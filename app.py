@@ -13093,61 +13093,39 @@ iwm_status_text = (
 
 st.markdown("---")
 
-st.markdown(
-    f"#### 🚨 SPY Distribution Days ({spy_dist_count}/25) — "
-    f"<span style='color:{spy_status_color};font-weight:bold;'>"
-    f"{spy_status_text}</span>",
-    unsafe_allow_html=True,
-)
+def _dist_box_html(label, count, dates, triggered):
+    if triggered:
+        bg, border, text_color = "#3a1414", "#FF4B4B", "#FF4B4B"
+    else:
+        bg, border, text_color = "#0f2a17", "#00FF00", "#00FF00"
 
-if spy_dist_dates:
-    st.markdown(", ".join(spy_dist_dates))
-else:
-    st.info(
-        "No SPY distribution days in the trailing 25 sessions."
-    )
+    dates_str = ", ".join(dates) if dates else "None"
 
-st.markdown(
-    f"#### 🚨 QQQ Distribution Days ({qqq_dist_count}/25) — "
-    f"<span style='color:{qqq_status_color};font-weight:bold;'>"
-    f"{qqq_status_text}</span>",
-    unsafe_allow_html=True,
-)
+    return f"""
+    <div style="background:{bg}; border:2px solid {border}; border-radius:8px;
+                padding:12px; min-height:120px;">
+        <div style="font-size:14px; font-weight:bold; color:{text_color}; margin-bottom:6px;">
+            {label}
+        </div>
+        <div style="font-size:22px; font-weight:900; color:{text_color}; margin-bottom:6px;">
+            {count}/25
+        </div>
+        <div style="font-size:11px; color:#ccc; line-height:1.4; word-wrap:break-word;">
+            {dates_str}
+        </div>
+    </div>
+    """
 
-if qqq_dist_dates:
-    st.markdown(", ".join(qqq_dist_dates))
-else:
-    st.info(
-        "No QQQ distribution days in the trailing 25 sessions."
-    )
+dist_col1, dist_col2, dist_col3, dist_col4 = st.columns(4)
 
-st.markdown(
-    f"#### 🚨 SMH Distribution Days ({smh_dist_count}/25) — "
-    f"<span style='color:{smh_status_color};font-weight:bold;'>"
-    f"{smh_status_text}</span>",
-    unsafe_allow_html=True,
-)
-
-if smh_dist_dates:
-    st.markdown(", ".join(smh_dist_dates))
-else:
-    st.info(
-        "No SMH distribution days in the trailing 25 sessions."
-    )
-
-st.markdown(
-    f"#### 🚨 IWM Distribution Days ({iwm_dist_count}/25) — "
-    f"<span style='color:{iwm_status_color};font-weight:bold;'>"
-    f"{iwm_status_text}</span>",
-    unsafe_allow_html=True,
-)
-
-if iwm_dist_dates:
-    st.markdown(", ".join(iwm_dist_dates))
-else:
-    st.info(
-        "No IWM distribution days in the trailing 25 sessions."
-    )
+with dist_col1:
+    st.markdown(_dist_box_html("🚨 SPY Distribution", spy_dist_count, spy_dist_dates, spy_triggered), unsafe_allow_html=True)
+with dist_col2:
+    st.markdown(_dist_box_html("🚨 QQQ Distribution", qqq_dist_count, qqq_dist_dates, qqq_triggered), unsafe_allow_html=True)
+with dist_col3:
+    st.markdown(_dist_box_html("🚨 SMH Distribution", smh_dist_count, smh_dist_dates, smh_triggered), unsafe_allow_html=True)
+with dist_col4:
+    st.markdown(_dist_box_html("🚨 IWM Distribution", iwm_dist_count, iwm_dist_dates, iwm_triggered), unsafe_allow_html=True)
 
 
 
@@ -14253,7 +14231,7 @@ else:
 # section or shared variable — all new names are unique.
 # ==============================================================================
 st.markdown("---")
-st.markdown("## 🧭 Lazy Exposure / % Invested / 21ema or 50ma / 2R or 1.5R TP / 2-stops or 3-stops")
+st.markdown("## 🧭 Lazy Exposure / % Invested / 21ema vs 50ma / 2R vs 1.5R TP / 2-stops vs 3-stops")
 
 # ── Standalone data fetches used only by the verdict (run first so they're
 # available when compute_market_verdict() executes) ─────────────────────────
