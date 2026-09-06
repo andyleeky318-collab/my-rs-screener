@@ -13053,9 +13053,9 @@ st.markdown("---")
 
 def _dist_box_html(label, count, dates, triggered):
     if triggered:
-        bg, border, text_color = "#3a1414", "#FF4B4B", "#FF4B4B"
+        bg, border, text_color = "#2a1212", "#4a1f1f", "#888888"
     else:
-        bg, border, text_color = "#0f2a17", "#00FF00", "#00FF00"
+        bg, border, text_color = "#0d2818", "#1a4a2e", "#888888"
 
     dates_str = ", ".join(dates) if dates else "None"
 
@@ -13077,26 +13077,26 @@ def _dist_box_html(label, count, dates, triggered):
 dist_col1, dist_col2, dist_col3, dist_col4 = st.columns(4)
 
 with dist_col1:
-    st.markdown(_dist_box_html("🚨 SPY Distribution", spy_dist_count, spy_dist_dates, spy_triggered), unsafe_allow_html=True)
+    st.markdown(_dist_box_html("SPY Distribution", spy_dist_count, spy_dist_dates, spy_triggered), unsafe_allow_html=True)
 with dist_col2:
-    st.markdown(_dist_box_html("🚨 QQQ Distribution", qqq_dist_count, qqq_dist_dates, qqq_triggered), unsafe_allow_html=True)
+    st.markdown(_dist_box_html("QQQ Distribution", qqq_dist_count, qqq_dist_dates, qqq_triggered), unsafe_allow_html=True)
 with dist_col3:
-    st.markdown(_dist_box_html("🚨 SMH Distribution", smh_dist_count, smh_dist_dates, smh_triggered), unsafe_allow_html=True)
+    st.markdown(_dist_box_html("SMH Distribution", smh_dist_count, smh_dist_dates, smh_triggered), unsafe_allow_html=True)
 with dist_col4:
-    st.markdown(_dist_box_html("🚨 IWM Distribution", iwm_dist_count, iwm_dist_dates, iwm_triggered), unsafe_allow_html=True)
+    st.markdown(_dist_box_html("IWM Distribution", iwm_dist_count, iwm_dist_dates, iwm_triggered), unsafe_allow_html=True)
 
 st.write("")
 
 stall_col1, stall_col2, stall_col3, stall_col4 = st.columns(4)
 
 with stall_col1:
-    st.markdown(_dist_box_html("🛑 SPY Stalling", spy_stall_count, spy_stall_dates, spy_stall_triggered), unsafe_allow_html=True)
+    st.markdown(_dist_box_html("SPY Stalling", spy_stall_count, spy_stall_dates, spy_stall_triggered), unsafe_allow_html=True)
 with stall_col2:
-    st.markdown(_dist_box_html("🛑 QQQ Stalling", qqq_stall_count, qqq_stall_dates, qqq_stall_triggered), unsafe_allow_html=True)
+    st.markdown(_dist_box_html("QQQ Stalling", qqq_stall_count, qqq_stall_dates, qqq_stall_triggered), unsafe_allow_html=True)
 with stall_col3:
-    st.markdown(_dist_box_html("🛑 SMH Stalling", smh_stall_count, smh_stall_dates, smh_stall_triggered), unsafe_allow_html=True)
+    st.markdown(_dist_box_html("SMH Stalling", smh_stall_count, smh_stall_dates, smh_stall_triggered), unsafe_allow_html=True)
 with stall_col4:
-    st.markdown(_dist_box_html("🛑 IWM Stalling", iwm_stall_count, iwm_stall_dates, iwm_stall_triggered), unsafe_allow_html=True)
+    st.markdown(_dist_box_html("IWM Stalling", iwm_stall_count, iwm_stall_dates, iwm_stall_triggered), unsafe_allow_html=True)
 
 # ==============================================================================
 # MASTER SETUP CONSOLIDATION TABLE
