@@ -16776,3 +16776,59 @@ else:
     #     "advance/decline feed isn't available). Z-scores computed on a trailing 252-day "
     #     "window, mirroring the normalized MCO/MCSI approach shown in the reference chart."
     # )
+
+# ── ARK Funds — Daily / 1 Week / 1 Month ────────────────────────────────────
+st.markdown("---")
+st.markdown("#### 🚀 ARK Funds — Daily / 1 Week / 1 Month")
+
+ARK_TICKERS = ['ARKG', 'ARKK', 'ARKQ', 'ARKW', 'ARKF', 'ARKX']
+
+@st.cache_data(ttl=3600)
+def download_ark_data(tickers_tuple):
+    raw = yf.download(list(tickers_tuple), period="2mo", interval="1d", progress=False, auto_adjust=True)
+    dfs = {}
+    for t in tickers_tuple:
+        try:
+            df = pd.DataFrame({'Close': raw['Close'][t]}).dropna()
+            if not df.empty:
+                dfs[t] = df
+        except Exception:
+            continue
+    return dfs
+
+ark_dfs = timed("download_ark_data", download_ark_data, tuple(ARK_TICKERS))
+
+ark_rows = []
+for sym in ARK_TICKERS:
+    df_sym = ark_dfs.get(sym)
+    if df_sym is None or len(df_sym) < 2:
+        continue
+    c_today = df_sym['Close'].iloc[-1]
+    c_prev = df_sym['Close'].iloc[-2]
+    if pd.isna(c_today) or pd.isna(c_prev) or c_prev == 0:
+        continue
+    pct_1d = round((c_today - c_prev) / c_prev * 100, 2)
+    c_1w = df_sym['Close'].iloc[-6] if len(df_sym) >= 6 else None
+    pct_1w = round((c_today - c_1w) / c_1w * 100, 2) if (c_1w is not None and not pd.isna(c_1w) and c_1w != 0) else None
+    c_1m = df_sym['Close'].iloc[-22] if len(df_sym) >= 22 else None
+    pct_1m = round((c_today - c_1m) / c_1m * 100, 2) if (c_1m is not None and not pd.isna(c_1m) and c_1m != 0) else None
+    ark_rows.append({"sym": sym, "pct": pct_1d, "pct_1w": pct_1w, "pct_1m": pct_1m})
+
+if ark_rows:
+    col_ark_1d, col_ark_1w, col_ark_1m = st.columns(3)
+    for col, key, label in [(col_ark_1d, "pct", "Daily"), (col_ark_1w, "pct_1w", "1 Week"), (col_ark_1m, "pct_1m", "1 Month")]:
+        rows_sorted = sorted([r for r in ark_rows if r[key] is not None], key=lambda x: -x[key])
+        with col:
+            st.markdown(f"**{label}**")
+            for r in rows_sorted:
+                v = r[key]
+                c = "#378ADD" if v >= 0 else "#FF69B4"
+                st.markdown(
+                    f"<div style='display:flex;justify-content:space-between;padding:3px 8px;"
+                    f"margin:2px 0;background:#1e1e1e;border-radius:4px;border:1px solid {c};'>"
+                    f"<span style='color:#ccc;font-weight:bold;'>{r['sym']}</span>"
+                    f"<span style='color:{c};font-weight:bold;'>{v:+.2f}%</span></div>",
+                    unsafe_allow_html=True
+                )
+else:
+    st.info("No ARK Funds performance data available.")
