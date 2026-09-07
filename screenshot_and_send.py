@@ -143,7 +143,7 @@ SECTION_KEYWORDS = [
     "Two Botak = Short term Group burst",
     "Engulfing = HL",
     #"3x Engulfing",
-    "PowerTrend = Thematic Extended",
+    "PowerTrend = Thematic Parabolic",
     "Volatility = ",
     "Value Trap = ",
     "Change of Character",
