@@ -225,7 +225,7 @@ INDUSTRIES = {
     'LEISURE-SERVICES': ['CTAS', 'ROL', 'SCI', 'HRB', 'PLNT', 'LTH', 'VVV', 'GHC', 'UNF', 'LRN', 'DRVN', 'STRA'],
     'CONSUMR PROD-SPECI': ['MSA', 'HAS', 'AS', 'MAT', 'THO', 'PII', 'GOLF', 'HAYW', 'SIG'],
     #'CMP SFTWR-SPC-ENTR': ['TTD', 'MGNI', 'PUBM'],
-    'MEDICAL-ETHICAL DRGS': ['XBI', 'NVO', 'LLY', 'JNJ', 'ABBV', 'MRK', 'PFE', 'VRTX', 'REGN', 'BMY', 'ZTS', 'ALNY', 'BIIB', 'RPRX', 'UTHR', 'VTRS', 'INCY', 'INSM', 'SRPT', 'NBIX', 'ROIV', 'RGEN', 'VKTX', 'EXEL', 'JAZZ', 'CYTK', 'IONS', 'BHVN', 'RARE', 'CORT', 'MDGL', 'OGN', 'ALKS', 'CRNX', 'TGTX', 'PRGO', 'RVMD', 'HROW'],
+    'MEDICAL-ETHICAL DRGS': ['XBI', 'NVO', 'LLY', 'JNJ', 'ABBV', 'MRK', 'PFE', 'VRTX', 'REGN', 'BMY', 'ZTS', 'ALNY', 'BIIB', 'RPRX', 'UTHR', 'VTRS', 'INCY', 'INSM', 'SRPT', 'NBIX', 'ROIV', 'RGEN', 'VKTX', 'EXEL', 'JAZZ', 'CYTK', 'IONS', 'BHVN', 'RARE', 'CORT', 'MDGL', 'OGN', 'ALKS', 'TGTX', 'PRGO', 'RVMD', 'HROW'],
     'MINING-GLD/SILVR/GMS': ['NEM', 'RGLD', 'AEM', 'AU', 'WPM', 'KGC', 'AGI', 'EGO', 'OR'],
     'INSRNCE-PRP/CAS/TITL': ['BRK-B','CB', 'TRV', 'ALL', 'AIG', 'ERIE', 'WRB', 'MKL', 'L', 'EG', 'RNR', 'AFG', 'AIZ', 'MTG', 'SIGI', 'THG', 'KMPR', 'HGTY', 'MCY', 'NMIH', 'PLMR', 'SPNT', 'FNF', 'ORI', 'ESNT', 'FAF', 'RDN', 'AGO'],
     'MEDIA-BOOKS': ['WLY', 'SCHL', 'NYT', 'NWS'],
@@ -253,7 +253,7 @@ INDUSTRIES = {
     'TELCOM SVC-WIRLES': ['IYZ', 'TMUS', 'VZ', 'T', 'TIGO', 'TDS'],
     'ELEC-SEMICON FBLSS': ['SMH', 'SIMO', 'ARM', 'NVDA', 'AVGO', 'AMD', 'QCOM', 'ADI', 'MRVL', 'NXPI', 'MPWR', 'MCHP', 'ON', 'SWKS', 'QRVO', 'ALAB', 'CRDO', 'MTSI', 'LSCC', 'CRUS', 'PI', 'RMBS', 'SITM', 'ALGM', 'SLAB', 'POWI', 'IPGP', 'SMTC', 'DIOD', 'SYNA', 'AMBA', 'WOLF'],
     'ELEC-SEMICON FNDRY': ['SOXX', 'TSM', 'TXN', 'INTC', 'GFS', 'AMKR', 'TSEM', 'FORM', 'STM', 'UMC'],
-    'ROBOTIC': ['BOTZ', 'AMBA', 'ARBE', 'MBLY', 'NOVT', 'HLX', 'JOBY', 'CGNX', 'ZBRA', 'CRNC', 'RR', 'PRCT', 'PTC', 'NDSN', 'HSAI', 'EMR', 'SERV', 'TER', 'IPGP', 'TRMB', 'SYM', 'OUST'],
+    'ROBOTIC': ['BOTZ', 'AMBA', 'ARBE', 'MBLY', 'NOVT', 'JOBY', 'CGNX', 'ZBRA', 'CRNC', 'RR', 'PRCT', 'PTC', 'NDSN', 'HSAI', 'EMR', 'SERV', 'TER', 'IPGP', 'TRMB', 'SYM', 'OUST'],
     'RARE EARTH': ['REMX', 'USAR', 'METC', 'TMC', 'MP', 'MOS', 'CRML', 'NB', 'PPTA', 'UAMY'],
     'QUANTUM': ['WQTM', 'QNT', 'QMCO', 'IONQ', 'QUBT', 'QBTS', 'RGTI', 'BTQ', 'ARQQ', 'INFQ', 'XNDU'],
     'FUEL CELL': ['FCEL', 'BLDP', 'HYDR', 'BE', 'PLUG'],
@@ -11128,6 +11128,9 @@ if trending_mentions_data:
         sentiment = item.get("sentiment_score")
         bullish = item.get("bullish_pct")
 
+        # NEW: cross-section glow (same rule as Quant Sentiment/Reddit/X.com)
+        glow_style = CROSS_SECTION_GLOW_STYLE if sym in cross_section_glow_syms else ""
+
         # Trend color
         if trend == "rising":
             trend_color = "#00FF00"
@@ -11139,23 +11142,12 @@ if trending_mentions_data:
             trend_color = "#FFD700"
             trend_icon = "→"
 
-        # Format optional metrics
         buzz_str = f" · Buzz {buzz:.0f}" if buzz is not None else ""
-
-        sentiment_str = (
-            f" · Sent {sentiment:+.2f}"
-            if sentiment is not None
-            else ""
-        )
-
-        bullish_str = (
-            f" · 🟢 {bullish:.0f}%"
-            if bullish is not None
-            else ""
-        )
+        sentiment_str = f" · Sent {sentiment:+.2f}" if sentiment is not None else ""
+        bullish_str = f" · 🟢 {bullish:.0f}%" if bullish is not None else ""
 
         html_mentions += (
-            f'<div class="ticker-badge">'
+            f'<div class="ticker-badge" style="{glow_style}">'
             f'<span class="ticker-name">${sym}</span>'
             f'<span class="ticker-rs" '
             f'style="color:{trend_color};margin-left:5px;">'
@@ -15621,7 +15613,7 @@ else:
 # ── 7. PowerTrend (z-score + max/min highlight) ─────────────────────────────
 if isinstance(globals().get("powertrend_hist", None), pd.DataFrame) and not powertrend_hist.empty:
     _colors = _zscore_outlier_colors(powertrend_hist["PowerTrend Count"], check_max=True, check_min=True)
-    _render_bar_chart("PowerTrend = Thematic Extended", powertrend_hist, "Date", "PowerTrend Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
+    _render_bar_chart("PowerTrend = Thematic Parabolic", powertrend_hist, "Date", "PowerTrend Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
 else:
     st.caption("**PowerTrend Count** — no data")
 
