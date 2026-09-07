@@ -13100,6 +13100,97 @@ with stall_col4:
     st.markdown(_dist_box_html("IWM Stalling", iwm_stall_count, iwm_stall_dates, iwm_stall_triggered), unsafe_allow_html=True)
 
 # ==============================================================================
+# ATR MULTIPLE ABOVE MA50 — SPY / QQQ / SMH / IWM
+# Same visual style as the Distribution/Stalling boxes above.
+# ==============================================================================
+
+@st.cache_data(ttl=3600)
+def compute_atr_multiple_above_ma50(ticker):
+    """
+    atr_multiple = (% gain from 50-day MA) / (ATR14 as % of price)
+    Same formula used elsewhere in the app (PowerTrend / Value Trap sections).
+    """
+    df = yf.download(ticker, period="6mo", interval="1d", progress=False, auto_adjust=True)
+    df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
+    df = df[["High", "Low", "Close"]].dropna()
+
+    close = df["Close"]
+    high = df["High"]
+    low = df["Low"]
+
+    sma50 = close.rolling(50).mean()
+
+    tr = pd.concat([
+        high - low,
+        (high - close.shift(1)).abs(),
+        (low - close.shift(1)).abs()
+    ], axis=1).max(axis=1)
+    atr14 = tr.rolling(14).mean()
+    atr_pct = (atr14 / close) * 100
+
+    pct_gain = ((close - sma50) / sma50) * 100
+    atr_multiple = pct_gain / atr_pct.replace(0, np.nan)
+
+    val = atr_multiple.iloc[-1]
+    return None if pd.isna(val) else float(val)
+
+
+def _atr_multiple_box_html(label, value, threshold, triggered):
+    if triggered:
+        bg, border, text_color = "#2a1212", "#4a1f1f", "#ff5252"
+    else:
+        bg, border, text_color = "#0d2818", "#1a4a2e", "#00e676"
+
+    value_str = f"{value:.2f}x" if value is not None else "n/a"
+
+    return f"""
+    <div style="background:{bg}; border:2px solid {border}; border-radius:8px;
+                padding:12px; min-height:120px;">
+        <div style="font-size:14px; font-weight:bold; color:{text_color}; margin-bottom:6px;">
+            {label}
+        </div>
+        <div style="font-size:22px; font-weight:900; color:{text_color}; margin-bottom:6px;">
+            {value_str}
+        </div>
+        <div style="font-size:11px; color:#ccc; line-height:1.4; word-wrap:break-word;">
+            Threshold: {threshold:.0f}x
+        </div>
+    </div>
+    """
+
+spy_atr_mult = timed("compute_spy_atr_multiple",
+    lambda: compute_atr_multiple_above_ma50("SPY"))
+qqq_atr_mult = timed("compute_qqq_atr_multiple",
+    lambda: compute_atr_multiple_above_ma50("QQQ"))
+smh_atr_mult = timed("compute_smh_atr_multiple",
+    lambda: compute_atr_multiple_above_ma50("SMH"))
+iwm_atr_mult = timed("compute_iwm_atr_multiple",
+    lambda: compute_atr_multiple_above_ma50("IWM"))
+
+SPY_ATR_THRESHOLD = 6
+QQQ_ATR_THRESHOLD = 7
+SMH_ATR_THRESHOLD = 8
+IWM_ATR_THRESHOLD = 6
+
+spy_atr_triggered = spy_atr_mult is not None and spy_atr_mult >= SPY_ATR_THRESHOLD
+qqq_atr_triggered = qqq_atr_mult is not None and qqq_atr_mult >= QQQ_ATR_THRESHOLD
+smh_atr_triggered = smh_atr_mult is not None and smh_atr_mult >= SMH_ATR_THRESHOLD
+iwm_atr_triggered = iwm_atr_mult is not None and iwm_atr_mult >= IWM_ATR_THRESHOLD
+
+st.write("")
+
+atr_col1, atr_col2, atr_col3, atr_col4 = st.columns(4)
+
+with atr_col1:
+    st.markdown(_atr_multiple_box_html("SPY ATR Multiple", spy_atr_mult, SPY_ATR_THRESHOLD, spy_atr_triggered), unsafe_allow_html=True)
+with atr_col2:
+    st.markdown(_atr_multiple_box_html("QQQ ATR Multiple", qqq_atr_mult, QQQ_ATR_THRESHOLD, qqq_atr_triggered), unsafe_allow_html=True)
+with atr_col3:
+    st.markdown(_atr_multiple_box_html("SMH ATR Multiple", smh_atr_mult, SMH_ATR_THRESHOLD, smh_atr_triggered), unsafe_allow_html=True)
+with atr_col4:
+    st.markdown(_atr_multiple_box_html("IWM ATR Multiple", iwm_atr_mult, IWM_ATR_THRESHOLD, iwm_atr_triggered), unsafe_allow_html=True)
+
+# ==============================================================================
 # MASTER SETUP CONSOLIDATION TABLE
 # Aggregates every tracked screen into one ticker x section table, ticked where
 # a ticker currently qualifies for that section, sorted by how many sections
