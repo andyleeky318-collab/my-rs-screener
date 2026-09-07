@@ -13542,7 +13542,7 @@ else:
 # Read-only, additive. Appended at the very bottom; touches nothing else.
 # ==============================================================================
 st.markdown("---")
-st.markdown("## 🔄 Finviz Industry Rotation Report")
+st.markdown("### 🔄 Finviz Industry Rotation Report")
 
 def _github_filepath_finviz(date_obj):
     return f"finviz_history/finviz_{date_obj.isoformat()}.json"
