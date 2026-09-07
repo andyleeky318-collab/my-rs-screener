@@ -155,7 +155,7 @@ SECTION_KEYWORDS = [
     "Quant Sentiment",
     #"Setup Quality",
     #"Breakout Count",
-    #"Upcoming Earnings",
+    "Upcoming Earnings",
     "Relative Rotation Graph",
     "Sector Strength Heatmap",
     "Stage Distribution by Industry",
