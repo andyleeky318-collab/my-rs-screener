@@ -17320,3 +17320,145 @@ if _timing_log:
 
     total_ms = sum(_timing_log.values())
     st.caption(f"Total measured wall-clock time: **{total_ms/1000:.2f}s** across {len(_timing_log)} tracked calls")        
+
+# ==============================================================================
+# 28. DOWNTREND LINE BREAKOUT — dynamic descending-resistance trendline breakout
+# Ported from the Pine "trendLine"/"pivData" logic (pivot-high anchored
+# trendline with a % price buffer, min-touch confirmation, close-based
+# breakout signal). Read-only, additive. Reuses ticker_dfs_shared (already
+# downloaded) — no new data fetch. Appended at the very bottom.
+# ==============================================================================
+st.markdown("---")
+
+@st.cache_data(ttl=3600)
+def compute_downtrend_line_breakout(stocks_list, _ticker_dfs,
+                                     bars=5, buffer_pct=0.001, num_touches=3,
+                                     new_high_bars=100, show_num=1):
+    """
+    Faithful port of the Pine "trendLine"/"pivData" descending-resistance
+    trendline logic:
+      - Anchor = most recent qualifying pivot high (confirmed 'bars' bars
+        later, like ta.pivothigh(bars, bars)). A new pivot replaces the
+        anchor if it's higher, or if the current anchor is older than
+        new_high_bars.
+      - Whenever a bar's high drops below the anchor high, a trial
+        trendline is drawn from the anchor to that bar. If every bar in
+        between stayed within buffer_pct of the line (no bar poked
+        through it) and at least num_touches bars touched it closely,
+        the line is confirmed (kept, up to show_num active lines).
+      - A confirmed line breaks out ("bo") the first time CLOSE trades
+        above the line's projected price by more than buffer_pct.
+    Returns {ticker: (breakout_today: bool, breakout_yesterday: bool)}.
+    """
+    results = {}
+    for ticker in stocks_list:
+        df = _ticker_dfs.get(ticker)
+        if df is None or len(df) < bars * 2 + 5:
+            continue
+        try:
+            high = df['High'].to_numpy()
+            close = df['Close'].to_numpy()
+            n = len(high)
+
+            # Pivot-high detection (confirmed 'bars' bars after the pivot bar,
+            # mirroring ta.pivothigh(bars, bars))
+            pivot_val = {}
+            for p in range(bars, n - bars):
+                window = high[p - bars: p + bars + 1]
+                if high[p] == window.max():
+                    pivot_val[p] = high[p]
+
+            piv_h = None
+            piv_b = None
+            trendlines = []  # each: dict(piv_b, piv_h, slope, active)
+            bo_flags = np.zeros(n, dtype=bool)
+
+            for i in range(n):
+                confirmed_pivot_bar = i - bars
+                if confirmed_pivot_bar in pivot_val:
+                    pv = pivot_val[confirmed_pivot_bar]
+                    if (piv_h is None or pv > piv_h or
+                            (piv_b is not None and i - piv_b > new_high_bars)):
+                        piv_h = pv
+                        piv_b = confirmed_pivot_bar
+
+                if piv_h is not None and high[i] < piv_h and i > piv_b:
+                    slope = (high[i] - piv_h) / (i - piv_b)
+                    touches = 0
+                    broken = False
+                    for k in range(0, i - piv_b + 1):
+                        bar_k = piv_b + k
+                        line_price = piv_h + slope * k
+                        if high[bar_k] > line_price * (1 + buffer_pct):
+                            broken = True
+                            break
+                        elif line_price * (1 - buffer_pct) <= high[bar_k] <= line_price * (1 + buffer_pct):
+                            touches += 1
+
+                    if not broken and touches >= num_touches:
+                        new_line = {'piv_b': piv_b, 'piv_h': piv_h, 'slope': slope, 'active': True}
+                        trendlines.append(new_line)
+                        if len(trendlines) > show_num:
+                            trendlines.pop(0)
+                        # de-dup lines that price-match at this pivot anchor bar
+                        if len(trendlines) > 1:
+                            cur = trendlines[-1]
+                            cur_price = cur['piv_h'] + cur['slope'] * (piv_b - cur['piv_b'])
+                            kept = []
+                            for idx, t in enumerate(trendlines):
+                                t_price = t['piv_h'] + t['slope'] * (piv_b - t['piv_b'])
+                                if t_price == cur_price and idx != len(trendlines) - 1:
+                                    continue
+                                kept.append(t)
+                            trendlines = kept
+
+                for t in trendlines:
+                    if not t['active']:
+                        continue
+                    line_price_today = t['piv_h'] + t['slope'] * (i - t['piv_b'])
+                    if close[i] > line_price_today * (1 + buffer_pct):
+                        bo_flags[i] = True
+                        t['active'] = False
+
+            bo_today = bool(bo_flags[-1])
+            bo_yest = bool(bo_flags[-2]) if n >= 2 else False
+            results[ticker] = (bo_today, bo_yest)
+        except Exception:
+            continue
+
+    return results
+
+
+with st.spinner("Scanning for downtrend line breakouts..."):
+    downtrend_bo_results = timed(
+        "compute_downtrend_line_breakout",
+        compute_downtrend_line_breakout,
+        stocks_tuple, ticker_dfs_shared
+    )
+
+downtrend_today = sorted(sym for sym, (t, y) in downtrend_bo_results.items() if t)
+downtrend_yest = sorted(sym for sym, (t, y) in downtrend_bo_results.items() if y)
+
+st.markdown(f"#### 📐 Downtrend Line Breakout ({len(downtrend_today)})")
+
+if downtrend_today or downtrend_yest:
+    dt_industry_counts, dt_ticker_industry = build_leader_industry_map(downtrend_today, INDUSTRIES)
+
+    html_dt = ""
+    for sym in downtrend_today:
+        industries = dt_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+            if is_top20_industry else ""
+        )
+        html_dt += setup_badge(sym, is_new=(sym not in downtrend_yest), extra_style=glow_style)
+
+    removed_dt = [sym for sym in downtrend_yest if sym not in downtrend_today]
+    for sym in sorted(removed_dt):
+        html_dt += f'<div class="ticker-badge removed-badge">{sym}</div>'
+
+    st.markdown(html_dt, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
