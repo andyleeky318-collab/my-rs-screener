@@ -17484,7 +17484,7 @@ if downtrend_today or downtrend_yest:
             sym,
             is_new=(sym not in downtrend_yest),
             extra_style=glow_style,
-            extra_prefix="⭐ " if vol_above_avg else ""
+            extra_prefix="★ " if vol_above_avg else ""
         )
 
     # Show removed badges only when latest available price > $20
