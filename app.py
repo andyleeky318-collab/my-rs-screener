@@ -15012,7 +15012,15 @@ if dist_triggered:
 # This corner of the ETF market delists/splits often — verify periodically.
 # ==============================================================================
 st.markdown("---")
-st.markdown("#### 🎢 Leveraged ETF Bull / Bear Table")
+st.markdown(
+    """
+    <h4>
+        🎢 Leveraged ETF Bull / Bear Table
+        <span style="color:#888; font-size:12px;">(Require precision + conducive market conditions)</span>
+    </h4>
+    """,
+    unsafe_allow_html=True
+)
 
 LEVERAGED_ETF_MAP = {
     # ── Index / broad market ──
