@@ -4387,40 +4387,6 @@ if all_data:
             )
     st.markdown(upper_wick_html, unsafe_allow_html=True)
 
-    all_vol_tickers = set()
-    for tickers_list in industry_vol_tickers.values():
-        all_vol_tickers.update(tickers_list)
-    total_vol_ticker_count = len(all_vol_tickers)
-
-    dist_html = (
-        f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"📉📉📉 Distribution Cluster [{len(vol_flagged_industries)}] "
-        #f"<span style='color:#FF4B4B;'>({len(vol_flagged_industries)} industries, {total_vol_ticker_count} tickers)</span>"
-        f"</div>"
-    )
-    if vol_flagged_industries:
-        # Order by current table rank so it reads top-to-bottom like the main table
-        sorted_flagged = sorted(
-            vol_flagged_industries,
-            key=lambda ind: industry_rank_map.get(ind, 9999)
-        )
-        for industry in sorted_flagged:
-            rank = industry_rank_map.get(industry, "-")
-            tickers_for_ind = sorted(industry_vol_tickers.get(industry, []))
-            ticker_badges = "".join(
-                _render_cluster_badge(t, "#663333", "#2d1a1a", "#FF9999")
-                for t in tickers_for_ind
-            )
-            _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
-            dist_html += (
-                f"<div style='margin-bottom:5px;'>"
-                f"<span style='color:#FF4B4B; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
-                f"<span style='color:#FF4B4B; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;{_ul}'>{industry}</span>"
-                f"<span>{ticker_badges}</span>"
-                f"</div>"
-            )
-    st.markdown(dist_html, unsafe_allow_html=True)
-
     # ── Volume Cluster summary (industries with >=3 volume-above-50MA tickers) ──
     all_volume_tickers = set()
     for tickers_list in industry_volume_tickers.values():
@@ -4454,6 +4420,40 @@ if all_data:
                 f"</div>"
             )
     st.markdown(volume_html, unsafe_allow_html=True)
+
+    all_vol_tickers = set()
+    for tickers_list in industry_vol_tickers.values():
+        all_vol_tickers.update(tickers_list)
+    total_vol_ticker_count = len(all_vol_tickers)
+
+    dist_html = (
+        f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
+        f"📉📉📉 Distribution Cluster [{len(vol_flagged_industries)}] "
+        #f"<span style='color:#FF4B4B;'>({len(vol_flagged_industries)} industries, {total_vol_ticker_count} tickers)</span>"
+        f"</div>"
+    )
+    if vol_flagged_industries:
+        # Order by current table rank so it reads top-to-bottom like the main table
+        sorted_flagged = sorted(
+            vol_flagged_industries,
+            key=lambda ind: industry_rank_map.get(ind, 9999)
+        )
+        for industry in sorted_flagged:
+            rank = industry_rank_map.get(industry, "-")
+            tickers_for_ind = sorted(industry_vol_tickers.get(industry, []))
+            ticker_badges = "".join(
+                _render_cluster_badge(t, "#663333", "#2d1a1a", "#FF9999")
+                for t in tickers_for_ind
+            )
+            _ul = "text-decoration:underline;" if industry in _multi_cluster_industries else ""
+            dist_html += (
+                f"<div style='margin-bottom:5px;'>"
+                f"<span style='color:#FF4B4B; font-weight:bold; font-size:12px; display:inline-block; min-width:34px;'>#{rank}</span>"
+                f"<span style='color:#FF4B4B; font-weight:bold; font-size:13px; display:inline-block; min-width:200px;{_ul}'>{industry}</span>"
+                f"<span>{ticker_badges}</span>"
+                f"</div>"
+            )
+    st.markdown(dist_html, unsafe_allow_html=True)
 
     st.markdown(
         f'<div style="text-align: right; font-size: 20px; color: #888888; margin-bottom: 4px; font-family: monospace;">'
@@ -13549,7 +13549,15 @@ def _render_accumulation_sparkline_svg(values, width=140, height=32):
 
 
 st.markdown("---")
-st.markdown("#### 🧮 Accumulation Rating")
+st.markdown(
+    """
+    <h4>
+        🧮 Accumulation Rating
+        <span style="color:#888; font-size:12px;">(Gold glow style = Accumulation A+)</span>
+    </h4>
+    """,
+    unsafe_allow_html=True
+)
 
 with st.spinner("Computing Up/Down Volume Ratio by industry group..."):
     accumulation_rows = timed(
