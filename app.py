@@ -17445,18 +17445,40 @@ if downtrend_today or downtrend_yest:
     dt_industry_counts, dt_ticker_industry = build_leader_industry_map(downtrend_today, INDUSTRIES)
 
     html_dt = ""
+
+    # Show today's breakout badges only when latest price > $20
     for sym in downtrend_today:
+        df = ticker_dfs_shared.get(sym)
+        latest_price = float(df["Close"].iloc[-1]) if df is not None and not df.empty else 0
+
+        if latest_price <= 20:
+            continue
+
         industries = dt_ticker_industry.get(sym, [])
         ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
         is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+
         glow_style = (
             "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
             if is_top20_industry else ""
         )
-        html_dt += setup_badge(sym, is_new=(sym not in downtrend_yest), extra_style=glow_style)
 
+        html_dt += setup_badge(
+            sym,
+            is_new=(sym not in downtrend_yest),
+            extra_style=glow_style
+        )
+
+    # Show removed badges only when latest available price > $20
     removed_dt = [sym for sym in downtrend_yest if sym not in downtrend_today]
+
     for sym in sorted(removed_dt):
+        df = ticker_dfs_shared.get(sym)
+        latest_price = float(df["Close"].iloc[-1]) if df is not None and not df.empty else 0
+
+        if latest_price <= 20:
+            continue
+
         html_dt += f'<div class="ticker-badge removed-badge">{sym}</div>'
 
     st.markdown(html_dt, unsafe_allow_html=True)
