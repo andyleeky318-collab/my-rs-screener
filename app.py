@@ -17330,6 +17330,21 @@ if _timing_log:
 # ==============================================================================
 st.markdown("---")
 
+def is_volume_above_50d_avg(df):
+    """True if the latest bar's Volume is above its 50-day average volume."""
+    try:
+        if df is None or "Volume" not in df.columns or len(df) < 50:
+            return False
+        vol = df["Volume"].astype(float)
+        avg50 = vol.rolling(50, min_periods=50).mean()
+        latest_vol = vol.iloc[-1]
+        latest_avg = avg50.iloc[-1]
+        if pd.isna(latest_avg):
+            return False
+        return bool(latest_vol > latest_avg)
+    except Exception:
+        return False
+
 @st.cache_data(ttl=3600)
 def compute_downtrend_line_breakout(stocks_list, _ticker_dfs,
                                      bars=5, buffer_pct=0.001, num_touches=3,
@@ -17463,10 +17478,13 @@ if downtrend_today or downtrend_yest:
             if is_top20_industry else ""
         )
 
+        vol_above_avg = is_volume_above_50d_avg(df)
+
         html_dt += setup_badge(
             sym,
             is_new=(sym not in downtrend_yest),
-            extra_style=glow_style
+            extra_style=glow_style,
+            extra_prefix="⭐ " if vol_above_avg else ""
         )
 
     # Show removed badges only when latest available price > $20
