@@ -17512,10 +17512,17 @@ else:
 # cloud21ema_all, cloudwick_all, ma50bounce_all) across 10 weighted criteria and
 # concludes "Healthy Pullback" vs "Deterioration" per ticker.
 #
+# Criteria 4, 6, 7, 9 and 10 do NOT use a fixed lookback window. Instead, for each
+# ticker we find the interim swing high (highest High) within the last
+# HP_INTERIM_HIGH_LOOKBACK days, and use the number of bars from that high to the
+# latest bar as the lookback for those 5 criteria — i.e. each stock is judged over
+# its OWN actual pullback length, not an arbitrary fixed number of days. That
+# interim high (price, date, bars-ago) is also shown as its own table column.
+#
 # Every criterion below is either read directly from an existing, already-computed
 # object in this file (industry_rank_map, industry_trend_map, all_data's RS Score,
-# compute_up_down_vol_ratio_series/_udvr_rating, boc_delta_map) or computed fresh
-# from ticker_dfs_shared (the same OHLCV already downloaded for the whole app) —
+# compute_up_down_vol_ratio_series/_udvr_rating) or computed fresh from
+# ticker_dfs_shared (the same OHLCV already downloaded for the whole app) —
 # nothing else in the dashboard is touched or recomputed. Read-only, additive.
 # ==============================================================================
 st.markdown("---")
@@ -17526,29 +17533,35 @@ HP_WEIGHTS = {
     "Industry RS/Trend":   10,  # 1) industry group RS rank + 4-circle trend
     "Stock RS Value":      15,  # 2) the stock's own RS Score
     "21ema/50ma State":    15,  # 3) strong / held / idle / weak vs its own MAs
-    "Low-Vol Cluster":     10,  # 4) low-volume orange-box cluster during pullback
+    "Low-Vol Cluster":     10,  # 4) low-volume orange-box cluster since interim high
     "EMA21>MA50 Time%":    10,  # 5) % of last 90d that ema21 stayed above ma50
-    "Volatility Z-Score":  10,  # 6) frequency/amplitude z-score violations
-    "Bear Engulf Count":   10,  # 7) bearish engulfing bars in last 10d
+    "Volatility Z-Score":  10,  # 6) frequency/amplitude z-score violations since interim high
+    "Bear Engulf Count":   10,  # 7) bearish engulfing bars since interim high
     "Accumulation Rating": 10,  # 8) up/down volume ratio (existing UDVR logic)
-    "RS Triangle":          5,  # 9) RS-vs-its-own-MA crossover triangles
-    "Score Delta ±20":      5,  # 10) existing composite-score breakdown flag
+    "RS Triangle":          5,  # 9) RS-vs-its-own-MA crossover triangles since interim high
+    "Score Delta ±20":      5,  # 10) composite-score ±20 red/green bars since interim high
 }
 HP_INDUSTRY_GREEN_MIN   = 2     # min green circles (of 4) in industry trend
 HP_STOCK_RS_MIN         = 70    # IBD-style leadership threshold
-HP_LOWVOL_LOOKBACK      = 10
 HP_LOWVOL_MIN_STREAK    = 2     # consecutive low-vol bars to count as a cluster
 HP_DIST_LOOKBACK        = 90
 HP_DIST_PCT_MIN         = 90.0  # % of days ema21 must stay above ma50
-HP_VOLZ_LOOKBACK        = 20
-HP_VOLZ_MAX_HIGHCOUNT   = 1     # max allowed z>1.5 days in last 20 (user: "not more than 1")
-HP_BEARENGULF_LOOKBACK  = 10
-HP_BEARENGULF_MAX       = 0     # max bearish engulfing bars allowed in lookback
+HP_VOLZ_MAX_HIGHCOUNT   = 1     # max allowed z>1.5 days in the dynamic window (user: "not more than 1")
+HP_BEARENGULF_MAX       = 0     # max bearish engulfing bars allowed in the dynamic window
 HP_ACCUM_MIN            = 1.0   # up/down volume ratio >= 1 = net accumulation
-HP_RSTRI_LOOKBACK       = 20
-HP_SCORE_BREAKDOWN      = -20   # boc_delta_map <= this = character breakdown
+HP_SCORE_BREAKDOWN      = -20   # score_delta <= this on a bar = character breakdown ("red bar")
+HP_SCORE_CHANGE_UP      = 20    # score_delta >= this on a bar = change of character ("green bar")
 HP_MIN_HISTORY_BARS     = 60
 HP_HEALTHY_THRESHOLD    = 60.0  # weighted score (0-100) needed to call it "Healthy"
+
+# Interim-high lookback: the swing high is searched for within the last
+# HP_INTERIM_HIGH_LOOKBACK days; the resulting "bars since high" is then
+# clamped to [HP_DYNAMIC_LOOKBACK_MIN, HP_DYNAMIC_LOOKBACK_MAX] before being
+# used as the dynamic window for criteria 4/6/7/9/10 (the floor keeps very
+# fresh highs from giving statistically unstable 0-2 bar windows).
+HP_INTERIM_HIGH_LOOKBACK = 90
+HP_DYNAMIC_LOOKBACK_MIN  = 5
+HP_DYNAMIC_LOOKBACK_MAX  = HP_INTERIM_HIGH_LOOKBACK
 
 
 def _hp_ma_state(close_s, high_s, low_s, ema21_s, sma50_s):
@@ -17586,7 +17599,25 @@ def _hp_ma_state(close_s, high_s, low_s, ema21_s, sma50_s):
     return "Medium"
 
 
-def _hp_low_vol_cluster(vol_s, lookback=HP_LOWVOL_LOOKBACK):
+def _hp_interim_high(df_s, high_s, lookback=HP_INTERIM_HIGH_LOOKBACK):
+    """Find the interim swing high (highest High) within `lookback` days, and
+    how many bars ago it occurred. Returns (high_price, bars_since, high_date,
+    dynamic_lookback) — dynamic_lookback is bars_since clamped to
+    [HP_DYNAMIC_LOOKBACK_MIN, HP_DYNAMIC_LOOKBACK_MAX] and is what criteria
+    4/6/7/9/10 use as their own lookback window."""
+    n = len(high_s)
+    window = min(lookback, n)
+    ih_slice = high_s.iloc[-window:]
+    high_price = float(ih_slice.max())
+    pos_in_slice = int(np.argmax(ih_slice.values))
+    high_pos = (n - window) + pos_in_slice
+    bars_since = (n - 1) - high_pos
+    high_date = df_s.index[high_pos]
+    dyn_lookback = min(max(bars_since, HP_DYNAMIC_LOOKBACK_MIN), HP_DYNAMIC_LOOKBACK_MAX)
+    return high_price, bars_since, high_date, dyn_lookback
+
+
+def _hp_low_vol_cluster(vol_s, lookback):
     """Mirrors the Pine 'Low Volume Cluster Boxes' logic: a bar is low-vol if
     it's below its own 50-day average OR is the 10-day lowest volume. Returns
     (has_cluster, longest_streak) over the lookback window."""
@@ -17603,7 +17634,8 @@ def _hp_low_vol_cluster(vol_s, lookback=HP_LOWVOL_LOOKBACK):
 
 def _hp_dist_pct_positive(ema21_s, sma50_s, lookback=HP_DIST_LOOKBACK):
     """% of the lookback window where ema21 stayed above ma50 (distancePct > 0),
-    per the MA-squeeze Pine script."""
+    per the MA-squeeze Pine script. (Fixed 90d window — not part of the
+    dynamic interim-high lookback change; kept as-is.)"""
     distance_pct = (ema21_s - sma50_s) / sma50_s * 100
     window = distance_pct.dropna().iloc[-lookback:]
     if window.empty:
@@ -17611,7 +17643,7 @@ def _hp_dist_pct_positive(ema21_s, sma50_s, lookback=HP_DIST_LOOKBACK):
     return float((window > 0).mean() * 100)
 
 
-def _hp_volatility_highcount(high_s, low_s, lookback=HP_VOLZ_LOOKBACK):
+def _hp_volatility_highcount(high_s, low_s, lookback):
     """Count of z>1.5 daily-range days in the lookback window, per the
     'Topping Signal' Pine script's frequency/amplitude violation logic."""
     daily_range = (high_s / low_s - 1) * 100
@@ -17623,7 +17655,7 @@ def _hp_volatility_highcount(high_s, low_s, lookback=HP_VOLZ_LOOKBACK):
     return float(val) if pd.notna(val) else np.nan
 
 
-def _hp_bearish_engulf_count(open_s, close_s, lookback=HP_BEARENGULF_LOOKBACK):
+def _hp_bearish_engulf_count(open_s, close_s, lookback):
     """Classic bearish engulfing bar count: prior bar up, current bar down,
     and today's body fully engulfs yesterday's body."""
     prior_bull = close_s.shift(1) > open_s.shift(1)
@@ -17632,7 +17664,7 @@ def _hp_bearish_engulf_count(open_s, close_s, lookback=HP_BEARENGULF_LOOKBACK):
     return int(engulf.fillna(False).iloc[-lookback:].sum())
 
 
-def _hp_rs_triangle(rs_s, rsma_s, lookback=HP_RSTRI_LOOKBACK):
+def _hp_rs_triangle(rs_s, rsma_s, lookback):
     """RS-line-crosses-its-own-MA triangle events (green=crossover, red=crossunder),
     the Python equivalent of the Pine 'mycrossover'/'mycrossunder' markers."""
     crossover = (rs_s > rsma_s) & (rs_s.shift(1) <= rsma_s.shift(1))
@@ -17641,6 +17673,64 @@ def _hp_rs_triangle(rs_s, rsma_s, lookback=HP_RSTRI_LOOKBACK):
     red = int(crossunder.fillna(False).iloc[-lookback:].sum())
     cur_above = bool(rs_s.iloc[-1] > rsma_s.iloc[-1]) if pd.notna(rs_s.iloc[-1]) and pd.notna(rsma_s.iloc[-1]) else False
     return green, red, cur_above
+
+
+def _hp_score_delta_series(close_s, high_s, low_s, bench_close_s):
+    """Mirrors compute_character_shift's 9-component composite score exactly
+    (same formula as that function, ~line 9044), but returns the FULL
+    score_delta Series instead of only today's value — so criterion 10 can
+    count red/green ±20 bars over the dynamic interim-high lookback instead
+    of only checking the single latest boc_delta_map snapshot."""
+    rs = close_s / bench_close_s
+    if rs.dropna().empty:
+        return None
+    ema126 = close_s.ewm(span=126, adjust=False).mean()
+    r = {sp: rs.ewm(span=sp, adjust=False).mean() for sp in [21, 42, 63, 72, 84, 126, 147, 168]}
+
+    stage1_cond = (rs >= r[84]) & (rs < r[126])
+    stage3_cond = (
+        (rs < r[42]) & (rs >= r[72]) & (rs >= r[84]) & (rs >= r[126])
+        & ((r[42] > r[63]) | (rs < r[63])) & (r[63] > r[126]) & (close_s >= ema126)
+    )
+    stage2a_cond = (
+        (rs >= r[168]) & (rs >= r[147]) & (rs >= r[126])
+        & (close_s >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+    )
+    stage2b_cond = (rs >= r[126]) & (close_s >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+    stage2_cond = (~stage1_cond & ~stage3_cond & (stage2a_cond | stage2b_cond))
+
+    rsMA21  = rs.ewm(span=21, adjust=False).mean()
+    ema21t  = close_s.ewm(span=21, adjust=False).mean()
+    sma50t  = close_s.rolling(50).mean()
+    low14   = low_s.rolling(14).min().shift(1)
+    ema50t  = close_s.ewm(span=50, adjust=False).mean()
+    ema100t = close_s.ewm(span=100, adjust=False).mean()
+
+    gap_down_evt       = (high_s < low_s.shift(1))
+    gap_down_pct       = ((close_s.shift(1) - close_s) / close_s.shift(1) * 100).where(gap_down_evt)
+    gap_down_qualified = gap_down_evt & (gap_down_pct >= 3)
+    recent_gap_down    = gap_down_qualified.rolling(10, min_periods=1).max().fillna(0).astype(bool)
+
+    pct_chg = close_s.pct_change() * 100
+    win = min(220, len(pct_chg))
+    biggest_drop = pct_chg.rolling(window=win, min_periods=20).min()
+    biggest_up   = pct_chg.rolling(window=win, min_periods=20).max()
+
+    high252 = high_s.rolling(252, min_periods=50).max()
+    pct_from_high = (close_s - high252) / high252 * 100
+
+    s1  = (rs > rsMA21).fillna(False).astype(int) * 10
+    s2  = stage2_cond.fillna(False).astype(int) * 10
+    s3  = (close_s > ema21t).fillna(False).astype(int) * 10
+    s4  = (close_s > sma50t).fillna(False).astype(int) * 10
+    s6  = (~(close_s < low14).fillna(False)).astype(int) * 10
+    s7  = (~recent_gap_down).astype(int) * 10
+    s8  = (~(biggest_up < -biggest_drop).fillna(False)).astype(int) * 10
+    s9  = (~(pct_from_high < -25).fillna(False)).astype(int) * 10
+    s10 = (ema50t >= ema100t).fillna(False).astype(int) * 10
+
+    score = s1 + s2 + s3 + s4 + s6 + s7 + s8 + s9 + s10
+    return score.diff()
 
 
 with st.spinner("Classifying healthy pullbacks vs. deterioration..."):
@@ -17666,6 +17756,11 @@ with st.spinner("Classifying healthy pullbacks vs. deterioration..."):
             close, open_, high, low, vol = df['Close'], df['Open'], df['High'], df['Low'], df['Volume']
             ema21 = close.ewm(span=21, adjust=False).mean()
             sma50 = close.rolling(50).mean()
+            bench_close = benchmark_df_shared['Close']
+
+            # Interim swing high (last 90d) + the dynamic high->now lookback that
+            # criteria 4/6/7/9/10 below use instead of a fixed window.
+            interim_high_price, bars_since_high, interim_high_date, dyn_lb = _hp_interim_high(df, high)
 
             # 1) Industry group RS rank + 4-circle trend (best-ranked industry the ticker belongs to)
             _inds = ticker_to_industries.get(sym, [])
@@ -17687,20 +17782,20 @@ with st.spinner("Classifying healthy pullbacks vs. deterioration..."):
             ma_state = _hp_ma_state(close, high, low, ema21, sma50)
             healthy_3 = ma_state in ("Strong", "Held", "Idle")
 
-            # 4) Low-volume cluster during pullback
-            has_cluster, cluster_streak = _hp_low_vol_cluster(vol)
+            # 4) Low-volume cluster since the interim high (dynamic lookback)
+            has_cluster, cluster_streak = _hp_low_vol_cluster(vol, dyn_lb)
             healthy_4 = has_cluster
 
-            # 5) ema21 vs ma50 distance % positive time
+            # 5) ema21 vs ma50 distance % positive time (fixed 90d — unchanged)
             dist_pct = _hp_dist_pct_positive(ema21, sma50)
             healthy_5 = dist_pct >= HP_DIST_PCT_MIN
 
-            # 6) Volatility frequency/amplitude z-score violations
-            volz_count = _hp_volatility_highcount(high, low)
+            # 6) Volatility frequency/amplitude z-score violations since interim high
+            volz_count = _hp_volatility_highcount(high, low, dyn_lb)
             healthy_6 = pd.notna(volz_count) and volz_count <= HP_VOLZ_MAX_HIGHCOUNT
 
-            # 7) Bearish engulfing count
-            bear_cnt = _hp_bearish_engulf_count(open_, close)
+            # 7) Bearish engulfing count since interim high
+            bear_cnt = _hp_bearish_engulf_count(open_, close, dyn_lb)
             healthy_7 = bear_cnt <= HP_BEARENGULF_MAX
 
             # 8) Accumulation rating (existing UDVR helper + rating function)
@@ -17709,16 +17804,21 @@ with st.spinner("Classifying healthy pullbacks vs. deterioration..."):
             accum_rating = _udvr_rating(accum_val)
             healthy_8 = accum_val is not None and accum_val >= HP_ACCUM_MIN
 
-            # 9) RS red/green triangle count
-            bench_close = benchmark_df_shared['Close']
+            # 9) RS red/green triangle count since interim high
             rs = close / bench_close
             rsma = rs.ewm(span=21, adjust=False).mean()
-            tri_green, tri_red, tri_above = _hp_rs_triangle(rs, rsma)
+            tri_green, tri_red, tri_above = _hp_rs_triangle(rs, rsma, dyn_lb)
             healthy_9 = tri_above and tri_green >= tri_red
 
-            # 10) Existing composite score's ±20 breakdown flag (Breakdown of Character)
-            boc_delta = boc_delta_map.get(sym, 0)
-            healthy_10 = boc_delta > HP_SCORE_BREAKDOWN
+            # 10) Composite ±20 score-delta red/green bars since interim high
+            score_delta_series = _hp_score_delta_series(close, high, low, bench_close)
+            if score_delta_series is not None:
+                score_window = score_delta_series.iloc[-dyn_lb:]
+                score_green_ct = int((score_window >= HP_SCORE_CHANGE_UP).sum())
+                score_red_ct = int((score_window <= HP_SCORE_BREAKDOWN).sum())
+            else:
+                score_green_ct = score_red_ct = 0
+            healthy_10 = score_red_ct == 0 or score_green_ct >= score_red_ct
 
             flags = {
                 "Industry RS/Trend":   healthy_1,
@@ -17742,16 +17842,20 @@ with st.spinner("Classifying healthy pullbacks vs. deterioration..."):
                 "Ticker": sym,
                 "Conclusion": conclusion,
                 "Score": round(weighted_score, 1),
+                "Interim High (90d)": (
+                    f"${interim_high_price:.2f} · {bars_since_high}d ago "
+                    f"({pd.Timestamp(interim_high_date).strftime('%Y-%m-%d')}) · lookback={dyn_lb}d"
+                ),
                 "Industry RS/Trend": f"{_tick(healthy_1)} #{best_rank if best_rank else '-'} {trend_str}",
                 "Stock RS Value": f"{_tick(healthy_2)} {rs_score if rs_score is not None else '-'}",
                 "21ema/50ma State": f"{_tick(healthy_3)} {ma_state}",
-                "Low-Vol Cluster": f"{_tick(healthy_4)} streak={cluster_streak}",
+                "Low-Vol Cluster": f"{_tick(healthy_4)} streak={cluster_streak} (of {dyn_lb}d)",
                 "EMA21>MA50 Time%": f"{_tick(healthy_5)} {dist_pct:.0f}%",
-                "Volatility Z-Score": f"{_tick(healthy_6)} {int(volz_count) if pd.notna(volz_count) else '-'}",
-                "Bear Engulf Count": f"{_tick(healthy_7)} {bear_cnt}",
+                "Volatility Z-Score": f"{_tick(healthy_6)} {int(volz_count) if pd.notna(volz_count) else '-'} (of {dyn_lb}d)",
+                "Bear Engulf Count": f"{_tick(healthy_7)} {bear_cnt} (of {dyn_lb}d)",
                 "Accumulation Rating": f"{_tick(healthy_8)} {accum_rating} ({accum_val:.2f})" if accum_val is not None else f"{_tick(False)} -",
-                "RS Triangle": f"{_tick(healthy_9)} 🟢{tri_green}/🔴{tri_red}",
-                "Score Delta ±20": f"{_tick(healthy_10)} {boc_delta:+d}",
+                "RS Triangle": f"{_tick(healthy_9)} 🟢{tri_green}/🔴{tri_red} (of {dyn_lb}d)",
+                "Score Delta ±20": f"{_tick(healthy_10)} 🟢{score_green_ct}/🔴{score_red_ct} (of {dyn_lb}d)",
             })
         except Exception:
             continue
