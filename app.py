@@ -17502,3 +17502,266 @@ if downtrend_today or downtrend_yest:
     st.markdown(html_dt, unsafe_allow_html=True)
 else:
     st.info("No active setups discovered.")
+
+
+# ==============================================================================
+# 29. HEALTHY PULLBACK vs. DETERIORATION — weighted multi-factor classifier
+#
+# A red day / pullback alone doesn't mean a setup is broken. This section scores
+# every ticker already flagged by an existing pullback-style setup (cloud_valid_syms,
+# cloud21ema_all, cloudwick_all, ma50bounce_all) across 10 weighted criteria and
+# concludes "Healthy Pullback" vs "Deterioration" per ticker.
+#
+# Every criterion below is either read directly from an existing, already-computed
+# object in this file (industry_rank_map, industry_trend_map, all_data's RS Score,
+# compute_up_down_vol_ratio_series/_udvr_rating, boc_delta_map) or computed fresh
+# from ticker_dfs_shared (the same OHLCV already downloaded for the whole app) —
+# nothing else in the dashboard is touched or recomputed. Read-only, additive.
+# ==============================================================================
+st.markdown("---")
+st.markdown("#### 🩺 Healthy Pullback vs. Deterioration")
+
+# ── Tunable parameters (weights sum to 100) ─────────────────────────────────
+HP_WEIGHTS = {
+    "Industry RS/Trend":   10,  # 1) industry group RS rank + 4-circle trend
+    "Stock RS Value":      15,  # 2) the stock's own RS Score
+    "21ema/50ma State":    15,  # 3) strong / held / idle / weak vs its own MAs
+    "Low-Vol Cluster":     10,  # 4) low-volume orange-box cluster during pullback
+    "EMA21>MA50 Time%":    10,  # 5) % of last 90d that ema21 stayed above ma50
+    "Volatility Z-Score":  10,  # 6) frequency/amplitude z-score violations
+    "Bear Engulf Count":   10,  # 7) bearish engulfing bars in last 10d
+    "Accumulation Rating": 10,  # 8) up/down volume ratio (existing UDVR logic)
+    "RS Triangle":          5,  # 9) RS-vs-its-own-MA crossover triangles
+    "Score Delta ±20":      5,  # 10) existing composite-score breakdown flag
+}
+HP_INDUSTRY_GREEN_MIN   = 2     # min green circles (of 4) in industry trend
+HP_STOCK_RS_MIN         = 70    # IBD-style leadership threshold
+HP_LOWVOL_LOOKBACK      = 10
+HP_LOWVOL_MIN_STREAK    = 2     # consecutive low-vol bars to count as a cluster
+HP_DIST_LOOKBACK        = 90
+HP_DIST_PCT_MIN         = 90.0  # % of days ema21 must stay above ma50
+HP_VOLZ_LOOKBACK        = 20
+HP_VOLZ_MAX_HIGHCOUNT   = 1     # max allowed z>1.5 days in last 20 (user: "not more than 1")
+HP_BEARENGULF_LOOKBACK  = 10
+HP_BEARENGULF_MAX       = 0     # max bearish engulfing bars allowed in lookback
+HP_ACCUM_MIN            = 1.0   # up/down volume ratio >= 1 = net accumulation
+HP_RSTRI_LOOKBACK       = 20
+HP_SCORE_BREAKDOWN      = -20   # boc_delta_map <= this = character breakdown
+HP_MIN_HISTORY_BARS     = 60
+HP_HEALTHY_THRESHOLD    = 60.0  # weighted score (0-100) needed to call it "Healthy"
+
+
+def _hp_ma_state(close_s, high_s, low_s, ema21_s, sma50_s):
+    """Classify the stock's relationship to its own 21ema/50ma as
+    Strong / Held / Idle / Weak / Medium. 'Held' = pierced then closed back
+    above the MA in the last 5 bars (a bounce). 'Idle' = tight, low-volatility
+    base sitting right on the 21ema (neither broken down nor extended)."""
+    c   = float(close_s.iloc[-1])
+    e21 = float(ema21_s.iloc[-1])
+    m50 = float(sma50_s.iloc[-1])
+    if pd.isna(e21) or pd.isna(m50) or e21 == 0 or m50 == 0:
+        return "Unknown"
+
+    e21_prev = float(ema21_s.iloc[-6]) if len(ema21_s) > 6 else e21
+    m50_prev = float(sma50_s.iloc[-6]) if len(sma50_s) > 6 else m50
+    above21, above50 = c > e21, c > m50
+    ema21_rising, sma50_rising = e21 > e21_prev, m50 > m50_prev
+
+    low5, ema21_5, sma50_5 = low_s.iloc[-5:], ema21_s.iloc[-5:], sma50_s.iloc[-5:]
+    touched21_held = bool((low5 <= ema21_5).any()) and above21
+    touched50_held = bool((low5 <= sma50_5).any()) and above50
+
+    dist21_pct = abs(c - e21) / e21 * 100
+    range5_pct = (high_s.iloc[-5:].max() - low5.min()) / c * 100 if c else np.nan
+    idle = dist21_pct <= 3 and range5_pct <= 8
+
+    if above21 and above50 and ema21_rising and sma50_rising and not idle:
+        return "Strong"
+    if touched21_held or touched50_held:
+        return "Held"
+    if idle:
+        return "Idle"
+    if not above21 and not above50:
+        return "Weak"
+    return "Medium"
+
+
+def _hp_low_vol_cluster(vol_s, lookback=HP_LOWVOL_LOOKBACK):
+    """Mirrors the Pine 'Low Volume Cluster Boxes' logic: a bar is low-vol if
+    it's below its own 50-day average OR is the 10-day lowest volume. Returns
+    (has_cluster, longest_streak) over the lookback window."""
+    ma50v = vol_s.rolling(50).mean()
+    low10 = vol_s.rolling(10).min()
+    is_low = (vol_s < ma50v) | (vol_s <= low10)
+    recent = is_low.iloc[-lookback:]
+    max_streak = streak = 0
+    for v in recent:
+        streak = streak + 1 if bool(v) else 0
+        max_streak = max(max_streak, streak)
+    return max_streak >= HP_LOWVOL_MIN_STREAK, max_streak
+
+
+def _hp_dist_pct_positive(ema21_s, sma50_s, lookback=HP_DIST_LOOKBACK):
+    """% of the lookback window where ema21 stayed above ma50 (distancePct > 0),
+    per the MA-squeeze Pine script."""
+    distance_pct = (ema21_s - sma50_s) / sma50_s * 100
+    window = distance_pct.dropna().iloc[-lookback:]
+    if window.empty:
+        return 0.0
+    return float((window > 0).mean() * 100)
+
+
+def _hp_volatility_highcount(high_s, low_s, lookback=HP_VOLZ_LOOKBACK):
+    """Count of z>1.5 daily-range days in the lookback window, per the
+    'Topping Signal' Pine script's frequency/amplitude violation logic."""
+    daily_range = (high_s / low_s - 1) * 100
+    mean_w = daily_range.rolling(lookback).mean()
+    std_w = daily_range.rolling(lookback).std()
+    z = (daily_range - mean_w) / std_w
+    high_vol_count = (z > 1.5).rolling(lookback).sum()
+    val = high_vol_count.iloc[-1] if not high_vol_count.empty else np.nan
+    return float(val) if pd.notna(val) else np.nan
+
+
+def _hp_bearish_engulf_count(open_s, close_s, lookback=HP_BEARENGULF_LOOKBACK):
+    """Classic bearish engulfing bar count: prior bar up, current bar down,
+    and today's body fully engulfs yesterday's body."""
+    prior_bull = close_s.shift(1) > open_s.shift(1)
+    today_bear = close_s < open_s
+    engulf = prior_bull & today_bear & (open_s >= close_s.shift(1)) & (close_s <= open_s.shift(1))
+    return int(engulf.fillna(False).iloc[-lookback:].sum())
+
+
+def _hp_rs_triangle(rs_s, rsma_s, lookback=HP_RSTRI_LOOKBACK):
+    """RS-line-crosses-its-own-MA triangle events (green=crossover, red=crossunder),
+    the Python equivalent of the Pine 'mycrossover'/'mycrossunder' markers."""
+    crossover = (rs_s > rsma_s) & (rs_s.shift(1) <= rsma_s.shift(1))
+    crossunder = (rs_s < rsma_s) & (rs_s.shift(1) >= rsma_s.shift(1))
+    green = int(crossover.fillna(False).iloc[-lookback:].sum())
+    red = int(crossunder.fillna(False).iloc[-lookback:].sum())
+    cur_above = bool(rs_s.iloc[-1] > rsma_s.iloc[-1]) if pd.notna(rs_s.iloc[-1]) and pd.notna(rsma_s.iloc[-1]) else False
+    return green, red, cur_above
+
+
+with st.spinner("Classifying healthy pullbacks vs. deterioration..."):
+    _hp_universe = sorted(cloud_valid_syms | cloud21ema_all | cloudwick_all | ma50bounce_all)
+
+    # Reuse the existing global RS Score lookup pattern (built from all_data,
+    # same as build_setup_summary_text's global_rs_lookup at line ~7169).
+    _hp_rs_lookup = {}
+    for _item in all_data:
+        for _t, _s in zip(_item["Tickers"]["Ticker"], _item["Tickers"]["RS Score"]):
+            _hp_rs_lookup[_t] = _s
+
+    _hp_total_industries = max(1, len(INDUSTRIES))
+    _hp_industry_rank_cutoff = max(1, _hp_total_industries // 2)
+
+    hp_rows = []
+    for sym in _hp_universe:
+        try:
+            df = ticker_dfs_shared.get(sym)
+            if df is None or len(df) < HP_MIN_HISTORY_BARS:
+                continue
+
+            close, open_, high, low, vol = df['Close'], df['Open'], df['High'], df['Low'], df['Volume']
+            ema21 = close.ewm(span=21, adjust=False).mean()
+            sma50 = close.rolling(50).mean()
+
+            # 1) Industry group RS rank + 4-circle trend (best-ranked industry the ticker belongs to)
+            _inds = ticker_to_industries.get(sym, [])
+            best_ind, best_rank = None, None
+            for _ind in _inds:
+                _r = industry_rank_map.get(_ind)
+                if _r is not None and (best_rank is None or _r < best_rank):
+                    best_rank, best_ind = _r, _ind
+            trend_str = industry_trend_map.get(best_ind, "") if best_ind else ""
+            green_ct = trend_str.count("🟢")
+            healthy_1 = (best_rank is not None and best_rank <= _hp_industry_rank_cutoff
+                         and green_ct >= HP_INDUSTRY_GREEN_MIN)
+
+            # 2) Stock's own RS value
+            rs_score = _hp_rs_lookup.get(sym)
+            healthy_2 = rs_score is not None and rs_score >= HP_STOCK_RS_MIN
+
+            # 3) 21ema/50ma state
+            ma_state = _hp_ma_state(close, high, low, ema21, sma50)
+            healthy_3 = ma_state in ("Strong", "Held", "Idle")
+
+            # 4) Low-volume cluster during pullback
+            has_cluster, cluster_streak = _hp_low_vol_cluster(vol)
+            healthy_4 = has_cluster
+
+            # 5) ema21 vs ma50 distance % positive time
+            dist_pct = _hp_dist_pct_positive(ema21, sma50)
+            healthy_5 = dist_pct >= HP_DIST_PCT_MIN
+
+            # 6) Volatility frequency/amplitude z-score violations
+            volz_count = _hp_volatility_highcount(high, low)
+            healthy_6 = pd.notna(volz_count) and volz_count <= HP_VOLZ_MAX_HIGHCOUNT
+
+            # 7) Bearish engulfing count
+            bear_cnt = _hp_bearish_engulf_count(open_, close)
+            healthy_7 = bear_cnt <= HP_BEARENGULF_MAX
+
+            # 8) Accumulation rating (existing UDVR helper + rating function)
+            udvr_series = compute_up_down_vol_ratio_series(sym, ticker_dfs_shared, 50, 10)
+            accum_val = float(udvr_series.iloc[-1]) if udvr_series is not None and not udvr_series.empty else None
+            accum_rating = _udvr_rating(accum_val)
+            healthy_8 = accum_val is not None and accum_val >= HP_ACCUM_MIN
+
+            # 9) RS red/green triangle count
+            bench_close = benchmark_df_shared['Close']
+            rs = close / bench_close
+            rsma = rs.ewm(span=21, adjust=False).mean()
+            tri_green, tri_red, tri_above = _hp_rs_triangle(rs, rsma)
+            healthy_9 = tri_above and tri_green >= tri_red
+
+            # 10) Existing composite score's ±20 breakdown flag (Breakdown of Character)
+            boc_delta = boc_delta_map.get(sym, 0)
+            healthy_10 = boc_delta > HP_SCORE_BREAKDOWN
+
+            flags = {
+                "Industry RS/Trend":   healthy_1,
+                "Stock RS Value":      healthy_2,
+                "21ema/50ma State":    healthy_3,
+                "Low-Vol Cluster":     healthy_4,
+                "EMA21>MA50 Time%":    healthy_5,
+                "Volatility Z-Score":  healthy_6,
+                "Bear Engulf Count":   healthy_7,
+                "Accumulation Rating": healthy_8,
+                "RS Triangle":         healthy_9,
+                "Score Delta ±20":     healthy_10,
+            }
+            weighted_score = sum(HP_WEIGHTS[k] for k, ok in flags.items() if ok)
+            conclusion = "✅ Healthy Pullback" if weighted_score >= HP_HEALTHY_THRESHOLD else "⚠️ Deterioration"
+
+            def _tick(ok):
+                return "✅" if ok else "❌"
+
+            hp_rows.append({
+                "Ticker": sym,
+                "Conclusion": conclusion,
+                "Score": round(weighted_score, 1),
+                "Industry RS/Trend": f"{_tick(healthy_1)} #{best_rank if best_rank else '-'} {trend_str}",
+                "Stock RS Value": f"{_tick(healthy_2)} {rs_score if rs_score is not None else '-'}",
+                "21ema/50ma State": f"{_tick(healthy_3)} {ma_state}",
+                "Low-Vol Cluster": f"{_tick(healthy_4)} streak={cluster_streak}",
+                "EMA21>MA50 Time%": f"{_tick(healthy_5)} {dist_pct:.0f}%",
+                "Volatility Z-Score": f"{_tick(healthy_6)} {int(volz_count) if pd.notna(volz_count) else '-'}",
+                "Bear Engulf Count": f"{_tick(healthy_7)} {bear_cnt}",
+                "Accumulation Rating": f"{_tick(healthy_8)} {accum_rating} ({accum_val:.2f})" if accum_val is not None else f"{_tick(False)} -",
+                "RS Triangle": f"{_tick(healthy_9)} 🟢{tri_green}/🔴{tri_red}",
+                "Score Delta ±20": f"{_tick(healthy_10)} {boc_delta:+d}",
+            })
+        except Exception:
+            continue
+
+if hp_rows:
+    hp_df = pd.DataFrame(hp_rows).sort_values(["Score", "Ticker"], ascending=[False, True]).reset_index(drop=True)
+    st.caption(
+        f"{len(hp_df)} tickers scanned from cloud_valid_syms / cloud21ema_all / cloudwick_all / "
+        f"ma50bounce_all · Healthy Pullback threshold = weighted score ≥ {HP_HEALTHY_THRESHOLD:.0f}/100"
+    )
+    st.dataframe(hp_df, use_container_width=True, hide_index=True)
+else:
+    st.info("No tickers available to classify (empty cloud/21ema/wick/50ma-bounce universe).")
