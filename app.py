@@ -9748,17 +9748,35 @@ for tickers in INDUSTRIES.values():
 all_industry_tickers_tuple = tuple(sorted(all_industry_tickers))
 
 @st.cache_data(ttl=3600)
-def download_all_industry_stocks_data(stocks_tuple, known_ticker_dfs):
-    benchmark_symbol = "^GSPC"
-    missing = [t for t in stocks_tuple if t not in known_ticker_dfs]
+def download_all_industry_stocks_data(stocks_tuple, _known_ticker_dfs):
+    """Fetch the industry tickers that KNOWN_STOCKS didn't already cover.
 
-    ticker_dfs = {t: known_ticker_dfs[t] for t in stocks_tuple if t in known_ticker_dfs}
-    benchmark_df = pd.DataFrame({'Close': known_ticker_dfs[benchmark_symbol]['Close']}) \
-        if benchmark_symbol in known_ticker_dfs else None
+    `_known_ticker_dfs` is underscore-prefixed so Streamlit keys the cache on
+    `stocks_tuple` alone (the static INDUSTRIES ticker list) instead of on the
+    contents of ~470 DataFrames. Hashing that dict is cheap, but its *contents*
+    shift every time download_known_stocks_data refreshes (new bar / intraday
+    tick), which invalidated this entry and forced a full ~1100-ticker refetch
+    far more often than the 1h TTL implies. Same convention as _ticker_dfs used
+    by the other cached compute functions in this file.
+
+    period="9mo" is a hard floor, not a spare knob: the only consumer,
+    compute_setup_avgrank_history(rs_length=90), needs a 90-bar rolling window
+    plus 60 output days = 149 trading bars. 9mo=188 bars, 8mo=167, 7mo=147,
+    6mo=128 — anything under 8mo silently truncates that 60-day history. Wall
+    time here scales with ticker count (one request per symbol), not with how
+    much history each request returns, so shortening the period costs accuracy
+    and buys almost nothing.
+    """
+    benchmark_symbol = "^GSPC"
+    missing = [t for t in stocks_tuple if t not in _known_ticker_dfs]
+
+    ticker_dfs = {t: _known_ticker_dfs[t] for t in stocks_tuple if t in _known_ticker_dfs}
+    benchmark_df = pd.DataFrame({'Close': _known_ticker_dfs[benchmark_symbol]['Close']}) \
+        if benchmark_symbol in _known_ticker_dfs else None
 
     if missing or benchmark_df is None:
         all_symbols = missing + ([benchmark_symbol] if benchmark_df is None else [])
-        raw_data = yf.download(all_symbols, period="9mo", interval="1d", progress=False, auto_adjust=True)
+        raw_data = yf.download(all_symbols, period="8mo", interval="1d", progress=False, auto_adjust=True)
 
         for ticker in missing:
             try:
