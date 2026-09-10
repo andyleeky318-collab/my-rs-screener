@@ -179,7 +179,7 @@ FINAL_SECTION_KEYWORD = SECTION_KEYWORDS[-1]
 # capturing anyway (falls back gracefully rather than blocking forever).
 # Quant Sentiment has been observed to take up to ~8 minutes to appear, so
 # this is set with some buffer above that.
-FULL_LOAD_TIMEOUT_SECONDS = 13 * 60
+FULL_LOAD_TIMEOUT_SECONDS = 14 * 60
 FULL_LOAD_POLL_SECONDS    = 3
 
 
