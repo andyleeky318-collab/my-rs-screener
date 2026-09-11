@@ -6451,31 +6451,14 @@ if not leader_hist.empty:
         chart_df.iloc[-1, chart_df.columns.get_loc("Bar_Color")] = "#FF4B4B"
     # else: leave as-is (already blue, or red from z-score outlier check above)
 
-    # 4. Render chart mapping color directly to the per-row Bar_Color column.
-    # st.bar_chart's color-by-column feature does not reliably paint each bar
-    # its own literal hex color for this shape of data — most bars rendered
-    # blue regardless of Bar_Color, contradicting the (verified-correct, only
-    # ~2-std-dev-outlier bars flagged) values actually computed above, and
-    # disagreeing with the Lazy Charts grid's Plotly rendering of the SAME
-    # leader_hist + the same z-score/max/min logic further down this file.
-    # Plotly's go.Bar with an explicit marker_color list paints exactly the
-    # colors computed, bar for bar — matching that already-correct chart.
-    _leader_fig = go.Figure()
-    _leader_fig.add_trace(go.Bar(
-        x=chart_df["Date"].astype(str), y=chart_df["Leader Count"],
-        marker_color=chart_df["Bar_Color"], showlegend=False,
-    ))
-    _leader_fig.update_layout(
-        height=400,
-        margin=dict(l=10, r=10, t=10, b=10),
-        plot_bgcolor="rgba(20,22,30,1)",
-        paper_bgcolor="rgba(13,17,23,0)",
-        font=dict(color="#cccccc"),
-        bargap=0,
-        xaxis=dict(type="category", title="Date", showgrid=False, tickfont=dict(size=9, color="#888888")),
-        yaxis=dict(title="Leader Count", showgrid=True, gridcolor="rgba(120,120,120,0.15)", tickfont=dict(size=10, color="#888888")),
+    # 4. Render chart mapping color directly to the new dataframe column
+    st.bar_chart(
+        data=chart_df,
+        x="Date",
+        y="Leader Count",
+        color="Bar_Color",  # Direct Streamlit to read colors line-by-line from this column
+        use_container_width=True
     )
-    st.plotly_chart(_leader_fig, use_container_width=True, config={"displayModeBar": False})
 
 def generate_leader_ai_analysis(leader_list, industry_counts, ticker_industry, rs_nh_list, quad_points=None):
     sorted_industries = sorted(industry_counts.items(), key=lambda x: -x[1])
