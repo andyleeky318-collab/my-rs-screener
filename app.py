@@ -17544,7 +17544,7 @@ else:
 # nothing else in the dashboard is touched or recomputed. Read-only, additive.
 # ==============================================================================
 st.markdown("---")
-st.markdown("#### 🩺 Healthy Pullback vs. Deterioration")
+st.markdown("#### 🩺 Healthy Pullback vs Deterioration")
 
 # ── Tunable parameters (weights sum to 100) ─────────────────────────────────
 HP_WEIGHTS = {
@@ -17995,7 +17995,7 @@ with st.spinner("Classifying healthy pullbacks vs. deterioration..."):
                 "Score": round(weighted_score, 1),
                 "Interim High (90d)": (
                     f"${interim_high_price:.2f} · {bars_since_high}d ago "
-                    f"({pd.Timestamp(interim_high_date).strftime('%Y-%m-%d')}) · lookback={dyn_lb}d"
+                    f"({pd.Timestamp(interim_high_date).strftime('%Y-%m-%d')})"
                 ),
                 "Industry RS/Trend": f"{_tick(healthy_1)} RS {best_group_rs:.0f} {trend_str}" if best_group_rs is not None else f"{_tick(False)} -",
                 "Stock RS Value": f"{_tick(healthy_2)} {rs_score if rs_score is not None else '-'}",
