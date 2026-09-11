@@ -17876,33 +17876,47 @@ def _hp_score_delta_series(close_s, high_s, low_s, bench_close_s):
     return score.diff()
 
 
-with st.spinner("Classifying healthy pullbacks vs. deterioration..."):
-    _hp_universe = sorted(cloud_valid_syms | cloud21ema_all | cloudwick_all | ma50bounce_all)
+@st.cache_data(ttl=3600)
+def compute_healthy_pullback_rows(universe_tuple, industry_trend_map, ticker_to_industries,
+                                   _all_data, _ticker_dfs, _benchmark_df):
+    """Runs the full 10-criteria Healthy Pullback / Deterioration classifier for
+    every ticker in universe_tuple.
 
-    # Reuse the existing global RS Score lookup pattern (built from all_data,
-    # same as build_setup_summary_text's global_rs_lookup at line ~7169).
+    Cached because this loop was previously bare module-level code: it re-ran
+    in full on every single Streamlit rerun (any widget interaction anywhere on
+    the page, not just when the underlying price data actually changed).
+    _hp_support_rating alone runs a bar-by-bar Python state machine over the
+    full price history twice per ticker (21ema + 50ma), on top of several
+    rolling/EWM passes for the other 9 criteria — real, repeatable work.
+
+    Leading-underscore args are excluded from Streamlit's cache key (same
+    convention as ticker_dfs_shared elsewhere in this file, since hashing ~470
+    DataFrames on every rerun would cost more than it saves); universe_tuple,
+    industry_trend_map and ticker_to_industries stay in the key so the cache
+    correctly busts when setup membership or industry trends actually change.
+    """
     _hp_rs_lookup = {}
-    for _item in all_data:
+    for _item in _all_data:
         for _t, _s in zip(_item["Tickers"]["Ticker"], _item["Tickers"]["RS Score"]):
             _hp_rs_lookup[_t] = _s
 
     # Industry Group RS values, straight off all_data (same field df_main ranks on).
     _hp_group_rs_lookup = {
         _item["Industry"]: _item.get("Group RS")
-        for _item in all_data if _item.get("Industry")
+        for _item in _all_data if _item.get("Industry")
     }
 
     hp_rows = []
-    for sym in _hp_universe:
+    for sym in universe_tuple:
         try:
-            df = ticker_dfs_shared.get(sym)
+            df = _ticker_dfs.get(sym)
             if df is None or len(df) < HP_MIN_HISTORY_BARS:
                 continue
 
             close, open_, high, low, vol = df['Close'], df['Open'], df['High'], df['Low'], df['Volume']
             ema21 = close.ewm(span=21, adjust=False).mean()
             sma50 = close.rolling(50).mean()
-            bench_close = benchmark_df_shared['Close']
+            bench_close = _benchmark_df['Close']
 
             # Interim swing high (last 90d) + the dynamic high->now lookback that
             # criteria 4/6/7/9/10 below use instead of a fixed window.
@@ -17950,7 +17964,7 @@ with st.spinner("Classifying healthy pullbacks vs. deterioration..."):
             healthy_7 = bear_cnt <= HP_BEARENGULF_MAX
 
             # 8) Accumulation rating (existing UDVR helper + rating function)
-            udvr_series = compute_up_down_vol_ratio_series(sym, ticker_dfs_shared, 50, 10)
+            udvr_series = compute_up_down_vol_ratio_series(sym, _ticker_dfs, 50, 10)
             accum_val = float(udvr_series.iloc[-1]) if udvr_series is not None and not udvr_series.empty else None
             accum_rating = _udvr_rating(accum_val)
             healthy_8 = accum_val is not None and accum_val >= HP_ACCUM_MIN
@@ -18010,6 +18024,18 @@ with st.spinner("Classifying healthy pullbacks vs. deterioration..."):
             })
         except Exception:
             continue
+
+    return hp_rows
+
+
+with st.spinner("Classifying healthy pullbacks vs. deterioration..."):
+    _hp_universe = tuple(sorted(cloud_valid_syms | cloud21ema_all | cloudwick_all | ma50bounce_all))
+    hp_rows = timed(
+        "compute_healthy_pullback_rows",
+        compute_healthy_pullback_rows,
+        _hp_universe, industry_trend_map, ticker_to_industries,
+        all_data, ticker_dfs_shared, benchmark_df_shared
+    )
 
 if hp_rows:
     hp_df = pd.DataFrame(hp_rows).sort_values(["Score", "Ticker"], ascending=[False, True]).reset_index(drop=True)
