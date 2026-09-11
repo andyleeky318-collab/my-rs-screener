@@ -12290,57 +12290,48 @@ else:
 #             #         when = {"bmo": "Before Open", "amc": "After Close"}.get(e.get("time"), e.get("time", ""))
 #             #         st.markdown(f"- {e.get('date','?')} ({when})")
 
-# ── Top Analyst Upgrades / Downgrades (Finnhub) ──────────────────────────────
+# ── Top Analyst Upgrades / Downgrades (yfinance — free, no API key) ─────────
+# Finnhub's /stock/upgrade-downgrade now requires a paid plan (confirmed via
+# its own API schema: "premium":"Premium Access Required", "freeTier":null),
+# so a free-tier FINNHUB_API_KEY got a 403 on every call, silently swallowed
+# by the try/except below, always returning an empty DataFrame. Swapped to
+# yfinance's Ticker.upgrades_downgrades — no key needed, already a dependency
+# for every price fetch in this file — which happens to use the identical
+# action vocabulary ("up"/"down"/"main"/"reit"/"init"), so the row schema and
+# everything downstream (grouping, badges, expander table) is unchanged.
 st.markdown("---")
 st.markdown("#### 🎓 Analyst Upgrades / Downgrades (Recent)")
 
 @st.cache_data(ttl=21600)
 def fetch_analyst_grade_changes(stocks_tuple, days_back=3, max_tickers=80):
     """
-    Loops FINNHUB_API_KEY's /stock/upgrade-downgrade per ticker (free tier,
-    60 req/min) — capped at max_tickers with a small sleep to stay under the
-    rate limit. Cached 6h since this is a slow, sequential fetch.
+    Loops yf.Ticker(sym).upgrades_downgrades per ticker — free, no API key.
+    Capped at max_tickers with a small pause to stay polite to Yahoo's
+    per-ticker endpoint. Cached 6h since this is a slow, sequential fetch.
     """
-    finnhub_key = st.secrets.get("FINNHUB_API_KEY")
-    if not finnhub_key:
-        return pd.DataFrame()
-    cutoff = datetime.date.today() - datetime.timedelta(days=days_back)
+    cutoff = pd.Timestamp(datetime.date.today() - datetime.timedelta(days=days_back))
     rows = []
     for sym in stocks_tuple[:max_tickers]:
         try:
-            resp = requests.get(
-                "https://finnhub.io/api/v1/stock/upgrade-downgrade",
-                params={"symbol": sym, "token": finnhub_key},
-                timeout=8,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            if not isinstance(data, list):
+            grades = yf.Ticker(sym).upgrades_downgrades
+            if grades is None or grades.empty:
                 continue
-            for g in data:
-                gts = g.get("gradeTime")
-                if not gts:
-                    continue
-                try:
-                    gdate = datetime.date.fromtimestamp(gts)
-                except Exception:
-                    continue
-                if gdate < cutoff:
-                    continue
-                action = g.get("action", "")
+            recent = grades[grades.index >= cutoff]
+            for gdate, g in recent.iterrows():
+                action = g.get("Action", "")
                 if action not in ("up", "down"):
                     continue
                 rows.append({
                     "Ticker": sym,
-                    "Date": gdate.isoformat(),
-                    "Firm": g.get("company", ""),
+                    "Date": pd.Timestamp(gdate).date().isoformat(),
+                    "Firm": g.get("Firm", ""),
                     "Action": "Upgrade" if action == "up" else "Downgrade",
-                    "From": g.get("fromGrade", ""),
-                    "To": g.get("toGrade", ""),
+                    "From": g.get("FromGrade", ""),
+                    "To": g.get("ToGrade", ""),
                 })
         except Exception:
             continue
-        time.sleep(1.1)  # stay under Finnhub's 60 calls/min free-tier limit
+        time.sleep(0.15)
     return pd.DataFrame(rows)
 
 
@@ -12352,7 +12343,7 @@ with st.spinner("Fetching recent analyst upgrades/downgrades..."):
     )
 
 if analyst_grades_df.empty:
-    st.info("No recent analyst grade changes found (or FINNHUB_API_KEY missing).")
+    st.info("No recent analyst grade changes found.")
 else:
     grade_counts = analyst_grades_df.groupby(["Ticker", "Action"]).size().unstack(fill_value=0)
     grade_counts["Total"] = grade_counts.sum(axis=1)
@@ -17541,8 +17532,10 @@ downtrend_yest = sorted(sym for sym, (t, y) in downtrend_bo_results.items() if y
 
 st.markdown(
     f"""
-    #### 📐 Downtrend Line Breakout ({len(downtrend_today)}) 
-    <span style="color:#888; font-size:12px; font-weight:normal;">*Star = High Volume</span>
+    <h4>
+        📐 Downtrend Line Breakout ({len(downtrend_today)})
+        <span style="color:#888; font-size:12px; font-weight:normal;">(Star = High Volume)</span>
+    </h4>
     """,
     unsafe_allow_html=True,
 )
