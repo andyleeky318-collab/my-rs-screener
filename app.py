@@ -17337,7 +17337,9 @@ if _timing_log:
             )
 
     total_ms = sum(_timing_log.values())
-    st.caption(f"Total measured wall-clock time: **{total_ms/1000:.2f}s** across {len(_timing_log)} tracked calls")        
+    total_s = total_ms / 1000
+    total_str = f"{int(total_s // 60)}m {total_s % 60:.2f}s" if total_s >= 60 else f"{total_s:.2f}s"
+    st.caption(f"Total measured wall-clock time: **{total_str}** across {len(_timing_log)} tracked calls")
 
 # ==============================================================================
 # 28. DOWNTREND LINE BREAKOUT — dynamic descending-resistance trendline breakout
@@ -17473,12 +17475,11 @@ downtrend_today = sorted(sym for sym, (t, y) in downtrend_bo_results.items() if 
 downtrend_yest = sorted(sym for sym, (t, y) in downtrend_bo_results.items() if y)
 
 st.markdown(
-    f"""#### 📐 Downtrend Line Breakout ({len(downtrend_today)})
-    <span style="color:#888; font-size:12px; font-weight:normal;">
-        Star = High Volume
-    </span>
+    f"""
+    #### 📐 Downtrend Line Breakout ({len(downtrend_today)}) 
+    <span style="color:#888; font-size:12px; font-weight:normal;">*Star = High Volume</span>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
 if downtrend_today or downtrend_yest:
