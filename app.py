@@ -3484,9 +3484,17 @@ def parse_ai_points(raw_text):
 
     return header, points
 
-def render_ai_points_table(raw_text, tickers=None, industries=None):
+def render_ai_points_table(raw_text, tickers=None, industries=None, label_industries=None):
     """Render an AI analysis response as a 2-column (topic | detail) table.
-    Rows with no content (section headings like 'Outliers') span the full width."""
+    Rows with no content (section headings like 'Outliers') span the full width.
+
+    label_industries: optional — when a caller's labels ARE industry names
+    (e.g. the Finviz rotation report, where "Industry Name" was pulled out of
+    the content into the label column), pass the same industries list here to
+    color the label the same teal/bold way format_ai_analysis_text already
+    colors industry names inside content, and let the column size to its
+    content with no wrap instead of the fixed 170px/plain-grey default. Every
+    other existing caller omits this and is completely unaffected."""
     if not raw_text:
         return
 
@@ -3516,10 +3524,19 @@ def render_ai_points_table(raw_text, tickers=None, industries=None):
             continue
 
         formatted_content = format_ai_analysis_text(content, tickers=tickers, industries=industries)
+
+        if label_industries:
+            formatted_label = format_ai_analysis_text(label_clean, industries=label_industries)
+            label_td_style = ("padding:8px 12px; border:2px solid #4a4f5a; vertical-align:top; "
+                               "white-space:nowrap; font-weight:700; font-size:14.5px;")
+        else:
+            formatted_label = label_clean
+            label_td_style = ("padding:8px 12px; border:2px solid #4a4f5a ; vertical-align:top; "
+                               "width:170px; font-weight:700; color:#e0e0e0; font-size:14.5px;")
+
         rows_html += (
             f"<tr style='background:{bg};'>"
-            f"<td style='padding:8px 12px; border:2px solid #4a4f5a ; vertical-align:top; "
-            f"width:170px; font-weight:700; color:#e0e0e0; font-size:14.5px;'>{label_clean}</td>"
+            f"<td style='{label_td_style}'>{formatted_label}</td>"
             f"<td style='padding:8px 12px; border:2px solid #4a4f5a ; vertical-align:top; "
             f"color:#e0e0e0; font-size:14.5px; line-height:1.5;'>{formatted_content}</td>"
             f"</tr>"
@@ -12197,70 +12214,70 @@ if not econ_df.empty and "event" in econ_df.columns:
 else:
     st.info("Economic calendar data currently unavailable.")
 
-st.markdown("---")
-st.markdown("#### 🔎 Volatility Explanation Panel (Massive.com)")
+# st.markdown("---")
+# st.markdown("#### 🔎 Volatility Explanation Panel (Massive.com)")
 
-vol_hit_tickers = tuple(sym for sym, z, pct in volatility_hits)
+# vol_hit_tickers = tuple(sym for sym, z, pct in volatility_hits)
 
-if not st.secrets.get("MASSIVE_API_KEY"):
-    st.info("Add MASSIVE_API_KEY to secrets.toml to enable this panel.")
-elif not vol_hit_tickers:
-    st.info("No volatility hits today.")
-else:
-    with st.spinner("Fetching news, SEC filings, insider trades & earnings via Massive..."):
-        reasons, news_map, sec_map, form4_map, earnings_map = timed(
-            "explain_volatility_hits", explain_volatility_hits, vol_hit_tickers
-        )
+# if not st.secrets.get("MASSIVE_API_KEY"):
+#     st.info("Add MASSIVE_API_KEY to secrets.toml to enable this panel.")
+# elif not vol_hit_tickers:
+#     st.info("No volatility hits today.")
+# else:
+#     with st.spinner("Fetching news, SEC filings, insider trades & earnings via Massive..."):
+#         reasons, news_map, sec_map, form4_map, earnings_map = timed(
+#             "explain_volatility_hits", explain_volatility_hits, vol_hit_tickers
+#         )
 
-    # Compact badge row (reuses your .ticker-badge CSS)
-    badge_html = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
-    for sym in vol_hit_tickers:
-        tag_str = " ".join(reasons.get(sym, [])) or "No catalyst"
-        badge_html += (
-            f'<div class="ticker-badge"><span class="ticker-name">{sym}</span>'
-            f'<span class="ticker-rs" style="margin-left:6px;">{tag_str}</span></div>'
-        )
-    badge_html += "</div>"
-    st.markdown(badge_html, unsafe_allow_html=True)
+#     # Compact badge row (reuses your .ticker-badge CSS)
+#     badge_html = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
+#     for sym in vol_hit_tickers:
+#         tag_str = " ".join(reasons.get(sym, [])) or "No catalyst"
+#         badge_html += (
+#             f'<div class="ticker-badge"><span class="ticker-name">{sym}</span>'
+#             f'<span class="ticker-rs" style="margin-left:6px;">{tag_str}</span></div>'
+#         )
+#     badge_html += "</div>"
+#     st.markdown(badge_html, unsafe_allow_html=True)
 
-    # Per-ticker detail — only render an expander if a catalyst was actually found
-    for sym in vol_hit_tickers:
-        news_items = news_map.get(sym, [])
-        filings    = sec_map.get(sym, [])
-        form4s     = form4_map.get(sym, [])
-        #earnings   = earnings_map.get(sym, [])
+#     # Per-ticker detail — only render an expander if a catalyst was actually found
+#     for sym in vol_hit_tickers:
+#         news_items = news_map.get(sym, [])
+#         filings    = sec_map.get(sym, [])
+#         form4s     = form4_map.get(sym, [])
+#         #earnings   = earnings_map.get(sym, [])
 
-        if not (news_items or filings or form4s):
-            continue
+#         if not (news_items or filings or form4s):
+#             continue
 
-        tag_str = " ".join(reasons.get(sym, [])) or "No catalyst found"
-        with st.expander(f"{sym} — {tag_str}"):
-            if news_items:
-                st.markdown("**📰 News**")
-                for n in news_items[:3]:
-                    title = n.get("title", "Untitled")
-                    url = n.get("article_url") or n.get("url", "")
-                    st.markdown(f"- [{title}]({url})" if url else f"- {title}")
+#         tag_str = " ".join(reasons.get(sym, [])) or "No catalyst found"
+#         with st.expander(f"{sym} — {tag_str}"):
+#             if news_items:
+#                 st.markdown("**📰 News**")
+#                 for n in news_items[:3]:
+#                     title = n.get("title", "Untitled")
+#                     url = n.get("article_url") or n.get("url", "")
+#                     st.markdown(f"- [{title}]({url})" if url else f"- {title}")
 
-            if filings:
-                st.markdown("**📝 Recent SEC Filings**")
-                for f in filings[:3]:
-                    st.markdown(f"- {f.get('form_type','?')} filed {f.get('filing_date','?')}")
+#             if filings:
+#                 st.markdown("**📝 Recent SEC Filings**")
+#                 for f in filings[:3]:
+#                     st.markdown(f"- {f.get('form_type','?')} filed {f.get('filing_date','?')}")
 
-            if form4s:
-                st.markdown("**👤 Insider Activity (Form 4)**")
-                for f in form4s[:5]:
-                    st.markdown(
-                        f"- {f.get('owner_name','Unknown')}: "
-                        f"{f.get('transaction_type','?')} {f.get('shares','?')} shares "
-                        f"({f.get('filing_date','?')})"
-                    )
+#             if form4s:
+#                 st.markdown("**👤 Insider Activity (Form 4)**")
+#                 for f in form4s[:5]:
+#                     st.markdown(
+#                         f"- {f.get('owner_name','Unknown')}: "
+#                         f"{f.get('transaction_type','?')} {f.get('shares','?')} shares "
+#                         f"({f.get('filing_date','?')})"
+#                     )
 
-            # if earnings:
-            #     st.markdown("**📅 Upcoming Earnings**")
-            #     for e in earnings[:2]:
-            #         when = {"bmo": "Before Open", "amc": "After Close"}.get(e.get("time"), e.get("time", ""))
-            #         st.markdown(f"- {e.get('date','?')} ({when})")
+#             # if earnings:
+#             #     st.markdown("**📅 Upcoming Earnings**")
+#             #     for e in earnings[:2]:
+#             #         when = {"bmo": "Before Open", "amc": "After Close"}.get(e.get("time"), e.get("time", ""))
+#             #         st.markdown(f"- {e.get('date','?')} ({when})")
 
 # ── Top Analyst Upgrades / Downgrades (Finnhub) ──────────────────────────────
 st.markdown("---")
@@ -13952,9 +13969,11 @@ Keep it tight, data-driven, cite the actual % numbers, no fluff, no disclaimers.
             st.session_state["finviz_rotation_result"],
             flags=re.MULTILINE,
         )
+        _finviz_industries = finviz_perf_df["Industry"].tolist()
         render_ai_points_table(
             _finviz_labeled_text,
-            industries=finviz_perf_df["Industry"].tolist()
+            industries=_finviz_industries,
+            label_industries=_finviz_industries,
         )
 
     with st.expander("Raw Finviz industry performance table"):
@@ -14049,10 +14068,10 @@ else:
             fig_mc.add_hline(y=level, line_color=color, line_dash=dash, line_width=1, row=r, col=1)
 
     fig_mc.update_layout(
-        height=650, margin=dict(l=40, r=40, t=65, b=30),
+        height=650, margin=dict(l=40, r=40, t=58, b=30),
         plot_bgcolor="rgba(20,22,30,1)", paper_bgcolor="rgba(13,17,23,0)",
         font=dict(color="#cccccc"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5),
+        legend=dict(orientation="h", yanchor="bottom", y=1.045, xanchor="center", x=0.5),
         hovermode="x unified",
     )
     fig_mc.update_xaxes(type="category", showgrid=False, tickfont=dict(size=9))
@@ -14324,7 +14343,7 @@ else:
 # section or shared variable — all new names are unique.
 # ==============================================================================
 st.markdown("---")
-st.markdown("## 🧭 Lazy Exposure / % Invested / 21ema vs 50ma / 2R vs 1.5R TP / 2-stops vs 3-stops")
+st.markdown("## 🧭 Lazy Exposure = % Invested / 21ema vs 50ma / 2R vs 1.5R TP / 2-stops vs 3-stops")
 
 # ── Standalone data fetches used only by the verdict (run first so they're
 # available when compute_market_verdict() executes) ─────────────────────────
