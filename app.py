@@ -17472,7 +17472,14 @@ with st.spinner("Scanning for downtrend line breakouts..."):
 downtrend_today = sorted(sym for sym, (t, y) in downtrend_bo_results.items() if t)
 downtrend_yest = sorted(sym for sym, (t, y) in downtrend_bo_results.items() if y)
 
-st.markdown(f"#### 📐 Downtrend Line Breakout ({len(downtrend_today)})")
+st.markdown(
+    f"""#### 📐 Downtrend Line Breakout ({len(downtrend_today)})
+    <span style="color:#888; font-size:12px; font-weight:normal;">
+        Star = High Volume
+    </span>
+    """,
+    unsafe_allow_html=True
+)
 
 if downtrend_today or downtrend_yest:
     dt_industry_counts, dt_ticker_industry = build_leader_industry_map(downtrend_today, INDUSTRIES)
