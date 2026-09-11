@@ -18018,6 +18018,9 @@ if hp_rows:
     #     f"{len(hp_df)} tickers scanned from cloud_valid_syms / cloud21ema_all / cloudwick_all / "
     #     f"ma50bounce_all · Healthy Pullback threshold = weighted score ≥ {HP_HEALTHY_THRESHOLD:.0f}/100"
     # )
-    st.dataframe(hp_df, use_container_width=True, hide_index=True)
+    # height sized to the row count (35px/row + header) so every ticker renders
+    # vertically with no inner scrollbar — the page scrolls instead of the grid.
+    st.dataframe(hp_df, use_container_width=True, hide_index=True,
+                 height=(len(hp_df) + 1) * 35 + 3)
 else:
     st.info("No tickers available to classify (empty cloud/21ema/wick/50ma-bounce universe).")
