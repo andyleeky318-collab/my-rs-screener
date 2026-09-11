@@ -3320,11 +3320,13 @@ SECTOR_KEYWORDS = {
     "biotechnology": "#FF69B4", "Commodities": "#FF69B4", "commodity": "#FF69B4", "mining": "#FF69B4", "pharmaceutical": "#FF69B4", 
 }
 
-def format_ai_analysis_text(text, tickers=None, industries=None):
+def format_ai_analysis_text(text, tickers=None, industries=None, number_color="#FFE5CC"):
     """
     Post-process AI markdown output to highlight key terms:
     - strips markdown syntax (**bold**, *italic*, ### headers) — plain text, no HTML tags
-    - numbers/percentages (light color)
+    - numbers/percentages (light color by default; pass number_color to override
+      for a specific caller — e.g. the Finviz rotation report uses pure orange —
+      without changing the default for every other AI-text caller)
     - quadrant keywords: Strong/Improving/Weakening/Weak (color-coded)
     - BLUE DOT (red, bold)
     - ticker symbols (gold, bold)
@@ -3344,7 +3346,7 @@ def format_ai_analysis_text(text, tickers=None, industries=None):
     #    so we don't accidentally bold digits inside hex color codes.
     text = re.sub(
         r'\b(\d+(?:\.\d+)?%?)\b',
-        r'<span style="color:#FFE5CC; font-weight:bold;">\1</span>',
+        rf'<span style="color:{number_color}; font-weight:bold;">\1</span>',
         text
     )
 
@@ -3484,7 +3486,8 @@ def parse_ai_points(raw_text):
 
     return header, points
 
-def render_ai_points_table(raw_text, tickers=None, industries=None, label_industries=None):
+def render_ai_points_table(raw_text, tickers=None, industries=None, label_industries=None,
+                            content_number_color=None):
     """Render an AI analysis response as a 2-column (topic | detail) table.
     Rows with no content (section headings like 'Outliers') span the full width.
 
@@ -3494,13 +3497,18 @@ def render_ai_points_table(raw_text, tickers=None, industries=None, label_indust
     color the label the same teal/bold way format_ai_analysis_text already
     colors industry names inside content, and let the column size to its
     content with no wrap instead of the fixed 170px/plain-grey default. Every
-    other existing caller omits this and is completely unaffected."""
+    other existing caller omits this and is completely unaffected.
+
+    content_number_color: optional — overrides the numeric/percentage
+    highlight color in the content cell for this call only (format_ai_analysis_text
+    still defaults to its usual light color everywhere else)."""
     if not raw_text:
         return
 
     header, points = parse_ai_points(raw_text)
     if not points:
-        formatted = format_ai_analysis_text(raw_text, tickers=tickers, industries=industries)
+        formatted = format_ai_analysis_text(raw_text, tickers=tickers, industries=industries,
+                                             **({"number_color": content_number_color} if content_number_color else {}))
         st.markdown(formatted, unsafe_allow_html=True)
         return
 
@@ -3523,7 +3531,10 @@ def render_ai_points_table(raw_text, tickers=None, industries=None, label_indust
             )
             continue
 
-        formatted_content = format_ai_analysis_text(content, tickers=tickers, industries=industries)
+        formatted_content = format_ai_analysis_text(
+            content, tickers=tickers, industries=industries,
+            **({"number_color": content_number_color} if content_number_color else {})
+        )
 
         if label_industries:
             formatted_label = format_ai_analysis_text(label_clean, industries=label_industries)
@@ -13974,6 +13985,7 @@ Keep it tight, data-driven, cite the actual % numbers, no fluff, no disclaimers.
             _finviz_labeled_text,
             industries=_finviz_industries,
             label_industries=_finviz_industries,
+            content_number_color="#FFA500",  # pure orange, this report only
         )
 
     with st.expander("Raw Finviz industry performance table"):
@@ -15449,7 +15461,17 @@ else:
 # )
 
 st.markdown("---")
-st.markdown("#### 📊 Lazy Charts")
+# Title is filled in AFTER every chart below has rendered, so it can turn red
+# when any one of the _render_bar_chart-based charts has today's (latest) bar
+# colored red (#FF4B4B) or light green (#90EE90) — see _lazy_chart_alerts
+# below. Mark Minervini and Stage 2 vs Stage 4 are line charts (no bar-color
+# logic at all) and Setup Avg Rank is deliberately excluded (its own red/
+# light-green colors mean "today set a new best," a different signal) — none
+# of the three can ever add to this alert.
+_lazy_chart_title_ph = st.empty()
+_lazy_chart_title_ph.markdown("#### 📊 Lazy Charts")
+_lazy_chart_alerts = []
+_LAZY_ALERT_COLORS = ("#FF4B4B", "#90EE90")
 
 _compare_days = 60
 
@@ -15493,6 +15515,8 @@ def _render_bar_chart(title, df, date_col, value_col, colors, height=110, days=3
         return
     plot_df = df.tail(days).reset_index(drop=True)
     plot_colors = colors[-len(plot_df):] if colors else ["#29B5E8"] * len(plot_df)
+    if plot_colors and plot_colors[-1] in _LAZY_ALERT_COLORS:
+        _lazy_chart_alerts.append(title)
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
@@ -15705,6 +15729,9 @@ if isinstance(_setup_avgrank_hist, pd.DataFrame) and not _setup_avgrank_hist.emp
     _bar_colors[_chart_df_rank.index.get_loc(_min_idx)] = "#90EE90"
     if _today_rank == _min_rank:
         _bar_colors[-1] = "#FF4B4B"
+    # Setup Avg Rank is deliberately excluded from the Lazy Charts title-color
+    # alert (its light-green/red logic means something different — "today set
+    # a new best" — not the same "unusual" signal as the other charts).
 
     _fig_setup = go.Figure()
     _fig_setup.add_trace(go.Bar(
@@ -15747,6 +15774,11 @@ if isinstance(globals().get("valid_breakout_history_v1", None), pd.DataFrame) an
     )
 else:
     st.caption("**Breakout Count** — no data")
+
+# Fill in the Lazy Charts title now that every chart above has run — red if
+# any one of them flagged its latest bar via _lazy_chart_alerts, else default.
+if _lazy_chart_alerts:
+    _lazy_chart_title_ph.markdown("#### :red[📊 Lazy Charts]")
 
 # ==============================================================================
 # 25. RAPID ROTATION DETECTOR — high-sensitivity, 1-2 day rotation confirmation
