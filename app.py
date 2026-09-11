@@ -13652,7 +13652,7 @@ if accumulation_rows:
     <thead><tr>
     <th style="width:30px; text-align:center; padding:4px 8px;">#</th>
     <th style="text-align:left; padding:4px 8px;">Ticker</th>
-    <th style="text-align:center; padding:4px 8px;">Avg Accum</th>
+    <th style="text-align:center; padding:4px 8px; white-space:nowrap;">Avg Accum</th>
     <th style="text-align:left; padding:4px 8px;">Trend</th>
     <th style="text-align:left; padding:4px 8px;">Ratio &gt; 1</th>
     <th style="text-align:left; padding:4px 8px;">Ratio &lt; 1</th>
