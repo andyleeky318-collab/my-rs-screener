@@ -13938,8 +13938,22 @@ Keep it tight, data-driven, cite the actual % numbers, no fluff, no disclaimers.
             st.session_state["finviz_rotation_sig"] = _finviz_sig
 
     if "finviz_rotation_result" in st.session_state:
-        render_ai_points_table(
+        # Each bullet is "- Industry Name — 1W: +X% | 1M: +X% | 3M: +X%" (per
+        # the prompt template above). render_ai_points_table's default parser
+        # can't see "Industry Name" as a label unless it's bolded, so it falls
+        # back to "Point N" for the label cell. Rewriting "- X — Y" as
+        # "- **X**: Y" here (display-only; the stored AI text is untouched)
+        # makes the existing bold-label rule in parse_ai_points pick up the
+        # industry name as the label — the "1W: ... | 1M: ... | 3M: ..." part
+        # (group 3) still lands in the same content cell as before.
+        _finviz_labeled_text = re.sub(
+            r'^(-\s+)([^\n—–]+?)\s*[—–]\s*(.+)$',
+            r'\1**\2**: \3',
             st.session_state["finviz_rotation_result"],
+            flags=re.MULTILINE,
+        )
+        render_ai_points_table(
+            _finviz_labeled_text,
             industries=finviz_perf_df["Industry"].tolist()
         )
 
@@ -14035,10 +14049,10 @@ else:
             fig_mc.add_hline(y=level, line_color=color, line_dash=dash, line_width=1, row=r, col=1)
 
     fig_mc.update_layout(
-        height=650, margin=dict(l=40, r=40, t=50, b=30),
+        height=650, margin=dict(l=40, r=40, t=65, b=30),
         plot_bgcolor="rgba(20,22,30,1)", paper_bgcolor="rgba(13,17,23,0)",
         font=dict(color="#cccccc"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+        legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5),
         hovermode="x unified",
     )
     fig_mc.update_xaxes(type="category", showgrid=False, tickfont=dict(size=9))
