@@ -17682,7 +17682,10 @@ else:
 # nothing else in the dashboard is touched or recomputed. Read-only, additive.
 # ==============================================================================
 st.markdown("---")
-st.markdown("#### 🩺 Healthy Pullback vs Deterioration")
+# Filled in after hp_df is built below with (Risk Off)/(Risk On), based on
+# whether more than half the table reads Deterioration.
+_hp_title_ph = st.empty()
+_hp_title_ph.markdown("#### 🩺 Healthy Pullback vs Deterioration")
 
 # ── Tunable parameters (weights sum to 100) ─────────────────────────────────
 HP_WEIGHTS = {
@@ -18178,6 +18181,10 @@ with st.spinner("Classifying healthy pullbacks vs. deterioration..."):
 if hp_rows:
     hp_df = pd.DataFrame(hp_rows).sort_values(["Score", "Ticker"], ascending=[False, True]).reset_index(drop=True)
     hp_df.insert(0, "#", range(1, len(hp_df) + 1))
+
+    _hp_deter_count = hp_df["Conclusion"].str.contains("Deterioration").sum()
+    _hp_regime = "Risk Off" if _hp_deter_count > len(hp_df) / 2 else "Risk On"
+    _hp_title_ph.markdown(f"#### 🩺 Healthy Pullback vs Deterioration ({_hp_regime})")
     # st.caption(
     #     f"{len(hp_df)} tickers scanned from cloud_valid_syms / cloud21ema_all / cloudwick_all / "
     #     f"ma50bounce_all · Healthy Pullback threshold = weighted score ≥ {HP_HEALTHY_THRESHOLD:.0f}/100"
