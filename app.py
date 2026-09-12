@@ -114,7 +114,8 @@ INDUSTRIES = {
     'TRANSPORTATION-SVCS': ['DASH', 'EXPD', 'CHRW', 'CART', 'GXO', 'HUBG', 'UBER', 'PFGC', 'SARO', 'VNT', 'VRRM', 'CAAP'],
     'TRNSPRTTIN-AIRLNE': ['JETS', 'DAL', 'UAL', 'LUV', 'AAL', 'ALK', 'CPA', 'SKYW'],
     'ENERGY-ALT/OTHER': ['BIP', 'TLN', 'CWEN', 'BEPC'],
-    'MINING-METAL ORES': ['PICK', 'AA', 'SCCO', 'FCX', 'CCJ', 'CRS', 'ATI', 'TECK', 'CENX', 'AG', 'HL', 'NEM', 'KALU', 'CSTM'],
+    'MINING-METAL ORES': ['PICK', 'AA', 'CCJ', 'CRS', 'ATI', 'TECK', 'CENX', 'AG', 'HL', 'NEM', 'KALU', 'CSTM'],
+    'COPPER': ['COPX', 'SCCO', 'FCX'],
     'APPAREL-SHOES & REL': ['NKE', 'DECK', 'ONON', 'RL', 'BIRK', 'CROX', 'LEVI', 'VFC', 'GIL', 'PVH', 'COLM', 'KTB', 'SHOO'],
     'RETAIL-APPRL/SHOES/ACC': ['TJX', 'ROST', 'BURL', 'TPR', 'GAP', 'ANF', 'BBWI', 'CPRI', 'BOOT', 'AEO', 'URBN', 'CRI', 'BKE', 'VSXY'],
     'AUTO/TRCK-ORGNL EQP': ['ITW', 'CMI', 'APTV', 'ITT', 'DCI', 'ALSN', 'ALV', 'GNTX', 'LEA', 'BC', 'ATMU', 'VC', 'BWA'],
@@ -13164,6 +13165,37 @@ def compute_atr_multiple_above_ma50(ticker):
     return None if pd.isna(val) else float(val)
 
 
+def compute_ema21_atr_multiple(ticker):
+    """
+    Same 'how many ATRs extended' formula as compute_atr_multiple_above_ma50,
+    but measured from the 21-day EMA instead of the 50-day SMA — a faster,
+    tighter reference line, so this reads the SHORT-TERM extension level.
+    """
+    df = yf.download(ticker, period="6mo", interval="1d", progress=False, auto_adjust=True)
+    df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
+    df = df[["High", "Low", "Close"]].dropna()
+
+    close = df["Close"]
+    high = df["High"]
+    low = df["Low"]
+
+    ema21 = close.ewm(span=21, adjust=False).mean()
+
+    tr = pd.concat([
+        high - low,
+        (high - close.shift(1)).abs(),
+        (low - close.shift(1)).abs()
+    ], axis=1).max(axis=1)
+    atr14 = tr.rolling(14).mean()
+    atr_pct = (atr14 / close) * 100
+
+    pct_gain = ((close - ema21) / ema21) * 100
+    atr_multiple = pct_gain / atr_pct.replace(0, np.nan)
+
+    val = atr_multiple.iloc[-1]
+    return None if pd.isna(val) else float(val)
+
+
 def _atr_multiple_box_html(label, value, threshold, triggered):
     if triggered:
         bg, border, text_color = "#2a1212", "#4a1f1f", "#ff5252"
@@ -13218,6 +13250,45 @@ with atr_col3:
     st.markdown(_atr_multiple_box_html("SMH ATR Multiple", smh_atr_mult, SMH_ATR_THRESHOLD, smh_atr_triggered), unsafe_allow_html=True)
 with atr_col4:
     st.markdown(_atr_multiple_box_html("IWM ATR Multiple", iwm_atr_mult, IWM_ATR_THRESHOLD, iwm_atr_triggered), unsafe_allow_html=True)
+
+# ── 21EMA Extension — same ATR-multiple formula, measured off the 21-day EMA
+# instead of the 50-day SMA, so it reads short-term (not base-length) stretch.
+# Thresholds are suggested starting points, not backtested: since the 21ema
+# tracks price much more closely than the 50sma, the SAME % gain produces a
+# smaller ATR-multiple reading here, so each is roughly half its 50sma-row
+# counterpart above (SPY/IWM lowest-beta -> lowest threshold, SMH highest-beta
+# -> highest threshold, same relative ordering as the ATR Multiple row).
+spy_ema21_atr_mult = timed("compute_spy_ema21_atr_multiple",
+    lambda: compute_ema21_atr_multiple("SPY"))
+qqq_ema21_atr_mult = timed("compute_qqq_ema21_atr_multiple",
+    lambda: compute_ema21_atr_multiple("QQQ"))
+smh_ema21_atr_mult = timed("compute_smh_ema21_atr_multiple",
+    lambda: compute_ema21_atr_multiple("SMH"))
+iwm_ema21_atr_mult = timed("compute_iwm_ema21_atr_multiple",
+    lambda: compute_ema21_atr_multiple("IWM"))
+
+SPY_EMA21_ATR_THRESHOLD = 2.5
+QQQ_EMA21_ATR_THRESHOLD = 3.0
+SMH_EMA21_ATR_THRESHOLD = 4.0
+IWM_EMA21_ATR_THRESHOLD = 3.0
+
+spy_ema21_atr_triggered = spy_ema21_atr_mult is not None and spy_ema21_atr_mult >= SPY_EMA21_ATR_THRESHOLD
+qqq_ema21_atr_triggered = qqq_ema21_atr_mult is not None and qqq_ema21_atr_mult >= QQQ_EMA21_ATR_THRESHOLD
+smh_ema21_atr_triggered = smh_ema21_atr_mult is not None and smh_ema21_atr_mult >= SMH_EMA21_ATR_THRESHOLD
+iwm_ema21_atr_triggered = iwm_ema21_atr_mult is not None and iwm_ema21_atr_mult >= IWM_EMA21_ATR_THRESHOLD
+
+st.write("")
+
+ema21_col1, ema21_col2, ema21_col3, ema21_col4 = st.columns(4)
+
+with ema21_col1:
+    st.markdown(_atr_multiple_box_html("SPY 21EMA Extension", spy_ema21_atr_mult, SPY_EMA21_ATR_THRESHOLD, spy_ema21_atr_triggered), unsafe_allow_html=True)
+with ema21_col2:
+    st.markdown(_atr_multiple_box_html("QQQ 21EMA Extension", qqq_ema21_atr_mult, QQQ_EMA21_ATR_THRESHOLD, qqq_ema21_atr_triggered), unsafe_allow_html=True)
+with ema21_col3:
+    st.markdown(_atr_multiple_box_html("SMH 21EMA Extension", smh_ema21_atr_mult, SMH_EMA21_ATR_THRESHOLD, smh_ema21_atr_triggered), unsafe_allow_html=True)
+with ema21_col4:
+    st.markdown(_atr_multiple_box_html("IWM 21EMA Extension", iwm_ema21_atr_mult, IWM_EMA21_ATR_THRESHOLD, iwm_ema21_atr_triggered), unsafe_allow_html=True)
 
 # ==============================================================================
 # MASTER SETUP CONSOLIDATION TABLE
