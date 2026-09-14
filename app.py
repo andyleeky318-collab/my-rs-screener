@@ -18230,3 +18230,237 @@ if hp_rows:
                  height=(len(hp_df) + 1) * 35 + 3)
 else:
     st.info("No tickers available to classify (empty cloud/21ema/wick/50ma-bounce universe).")
+
+# ==============================================================================
+# 30. BREAKOUT HEALTH — how recent 2nd-Pivot-Break breakouts are holding up
+#
+# Methodology: https://note.com/oratnek_ill/n/nbca4d1b8c3e1?hl=en ("Breakout
+# Health" by Oratnek). For every KNOWN_STOCKS ticker with a "2nd Pivot Break"
+# in the last 20 trading days, score its follow-through on 4 checks, each
+# measured in R = ADR% (20-day avg High/Low range) of the breakout level:
+#   1) avoided -1R within 3 days   (didn't immediately fail)
+#   2) reached +1R within 5 days   (follow-through)
+#   3) reached +2R within 10 days  (strong follow-through)
+#   4) still above the pivot 5 days later (held the level)
+# then takes a weighted average of those 4 checks per stock, and averages
+# across every qualifying stock for one overall market "Breakout Health"
+# score. "2nd Pivot Break" is a Higher-Low base breakout: track pivot lows of
+# length 2-5 bars; whenever a NEW pivot low forms higher than the prior one
+# (a "Higher Low"), the 2nd Pivot is the highest high between those two lows
+# — the resistance the base needs to clear. Breaking above that level (close
+# crossing over it) while the structure hasn't already failed (price back
+# below the pivot low, or below the 21-bar MA of Low) is the breakout event.
+# Ported from the "Advanced Structure Pivot" Pine v6 indicator's long-side
+# state machine — same pivot/break/fail logic, minus its chart drawing.
+# Reuses ticker_dfs_shared (already downloaded) — no new data fetch.
+# Read-only, additive.
+# ==============================================================================
+st.markdown("---")
+_bh_title_ph = st.empty()
+_bh_title_ph.markdown("#### 🚀 Breakout Health")
+
+BH_MIN_LEN = 2          # shortest pivot length scanned (bars each side)
+BH_MAX_LEN = 5          # longest pivot length scanned
+BH_MA_LEN = 21          # MA(Low) used as the structure's fail/stop level
+BH_LOOKBACK_DAYS = 20   # "2nd Pivot Break within the past 20 trading days"
+BH_MIN_HISTORY_BARS = 80
+
+# Suggested weights for the 4 checks (sum to 100) — not backtested, a
+# starting point: survival (avoided -1R) and holding the level (above pivot
+# 5d) weighted slightly higher than the two upside-follow-through checks,
+# since a breakout that merely "didn't fail" is a materially different
+# signal than a fully confirmed, extended one.
+BH_WEIGHTS = {
+    "Avoided -1R (3d)":  30,
+    "+1R (5d)":          20,
+    "+2R (10d)":         20,
+    "Above Pivot (5d)":  30,
+}
+BH_HEALTHY_THRESHOLD = 65.0   # aggregate score >= this reads "Healthy"
+BH_WEAK_THRESHOLD = 40.0      # aggregate score <  this reads "Weak" (else "Neutral")
+
+
+def _bh_find_2nd_pivot_breaks(df, min_len=BH_MIN_LEN, max_len=BH_MAX_LEN, ma_len=BH_MA_LEN):
+    """Bar-by-bar port of the Pine script's long-side Higher-Low structure
+    state machine, run independently for each pivot length. Returns every
+    2nd-Pivot-Break event found across all lengths as a list of dicts
+    {length, break_bar, break_val, pivot_idx, pivot_val}."""
+    n = len(df)
+    close = df['Close'].to_numpy()
+    high = df['High'].to_numpy()
+    low = df['Low'].to_numpy()
+    ma_stop = df['Low'].rolling(ma_len).mean().to_numpy()
+
+    events = []
+    for L in range(min_len, max_len + 1):
+        prev_p, prev_idx = np.nan, -1
+        curr_p, curr_idx = np.nan, -1
+        is_setup = False
+        break_val = np.nan
+        broke_already = False
+
+        for b in range(n):
+            p_idx = b - L
+            if p_idx - L >= 0 and p_idx + L < n:
+                seg = low[p_idx - L: p_idx + L + 1]
+                if low[p_idx] == seg.min():
+                    p = low[p_idx]
+                    setup_cond = (not np.isnan(curr_p)) and (p > curr_p)
+                    prev_p, prev_idx = curr_p, curr_idx
+                    curr_p, curr_idx = p, p_idx
+                    is_setup = setup_cond
+                    break_val = np.nan
+                    broke_already = False
+                    if setup_cond and prev_idx >= 0:
+                        seg_start, seg_end = prev_idx + 1, curr_idx
+                        if seg_end > seg_start:
+                            hseg = high[seg_start:seg_end]
+                            rel = int(np.argmax(hseg))
+                            break_val = hseg[rel]
+
+            if is_setup and not np.isnan(curr_p) and low[b] < curr_p:
+                is_setup = False
+
+            if is_setup and not np.isnan(break_val) and not broke_already:
+                if close[b] > break_val and (b == 0 or close[b - 1] <= break_val):
+                    events.append({
+                        "length": L, "break_bar": b, "break_val": float(break_val),
+                        "pivot_idx": int(curr_idx), "pivot_val": float(curr_p),
+                    })
+                    broke_already = True
+
+            if is_setup and broke_already and not np.isnan(ma_stop[b]) and low[b] < ma_stop[b]:
+                is_setup = False
+                broke_already = False
+
+    return events
+
+
+def _bh_most_recent_event(events, n_bars, lookback_days=BH_LOOKBACK_DAYS):
+    """Collapse multi-length events to the single most recent one within the
+    lookback window (ties -> tightest/lowest break level), matching "stocks
+    that had A 2nd-Pivot Break" (one event per stock, not one per length)."""
+    cutoff = n_bars - 1 - lookback_days
+    recent = [e for e in events if e["break_bar"] > cutoff]
+    if not recent:
+        return None
+    recent.sort(key=lambda e: (-e["break_bar"], e["break_val"]))
+    return recent[0]
+
+
+def _bh_score_event(df, event, weights=BH_WEIGHTS):
+    """The 4-check weighted score for one breakout event. Each check is
+    evaluated over whatever bars are actually available so far
+    (min(window, bars elapsed)), so a breakout from a few days ago scores on
+    its trajectory-so-far rather than being penalized for not yet having a
+    full 10 days of history."""
+    n = len(df)
+    b = event["break_bar"]
+    entry = event["break_val"]
+
+    high = df['High'].to_numpy()
+    low = df['Low'].to_numpy()
+    close = df['Close'].to_numpy()
+    adr_pct_series = (100 * (df['High'] / df['Low']).rolling(20).mean() - 100).to_numpy()
+    adr_pct = adr_pct_series[b]
+    if pd.isna(adr_pct):
+        return None
+    R = entry * adr_pct / 100.0
+
+    def _end(days):
+        return min(n, b + 1 + days)
+
+    win3, win5, win10 = slice(b + 1, _end(3)), slice(b + 1, _end(5)), slice(b + 1, _end(10))
+
+    avoided_neg1r = True
+    if low[win3].size:
+        avoided_neg1r = not bool((low[win3] <= entry - R).any())
+
+    hit_pos1r = bool((high[win5] >= entry + R).any()) if high[win5].size else False
+    hit_pos2r = bool((high[win10] >= entry + 2 * R).any()) if high[win10].size else False
+
+    day5_idx = min(n - 1, b + 5)
+    above_pivot_5d = bool(close[day5_idx] > entry) if day5_idx > b else True
+
+    checks = {
+        "Avoided -1R (3d)": avoided_neg1r,
+        "+1R (5d)": hit_pos1r,
+        "+2R (10d)": hit_pos2r,
+        "Above Pivot (5d)": above_pivot_5d,
+    }
+    score = sum(weights[k] for k, ok in checks.items() if ok)
+    return {"checks": checks, "score": float(score), "R": R, "adr_pct": adr_pct,
+            "entry": entry, "days_since": n - 1 - b}
+
+
+@st.cache_data(ttl=3600)
+def compute_breakout_health(stocks_tuple_bh, _ticker_dfs):
+    """For every ticker, find its most recent 2nd-Pivot-Break (if any) within
+    the last BH_LOOKBACK_DAYS trading days and score it. Returns a list of
+    per-ticker row dicts, sorted by most recent breakout first."""
+    rows = []
+    for sym in stocks_tuple_bh:
+        try:
+            df = _ticker_dfs.get(sym)
+            if df is None or len(df) < BH_MIN_HISTORY_BARS:
+                continue
+            events = _bh_find_2nd_pivot_breaks(df)
+            ev = _bh_most_recent_event(events, len(df))
+            if ev is None:
+                continue
+            res = _bh_score_event(df, ev)
+            if res is None:
+                continue
+
+            def _tick(ok):
+                return "✅" if ok else "❌"
+
+            rows.append({
+                "Ticker": sym,
+                "Score": round(res["score"], 1),
+                "Days Since Break": res["days_since"],
+                "Pivot": round(res["entry"], 2),
+                "ADR%": round(res["adr_pct"], 2),
+                "R ($)": round(res["R"], 2),
+                "Avoided -1R (3d)": _tick(res["checks"]["Avoided -1R (3d)"]),
+                "+1R (5d)": _tick(res["checks"]["+1R (5d)"]),
+                "+2R (10d)": _tick(res["checks"]["+2R (10d)"]),
+                "Above Pivot (5d)": _tick(res["checks"]["Above Pivot (5d)"]),
+            })
+        except Exception:
+            continue
+    return rows
+
+
+with st.spinner("Scanning 2nd-Pivot-Break breakouts..."):
+    bh_rows = timed(
+        "compute_breakout_health",
+        compute_breakout_health,
+        stocks_tuple, ticker_dfs_shared
+    )
+
+if bh_rows:
+    bh_df = pd.DataFrame(bh_rows).sort_values(
+        ["Days Since Break", "Score"], ascending=[True, False]
+    ).reset_index(drop=True)
+    bh_df.insert(0, "#", range(1, len(bh_df) + 1))
+
+    _bh_agg_score = bh_df["Score"].mean()
+    if _bh_agg_score >= BH_HEALTHY_THRESHOLD:
+        _bh_verdict, _bh_color = "Healthy", "green"
+    elif _bh_agg_score < BH_WEAK_THRESHOLD:
+        _bh_verdict, _bh_color = "Weak", "red"
+    else:
+        _bh_verdict, _bh_color = "Neutral", "orange"
+    _bh_title_ph.markdown(
+        f"#### 🚀 Breakout Health (:{_bh_color}[{_bh_agg_score:.0f}/100 · {_bh_verdict}])"
+    )
+    st.caption(
+        f"{len(bh_df)} tickers with a 2nd-Pivot-Break in the last {BH_LOOKBACK_DAYS} trading days "
+        f"· weights: {', '.join(f'{k}={v}' for k, v in BH_WEIGHTS.items())}"
+    )
+    st.dataframe(bh_df, use_container_width=True, hide_index=True,
+                 height=(len(bh_df) + 1) * 35 + 3)
+else:
+    _bh_title_ph.markdown("#### 🚀 Breakout Health")
+    st.info(f"No tickers had a qualifying 2nd-Pivot-Break in the last {BH_LOOKBACK_DAYS} trading days.")
