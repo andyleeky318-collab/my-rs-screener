@@ -18404,6 +18404,8 @@ def compute_breakout_health(stocks_tuple_bh, _ticker_dfs):
             df = _ticker_dfs.get(sym)
             if df is None or len(df) < BH_MIN_HISTORY_BARS:
                 continue
+            if df['Close'].iloc[-1] < 20:
+                continue
             events = _bh_find_2nd_pivot_breaks(df)
             ev = _bh_most_recent_event(events, len(df))
             if ev is None:
@@ -18460,7 +18462,8 @@ if bh_rows:
         f"· weights: {', '.join(f'{k}={v}' for k, v in BH_WEIGHTS.items())}"
     )
     st.dataframe(bh_df, use_container_width=True, hide_index=True,
-                 height=(len(bh_df) + 1) * 35 + 3)
+                 height=(len(bh_df) + 1) * 35 + 3,
+                 column_config={"#": st.column_config.NumberColumn(width="small")})
 else:
     _bh_title_ph.markdown("#### 🚀 Breakout Health")
     st.info(f"No tickers had a qualifying 2nd-Pivot-Break in the last {BH_LOOKBACK_DAYS} trading days.")
