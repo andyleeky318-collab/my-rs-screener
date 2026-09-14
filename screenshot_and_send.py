@@ -162,12 +162,12 @@ SECTION_KEYWORDS = [
     "Accumulation Rating",
     "Finviz Industry Rotation Report",
     "Market Internal",
+    "Healthy Pullback vs Deterioration",
     "Lazy Exposure",
     "Lazy Table",
     "Lazy Charts",
     "Stage 2 vs Stage 4",
     "Test Time",
-    "Breakout Health",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the

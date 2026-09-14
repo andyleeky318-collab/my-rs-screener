@@ -15292,17 +15292,141 @@ def compute_breakout_health(stocks_tuple_bh, _ticker_dfs):
     return rows
 
 # ==============================================================================
+# 29. HEALTHY PULLBACK vs. DETERIORATION — weighted multi-factor classifier
+#
+# A red day / pullback alone doesn't mean a setup is broken. This section scores
+# every ticker already flagged by an existing pullback-style setup (cloud_valid_syms,
+# cloud21ema_all, cloudwick_all, ma50bounce_all) across 10 weighted criteria and
+# concludes "Healthy Pullback" vs "Deterioration" per ticker.
+#
+# Criteria 4, 6, 7, 9 and 10 do NOT use a fixed lookback window. Instead, for each
+# ticker we find the interim swing high (highest High) within the last
+# HP_INTERIM_HIGH_LOOKBACK days, and use the number of bars from that high to the
+# latest bar as the lookback for those 5 criteria — i.e. each stock is judged over
+# its OWN actual pullback length, not an arbitrary fixed number of days. That
+# interim high (price, date, bars-ago) is also shown as its own table column.
+#
+# Every criterion below is either read directly from an existing, already-computed
+# object in this file (industry_rank_map, industry_trend_map, all_data's RS Score,
+# compute_up_down_vol_ratio_series/_udvr_rating) or computed fresh from
+# ticker_dfs_shared (the same OHLCV already downloaded for the whole app) —
+# nothing else in the dashboard is touched or recomputed. Read-only, additive.
+# ==============================================================================
+st.markdown("---")
+# Filled in after hp_df is built below with (Risk Off)/(Risk On), based on
+# whether more than half the table reads Deterioration.
+_hp_title_ph = st.empty()
+_hp_title_ph.markdown("#### 🩺 Healthy Pullback vs Deterioration")
+
+
+
+with st.spinner("Classifying healthy pullbacks vs. deterioration..."):
+    _hp_universe = tuple(sorted(cloud_valid_syms | cloud21ema_all | cloudwick_all | ma50bounce_all))
+    hp_rows = timed(
+        "compute_healthy_pullback_rows",
+        compute_healthy_pullback_rows,
+        _hp_universe, industry_trend_map, ticker_to_industries,
+        all_data, ticker_dfs_shared, benchmark_df_shared
+    )
+
+if hp_rows:
+    hp_df = pd.DataFrame(hp_rows).sort_values(["Score", "Ticker"], ascending=[False, True]).reset_index(drop=True)
+    hp_df.insert(0, "#", range(1, len(hp_df) + 1))
+
+    _hp_deter_count = hp_df["Conclusion"].str.contains("Deterioration").sum()
+    _hp_regime = "Risk Off" if _hp_deter_count > len(hp_df) / 2 else "Risk On"
+    _hp_title_ph.markdown(f"#### 🩺 Healthy Pullback vs Deterioration ({_hp_regime})")
+    # st.caption(
+    #     f"{len(hp_df)} tickers scanned from cloud_valid_syms / cloud21ema_all / cloudwick_all / "
+    #     f"ma50bounce_all · Healthy Pullback threshold = weighted score ≥ {HP_HEALTHY_THRESHOLD:.0f}/100"
+    # )
+    # height sized to the row count (35px/row + header) so every ticker renders
+    # vertically with no inner scrollbar — the page scrolls instead of the grid.
+    st.dataframe(hp_df, use_container_width=True, hide_index=True,
+                 height=(len(hp_df) + 1) * 35 + 3)
+else:
+    st.info("No tickers available to classify (empty cloud/21ema/wick/50ma-bounce universe).")
+
+# ==============================================================================
+# 30. BREAKOUT HEALTH — how recent 2nd-Pivot-Break breakouts are holding up
+#
+# Methodology: https://note.com/oratnek_ill/n/nbca4d1b8c3e1?hl=en ("Breakout
+# Health" by Oratnek). For every KNOWN_STOCKS ticker with a "2nd Pivot Break"
+# in the last 20 trading days, score its follow-through on 4 checks, each
+# measured in R = ADR% (20-day avg High/Low range) of the breakout level:
+#   1) avoided -1R within 3 days   (didn't immediately fail)
+#   2) reached +1R within 5 days   (follow-through)
+#   3) reached +2R within 10 days  (strong follow-through)
+#   4) still above the pivot 5 days later (held the level)
+# then takes a weighted average of those 4 checks per stock, and averages
+# across every qualifying stock for one overall market "Breakout Health"
+# score. "2nd Pivot Break" is a Higher-Low base breakout: track pivot lows of
+# length 2-5 bars; whenever a NEW pivot low forms higher than the prior one
+# (a "Higher Low"), the 2nd Pivot is the highest high between those two lows
+# — the resistance the base needs to clear. Breaking above that level (close
+# crossing over it) while the structure hasn't already failed (price back
+# below the pivot low, or below the 21-bar MA of Low) is the breakout event.
+# Ported from the "Advanced Structure Pivot" Pine v6 indicator's long-side
+# state machine — same pivot/break/fail logic, minus its chart drawing.
+# Reuses ticker_dfs_shared (already downloaded) — no new data fetch.
+# Read-only, additive.
+# ==============================================================================
+st.markdown("---")
+_bh_title_ph = st.empty()
+_bh_title_ph.markdown("#### 🚀 Breakout Health")
+
+
+
+with st.spinner("Scanning 2nd-Pivot-Break breakouts..."):
+    bh_rows = timed(
+        "compute_breakout_health",
+        compute_breakout_health,
+        stocks_tuple, ticker_dfs_shared
+    )
+
+if bh_rows:
+    bh_df = pd.DataFrame(bh_rows).sort_values(
+        "Score", ascending=False
+    ).reset_index(drop=True)
+    bh_df.insert(0, "#", range(1, len(bh_df) + 1))
+
+    _bh_agg_score = bh_df["Score"].mean()
+    if _bh_agg_score >= BH_HEALTHY_THRESHOLD:
+        _bh_verdict, _bh_color = "Healthy", "green"
+    elif _bh_agg_score < BH_WEAK_THRESHOLD:
+        _bh_verdict, _bh_color = "Weak", "red"
+    else:
+        _bh_verdict, _bh_color = "Neutral", "orange"
+    _bh_title_ph.markdown(
+        f"#### 🚀 Breakout Health (:{_bh_color}[{_bh_agg_score:.0f}/100 · {_bh_verdict}])"
+    )
+    st.caption(
+        f"{len(bh_df)} tickers with a 2nd-Pivot-Break in the last {BH_LOOKBACK_DAYS} trading days "
+        f"· weights: {', '.join(f'{k}={v}' for k, v in BH_WEIGHTS.items())}"
+    )
+    # Fixed height = 10 data rows + header; st.dataframe adds its own native
+    # vertical scrollbar (right side) automatically once content exceeds this,
+    # so anything past the top 10 (already sorted by Score) scrolls instead
+    # of pushing the page taller.
+    st.dataframe(bh_df, use_container_width=True, hide_index=True,
+                 height=(10 + 1) * 35 + 3,
+                 column_config={"#": st.column_config.NumberColumn(width=45)})
+else:
+    _bh_title_ph.markdown("#### 🚀 Breakout Health")
+    st.info(f"No tickers had a qualifying 2nd-Pivot-Break in the last {BH_LOOKBACK_DAYS} trading days.")
+
+# ==============================================================================
 # 23. MARKET VERDICT — Composite Breakout / Pullback / Neutral / Defensive Read
 # Read-only, additive. Synthesizes every signal already computed above plus
 # two standalone fetches (VIX term structure, HYG/LQD credit spread), PLUS two
 # pillars from sections 29 (Healthy Pullback vs. Deterioration) and 30 (Breakout
-# Health) — whose own compute functions are DEFINED earlier in the file (moved
-# up here, right below) and CALLED in this section, before
-# compute_market_verdict() runs, so this section can stay in its original page
-# position while sections 29/30 still render in theirs, lower on the page
-# (their own render code re-hits this same cached call — free, not a second
-# real computation) — into a single weighted composite score and verdict. Does
-# not touch any other section or shared variable — all new names are unique.
+# Health), which now render directly above this section (their compute
+# functions are DEFINED just before this section's own header, and CALLED
+# right below, before compute_market_verdict() runs). Sections 29/30's own
+# render blocks (just above) call the same cached functions again for their
+# own display — a free cache-hit, not a second real computation — into a
+# single weighted composite score and verdict here. Does not touch any other
+# section or shared variable — all new names are unique.
 # ==============================================================================
 st.markdown("---")
 st.markdown("## 🧭 Lazy Exposure = % Invested / 21ema vs 50ma / 2R vs 1.5R TP / 2-stops vs 3-stops")
@@ -18403,127 +18527,3 @@ if _timing_log:
     total_s = total_ms / 1000
     total_str = f"{int(total_s // 60)}m {total_s % 60:.2f}s" if total_s >= 60 else f"{total_s:.2f}s"
     st.caption(f"Total measured wall-clock time: **{total_str}** across {len(_timing_log)} tracked calls")
-
-# ==============================================================================
-# 29. HEALTHY PULLBACK vs. DETERIORATION — weighted multi-factor classifier
-#
-# A red day / pullback alone doesn't mean a setup is broken. This section scores
-# every ticker already flagged by an existing pullback-style setup (cloud_valid_syms,
-# cloud21ema_all, cloudwick_all, ma50bounce_all) across 10 weighted criteria and
-# concludes "Healthy Pullback" vs "Deterioration" per ticker.
-#
-# Criteria 4, 6, 7, 9 and 10 do NOT use a fixed lookback window. Instead, for each
-# ticker we find the interim swing high (highest High) within the last
-# HP_INTERIM_HIGH_LOOKBACK days, and use the number of bars from that high to the
-# latest bar as the lookback for those 5 criteria — i.e. each stock is judged over
-# its OWN actual pullback length, not an arbitrary fixed number of days. That
-# interim high (price, date, bars-ago) is also shown as its own table column.
-#
-# Every criterion below is either read directly from an existing, already-computed
-# object in this file (industry_rank_map, industry_trend_map, all_data's RS Score,
-# compute_up_down_vol_ratio_series/_udvr_rating) or computed fresh from
-# ticker_dfs_shared (the same OHLCV already downloaded for the whole app) —
-# nothing else in the dashboard is touched or recomputed. Read-only, additive.
-# ==============================================================================
-st.markdown("---")
-# Filled in after hp_df is built below with (Risk Off)/(Risk On), based on
-# whether more than half the table reads Deterioration.
-_hp_title_ph = st.empty()
-_hp_title_ph.markdown("#### 🩺 Healthy Pullback vs Deterioration")
-
-
-
-with st.spinner("Classifying healthy pullbacks vs. deterioration..."):
-    _hp_universe = tuple(sorted(cloud_valid_syms | cloud21ema_all | cloudwick_all | ma50bounce_all))
-    hp_rows = timed(
-        "compute_healthy_pullback_rows",
-        compute_healthy_pullback_rows,
-        _hp_universe, industry_trend_map, ticker_to_industries,
-        all_data, ticker_dfs_shared, benchmark_df_shared
-    )
-
-if hp_rows:
-    hp_df = pd.DataFrame(hp_rows).sort_values(["Score", "Ticker"], ascending=[False, True]).reset_index(drop=True)
-    hp_df.insert(0, "#", range(1, len(hp_df) + 1))
-
-    _hp_deter_count = hp_df["Conclusion"].str.contains("Deterioration").sum()
-    _hp_regime = "Risk Off" if _hp_deter_count > len(hp_df) / 2 else "Risk On"
-    _hp_title_ph.markdown(f"#### 🩺 Healthy Pullback vs Deterioration ({_hp_regime})")
-    # st.caption(
-    #     f"{len(hp_df)} tickers scanned from cloud_valid_syms / cloud21ema_all / cloudwick_all / "
-    #     f"ma50bounce_all · Healthy Pullback threshold = weighted score ≥ {HP_HEALTHY_THRESHOLD:.0f}/100"
-    # )
-    # height sized to the row count (35px/row + header) so every ticker renders
-    # vertically with no inner scrollbar — the page scrolls instead of the grid.
-    st.dataframe(hp_df, use_container_width=True, hide_index=True,
-                 height=(len(hp_df) + 1) * 35 + 3)
-else:
-    st.info("No tickers available to classify (empty cloud/21ema/wick/50ma-bounce universe).")
-
-# ==============================================================================
-# 30. BREAKOUT HEALTH — how recent 2nd-Pivot-Break breakouts are holding up
-#
-# Methodology: https://note.com/oratnek_ill/n/nbca4d1b8c3e1?hl=en ("Breakout
-# Health" by Oratnek). For every KNOWN_STOCKS ticker with a "2nd Pivot Break"
-# in the last 20 trading days, score its follow-through on 4 checks, each
-# measured in R = ADR% (20-day avg High/Low range) of the breakout level:
-#   1) avoided -1R within 3 days   (didn't immediately fail)
-#   2) reached +1R within 5 days   (follow-through)
-#   3) reached +2R within 10 days  (strong follow-through)
-#   4) still above the pivot 5 days later (held the level)
-# then takes a weighted average of those 4 checks per stock, and averages
-# across every qualifying stock for one overall market "Breakout Health"
-# score. "2nd Pivot Break" is a Higher-Low base breakout: track pivot lows of
-# length 2-5 bars; whenever a NEW pivot low forms higher than the prior one
-# (a "Higher Low"), the 2nd Pivot is the highest high between those two lows
-# — the resistance the base needs to clear. Breaking above that level (close
-# crossing over it) while the structure hasn't already failed (price back
-# below the pivot low, or below the 21-bar MA of Low) is the breakout event.
-# Ported from the "Advanced Structure Pivot" Pine v6 indicator's long-side
-# state machine — same pivot/break/fail logic, minus its chart drawing.
-# Reuses ticker_dfs_shared (already downloaded) — no new data fetch.
-# Read-only, additive.
-# ==============================================================================
-st.markdown("---")
-_bh_title_ph = st.empty()
-_bh_title_ph.markdown("#### 🚀 Breakout Health")
-
-
-
-with st.spinner("Scanning 2nd-Pivot-Break breakouts..."):
-    bh_rows = timed(
-        "compute_breakout_health",
-        compute_breakout_health,
-        stocks_tuple, ticker_dfs_shared
-    )
-
-if bh_rows:
-    bh_df = pd.DataFrame(bh_rows).sort_values(
-        "Score", ascending=False
-    ).reset_index(drop=True)
-    bh_df.insert(0, "#", range(1, len(bh_df) + 1))
-
-    _bh_agg_score = bh_df["Score"].mean()
-    if _bh_agg_score >= BH_HEALTHY_THRESHOLD:
-        _bh_verdict, _bh_color = "Healthy", "green"
-    elif _bh_agg_score < BH_WEAK_THRESHOLD:
-        _bh_verdict, _bh_color = "Weak", "red"
-    else:
-        _bh_verdict, _bh_color = "Neutral", "orange"
-    _bh_title_ph.markdown(
-        f"#### 🚀 Breakout Health (:{_bh_color}[{_bh_agg_score:.0f}/100 · {_bh_verdict}])"
-    )
-    st.caption(
-        f"{len(bh_df)} tickers with a 2nd-Pivot-Break in the last {BH_LOOKBACK_DAYS} trading days "
-        f"· weights: {', '.join(f'{k}={v}' for k, v in BH_WEIGHTS.items())}"
-    )
-    # Fixed height = 10 data rows + header; st.dataframe adds its own native
-    # vertical scrollbar (right side) automatically once content exceeds this,
-    # so anything past the top 10 (already sorted by Score) scrolls instead
-    # of pushing the page taller.
-    st.dataframe(bh_df, use_container_width=True, hide_index=True,
-                 height=(10 + 1) * 35 + 3,
-                 column_config={"#": st.column_config.NumberColumn(width=45)})
-else:
-    _bh_title_ph.markdown("#### 🚀 Breakout Health")
-    st.info(f"No tickers had a qualifying 2nd-Pivot-Break in the last {BH_LOOKBACK_DAYS} trading days.")
