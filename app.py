@@ -7593,6 +7593,197 @@ if rs_nh_b4_today or rs_nh_b4_yest:
 else:
     st.info("No active setups discovered.")
 
+# ==============================================================================
+# 28. DOWNTREND LINE BREAKOUT — dynamic descending-resistance trendline breakout
+# Ported from the Pine "trendLine"/"pivData" logic (pivot-high anchored
+# trendline with a % price buffer, min-touch confirmation, close-based
+# breakout signal). Read-only, additive. Reuses ticker_dfs_shared (already
+# downloaded) — no new data fetch. Relocated here (after RS NH B4 Price) per
+# request; still fully self-contained.
+# ==============================================================================
+st.markdown("---")
+
+def is_volume_above_50d_avg(df):
+    """True if the latest bar's Volume is above its 50-day average volume."""
+    try:
+        if df is None or "Volume" not in df.columns or len(df) < 50:
+            return False
+        vol = df["Volume"].astype(float)
+        avg50 = vol.rolling(50, min_periods=50).mean()
+        latest_vol = vol.iloc[-1]
+        latest_avg = avg50.iloc[-1]
+        if pd.isna(latest_avg):
+            return False
+        return bool(latest_vol > latest_avg)
+    except Exception:
+        return False
+
+@st.cache_data(ttl=3600)
+def compute_downtrend_line_breakout(stocks_list, _ticker_dfs,
+                                     bars=5, buffer_pct=0.001, num_touches=3,
+                                     new_high_bars=100, show_num=1):
+    """
+    Faithful port of the Pine "trendLine"/"pivData" descending-resistance
+    trendline logic:
+      - Anchor = most recent qualifying pivot high (confirmed 'bars' bars
+        later, like ta.pivothigh(bars, bars)). A new pivot replaces the
+        anchor if it's higher, or if the current anchor is older than
+        new_high_bars.
+      - Whenever a bar's high drops below the anchor high, a trial
+        trendline is drawn from the anchor to that bar. If every bar in
+        between stayed within buffer_pct of the line (no bar poked
+        through it) and at least num_touches bars touched it closely,
+        the line is confirmed (kept, up to show_num active lines).
+      - A confirmed line breaks out ("bo") the first time CLOSE trades
+        above the line's projected price by more than buffer_pct.
+    Returns {ticker: (breakout_today: bool, breakout_yesterday: bool)}.
+    """
+    results = {}
+    for ticker in stocks_list:
+        df = _ticker_dfs.get(ticker)
+        if df is None or len(df) < bars * 2 + 5:
+            continue
+        try:
+            high = df['High'].to_numpy()
+            close = df['Close'].to_numpy()
+            n = len(high)
+
+            # Pivot-high detection (confirmed 'bars' bars after the pivot bar,
+            # mirroring ta.pivothigh(bars, bars))
+            pivot_val = {}
+            for p in range(bars, n - bars):
+                window = high[p - bars: p + bars + 1]
+                if high[p] == window.max():
+                    pivot_val[p] = high[p]
+
+            piv_h = None
+            piv_b = None
+            trendlines = []  # each: dict(piv_b, piv_h, slope, active)
+            bo_flags = np.zeros(n, dtype=bool)
+
+            for i in range(n):
+                confirmed_pivot_bar = i - bars
+                if confirmed_pivot_bar in pivot_val:
+                    pv = pivot_val[confirmed_pivot_bar]
+                    if (piv_h is None or pv > piv_h or
+                            (piv_b is not None and i - piv_b > new_high_bars)):
+                        piv_h = pv
+                        piv_b = confirmed_pivot_bar
+
+                if piv_h is not None and high[i] < piv_h and i > piv_b:
+                    slope = (high[i] - piv_h) / (i - piv_b)
+                    touches = 0
+                    broken = False
+                    for k in range(0, i - piv_b + 1):
+                        bar_k = piv_b + k
+                        line_price = piv_h + slope * k
+                        if high[bar_k] > line_price * (1 + buffer_pct):
+                            broken = True
+                            break
+                        elif line_price * (1 - buffer_pct) <= high[bar_k] <= line_price * (1 + buffer_pct):
+                            touches += 1
+
+                    if not broken and touches >= num_touches:
+                        new_line = {'piv_b': piv_b, 'piv_h': piv_h, 'slope': slope, 'active': True}
+                        trendlines.append(new_line)
+                        if len(trendlines) > show_num:
+                            trendlines.pop(0)
+                        # de-dup lines that price-match at this pivot anchor bar
+                        if len(trendlines) > 1:
+                            cur = trendlines[-1]
+                            cur_price = cur['piv_h'] + cur['slope'] * (piv_b - cur['piv_b'])
+                            kept = []
+                            for idx, t in enumerate(trendlines):
+                                t_price = t['piv_h'] + t['slope'] * (piv_b - t['piv_b'])
+                                if t_price == cur_price and idx != len(trendlines) - 1:
+                                    continue
+                                kept.append(t)
+                            trendlines = kept
+
+                for t in trendlines:
+                    if not t['active']:
+                        continue
+                    line_price_today = t['piv_h'] + t['slope'] * (i - t['piv_b'])
+                    if close[i] > line_price_today * (1 + buffer_pct):
+                        bo_flags[i] = True
+                        t['active'] = False
+
+            bo_today = bool(bo_flags[-1])
+            bo_yest = bool(bo_flags[-2]) if n >= 2 else False
+            results[ticker] = (bo_today, bo_yest)
+        except Exception:
+            continue
+
+    return results
+
+
+with st.spinner("Scanning for downtrend line breakouts..."):
+    downtrend_bo_results = timed(
+        "compute_downtrend_line_breakout",
+        compute_downtrend_line_breakout,
+        stocks_tuple, ticker_dfs_shared
+    )
+
+downtrend_today = sorted(sym for sym, (t, y) in downtrend_bo_results.items() if t)
+downtrend_yest = sorted(sym for sym, (t, y) in downtrend_bo_results.items() if y)
+
+st.markdown(
+    f"""
+    <h4>
+        📐 Downtrend Line Breakout ({len(downtrend_today)})
+        <span style="color:#888; font-size:12px; font-weight:normal;">(Star = High Volume)</span>
+    </h4>
+    """,
+    unsafe_allow_html=True,
+)
+
+if downtrend_today or downtrend_yest:
+    dt_industry_counts, dt_ticker_industry = build_leader_industry_map(downtrend_today, INDUSTRIES)
+
+    html_dt = ""
+
+    # Show today's breakout badges only when latest price > $20
+    for sym in downtrend_today:
+        df = ticker_dfs_shared.get(sym)
+        latest_price = float(df["Close"].iloc[-1]) if df is not None and not df.empty else 0
+
+        if latest_price <= 20:
+            continue
+
+        industries = dt_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+            if is_top20_industry else ""
+        )
+
+        vol_above_avg = is_volume_above_50d_avg(df)
+
+        html_dt += setup_badge(
+            sym,
+            is_new=(sym not in downtrend_yest),
+            extra_style=glow_style,
+            extra_prefix="★ " if vol_above_avg else ""
+        )
+
+    # Show removed badges only when latest available price > $20
+    removed_dt = [sym for sym in downtrend_yest if sym not in downtrend_today]
+
+    for sym in sorted(removed_dt):
+        df = ticker_dfs_shared.get(sym)
+        latest_price = float(df["Close"].iloc[-1]) if df is not None and not df.empty else 0
+
+        if latest_price <= 20:
+            continue
+
+        html_dt += f'<div class="ticker-badge removed-badge">{sym}</div>'
+
+    st.markdown(html_dt, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
+
 @st.cache_data(ttl=3600)
 def compute_quality_filter_pass(stocks_list, ticker_dfs):
     """
@@ -14444,18 +14635,700 @@ if ark_perf_rows:
 else:
     st.info("No ARK Funds performance data available.")
 
+
+# ── Tunable parameters (weights sum to 100) ─────────────────────────────────
+HP_WEIGHTS = {
+    "Industry RS/Trend":   10,  # 1) industry Group RS value + 4-circle trend
+    "Stock RS Value":      15,  # 2) the stock's own RS Score
+    "21ema/50ma State":    15,  # 3) recency-weighted MA support hold rate
+    "Low-Vol Cluster":     10,  # 4) low-volume orange-box cluster since interim high
+    "EMA21>MA50 Time%":    10,  # 5) % of last 90d that ema21 stayed above ma50
+    "Volatility Z-Score":  10,  # 6) frequency/amplitude z-score violations since interim high
+    "Bear Engulf Count":   10,  # 7) bearish engulfing bars since interim high
+    "Accumulation Rating": 10,  # 8) up/down volume ratio (existing UDVR logic)
+    "RS Triangle":          5,  # 9) RS-vs-its-own-MA crossover triangles since interim high
+    "Score Delta ±20":      5,  # 10) composite-score ±20 red/green bars since interim high
+}
+HP_GROUP_RS_MIN         = 70    # min industry Group RS (matches Pine's minGroupRS)
+HP_INDUSTRY_GREEN_MIN   = 2     # min green circles (of 4) in industry trend
+HP_STOCK_RS_MIN         = 70    # IBD-style leadership threshold
+HP_LOWVOL_MIN_STREAK    = 2     # consecutive low-vol bars to count as a cluster
+HP_DIST_LOOKBACK        = 90
+HP_DIST_PCT_MIN         = 90.0  # % of days ema21 must stay above ma50
+HP_VOLZ_MAX_HIGHCOUNT   = 1     # max allowed z>1.5 days in the dynamic window (user: "not more than 1")
+HP_BEARENGULF_MAX       = 0     # max bearish engulfing bars allowed in the dynamic window
+HP_ACCUM_MIN            = 1.0   # up/down volume ratio >= 1 = net accumulation
+HP_SCORE_BREAKDOWN      = -20   # score_delta <= this on a bar = character breakdown ("red bar")
+HP_SCORE_CHANGE_UP      = 20    # score_delta >= this on a bar = change of character ("green bar")
+HP_MIN_HISTORY_BARS     = 60
+HP_HEALTHY_THRESHOLD    = 60.0  # weighted score (0-100) needed to call it "Healthy"
+
+# Interim-high lookback: the swing high is searched for within the last
+# HP_INTERIM_HIGH_LOOKBACK days; the resulting "bars since high" is then
+# clamped to [HP_DYNAMIC_LOOKBACK_MIN, HP_DYNAMIC_LOOKBACK_MAX] before being
+# used as the dynamic window for criteria 4/6/7/9/10 (the floor keeps very
+# fresh highs from giving statistically unstable 0-2 bar windows).
+HP_INTERIM_HIGH_LOOKBACK = 90
+HP_DYNAMIC_LOOKBACK_MIN  = 5
+HP_DYNAMIC_LOOKBACK_MAX  = HP_INTERIM_HIGH_LOOKBACK
+
+# Criterion 3 — MA support-strength engine, ported from tradingview1's
+# "50 SMA / 21 EMA Support Strength" blocks. Same defaults as that script.
+HP_SUP_TOUCH_TOL    = 0.5    # touch tolerance above the MA (%)
+HP_SUP_MAX_UNDERCUT = 15.0   # dip deeper than this = trend break, not a test (%)
+HP_SUP_FAIL_TOL     = 4.0    # break / fail threshold (%)
+HP_SUP_RECLAIM      = 1.0    # reclaim margin (%)
+HP_SUP_ATR_MULT     = 1.5    # ATR multiple folded into both margins
+HP_SUP_MIN_RUNUP    = 4.0    # min prior run-up above the MA (%)
+HP_SUP_RUNUP_LOOK   = 30     # run-up lookback (bars)
+HP_SUP_PRIOR_ABOVE  = 6      # must have been above the MA within this many bars
+HP_SUP_CONFIRM_BARS = 7      # bars to confirm a test's outcome
+HP_SUP_FAIL_CLOSES  = 2      # consecutive closes below the break level = failed
+HP_SUP_LOOKBACK     = 150    # only score tests within this many bars
+HP_SUP_STALE_BARS   = 120    # no test within this many bars = not in play
+HP_SUP_MAX_EVENTS   = 8      # max tests remembered
+HP_SUP_MIN_EVENTS   = 3      # min tests before a firm rating is given
+HP_SUP_HALF_LIFE    = 45     # recency half-life (bars)
+HP_SUP_HEALTHY      = ("STRONG", "MEDIUM", "HELD?", "IDLE")
+
+
+def _hp_atr_pct(high_s, low_s, close_s, period=14):
+    """Wilder ATR expressed as a % of close — the Python equivalent of Pine's
+    ta.atr(14) / close * 100, which feeds the support engine's margins."""
+    prev_close = close_s.shift(1)
+    tr = pd.concat([
+        high_s - low_s,
+        (high_s - prev_close).abs(),
+        (low_s - prev_close).abs(),
+    ], axis=1).max(axis=1)
+    atr = tr.ewm(alpha=1.0 / period, adjust=False).mean()
+    return atr / close_s * 100
+
+
+def _hp_support_rating(close_s, low_s, ma_s, atr_pct_s):
+    """Port of tradingview1's MA support-strength engine (the "50 SMA / 21 EMA
+    Support Strength" blocks), so the Streamlit verdict uses the same method
+    as the Pine script instead of a single-bar snapshot.
+
+    Walks the full history bar by bar and records every genuine support TEST of
+    the moving average — price had been above it recently, had a real run-up,
+    touched the MA without collapsing through it, and the MA was rising. Each
+    test is then resolved over HP_SUP_CONFIRM_BARS bars as held (reclaimed, or
+    undercut intraday then closed back above = a spring) or failed (consecutive
+    closes below the break threshold). The rating is the recency-weighted hold
+    rate across the remembered tests, half-life HP_SUP_HALF_LIFE bars.
+
+    Returns STRONG / MEDIUM / WEAK / BROKEN / HELD? / LOST? / IDLE / BELOW / N/A.
+    """
+    n = len(close_s)
+    if n < HP_SUP_RUNUP_LOOK + HP_SUP_CONFIRM_BARS:
+        return "N/A"
+
+    c  = close_s.to_numpy(dtype=float)
+    lo = low_s.to_numpy(dtype=float)
+    ma = ma_s.to_numpy(dtype=float)
+    ap = np.nan_to_num(atr_pct_s.to_numpy(dtype=float))
+
+    # Volatility-aware margins, exactly as the Pine version derives them.
+    fail_pct = np.maximum(HP_SUP_FAIL_TOL, ap * HP_SUP_ATR_MULT)
+    rcl_pct  = np.maximum(HP_SUP_RECLAIM, ap * HP_SUP_ATR_MULT * 0.35)
+
+    above_i = pd.Series((c > ma).astype(int), index=close_s.index)
+
+    # ta.barssince(close > ma) <= HP_SUP_PRIOR_ABOVE
+    was_above = (above_i.rolling(HP_SUP_PRIOR_ABOVE + 1, min_periods=1).max() > 0).to_numpy()
+    runup_dist = (close_s.rolling(HP_SUP_RUNUP_LOOK).max().shift(1)
+                  >= ma_s * (1 + HP_SUP_MIN_RUNUP / 100)).fillna(False).to_numpy()
+    runup_time = (above_i.rolling(HP_SUP_RUNUP_LOOK).sum().shift(1)
+                  >= HP_SUP_RUNUP_LOOK * 0.5).fillna(False).to_numpy()
+
+    rising = np.zeros(n, dtype=bool)
+    rising[2:] = (ma[2:] > ma[1:-1]) & (ma[1:-1] > ma[:-2])
+    ge5 = np.zeros(n, dtype=bool)
+    ge5[5:] = ma[5:] >= ma[:-5]
+    rise_ok = rising | ge5
+
+    in_zone      = lo <= ma * (1 + HP_SUP_TOUCH_TOL / 100)
+    not_collapse = lo >= ma * (1 - HP_SUP_MAX_UNDERCUT / 100)
+    test_bar = was_above & (runup_dist | runup_time) & in_zone & not_collapse & rise_ok
+
+    events = []                       # (resolution_bar, held 0/1)
+    pending = 0
+    ev_ma = ev_lowlow = np.nan
+    ev_reclaim = ev_sprung = False
+    below_run = 0
+    last_test_bar = None
+    prev_test = False
+
+    for i in range(n):
+        tb = bool(test_bar[i])
+        if tb and not prev_test and pending == 0:
+            pending    = HP_SUP_CONFIRM_BARS
+            ev_ma      = ma[i]
+            ev_lowlow  = lo[i]
+            ev_reclaim = False
+            ev_sprung  = False
+            below_run  = 0
+        prev_test = tb
+
+        if pending > 0:
+            ev_lowlow = min(ev_lowlow, lo[i])
+            if c[i] >= ma[i] * (1 + rcl_pct[i] / 100):
+                ev_reclaim = True
+            if lo[i] < ev_ma and c[i] > ma[i]:
+                ev_sprung = True
+            below_run = below_run + 1 if c[i] < ev_ma * (1 - fail_pct[i] / 100) else 0
+            pending -= 1
+            deep_stay = (ev_lowlow < ev_ma * (1 - fail_pct[i] / 100)) and not ev_sprung
+            if below_run >= HP_SUP_FAIL_CLOSES and not ev_sprung:
+                events.append((i, 0))
+                last_test_bar = i
+                pending = 0
+            elif pending == 0:
+                held = (ev_reclaim or ev_sprung) and not deep_stay
+                events.append((i, 1 if held else 0))
+                last_test_bar = i
+            if len(events) > HP_SUP_MAX_EVENTS:
+                events = events[-HP_SUP_MAX_EVENTS:]
+
+    last = n - 1
+    if pd.isna(ma[last]):
+        return "N/A"
+
+    w_sum = w_hold = 0.0
+    n_tot = 0
+    for bar_i, held in events:
+        age = last - bar_i
+        if age <= HP_SUP_LOOKBACK:
+            w = 0.5 ** (age / max(HP_SUP_HALF_LIFE, 1))
+            w_sum  += w
+            w_hold += w * held
+            n_tot  += 1
+    hold_rate = (w_hold / w_sum) if w_sum > 0 else None
+    last_held = events[-1][1] if events else None
+
+    stale     = last_test_bar is None or (last - last_test_bar) > HP_SUP_STALE_BARS
+    below_now = c[last] < ma[last] * (1 - fail_pct[last] / 100)
+    in_play   = pending > 0 or not stale or below_now
+
+    if not in_play:
+        return "IDLE" if c[last] >= ma[last] else "BELOW"
+    if n_tot < HP_SUP_MIN_EVENTS or hold_rate is None:
+        if last_held is None:
+            return "N/A"
+        return "HELD?" if last_held == 1 else "LOST?"
+    if hold_rate >= 0.80 and bool(rise_ok[last]):
+        return "STRONG"
+    if hold_rate >= 0.60:
+        return "MEDIUM"
+    if hold_rate >= 0.40:
+        return "WEAK"
+    return "BROKEN" if (below_now or last_held == 0) else "WEAK"
+
+
+def _hp_interim_high(df_s, high_s, lookback=HP_INTERIM_HIGH_LOOKBACK):
+    """Find the interim swing high (highest High) within `lookback` days, and
+    how many bars ago it occurred. Returns (high_price, bars_since, high_date,
+    dynamic_lookback) — dynamic_lookback is bars_since clamped to
+    [HP_DYNAMIC_LOOKBACK_MIN, HP_DYNAMIC_LOOKBACK_MAX] and is what criteria
+    4/6/7/9/10 use as their own lookback window."""
+    n = len(high_s)
+    window = min(lookback, n)
+    ih_slice = high_s.iloc[-window:]
+    high_price = float(ih_slice.max())
+    pos_in_slice = int(np.argmax(ih_slice.values))
+    high_pos = (n - window) + pos_in_slice
+    bars_since = (n - 1) - high_pos
+    high_date = df_s.index[high_pos]
+    dyn_lookback = min(max(bars_since, HP_DYNAMIC_LOOKBACK_MIN), HP_DYNAMIC_LOOKBACK_MAX)
+    return high_price, bars_since, high_date, dyn_lookback
+
+
+def _hp_low_vol_cluster(vol_s, lookback):
+    """Mirrors the Pine 'Low Volume Cluster Boxes' logic: a bar is low-vol if
+    it's below its own 50-day average OR is the 10-day lowest volume. Returns
+    (has_cluster, longest_streak) over the lookback window."""
+    ma50v = vol_s.rolling(50).mean()
+    low10 = vol_s.rolling(10).min()
+    is_low = (vol_s < ma50v) | (vol_s <= low10)
+    recent = is_low.iloc[-lookback:]
+    max_streak = streak = 0
+    for v in recent:
+        streak = streak + 1 if bool(v) else 0
+        max_streak = max(max_streak, streak)
+    return max_streak >= HP_LOWVOL_MIN_STREAK, max_streak
+
+
+def _hp_dist_pct_positive(ema21_s, sma50_s, lookback=HP_DIST_LOOKBACK):
+    """% of the lookback window where ema21 stayed above ma50 (distancePct > 0),
+    per the MA-squeeze Pine script. (Fixed 90d window — not part of the
+    dynamic interim-high lookback change; kept as-is.)"""
+    distance_pct = (ema21_s - sma50_s) / sma50_s * 100
+    window = distance_pct.dropna().iloc[-lookback:]
+    if window.empty:
+        return 0.0
+    return float((window > 0).mean() * 100)
+
+
+def _hp_volatility_highcount(high_s, low_s, lookback):
+    """Count of z>1.5 daily-range days in the lookback window, per the
+    'Topping Signal' Pine script's frequency/amplitude violation logic."""
+    daily_range = (high_s / low_s - 1) * 100
+    mean_w = daily_range.rolling(lookback).mean()
+    std_w = daily_range.rolling(lookback).std()
+    z = (daily_range - mean_w) / std_w
+    high_vol_count = (z > 1.5).rolling(lookback).sum()
+    val = high_vol_count.iloc[-1] if not high_vol_count.empty else np.nan
+    return float(val) if pd.notna(val) else np.nan
+
+
+def _hp_bearish_engulf_count(open_s, high_s, low_s, close_s, lookback):
+    """Bearish engulfing + 'bearbear' grey bar count, using tradingview1's own
+    definitions rather than the classic pattern — the engulfing test drops the
+    prior-bar-up requirement and ORs the two close conditions, and the bearbear
+    gap-down bar counts as well. Fires on strictly more bars than the classic
+    definition, which is the point: both engines now flag the same bars."""
+    engulf = (
+        (open_s >= close_s.shift(1))
+        & (open_s >= open_s.shift(1))
+        & ((close_s <= open_s.shift(1)) | (close_s <= close_s.shift(1)))
+    )
+    bearbear = (close_s < open_s) & (open_s > high_s.shift(1)) & (close_s < low_s.shift(1))
+    return int((engulf | bearbear).fillna(False).iloc[-lookback:].sum())
+
+
+def _hp_rs_triangle(rs_s, rsma_s, lookback):
+    """RS-line-crosses-its-own-MA triangle events (green=crossover, red=crossunder),
+    the Python equivalent of the Pine 'mycrossover'/'mycrossunder' markers."""
+    crossover = (rs_s > rsma_s) & (rs_s.shift(1) <= rsma_s.shift(1))
+    crossunder = (rs_s < rsma_s) & (rs_s.shift(1) >= rsma_s.shift(1))
+    green = int(crossover.fillna(False).iloc[-lookback:].sum())
+    red = int(crossunder.fillna(False).iloc[-lookback:].sum())
+    cur_above = bool(rs_s.iloc[-1] > rsma_s.iloc[-1]) if pd.notna(rs_s.iloc[-1]) and pd.notna(rsma_s.iloc[-1]) else False
+    return green, red, cur_above
+
+
+def _hp_score_delta_series(close_s, high_s, low_s, bench_close_s):
+    """Mirrors compute_character_shift's 9-component composite score exactly
+    (same formula as that function, ~line 9044), but returns the FULL
+    score_delta Series instead of only today's value — so criterion 10 can
+    count red/green ±20 bars over the dynamic interim-high lookback instead
+    of only checking the single latest boc_delta_map snapshot."""
+    rs = close_s / bench_close_s
+    if rs.dropna().empty:
+        return None
+    ema126 = close_s.ewm(span=126, adjust=False).mean()
+    r = {sp: rs.ewm(span=sp, adjust=False).mean() for sp in [21, 42, 63, 72, 84, 126, 147, 168]}
+
+    stage1_cond = (rs >= r[84]) & (rs < r[126])
+    stage3_cond = (
+        (rs < r[42]) & (rs >= r[72]) & (rs >= r[84]) & (rs >= r[126])
+        & ((r[42] > r[63]) | (rs < r[63])) & (r[63] > r[126]) & (close_s >= ema126)
+    )
+    stage2a_cond = (
+        (rs >= r[168]) & (rs >= r[147]) & (rs >= r[126])
+        & (close_s >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+    )
+    stage2b_cond = (rs >= r[126]) & (close_s >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
+    stage2_cond = (~stage1_cond & ~stage3_cond & (stage2a_cond | stage2b_cond))
+
+    rsMA21  = rs.ewm(span=21, adjust=False).mean()
+    ema21t  = close_s.ewm(span=21, adjust=False).mean()
+    sma50t  = close_s.rolling(50).mean()
+    low14   = low_s.rolling(14).min().shift(1)
+    ema50t  = close_s.ewm(span=50, adjust=False).mean()
+    ema100t = close_s.ewm(span=100, adjust=False).mean()
+
+    gap_down_evt       = (high_s < low_s.shift(1))
+    gap_down_pct       = ((close_s.shift(1) - close_s) / close_s.shift(1) * 100).where(gap_down_evt)
+    gap_down_qualified = gap_down_evt & (gap_down_pct >= 3)
+    recent_gap_down    = gap_down_qualified.rolling(10, min_periods=1).max().fillna(0).astype(bool)
+
+    pct_chg = close_s.pct_change() * 100
+    win = min(220, len(pct_chg))
+    biggest_drop = pct_chg.rolling(window=win, min_periods=20).min()
+    biggest_up   = pct_chg.rolling(window=win, min_periods=20).max()
+
+    high252 = high_s.rolling(252, min_periods=50).max()
+    pct_from_high = (close_s - high252) / high252 * 100
+
+    s1  = (rs > rsMA21).fillna(False).astype(int) * 10
+    s2  = stage2_cond.fillna(False).astype(int) * 10
+    s3  = (close_s > ema21t).fillna(False).astype(int) * 10
+    s4  = (close_s > sma50t).fillna(False).astype(int) * 10
+    s6  = (~(close_s < low14).fillna(False)).astype(int) * 10
+    s7  = (~recent_gap_down).astype(int) * 10
+    s8  = (~(biggest_up < -biggest_drop).fillna(False)).astype(int) * 10
+    s9  = (~(pct_from_high < -25).fillna(False)).astype(int) * 10
+    s10 = (ema50t >= ema100t).fillna(False).astype(int) * 10
+
+    score = s1 + s2 + s3 + s4 + s6 + s7 + s8 + s9 + s10
+    return score.diff()
+
+
+@st.cache_data(ttl=3600)
+def compute_healthy_pullback_rows(universe_tuple, industry_trend_map, ticker_to_industries,
+                                   _all_data, _ticker_dfs, _benchmark_df):
+    """Runs the full 10-criteria Healthy Pullback / Deterioration classifier for
+    every ticker in universe_tuple.
+
+    Cached because this loop was previously bare module-level code: it re-ran
+    in full on every single Streamlit rerun (any widget interaction anywhere on
+    the page, not just when the underlying price data actually changed).
+    _hp_support_rating alone runs a bar-by-bar Python state machine over the
+    full price history twice per ticker (21ema + 50ma), on top of several
+    rolling/EWM passes for the other 9 criteria — real, repeatable work.
+
+    Leading-underscore args are excluded from Streamlit's cache key (same
+    convention as ticker_dfs_shared elsewhere in this file, since hashing ~470
+    DataFrames on every rerun would cost more than it saves); universe_tuple,
+    industry_trend_map and ticker_to_industries stay in the key so the cache
+    correctly busts when setup membership or industry trends actually change.
+    """
+    _hp_rs_lookup = {}
+    for _item in _all_data:
+        for _t, _s in zip(_item["Tickers"]["Ticker"], _item["Tickers"]["RS Score"]):
+            _hp_rs_lookup[_t] = _s
+
+    # Industry Group RS values, straight off all_data (same field df_main ranks on).
+    _hp_group_rs_lookup = {
+        _item["Industry"]: _item.get("Group RS")
+        for _item in _all_data if _item.get("Industry")
+    }
+
+    hp_rows = []
+    for sym in universe_tuple:
+        try:
+            df = _ticker_dfs.get(sym)
+            if df is None or len(df) < HP_MIN_HISTORY_BARS:
+                continue
+
+            close, open_, high, low, vol = df['Close'], df['Open'], df['High'], df['Low'], df['Volume']
+            ema21 = close.ewm(span=21, adjust=False).mean()
+            sma50 = close.rolling(50).mean()
+            bench_close = _benchmark_df['Close']
+
+            # Interim swing high (last 90d) + the dynamic high->now lookback that
+            # criteria 4/6/7/9/10 below use instead of a fixed window.
+            interim_high_price, bars_since_high, interim_high_date, dyn_lb = _hp_interim_high(df, high)
+
+            # 1) Industry Group RS + 4-circle trend. Gated on the absolute Group
+            #    RS value (>= HP_GROUP_RS_MIN), matching the Pine script's
+            #    minGroupRS — not on the industry's rank among its peers.
+            _inds = ticker_to_industries.get(sym, [])
+            best_ind, best_group_rs = None, None
+            for _ind in _inds:
+                _g = _hp_group_rs_lookup.get(_ind)
+                if _g is not None and (best_group_rs is None or _g > best_group_rs):
+                    best_group_rs, best_ind = _g, _ind
+            trend_str = industry_trend_map.get(best_ind, "") if best_ind else ""
+            green_ct = trend_str.count("🟢")
+            healthy_1 = (best_group_rs is not None and best_group_rs >= HP_GROUP_RS_MIN
+                         and green_ct >= HP_INDUSTRY_GREEN_MIN)
+
+            # 2) Stock's own RS value
+            rs_score = _hp_rs_lookup.get(sym)
+            healthy_2 = rs_score is not None and rs_score >= HP_STOCK_RS_MIN
+
+            # 3) 21ema / 50ma support rating — recency-weighted hold rate across
+            #    every prior MA test, the same engine the Pine script uses.
+            atr_pct_s = _hp_atr_pct(high, low, close)
+            sup21_rating = _hp_support_rating(close, low, ema21, atr_pct_s)
+            sup50_rating = _hp_support_rating(close, low, sma50, atr_pct_s)
+            healthy_3 = sup21_rating in HP_SUP_HEALTHY or sup50_rating in HP_SUP_HEALTHY
+
+            # 4) Low-volume cluster since the interim high (dynamic lookback)
+            has_cluster, cluster_streak = _hp_low_vol_cluster(vol, dyn_lb)
+            healthy_4 = has_cluster
+
+            # 5) ema21 vs ma50 distance % positive time (fixed 90d — unchanged)
+            dist_pct = _hp_dist_pct_positive(ema21, sma50)
+            healthy_5 = dist_pct >= HP_DIST_PCT_MIN
+
+            # 6) Volatility frequency/amplitude z-score violations since interim high
+            volz_count = _hp_volatility_highcount(high, low, dyn_lb)
+            healthy_6 = pd.notna(volz_count) and volz_count <= HP_VOLZ_MAX_HIGHCOUNT
+
+            # 7) Bearish engulfing + bearbear grey bars since the interim high
+            bear_cnt = _hp_bearish_engulf_count(open_, high, low, close, dyn_lb)
+            healthy_7 = bear_cnt <= HP_BEARENGULF_MAX
+
+            # 8) Accumulation rating (existing UDVR helper + rating function)
+            udvr_series = compute_up_down_vol_ratio_series(sym, _ticker_dfs, 50, 10)
+            accum_val = float(udvr_series.iloc[-1]) if udvr_series is not None and not udvr_series.empty else None
+            accum_rating = _udvr_rating(accum_val)
+            healthy_8 = accum_val is not None and accum_val >= HP_ACCUM_MIN
+
+            # 9) RS red/green triangle count since interim high
+            rs = close / bench_close
+            rsma = rs.ewm(span=21, adjust=False).mean()
+            tri_green, tri_red, tri_above = _hp_rs_triangle(rs, rsma, dyn_lb)
+            healthy_9 = tri_above and tri_green >= tri_red
+
+            # 10) Composite ±20 score-delta red/green bars since interim high
+            score_delta_series = _hp_score_delta_series(close, high, low, bench_close)
+            if score_delta_series is not None:
+                score_window = score_delta_series.iloc[-dyn_lb:]
+                score_green_ct = int((score_window >= HP_SCORE_CHANGE_UP).sum())
+                score_red_ct = int((score_window <= HP_SCORE_BREAKDOWN).sum())
+            else:
+                score_green_ct = score_red_ct = 0
+            healthy_10 = score_red_ct == 0 or score_green_ct >= score_red_ct
+
+            flags = {
+                "Industry RS/Trend":   healthy_1,
+                "Stock RS Value":      healthy_2,
+                "21ema/50ma State":    healthy_3,
+                "Low-Vol Cluster":     healthy_4,
+                "EMA21>MA50 Time%":    healthy_5,
+                "Volatility Z-Score":  healthy_6,
+                "Bear Engulf Count":   healthy_7,
+                "Accumulation Rating": healthy_8,
+                "RS Triangle":         healthy_9,
+                "Score Delta ±20":     healthy_10,
+            }
+            weighted_score = sum(HP_WEIGHTS[k] for k, ok in flags.items() if ok)
+            conclusion = "✅ Healthy Pullback" if weighted_score >= HP_HEALTHY_THRESHOLD else "⚠️ Deterioration"
+
+            def _tick(ok):
+                return "✅" if ok else "❌"
+
+            hp_rows.append({
+                "Ticker": sym,
+                "Conclusion": conclusion,
+                "Score": round(weighted_score, 1),
+                "Interim High (90d)": (
+                    f"${interim_high_price:.2f} · {bars_since_high}d ago "
+                    f"({pd.Timestamp(interim_high_date).strftime('%Y-%m-%d')})"
+                ),
+                "Industry RS/Trend": f"{_tick(healthy_1)} RS {best_group_rs:.0f} {trend_str}" if best_group_rs is not None else f"{_tick(False)} -",
+                "Stock RS Value": f"{_tick(healthy_2)} {rs_score if rs_score is not None else '-'}",
+                "21ema/50ma State": f"{_tick(healthy_3)} 21:{sup21_rating} / 50:{sup50_rating}",
+                "Low-Vol Cluster": f"{_tick(healthy_4)} streak={cluster_streak} (of {dyn_lb}d)",
+                "EMA21>MA50 Time%": f"{_tick(healthy_5)} {dist_pct:.0f}%",
+                "Volatility Z-Score": f"{_tick(healthy_6)} {int(volz_count) if pd.notna(volz_count) else '-'} (of {dyn_lb}d)",
+                "Bear Engulf/Bearbear": f"{_tick(healthy_7)} {bear_cnt} (of {dyn_lb}d)",
+                "Accumulation Rating": f"{_tick(healthy_8)} {accum_rating} ({accum_val:.2f})" if accum_val is not None else f"{_tick(False)} -",
+                "RS Triangle": f"{_tick(healthy_9)} 🟢{tri_green}/🔴{tri_red} (of {dyn_lb}d)",
+                "Score Delta ±20": f"{_tick(healthy_10)} 🟢{score_green_ct}/🔴{score_red_ct} (of {dyn_lb}d)",
+            })
+        except Exception:
+            continue
+
+    return hp_rows
+
+BH_MIN_LEN = 2          # shortest pivot length scanned (bars each side)
+BH_MAX_LEN = 5          # longest pivot length scanned
+BH_MA_LEN = 21          # MA(Low) used as the structure's fail/stop level
+BH_LOOKBACK_DAYS = 20   # "2nd Pivot Break within the past 20 trading days"
+BH_MIN_HISTORY_BARS = 80
+
+# Suggested weights for the 4 checks (sum to 100) — not backtested, a
+# starting point: survival (avoided -1R) and holding the level (above pivot
+# 5d) weighted slightly higher than the two upside-follow-through checks,
+# since a breakout that merely "didn't fail" is a materially different
+# signal than a fully confirmed, extended one.
+BH_WEIGHTS = {
+    "Avoided -1R (3d)":  30,
+    "+1R (5d)":          20,
+    "+2R (10d)":         20,
+    "Above Pivot (5d)":  30,
+}
+BH_HEALTHY_THRESHOLD = 65.0   # aggregate score >= this reads "Healthy"
+BH_WEAK_THRESHOLD = 40.0      # aggregate score <  this reads "Weak" (else "Neutral")
+
+
+def _bh_find_2nd_pivot_breaks(df, min_len=BH_MIN_LEN, max_len=BH_MAX_LEN, ma_len=BH_MA_LEN):
+    """Bar-by-bar port of the Pine script's long-side Higher-Low structure
+    state machine, run independently for each pivot length. Returns every
+    2nd-Pivot-Break event found across all lengths as a list of dicts
+    {length, break_bar, break_val, pivot_idx, pivot_val}."""
+    n = len(df)
+    close = df['Close'].to_numpy()
+    high = df['High'].to_numpy()
+    low = df['Low'].to_numpy()
+    ma_stop = df['Low'].rolling(ma_len).mean().to_numpy()
+
+    events = []
+    for L in range(min_len, max_len + 1):
+        prev_p, prev_idx = np.nan, -1
+        curr_p, curr_idx = np.nan, -1
+        is_setup = False
+        break_val = np.nan
+        broke_already = False
+
+        for b in range(n):
+            p_idx = b - L
+            if p_idx - L >= 0 and p_idx + L < n:
+                seg = low[p_idx - L: p_idx + L + 1]
+                if low[p_idx] == seg.min():
+                    p = low[p_idx]
+                    setup_cond = (not np.isnan(curr_p)) and (p > curr_p)
+                    prev_p, prev_idx = curr_p, curr_idx
+                    curr_p, curr_idx = p, p_idx
+                    is_setup = setup_cond
+                    break_val = np.nan
+                    broke_already = False
+                    if setup_cond and prev_idx >= 0:
+                        seg_start, seg_end = prev_idx + 1, curr_idx
+                        if seg_end > seg_start:
+                            hseg = high[seg_start:seg_end]
+                            rel = int(np.argmax(hseg))
+                            break_val = hseg[rel]
+
+            if is_setup and not np.isnan(curr_p) and low[b] < curr_p:
+                is_setup = False
+
+            if is_setup and not np.isnan(break_val) and not broke_already:
+                if close[b] > break_val and (b == 0 or close[b - 1] <= break_val):
+                    events.append({
+                        "length": L, "break_bar": b, "break_val": float(break_val),
+                        "pivot_idx": int(curr_idx), "pivot_val": float(curr_p),
+                    })
+                    broke_already = True
+
+            if is_setup and broke_already and not np.isnan(ma_stop[b]) and low[b] < ma_stop[b]:
+                is_setup = False
+                broke_already = False
+
+    return events
+
+
+def _bh_most_recent_event(events, n_bars, lookback_days=BH_LOOKBACK_DAYS):
+    """Collapse multi-length events to the single most recent one within the
+    lookback window (ties -> tightest/lowest break level), matching "stocks
+    that had A 2nd-Pivot Break" (one event per stock, not one per length)."""
+    cutoff = n_bars - 1 - lookback_days
+    recent = [e for e in events if e["break_bar"] > cutoff]
+    if not recent:
+        return None
+    recent.sort(key=lambda e: (-e["break_bar"], e["break_val"]))
+    return recent[0]
+
+
+def _bh_score_event(df, event, weights=BH_WEIGHTS):
+    """The 4-check weighted score for one breakout event. Each check is
+    evaluated over whatever bars are actually available so far
+    (min(window, bars elapsed)), so a breakout from a few days ago scores on
+    its trajectory-so-far rather than being penalized for not yet having a
+    full 10 days of history."""
+    n = len(df)
+    b = event["break_bar"]
+    entry = event["break_val"]
+
+    high = df['High'].to_numpy()
+    low = df['Low'].to_numpy()
+    close = df['Close'].to_numpy()
+    adr_pct_series = (100 * (df['High'] / df['Low']).rolling(20).mean() - 100).to_numpy()
+    adr_pct = adr_pct_series[b]
+    if pd.isna(adr_pct):
+        return None
+    R = entry * adr_pct / 100.0
+
+    def _end(days):
+        return min(n, b + 1 + days)
+
+    win3, win5, win10 = slice(b + 1, _end(3)), slice(b + 1, _end(5)), slice(b + 1, _end(10))
+
+    avoided_neg1r = True
+    if low[win3].size:
+        avoided_neg1r = not bool((low[win3] <= entry - R).any())
+
+    hit_pos1r = bool((high[win5] >= entry + R).any()) if high[win5].size else False
+    hit_pos2r = bool((high[win10] >= entry + 2 * R).any()) if high[win10].size else False
+
+    day5_idx = min(n - 1, b + 5)
+    above_pivot_5d = bool(close[day5_idx] > entry) if day5_idx > b else True
+
+    checks = {
+        "Avoided -1R (3d)": avoided_neg1r,
+        "+1R (5d)": hit_pos1r,
+        "+2R (10d)": hit_pos2r,
+        "Above Pivot (5d)": above_pivot_5d,
+    }
+    score = sum(weights[k] for k, ok in checks.items() if ok)
+    return {"checks": checks, "score": float(score), "R": R, "adr_pct": adr_pct,
+            "entry": entry, "days_since": n - 1 - b}
+
+
+@st.cache_data(ttl=3600)
+def compute_breakout_health(stocks_tuple_bh, _ticker_dfs):
+    """For every ticker, find its most recent 2nd-Pivot-Break (if any) within
+    the last BH_LOOKBACK_DAYS trading days and score it. Returns a list of
+    per-ticker row dicts, sorted by most recent breakout first."""
+    rows = []
+    for sym in stocks_tuple_bh:
+        try:
+            df = _ticker_dfs.get(sym)
+            if df is None or len(df) < BH_MIN_HISTORY_BARS:
+                continue
+            if df['Close'].iloc[-1] < 20:
+                continue
+            events = _bh_find_2nd_pivot_breaks(df)
+            ev = _bh_most_recent_event(events, len(df))
+            if ev is None:
+                continue
+            res = _bh_score_event(df, ev)
+            if res is None:
+                continue
+
+            def _tick(ok):
+                return "✅" if ok else "❌"
+
+            rows.append({
+                "Ticker": sym,
+                "Score": round(res["score"], 1),
+                "Days Since Break": res["days_since"],
+                "Pivot": round(res["entry"], 2),
+                "ADR%": round(res["adr_pct"], 2),
+                "R ($)": round(res["R"], 2),
+                "Avoided -1R (3d)": _tick(res["checks"]["Avoided -1R (3d)"]),
+                "+1R (5d)": _tick(res["checks"]["+1R (5d)"]),
+                "+2R (10d)": _tick(res["checks"]["+2R (10d)"]),
+                "Above Pivot (5d)": _tick(res["checks"]["Above Pivot (5d)"]),
+            })
+        except Exception:
+            continue
+    return rows
+
 # ==============================================================================
 # 23. MARKET VERDICT — Composite Breakout / Pullback / Neutral / Defensive Read
 # Read-only, additive. Synthesizes every signal already computed above plus
-# two standalone fetches (VIX term structure, HYG/LQD credit spread) into a
-# single weighted composite score and verdict. Does not touch any other
-# section or shared variable — all new names are unique.
+# two standalone fetches (VIX term structure, HYG/LQD credit spread), PLUS two
+# pillars from sections 29 (Healthy Pullback vs. Deterioration) and 30 (Breakout
+# Health) — whose own compute functions are DEFINED earlier in the file (moved
+# up here, right below) and CALLED in this section, before
+# compute_market_verdict() runs, so this section can stay in its original page
+# position while sections 29/30 still render in theirs, lower on the page
+# (their own render code re-hits this same cached call — free, not a second
+# real computation) — into a single weighted composite score and verdict. Does
+# not touch any other section or shared variable — all new names are unique.
 # ==============================================================================
 st.markdown("---")
 st.markdown("## 🧭 Lazy Exposure = % Invested / 21ema vs 50ma / 2R vs 1.5R TP / 2-stops vs 3-stops")
 
 # ── Standalone data fetches used only by the verdict (run first so they're
 # available when compute_market_verdict() executes) ─────────────────────────
+
+# hp_rows/bh_rows: same compute functions and args sections 29/30 call again
+# later for their own rendering (cached, so that's a free cache-hit, not a
+# second real computation) — computed here first so the two pillars below
+# read real data instead of _safe()'s default.
+with st.spinner("Classifying healthy pullbacks vs. deterioration..."):
+    _hp_universe = tuple(sorted(cloud_valid_syms | cloud21ema_all | cloudwick_all | ma50bounce_all))
+    hp_rows = timed(
+        "compute_healthy_pullback_rows",
+        compute_healthy_pullback_rows,
+        _hp_universe, industry_trend_map, ticker_to_industries,
+        all_data, ticker_dfs_shared, benchmark_df_shared
+    )
+
+with st.spinner("Scanning 2nd-Pivot-Break breakouts..."):
+    bh_rows = timed(
+        "compute_breakout_health",
+        compute_breakout_health,
+        stocks_tuple, ticker_dfs_shared
+    )
 
 @st.cache_data(ttl=3600)
 def fetch_vix_term_structure_v0(period="6mo"):
@@ -15015,25 +15888,50 @@ def compute_market_verdict():
         p_accum_score, p_accum_label = 50, "Insufficient data"
     breakdown.append(("Accumulation Rating", p_accum_score, p_accum_label, ""))
 
+    # ── Pillar: Healthy Pullback vs Deterioration (section 29's own verdict) ──
+    hp_rows_v = _safe("hp_rows", [])
+    if hp_rows_v:
+        hp_healthy_ct = sum(1 for r in hp_rows_v if "Healthy" in r.get("Conclusion", ""))
+        p_hp_score = (hp_healthy_ct / len(hp_rows_v)) * 100
+        p_hp_label = f"{hp_healthy_ct}/{len(hp_rows_v)} pullback setups reading Healthy"
+    else:
+        p_hp_score, p_hp_label = 50, "Insufficient data"
+    breakdown.append(("Healthy Pullback vs Deterioration", p_hp_score, p_hp_label, ""))
+
+    # ── Pillar: Breakout Health (section 30's own aggregate score) ───────────
+    bh_rows_v = _safe("bh_rows", [])
+    if bh_rows_v:
+        p_bh_score = sum(r["Score"] for r in bh_rows_v) / len(bh_rows_v)
+        p_bh_label = f"{len(bh_rows_v)} recent 2nd-Pivot-Break setups, avg score {p_bh_score:.0f}"
+    else:
+        p_bh_score, p_bh_label = 50, "Insufficient data"
+    breakdown.append(("Breakout Health", p_bh_score, p_bh_label, ""))
+
     # ── Weighted Composite ──────────────────────────────────────────────────
     weights = {
-        "1 Month Leading Theme": 0.05,
-        "Pine RS Table Breadth": 0.05,
-        "RS Quadrant Map": 0.07,
+        # Existing 17 pillars, each trimmed to make room for the 2 new ones
+        # below so the full set still sums to exactly 1.00 (100%).
+        "1 Month Leading Theme": 0.04,
+        "Pine RS Table Breadth": 0.04,
+        "RS Quadrant Map": 0.06,
         "Pie Chart RSI (Sector Momentum)": 0.04,
-        "ETF Risk Appetite": 0.05,
+        "ETF Risk Appetite": 0.04,
         "Sector Heatmap Breadth": 0.04,
-        "RRG Rotation": 0.07,
-        "Stage Breadth": 0.07,
+        "RRG Rotation": 0.06,
+        "Stage Breadth": 0.06,
         "ETF Stage2/4 (watchlist)": 0.05,
-        "Market Regime": 0.11,
-        "Minervini Breadth Trend": 0.07,
-        "Distribution Days": 0.12,
-        "Accumulation Rating": 0.05,
+        "Market Regime": 0.09,
+        "Minervini Breadth Trend": 0.06,
+        "Distribution Days": 0.10,
+        "Accumulation Rating": 0.04,
         "VIX Term Structure": 0.04,
         "Credit Spread (HYG/LQD)": 0.04,
-        "Equity Risk Premium (ERP)": 0.05,
+        "Equity Risk Premium (ERP)": 0.04,
         "S&P 500 Valuation (P/E vs 10Y)": 0.03,
+        # New pillars (computed in sections 29/30, which now run BEFORE this
+        # relocated section, so hp_rows/bh_rows are already populated globals)
+        "Healthy Pullback vs Deterioration": 0.07,
+        "Breakout Health": 0.06,
     }
 
     # ── Reorder pillars for display ──────────────────────────────────────
@@ -15046,6 +15944,8 @@ def compute_market_verdict():
         "Sector Heatmap Breadth",
         "RRG Rotation",
         "Accumulation Rating",
+        "Healthy Pullback vs Deterioration",
+        "Breakout Health",
         "ETF Stage2/4 (watchlist)",
         "Stage Breadth",
         "Market Regime",
@@ -17505,197 +18405,6 @@ if _timing_log:
     st.caption(f"Total measured wall-clock time: **{total_str}** across {len(_timing_log)} tracked calls")
 
 # ==============================================================================
-# 28. DOWNTREND LINE BREAKOUT — dynamic descending-resistance trendline breakout
-# Ported from the Pine "trendLine"/"pivData" logic (pivot-high anchored
-# trendline with a % price buffer, min-touch confirmation, close-based
-# breakout signal). Read-only, additive. Reuses ticker_dfs_shared (already
-# downloaded) — no new data fetch. Appended at the very bottom.
-# ==============================================================================
-st.markdown("---")
-
-def is_volume_above_50d_avg(df):
-    """True if the latest bar's Volume is above its 50-day average volume."""
-    try:
-        if df is None or "Volume" not in df.columns or len(df) < 50:
-            return False
-        vol = df["Volume"].astype(float)
-        avg50 = vol.rolling(50, min_periods=50).mean()
-        latest_vol = vol.iloc[-1]
-        latest_avg = avg50.iloc[-1]
-        if pd.isna(latest_avg):
-            return False
-        return bool(latest_vol > latest_avg)
-    except Exception:
-        return False
-
-@st.cache_data(ttl=3600)
-def compute_downtrend_line_breakout(stocks_list, _ticker_dfs,
-                                     bars=5, buffer_pct=0.001, num_touches=3,
-                                     new_high_bars=100, show_num=1):
-    """
-    Faithful port of the Pine "trendLine"/"pivData" descending-resistance
-    trendline logic:
-      - Anchor = most recent qualifying pivot high (confirmed 'bars' bars
-        later, like ta.pivothigh(bars, bars)). A new pivot replaces the
-        anchor if it's higher, or if the current anchor is older than
-        new_high_bars.
-      - Whenever a bar's high drops below the anchor high, a trial
-        trendline is drawn from the anchor to that bar. If every bar in
-        between stayed within buffer_pct of the line (no bar poked
-        through it) and at least num_touches bars touched it closely,
-        the line is confirmed (kept, up to show_num active lines).
-      - A confirmed line breaks out ("bo") the first time CLOSE trades
-        above the line's projected price by more than buffer_pct.
-    Returns {ticker: (breakout_today: bool, breakout_yesterday: bool)}.
-    """
-    results = {}
-    for ticker in stocks_list:
-        df = _ticker_dfs.get(ticker)
-        if df is None or len(df) < bars * 2 + 5:
-            continue
-        try:
-            high = df['High'].to_numpy()
-            close = df['Close'].to_numpy()
-            n = len(high)
-
-            # Pivot-high detection (confirmed 'bars' bars after the pivot bar,
-            # mirroring ta.pivothigh(bars, bars))
-            pivot_val = {}
-            for p in range(bars, n - bars):
-                window = high[p - bars: p + bars + 1]
-                if high[p] == window.max():
-                    pivot_val[p] = high[p]
-
-            piv_h = None
-            piv_b = None
-            trendlines = []  # each: dict(piv_b, piv_h, slope, active)
-            bo_flags = np.zeros(n, dtype=bool)
-
-            for i in range(n):
-                confirmed_pivot_bar = i - bars
-                if confirmed_pivot_bar in pivot_val:
-                    pv = pivot_val[confirmed_pivot_bar]
-                    if (piv_h is None or pv > piv_h or
-                            (piv_b is not None and i - piv_b > new_high_bars)):
-                        piv_h = pv
-                        piv_b = confirmed_pivot_bar
-
-                if piv_h is not None and high[i] < piv_h and i > piv_b:
-                    slope = (high[i] - piv_h) / (i - piv_b)
-                    touches = 0
-                    broken = False
-                    for k in range(0, i - piv_b + 1):
-                        bar_k = piv_b + k
-                        line_price = piv_h + slope * k
-                        if high[bar_k] > line_price * (1 + buffer_pct):
-                            broken = True
-                            break
-                        elif line_price * (1 - buffer_pct) <= high[bar_k] <= line_price * (1 + buffer_pct):
-                            touches += 1
-
-                    if not broken and touches >= num_touches:
-                        new_line = {'piv_b': piv_b, 'piv_h': piv_h, 'slope': slope, 'active': True}
-                        trendlines.append(new_line)
-                        if len(trendlines) > show_num:
-                            trendlines.pop(0)
-                        # de-dup lines that price-match at this pivot anchor bar
-                        if len(trendlines) > 1:
-                            cur = trendlines[-1]
-                            cur_price = cur['piv_h'] + cur['slope'] * (piv_b - cur['piv_b'])
-                            kept = []
-                            for idx, t in enumerate(trendlines):
-                                t_price = t['piv_h'] + t['slope'] * (piv_b - t['piv_b'])
-                                if t_price == cur_price and idx != len(trendlines) - 1:
-                                    continue
-                                kept.append(t)
-                            trendlines = kept
-
-                for t in trendlines:
-                    if not t['active']:
-                        continue
-                    line_price_today = t['piv_h'] + t['slope'] * (i - t['piv_b'])
-                    if close[i] > line_price_today * (1 + buffer_pct):
-                        bo_flags[i] = True
-                        t['active'] = False
-
-            bo_today = bool(bo_flags[-1])
-            bo_yest = bool(bo_flags[-2]) if n >= 2 else False
-            results[ticker] = (bo_today, bo_yest)
-        except Exception:
-            continue
-
-    return results
-
-
-with st.spinner("Scanning for downtrend line breakouts..."):
-    downtrend_bo_results = timed(
-        "compute_downtrend_line_breakout",
-        compute_downtrend_line_breakout,
-        stocks_tuple, ticker_dfs_shared
-    )
-
-downtrend_today = sorted(sym for sym, (t, y) in downtrend_bo_results.items() if t)
-downtrend_yest = sorted(sym for sym, (t, y) in downtrend_bo_results.items() if y)
-
-st.markdown(
-    f"""
-    <h4>
-        📐 Downtrend Line Breakout ({len(downtrend_today)})
-        <span style="color:#888; font-size:12px; font-weight:normal;">(Star = High Volume)</span>
-    </h4>
-    """,
-    unsafe_allow_html=True,
-)
-
-if downtrend_today or downtrend_yest:
-    dt_industry_counts, dt_ticker_industry = build_leader_industry_map(downtrend_today, INDUSTRIES)
-
-    html_dt = ""
-
-    # Show today's breakout badges only when latest price > $20
-    for sym in downtrend_today:
-        df = ticker_dfs_shared.get(sym)
-        latest_price = float(df["Close"].iloc[-1]) if df is not None and not df.empty else 0
-
-        if latest_price <= 20:
-            continue
-
-        industries = dt_ticker_industry.get(sym, [])
-        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
-        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
-
-        glow_style = (
-            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
-            if is_top20_industry else ""
-        )
-
-        vol_above_avg = is_volume_above_50d_avg(df)
-
-        html_dt += setup_badge(
-            sym,
-            is_new=(sym not in downtrend_yest),
-            extra_style=glow_style,
-            extra_prefix="★ " if vol_above_avg else ""
-        )
-
-    # Show removed badges only when latest available price > $20
-    removed_dt = [sym for sym in downtrend_yest if sym not in downtrend_today]
-
-    for sym in sorted(removed_dt):
-        df = ticker_dfs_shared.get(sym)
-        latest_price = float(df["Close"].iloc[-1]) if df is not None and not df.empty else 0
-
-        if latest_price <= 20:
-            continue
-
-        html_dt += f'<div class="ticker-badge removed-badge">{sym}</div>'
-
-    st.markdown(html_dt, unsafe_allow_html=True)
-else:
-    st.info("No active setups discovered.")
-
-
-# ==============================================================================
 # 29. HEALTHY PULLBACK vs. DETERIORATION — weighted multi-factor classifier
 #
 # A red day / pullback alone doesn't mean a setup is broken. This section scores
@@ -17722,486 +18431,6 @@ st.markdown("---")
 _hp_title_ph = st.empty()
 _hp_title_ph.markdown("#### 🩺 Healthy Pullback vs Deterioration")
 
-# ── Tunable parameters (weights sum to 100) ─────────────────────────────────
-HP_WEIGHTS = {
-    "Industry RS/Trend":   10,  # 1) industry Group RS value + 4-circle trend
-    "Stock RS Value":      15,  # 2) the stock's own RS Score
-    "21ema/50ma State":    15,  # 3) recency-weighted MA support hold rate
-    "Low-Vol Cluster":     10,  # 4) low-volume orange-box cluster since interim high
-    "EMA21>MA50 Time%":    10,  # 5) % of last 90d that ema21 stayed above ma50
-    "Volatility Z-Score":  10,  # 6) frequency/amplitude z-score violations since interim high
-    "Bear Engulf Count":   10,  # 7) bearish engulfing bars since interim high
-    "Accumulation Rating": 10,  # 8) up/down volume ratio (existing UDVR logic)
-    "RS Triangle":          5,  # 9) RS-vs-its-own-MA crossover triangles since interim high
-    "Score Delta ±20":      5,  # 10) composite-score ±20 red/green bars since interim high
-}
-HP_GROUP_RS_MIN         = 70    # min industry Group RS (matches Pine's minGroupRS)
-HP_INDUSTRY_GREEN_MIN   = 2     # min green circles (of 4) in industry trend
-HP_STOCK_RS_MIN         = 70    # IBD-style leadership threshold
-HP_LOWVOL_MIN_STREAK    = 2     # consecutive low-vol bars to count as a cluster
-HP_DIST_LOOKBACK        = 90
-HP_DIST_PCT_MIN         = 90.0  # % of days ema21 must stay above ma50
-HP_VOLZ_MAX_HIGHCOUNT   = 1     # max allowed z>1.5 days in the dynamic window (user: "not more than 1")
-HP_BEARENGULF_MAX       = 0     # max bearish engulfing bars allowed in the dynamic window
-HP_ACCUM_MIN            = 1.0   # up/down volume ratio >= 1 = net accumulation
-HP_SCORE_BREAKDOWN      = -20   # score_delta <= this on a bar = character breakdown ("red bar")
-HP_SCORE_CHANGE_UP      = 20    # score_delta >= this on a bar = change of character ("green bar")
-HP_MIN_HISTORY_BARS     = 60
-HP_HEALTHY_THRESHOLD    = 60.0  # weighted score (0-100) needed to call it "Healthy"
-
-# Interim-high lookback: the swing high is searched for within the last
-# HP_INTERIM_HIGH_LOOKBACK days; the resulting "bars since high" is then
-# clamped to [HP_DYNAMIC_LOOKBACK_MIN, HP_DYNAMIC_LOOKBACK_MAX] before being
-# used as the dynamic window for criteria 4/6/7/9/10 (the floor keeps very
-# fresh highs from giving statistically unstable 0-2 bar windows).
-HP_INTERIM_HIGH_LOOKBACK = 90
-HP_DYNAMIC_LOOKBACK_MIN  = 5
-HP_DYNAMIC_LOOKBACK_MAX  = HP_INTERIM_HIGH_LOOKBACK
-
-# Criterion 3 — MA support-strength engine, ported from tradingview1's
-# "50 SMA / 21 EMA Support Strength" blocks. Same defaults as that script.
-HP_SUP_TOUCH_TOL    = 0.5    # touch tolerance above the MA (%)
-HP_SUP_MAX_UNDERCUT = 15.0   # dip deeper than this = trend break, not a test (%)
-HP_SUP_FAIL_TOL     = 4.0    # break / fail threshold (%)
-HP_SUP_RECLAIM      = 1.0    # reclaim margin (%)
-HP_SUP_ATR_MULT     = 1.5    # ATR multiple folded into both margins
-HP_SUP_MIN_RUNUP    = 4.0    # min prior run-up above the MA (%)
-HP_SUP_RUNUP_LOOK   = 30     # run-up lookback (bars)
-HP_SUP_PRIOR_ABOVE  = 6      # must have been above the MA within this many bars
-HP_SUP_CONFIRM_BARS = 7      # bars to confirm a test's outcome
-HP_SUP_FAIL_CLOSES  = 2      # consecutive closes below the break level = failed
-HP_SUP_LOOKBACK     = 150    # only score tests within this many bars
-HP_SUP_STALE_BARS   = 120    # no test within this many bars = not in play
-HP_SUP_MAX_EVENTS   = 8      # max tests remembered
-HP_SUP_MIN_EVENTS   = 3      # min tests before a firm rating is given
-HP_SUP_HALF_LIFE    = 45     # recency half-life (bars)
-HP_SUP_HEALTHY      = ("STRONG", "MEDIUM", "HELD?", "IDLE")
-
-
-def _hp_atr_pct(high_s, low_s, close_s, period=14):
-    """Wilder ATR expressed as a % of close — the Python equivalent of Pine's
-    ta.atr(14) / close * 100, which feeds the support engine's margins."""
-    prev_close = close_s.shift(1)
-    tr = pd.concat([
-        high_s - low_s,
-        (high_s - prev_close).abs(),
-        (low_s - prev_close).abs(),
-    ], axis=1).max(axis=1)
-    atr = tr.ewm(alpha=1.0 / period, adjust=False).mean()
-    return atr / close_s * 100
-
-
-def _hp_support_rating(close_s, low_s, ma_s, atr_pct_s):
-    """Port of tradingview1's MA support-strength engine (the "50 SMA / 21 EMA
-    Support Strength" blocks), so the Streamlit verdict uses the same method
-    as the Pine script instead of a single-bar snapshot.
-
-    Walks the full history bar by bar and records every genuine support TEST of
-    the moving average — price had been above it recently, had a real run-up,
-    touched the MA without collapsing through it, and the MA was rising. Each
-    test is then resolved over HP_SUP_CONFIRM_BARS bars as held (reclaimed, or
-    undercut intraday then closed back above = a spring) or failed (consecutive
-    closes below the break threshold). The rating is the recency-weighted hold
-    rate across the remembered tests, half-life HP_SUP_HALF_LIFE bars.
-
-    Returns STRONG / MEDIUM / WEAK / BROKEN / HELD? / LOST? / IDLE / BELOW / N/A.
-    """
-    n = len(close_s)
-    if n < HP_SUP_RUNUP_LOOK + HP_SUP_CONFIRM_BARS:
-        return "N/A"
-
-    c  = close_s.to_numpy(dtype=float)
-    lo = low_s.to_numpy(dtype=float)
-    ma = ma_s.to_numpy(dtype=float)
-    ap = np.nan_to_num(atr_pct_s.to_numpy(dtype=float))
-
-    # Volatility-aware margins, exactly as the Pine version derives them.
-    fail_pct = np.maximum(HP_SUP_FAIL_TOL, ap * HP_SUP_ATR_MULT)
-    rcl_pct  = np.maximum(HP_SUP_RECLAIM, ap * HP_SUP_ATR_MULT * 0.35)
-
-    above_i = pd.Series((c > ma).astype(int), index=close_s.index)
-
-    # ta.barssince(close > ma) <= HP_SUP_PRIOR_ABOVE
-    was_above = (above_i.rolling(HP_SUP_PRIOR_ABOVE + 1, min_periods=1).max() > 0).to_numpy()
-    runup_dist = (close_s.rolling(HP_SUP_RUNUP_LOOK).max().shift(1)
-                  >= ma_s * (1 + HP_SUP_MIN_RUNUP / 100)).fillna(False).to_numpy()
-    runup_time = (above_i.rolling(HP_SUP_RUNUP_LOOK).sum().shift(1)
-                  >= HP_SUP_RUNUP_LOOK * 0.5).fillna(False).to_numpy()
-
-    rising = np.zeros(n, dtype=bool)
-    rising[2:] = (ma[2:] > ma[1:-1]) & (ma[1:-1] > ma[:-2])
-    ge5 = np.zeros(n, dtype=bool)
-    ge5[5:] = ma[5:] >= ma[:-5]
-    rise_ok = rising | ge5
-
-    in_zone      = lo <= ma * (1 + HP_SUP_TOUCH_TOL / 100)
-    not_collapse = lo >= ma * (1 - HP_SUP_MAX_UNDERCUT / 100)
-    test_bar = was_above & (runup_dist | runup_time) & in_zone & not_collapse & rise_ok
-
-    events = []                       # (resolution_bar, held 0/1)
-    pending = 0
-    ev_ma = ev_lowlow = np.nan
-    ev_reclaim = ev_sprung = False
-    below_run = 0
-    last_test_bar = None
-    prev_test = False
-
-    for i in range(n):
-        tb = bool(test_bar[i])
-        if tb and not prev_test and pending == 0:
-            pending    = HP_SUP_CONFIRM_BARS
-            ev_ma      = ma[i]
-            ev_lowlow  = lo[i]
-            ev_reclaim = False
-            ev_sprung  = False
-            below_run  = 0
-        prev_test = tb
-
-        if pending > 0:
-            ev_lowlow = min(ev_lowlow, lo[i])
-            if c[i] >= ma[i] * (1 + rcl_pct[i] / 100):
-                ev_reclaim = True
-            if lo[i] < ev_ma and c[i] > ma[i]:
-                ev_sprung = True
-            below_run = below_run + 1 if c[i] < ev_ma * (1 - fail_pct[i] / 100) else 0
-            pending -= 1
-            deep_stay = (ev_lowlow < ev_ma * (1 - fail_pct[i] / 100)) and not ev_sprung
-            if below_run >= HP_SUP_FAIL_CLOSES and not ev_sprung:
-                events.append((i, 0))
-                last_test_bar = i
-                pending = 0
-            elif pending == 0:
-                held = (ev_reclaim or ev_sprung) and not deep_stay
-                events.append((i, 1 if held else 0))
-                last_test_bar = i
-            if len(events) > HP_SUP_MAX_EVENTS:
-                events = events[-HP_SUP_MAX_EVENTS:]
-
-    last = n - 1
-    if pd.isna(ma[last]):
-        return "N/A"
-
-    w_sum = w_hold = 0.0
-    n_tot = 0
-    for bar_i, held in events:
-        age = last - bar_i
-        if age <= HP_SUP_LOOKBACK:
-            w = 0.5 ** (age / max(HP_SUP_HALF_LIFE, 1))
-            w_sum  += w
-            w_hold += w * held
-            n_tot  += 1
-    hold_rate = (w_hold / w_sum) if w_sum > 0 else None
-    last_held = events[-1][1] if events else None
-
-    stale     = last_test_bar is None or (last - last_test_bar) > HP_SUP_STALE_BARS
-    below_now = c[last] < ma[last] * (1 - fail_pct[last] / 100)
-    in_play   = pending > 0 or not stale or below_now
-
-    if not in_play:
-        return "IDLE" if c[last] >= ma[last] else "BELOW"
-    if n_tot < HP_SUP_MIN_EVENTS or hold_rate is None:
-        if last_held is None:
-            return "N/A"
-        return "HELD?" if last_held == 1 else "LOST?"
-    if hold_rate >= 0.80 and bool(rise_ok[last]):
-        return "STRONG"
-    if hold_rate >= 0.60:
-        return "MEDIUM"
-    if hold_rate >= 0.40:
-        return "WEAK"
-    return "BROKEN" if (below_now or last_held == 0) else "WEAK"
-
-
-def _hp_interim_high(df_s, high_s, lookback=HP_INTERIM_HIGH_LOOKBACK):
-    """Find the interim swing high (highest High) within `lookback` days, and
-    how many bars ago it occurred. Returns (high_price, bars_since, high_date,
-    dynamic_lookback) — dynamic_lookback is bars_since clamped to
-    [HP_DYNAMIC_LOOKBACK_MIN, HP_DYNAMIC_LOOKBACK_MAX] and is what criteria
-    4/6/7/9/10 use as their own lookback window."""
-    n = len(high_s)
-    window = min(lookback, n)
-    ih_slice = high_s.iloc[-window:]
-    high_price = float(ih_slice.max())
-    pos_in_slice = int(np.argmax(ih_slice.values))
-    high_pos = (n - window) + pos_in_slice
-    bars_since = (n - 1) - high_pos
-    high_date = df_s.index[high_pos]
-    dyn_lookback = min(max(bars_since, HP_DYNAMIC_LOOKBACK_MIN), HP_DYNAMIC_LOOKBACK_MAX)
-    return high_price, bars_since, high_date, dyn_lookback
-
-
-def _hp_low_vol_cluster(vol_s, lookback):
-    """Mirrors the Pine 'Low Volume Cluster Boxes' logic: a bar is low-vol if
-    it's below its own 50-day average OR is the 10-day lowest volume. Returns
-    (has_cluster, longest_streak) over the lookback window."""
-    ma50v = vol_s.rolling(50).mean()
-    low10 = vol_s.rolling(10).min()
-    is_low = (vol_s < ma50v) | (vol_s <= low10)
-    recent = is_low.iloc[-lookback:]
-    max_streak = streak = 0
-    for v in recent:
-        streak = streak + 1 if bool(v) else 0
-        max_streak = max(max_streak, streak)
-    return max_streak >= HP_LOWVOL_MIN_STREAK, max_streak
-
-
-def _hp_dist_pct_positive(ema21_s, sma50_s, lookback=HP_DIST_LOOKBACK):
-    """% of the lookback window where ema21 stayed above ma50 (distancePct > 0),
-    per the MA-squeeze Pine script. (Fixed 90d window — not part of the
-    dynamic interim-high lookback change; kept as-is.)"""
-    distance_pct = (ema21_s - sma50_s) / sma50_s * 100
-    window = distance_pct.dropna().iloc[-lookback:]
-    if window.empty:
-        return 0.0
-    return float((window > 0).mean() * 100)
-
-
-def _hp_volatility_highcount(high_s, low_s, lookback):
-    """Count of z>1.5 daily-range days in the lookback window, per the
-    'Topping Signal' Pine script's frequency/amplitude violation logic."""
-    daily_range = (high_s / low_s - 1) * 100
-    mean_w = daily_range.rolling(lookback).mean()
-    std_w = daily_range.rolling(lookback).std()
-    z = (daily_range - mean_w) / std_w
-    high_vol_count = (z > 1.5).rolling(lookback).sum()
-    val = high_vol_count.iloc[-1] if not high_vol_count.empty else np.nan
-    return float(val) if pd.notna(val) else np.nan
-
-
-def _hp_bearish_engulf_count(open_s, high_s, low_s, close_s, lookback):
-    """Bearish engulfing + 'bearbear' grey bar count, using tradingview1's own
-    definitions rather than the classic pattern — the engulfing test drops the
-    prior-bar-up requirement and ORs the two close conditions, and the bearbear
-    gap-down bar counts as well. Fires on strictly more bars than the classic
-    definition, which is the point: both engines now flag the same bars."""
-    engulf = (
-        (open_s >= close_s.shift(1))
-        & (open_s >= open_s.shift(1))
-        & ((close_s <= open_s.shift(1)) | (close_s <= close_s.shift(1)))
-    )
-    bearbear = (close_s < open_s) & (open_s > high_s.shift(1)) & (close_s < low_s.shift(1))
-    return int((engulf | bearbear).fillna(False).iloc[-lookback:].sum())
-
-
-def _hp_rs_triangle(rs_s, rsma_s, lookback):
-    """RS-line-crosses-its-own-MA triangle events (green=crossover, red=crossunder),
-    the Python equivalent of the Pine 'mycrossover'/'mycrossunder' markers."""
-    crossover = (rs_s > rsma_s) & (rs_s.shift(1) <= rsma_s.shift(1))
-    crossunder = (rs_s < rsma_s) & (rs_s.shift(1) >= rsma_s.shift(1))
-    green = int(crossover.fillna(False).iloc[-lookback:].sum())
-    red = int(crossunder.fillna(False).iloc[-lookback:].sum())
-    cur_above = bool(rs_s.iloc[-1] > rsma_s.iloc[-1]) if pd.notna(rs_s.iloc[-1]) and pd.notna(rsma_s.iloc[-1]) else False
-    return green, red, cur_above
-
-
-def _hp_score_delta_series(close_s, high_s, low_s, bench_close_s):
-    """Mirrors compute_character_shift's 9-component composite score exactly
-    (same formula as that function, ~line 9044), but returns the FULL
-    score_delta Series instead of only today's value — so criterion 10 can
-    count red/green ±20 bars over the dynamic interim-high lookback instead
-    of only checking the single latest boc_delta_map snapshot."""
-    rs = close_s / bench_close_s
-    if rs.dropna().empty:
-        return None
-    ema126 = close_s.ewm(span=126, adjust=False).mean()
-    r = {sp: rs.ewm(span=sp, adjust=False).mean() for sp in [21, 42, 63, 72, 84, 126, 147, 168]}
-
-    stage1_cond = (rs >= r[84]) & (rs < r[126])
-    stage3_cond = (
-        (rs < r[42]) & (rs >= r[72]) & (rs >= r[84]) & (rs >= r[126])
-        & ((r[42] > r[63]) | (rs < r[63])) & (r[63] > r[126]) & (close_s >= ema126)
-    )
-    stage2a_cond = (
-        (rs >= r[168]) & (rs >= r[147]) & (rs >= r[126])
-        & (close_s >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
-    )
-    stage2b_cond = (rs >= r[126]) & (close_s >= ema126) & ((r[21] >= r[42]) | (r[42] >= r[63]))
-    stage2_cond = (~stage1_cond & ~stage3_cond & (stage2a_cond | stage2b_cond))
-
-    rsMA21  = rs.ewm(span=21, adjust=False).mean()
-    ema21t  = close_s.ewm(span=21, adjust=False).mean()
-    sma50t  = close_s.rolling(50).mean()
-    low14   = low_s.rolling(14).min().shift(1)
-    ema50t  = close_s.ewm(span=50, adjust=False).mean()
-    ema100t = close_s.ewm(span=100, adjust=False).mean()
-
-    gap_down_evt       = (high_s < low_s.shift(1))
-    gap_down_pct       = ((close_s.shift(1) - close_s) / close_s.shift(1) * 100).where(gap_down_evt)
-    gap_down_qualified = gap_down_evt & (gap_down_pct >= 3)
-    recent_gap_down    = gap_down_qualified.rolling(10, min_periods=1).max().fillna(0).astype(bool)
-
-    pct_chg = close_s.pct_change() * 100
-    win = min(220, len(pct_chg))
-    biggest_drop = pct_chg.rolling(window=win, min_periods=20).min()
-    biggest_up   = pct_chg.rolling(window=win, min_periods=20).max()
-
-    high252 = high_s.rolling(252, min_periods=50).max()
-    pct_from_high = (close_s - high252) / high252 * 100
-
-    s1  = (rs > rsMA21).fillna(False).astype(int) * 10
-    s2  = stage2_cond.fillna(False).astype(int) * 10
-    s3  = (close_s > ema21t).fillna(False).astype(int) * 10
-    s4  = (close_s > sma50t).fillna(False).astype(int) * 10
-    s6  = (~(close_s < low14).fillna(False)).astype(int) * 10
-    s7  = (~recent_gap_down).astype(int) * 10
-    s8  = (~(biggest_up < -biggest_drop).fillna(False)).astype(int) * 10
-    s9  = (~(pct_from_high < -25).fillna(False)).astype(int) * 10
-    s10 = (ema50t >= ema100t).fillna(False).astype(int) * 10
-
-    score = s1 + s2 + s3 + s4 + s6 + s7 + s8 + s9 + s10
-    return score.diff()
-
-
-@st.cache_data(ttl=3600)
-def compute_healthy_pullback_rows(universe_tuple, industry_trend_map, ticker_to_industries,
-                                   _all_data, _ticker_dfs, _benchmark_df):
-    """Runs the full 10-criteria Healthy Pullback / Deterioration classifier for
-    every ticker in universe_tuple.
-
-    Cached because this loop was previously bare module-level code: it re-ran
-    in full on every single Streamlit rerun (any widget interaction anywhere on
-    the page, not just when the underlying price data actually changed).
-    _hp_support_rating alone runs a bar-by-bar Python state machine over the
-    full price history twice per ticker (21ema + 50ma), on top of several
-    rolling/EWM passes for the other 9 criteria — real, repeatable work.
-
-    Leading-underscore args are excluded from Streamlit's cache key (same
-    convention as ticker_dfs_shared elsewhere in this file, since hashing ~470
-    DataFrames on every rerun would cost more than it saves); universe_tuple,
-    industry_trend_map and ticker_to_industries stay in the key so the cache
-    correctly busts when setup membership or industry trends actually change.
-    """
-    _hp_rs_lookup = {}
-    for _item in _all_data:
-        for _t, _s in zip(_item["Tickers"]["Ticker"], _item["Tickers"]["RS Score"]):
-            _hp_rs_lookup[_t] = _s
-
-    # Industry Group RS values, straight off all_data (same field df_main ranks on).
-    _hp_group_rs_lookup = {
-        _item["Industry"]: _item.get("Group RS")
-        for _item in _all_data if _item.get("Industry")
-    }
-
-    hp_rows = []
-    for sym in universe_tuple:
-        try:
-            df = _ticker_dfs.get(sym)
-            if df is None or len(df) < HP_MIN_HISTORY_BARS:
-                continue
-
-            close, open_, high, low, vol = df['Close'], df['Open'], df['High'], df['Low'], df['Volume']
-            ema21 = close.ewm(span=21, adjust=False).mean()
-            sma50 = close.rolling(50).mean()
-            bench_close = _benchmark_df['Close']
-
-            # Interim swing high (last 90d) + the dynamic high->now lookback that
-            # criteria 4/6/7/9/10 below use instead of a fixed window.
-            interim_high_price, bars_since_high, interim_high_date, dyn_lb = _hp_interim_high(df, high)
-
-            # 1) Industry Group RS + 4-circle trend. Gated on the absolute Group
-            #    RS value (>= HP_GROUP_RS_MIN), matching the Pine script's
-            #    minGroupRS — not on the industry's rank among its peers.
-            _inds = ticker_to_industries.get(sym, [])
-            best_ind, best_group_rs = None, None
-            for _ind in _inds:
-                _g = _hp_group_rs_lookup.get(_ind)
-                if _g is not None and (best_group_rs is None or _g > best_group_rs):
-                    best_group_rs, best_ind = _g, _ind
-            trend_str = industry_trend_map.get(best_ind, "") if best_ind else ""
-            green_ct = trend_str.count("🟢")
-            healthy_1 = (best_group_rs is not None and best_group_rs >= HP_GROUP_RS_MIN
-                         and green_ct >= HP_INDUSTRY_GREEN_MIN)
-
-            # 2) Stock's own RS value
-            rs_score = _hp_rs_lookup.get(sym)
-            healthy_2 = rs_score is not None and rs_score >= HP_STOCK_RS_MIN
-
-            # 3) 21ema / 50ma support rating — recency-weighted hold rate across
-            #    every prior MA test, the same engine the Pine script uses.
-            atr_pct_s = _hp_atr_pct(high, low, close)
-            sup21_rating = _hp_support_rating(close, low, ema21, atr_pct_s)
-            sup50_rating = _hp_support_rating(close, low, sma50, atr_pct_s)
-            healthy_3 = sup21_rating in HP_SUP_HEALTHY or sup50_rating in HP_SUP_HEALTHY
-
-            # 4) Low-volume cluster since the interim high (dynamic lookback)
-            has_cluster, cluster_streak = _hp_low_vol_cluster(vol, dyn_lb)
-            healthy_4 = has_cluster
-
-            # 5) ema21 vs ma50 distance % positive time (fixed 90d — unchanged)
-            dist_pct = _hp_dist_pct_positive(ema21, sma50)
-            healthy_5 = dist_pct >= HP_DIST_PCT_MIN
-
-            # 6) Volatility frequency/amplitude z-score violations since interim high
-            volz_count = _hp_volatility_highcount(high, low, dyn_lb)
-            healthy_6 = pd.notna(volz_count) and volz_count <= HP_VOLZ_MAX_HIGHCOUNT
-
-            # 7) Bearish engulfing + bearbear grey bars since the interim high
-            bear_cnt = _hp_bearish_engulf_count(open_, high, low, close, dyn_lb)
-            healthy_7 = bear_cnt <= HP_BEARENGULF_MAX
-
-            # 8) Accumulation rating (existing UDVR helper + rating function)
-            udvr_series = compute_up_down_vol_ratio_series(sym, _ticker_dfs, 50, 10)
-            accum_val = float(udvr_series.iloc[-1]) if udvr_series is not None and not udvr_series.empty else None
-            accum_rating = _udvr_rating(accum_val)
-            healthy_8 = accum_val is not None and accum_val >= HP_ACCUM_MIN
-
-            # 9) RS red/green triangle count since interim high
-            rs = close / bench_close
-            rsma = rs.ewm(span=21, adjust=False).mean()
-            tri_green, tri_red, tri_above = _hp_rs_triangle(rs, rsma, dyn_lb)
-            healthy_9 = tri_above and tri_green >= tri_red
-
-            # 10) Composite ±20 score-delta red/green bars since interim high
-            score_delta_series = _hp_score_delta_series(close, high, low, bench_close)
-            if score_delta_series is not None:
-                score_window = score_delta_series.iloc[-dyn_lb:]
-                score_green_ct = int((score_window >= HP_SCORE_CHANGE_UP).sum())
-                score_red_ct = int((score_window <= HP_SCORE_BREAKDOWN).sum())
-            else:
-                score_green_ct = score_red_ct = 0
-            healthy_10 = score_red_ct == 0 or score_green_ct >= score_red_ct
-
-            flags = {
-                "Industry RS/Trend":   healthy_1,
-                "Stock RS Value":      healthy_2,
-                "21ema/50ma State":    healthy_3,
-                "Low-Vol Cluster":     healthy_4,
-                "EMA21>MA50 Time%":    healthy_5,
-                "Volatility Z-Score":  healthy_6,
-                "Bear Engulf Count":   healthy_7,
-                "Accumulation Rating": healthy_8,
-                "RS Triangle":         healthy_9,
-                "Score Delta ±20":     healthy_10,
-            }
-            weighted_score = sum(HP_WEIGHTS[k] for k, ok in flags.items() if ok)
-            conclusion = "✅ Healthy Pullback" if weighted_score >= HP_HEALTHY_THRESHOLD else "⚠️ Deterioration"
-
-            def _tick(ok):
-                return "✅" if ok else "❌"
-
-            hp_rows.append({
-                "Ticker": sym,
-                "Conclusion": conclusion,
-                "Score": round(weighted_score, 1),
-                "Interim High (90d)": (
-                    f"${interim_high_price:.2f} · {bars_since_high}d ago "
-                    f"({pd.Timestamp(interim_high_date).strftime('%Y-%m-%d')})"
-                ),
-                "Industry RS/Trend": f"{_tick(healthy_1)} RS {best_group_rs:.0f} {trend_str}" if best_group_rs is not None else f"{_tick(False)} -",
-                "Stock RS Value": f"{_tick(healthy_2)} {rs_score if rs_score is not None else '-'}",
-                "21ema/50ma State": f"{_tick(healthy_3)} 21:{sup21_rating} / 50:{sup50_rating}",
-                "Low-Vol Cluster": f"{_tick(healthy_4)} streak={cluster_streak} (of {dyn_lb}d)",
-                "EMA21>MA50 Time%": f"{_tick(healthy_5)} {dist_pct:.0f}%",
-                "Volatility Z-Score": f"{_tick(healthy_6)} {int(volz_count) if pd.notna(volz_count) else '-'} (of {dyn_lb}d)",
-                "Bear Engulf/Bearbear": f"{_tick(healthy_7)} {bear_cnt} (of {dyn_lb}d)",
-                "Accumulation Rating": f"{_tick(healthy_8)} {accum_rating} ({accum_val:.2f})" if accum_val is not None else f"{_tick(False)} -",
-                "RS Triangle": f"{_tick(healthy_9)} 🟢{tri_green}/🔴{tri_red} (of {dyn_lb}d)",
-                "Score Delta ±20": f"{_tick(healthy_10)} 🟢{score_green_ct}/🔴{score_red_ct} (of {dyn_lb}d)",
-            })
-        except Exception:
-            continue
-
-    return hp_rows
 
 
 with st.spinner("Classifying healthy pullbacks vs. deterioration..."):
@@ -18259,179 +18488,6 @@ st.markdown("---")
 _bh_title_ph = st.empty()
 _bh_title_ph.markdown("#### 🚀 Breakout Health")
 
-BH_MIN_LEN = 2          # shortest pivot length scanned (bars each side)
-BH_MAX_LEN = 5          # longest pivot length scanned
-BH_MA_LEN = 21          # MA(Low) used as the structure's fail/stop level
-BH_LOOKBACK_DAYS = 20   # "2nd Pivot Break within the past 20 trading days"
-BH_MIN_HISTORY_BARS = 80
-
-# Suggested weights for the 4 checks (sum to 100) — not backtested, a
-# starting point: survival (avoided -1R) and holding the level (above pivot
-# 5d) weighted slightly higher than the two upside-follow-through checks,
-# since a breakout that merely "didn't fail" is a materially different
-# signal than a fully confirmed, extended one.
-BH_WEIGHTS = {
-    "Avoided -1R (3d)":  30,
-    "+1R (5d)":          20,
-    "+2R (10d)":         20,
-    "Above Pivot (5d)":  30,
-}
-BH_HEALTHY_THRESHOLD = 65.0   # aggregate score >= this reads "Healthy"
-BH_WEAK_THRESHOLD = 40.0      # aggregate score <  this reads "Weak" (else "Neutral")
-
-
-def _bh_find_2nd_pivot_breaks(df, min_len=BH_MIN_LEN, max_len=BH_MAX_LEN, ma_len=BH_MA_LEN):
-    """Bar-by-bar port of the Pine script's long-side Higher-Low structure
-    state machine, run independently for each pivot length. Returns every
-    2nd-Pivot-Break event found across all lengths as a list of dicts
-    {length, break_bar, break_val, pivot_idx, pivot_val}."""
-    n = len(df)
-    close = df['Close'].to_numpy()
-    high = df['High'].to_numpy()
-    low = df['Low'].to_numpy()
-    ma_stop = df['Low'].rolling(ma_len).mean().to_numpy()
-
-    events = []
-    for L in range(min_len, max_len + 1):
-        prev_p, prev_idx = np.nan, -1
-        curr_p, curr_idx = np.nan, -1
-        is_setup = False
-        break_val = np.nan
-        broke_already = False
-
-        for b in range(n):
-            p_idx = b - L
-            if p_idx - L >= 0 and p_idx + L < n:
-                seg = low[p_idx - L: p_idx + L + 1]
-                if low[p_idx] == seg.min():
-                    p = low[p_idx]
-                    setup_cond = (not np.isnan(curr_p)) and (p > curr_p)
-                    prev_p, prev_idx = curr_p, curr_idx
-                    curr_p, curr_idx = p, p_idx
-                    is_setup = setup_cond
-                    break_val = np.nan
-                    broke_already = False
-                    if setup_cond and prev_idx >= 0:
-                        seg_start, seg_end = prev_idx + 1, curr_idx
-                        if seg_end > seg_start:
-                            hseg = high[seg_start:seg_end]
-                            rel = int(np.argmax(hseg))
-                            break_val = hseg[rel]
-
-            if is_setup and not np.isnan(curr_p) and low[b] < curr_p:
-                is_setup = False
-
-            if is_setup and not np.isnan(break_val) and not broke_already:
-                if close[b] > break_val and (b == 0 or close[b - 1] <= break_val):
-                    events.append({
-                        "length": L, "break_bar": b, "break_val": float(break_val),
-                        "pivot_idx": int(curr_idx), "pivot_val": float(curr_p),
-                    })
-                    broke_already = True
-
-            if is_setup and broke_already and not np.isnan(ma_stop[b]) and low[b] < ma_stop[b]:
-                is_setup = False
-                broke_already = False
-
-    return events
-
-
-def _bh_most_recent_event(events, n_bars, lookback_days=BH_LOOKBACK_DAYS):
-    """Collapse multi-length events to the single most recent one within the
-    lookback window (ties -> tightest/lowest break level), matching "stocks
-    that had A 2nd-Pivot Break" (one event per stock, not one per length)."""
-    cutoff = n_bars - 1 - lookback_days
-    recent = [e for e in events if e["break_bar"] > cutoff]
-    if not recent:
-        return None
-    recent.sort(key=lambda e: (-e["break_bar"], e["break_val"]))
-    return recent[0]
-
-
-def _bh_score_event(df, event, weights=BH_WEIGHTS):
-    """The 4-check weighted score for one breakout event. Each check is
-    evaluated over whatever bars are actually available so far
-    (min(window, bars elapsed)), so a breakout from a few days ago scores on
-    its trajectory-so-far rather than being penalized for not yet having a
-    full 10 days of history."""
-    n = len(df)
-    b = event["break_bar"]
-    entry = event["break_val"]
-
-    high = df['High'].to_numpy()
-    low = df['Low'].to_numpy()
-    close = df['Close'].to_numpy()
-    adr_pct_series = (100 * (df['High'] / df['Low']).rolling(20).mean() - 100).to_numpy()
-    adr_pct = adr_pct_series[b]
-    if pd.isna(adr_pct):
-        return None
-    R = entry * adr_pct / 100.0
-
-    def _end(days):
-        return min(n, b + 1 + days)
-
-    win3, win5, win10 = slice(b + 1, _end(3)), slice(b + 1, _end(5)), slice(b + 1, _end(10))
-
-    avoided_neg1r = True
-    if low[win3].size:
-        avoided_neg1r = not bool((low[win3] <= entry - R).any())
-
-    hit_pos1r = bool((high[win5] >= entry + R).any()) if high[win5].size else False
-    hit_pos2r = bool((high[win10] >= entry + 2 * R).any()) if high[win10].size else False
-
-    day5_idx = min(n - 1, b + 5)
-    above_pivot_5d = bool(close[day5_idx] > entry) if day5_idx > b else True
-
-    checks = {
-        "Avoided -1R (3d)": avoided_neg1r,
-        "+1R (5d)": hit_pos1r,
-        "+2R (10d)": hit_pos2r,
-        "Above Pivot (5d)": above_pivot_5d,
-    }
-    score = sum(weights[k] for k, ok in checks.items() if ok)
-    return {"checks": checks, "score": float(score), "R": R, "adr_pct": adr_pct,
-            "entry": entry, "days_since": n - 1 - b}
-
-
-@st.cache_data(ttl=3600)
-def compute_breakout_health(stocks_tuple_bh, _ticker_dfs):
-    """For every ticker, find its most recent 2nd-Pivot-Break (if any) within
-    the last BH_LOOKBACK_DAYS trading days and score it. Returns a list of
-    per-ticker row dicts, sorted by most recent breakout first."""
-    rows = []
-    for sym in stocks_tuple_bh:
-        try:
-            df = _ticker_dfs.get(sym)
-            if df is None or len(df) < BH_MIN_HISTORY_BARS:
-                continue
-            if df['Close'].iloc[-1] < 20:
-                continue
-            events = _bh_find_2nd_pivot_breaks(df)
-            ev = _bh_most_recent_event(events, len(df))
-            if ev is None:
-                continue
-            res = _bh_score_event(df, ev)
-            if res is None:
-                continue
-
-            def _tick(ok):
-                return "✅" if ok else "❌"
-
-            rows.append({
-                "Ticker": sym,
-                "Score": round(res["score"], 1),
-                "Days Since Break": res["days_since"],
-                "Pivot": round(res["entry"], 2),
-                "ADR%": round(res["adr_pct"], 2),
-                "R ($)": round(res["R"], 2),
-                "Avoided -1R (3d)": _tick(res["checks"]["Avoided -1R (3d)"]),
-                "+1R (5d)": _tick(res["checks"]["+1R (5d)"]),
-                "+2R (10d)": _tick(res["checks"]["+2R (10d)"]),
-                "Above Pivot (5d)": _tick(res["checks"]["Above Pivot (5d)"]),
-            })
-        except Exception:
-            continue
-    return rows
 
 
 with st.spinner("Scanning 2nd-Pivot-Break breakouts..."):
@@ -18443,7 +18499,7 @@ with st.spinner("Scanning 2nd-Pivot-Break breakouts..."):
 
 if bh_rows:
     bh_df = pd.DataFrame(bh_rows).sort_values(
-        ["Days Since Break", "Score"], ascending=[True, False]
+        "Score", ascending=False
     ).reset_index(drop=True)
     bh_df.insert(0, "#", range(1, len(bh_df) + 1))
 
@@ -18461,9 +18517,13 @@ if bh_rows:
         f"{len(bh_df)} tickers with a 2nd-Pivot-Break in the last {BH_LOOKBACK_DAYS} trading days "
         f"· weights: {', '.join(f'{k}={v}' for k, v in BH_WEIGHTS.items())}"
     )
+    # Fixed height = 10 data rows + header; st.dataframe adds its own native
+    # vertical scrollbar (right side) automatically once content exceeds this,
+    # so anything past the top 10 (already sorted by Score) scrolls instead
+    # of pushing the page taller.
     st.dataframe(bh_df, use_container_width=True, hide_index=True,
-                 height=(len(bh_df) + 1) * 35 + 3,
-                 column_config={"#": st.column_config.NumberColumn(width="small")})
+                 height=(10 + 1) * 35 + 3,
+                 column_config={"#": st.column_config.NumberColumn(width=45)})
 else:
     _bh_title_ph.markdown("#### 🚀 Breakout Health")
     st.info(f"No tickers had a qualifying 2nd-Pivot-Break in the last {BH_LOOKBACK_DAYS} trading days.")

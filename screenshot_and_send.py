@@ -167,6 +167,7 @@ SECTION_KEYWORDS = [
     "Lazy Charts",
     "Stage 2 vs Stage 4",
     "Test Time",
+    "Breakout Health",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the
