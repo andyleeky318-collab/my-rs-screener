@@ -15371,6 +15371,64 @@ else:
 # Reuses ticker_dfs_shared (already downloaded) — no new data fetch.
 # Read-only, additive.
 # ==============================================================================
+def _github_filepath_bh_history(date_obj):
+    return f"breakout_health_history/bh_{date_obj.isoformat()}.json"
+
+def save_breakout_health_snapshot_github(date_obj, avg_score, n_tickers):
+    """Commit today's aggregate Breakout Health score to the GitHub data repo
+    (same soft-fail pattern as save_finviz_snapshot_github)."""
+    import json
+    repo   = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    if not repo or not st.secrets.get("GITHUB_TOKEN"):
+        return
+
+    path = _github_filepath_bh_history(date_obj)
+    url  = f"{GITHUB_API}/repos/{repo}/contents/{path}"
+    content_str = json.dumps({"date": date_obj.isoformat(), "avg_score": round(float(avg_score), 1), "n_tickers": int(n_tickers)})
+    content_b64 = base64.b64encode(content_str.encode()).decode()
+
+    sha = None
+    try:
+        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
+        if resp.status_code == 200:
+            sha = resp.json().get("sha")
+    except Exception:
+        pass
+
+    payload = {"message": f"Breakout Health snapshot {date_obj.isoformat()}", "content": content_b64, "branch": branch}
+    if sha:
+        payload["sha"] = sha
+    try:
+        requests.put(url, headers=_github_headers(), json=payload, timeout=10)
+    except Exception:
+        pass
+
+@st.cache_data(ttl=3600)
+def load_breakout_health_history_github(max_days=90):
+    """Load up to max_days of saved daily Breakout Health snapshots from
+    GitHub (oldest -> newest). Returns an empty DataFrame if unavailable."""
+    import json
+    repo   = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    if not repo or not st.secrets.get("GITHUB_TOKEN"):
+        return pd.DataFrame()
+
+    url = f"{GITHUB_API}/repos/{repo}/contents/breakout_health_history"
+    try:
+        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
+        if resp.status_code != 200:
+            return pd.DataFrame()
+        entries = sorted(resp.json(), key=lambda e: e["name"])[-max_days:]
+        rows = []
+        for entry in entries:
+            file_resp = requests.get(entry["url"], headers=_github_headers(), params={"ref": branch}, timeout=10)
+            if file_resp.status_code == 200:
+                rows.append(json.loads(base64.b64decode(file_resp.json()["content"]).decode()))
+        return pd.DataFrame(rows)
+    except Exception:
+        return pd.DataFrame()
+
 st.markdown("---")
 _bh_title_ph = st.empty()
 _bh_title_ph.markdown("#### 🚀 Breakout Health")
@@ -15411,6 +15469,13 @@ if bh_rows:
     st.dataframe(bh_df, use_container_width=True, hide_index=True,
                  height=(10 + 1) * 35 + 3,
                  column_config={"#": st.column_config.NumberColumn(width=45)})
+
+    timed("save_breakout_health_snapshot_github", save_breakout_health_snapshot_github,
+          datetime.date.today(), _bh_agg_score, len(bh_df))
+    _bh_hist_df = timed("load_breakout_health_history_github", load_breakout_health_history_github)
+    if not _bh_hist_df.empty:
+        st.caption("Breakout Health score history")
+        st.bar_chart(_bh_hist_df.set_index("date")["avg_score"], use_container_width=True)
 else:
     _bh_title_ph.markdown("#### 🚀 Breakout Health")
     st.info(f"No tickers had a qualifying 2nd-Pivot-Break in the last {BH_LOOKBACK_DAYS} trading days.")
