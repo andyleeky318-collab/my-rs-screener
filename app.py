@@ -7334,17 +7334,21 @@ if in_send_window and st.session_state.get("telegram_setup_summary_sig") != setu
 # NOTE: st.markdown(unsafe_allow_html=True) strips onXXX attributes (DOMPurify
 # sanitizer), so an inline onclick silently does nothing there — must use
 # st.components.v1.html (its iframe runs unsanitized JS) for the click to work.
+# The title stays as native st.markdown (pixel-identical original size) since
+# an iframe has no access to Streamlit's own header CSS; only the tiny copy
+# button itself needs the iframe, placed in a narrow column beside it.
 _ppp_csv = ", ".join(ppp_list)
-_ppp_header_html = f"""
-<div style="display:flex;align-items:center;gap:8px;background:#0e1117;">
-  <h4 style="margin:0;color:#fafafa;font-family:'Source Sans Pro',sans-serif;">📉 PPP = Opportunity ({len(ppp_list)})</h4>
-  <span id="ppp-copy-btn" title="Copy tickers" style="cursor:pointer;display:flex;align-items:center;color:#fafafa;">
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-    </svg>
-  </span>
-</div>
+_col_ppp_title, _col_ppp_copy = st.columns([30, 1])
+with _col_ppp_title:
+    st.markdown(f"#### 📉 PPP = Opportunity ({len(ppp_list)})")
+with _col_ppp_copy:
+    _ppp_copy_btn_html = f"""
+<span id="ppp-copy-btn" title="Copy tickers" style="cursor:pointer;display:flex;align-items:center;color:#fafafa;">
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+  </svg>
+</span>
 <script>
 (function() {{
   var btn = document.getElementById('ppp-copy-btn');
@@ -7373,7 +7377,7 @@ _ppp_header_html = f"""
 }})();
 </script>
 """
-st.components.v1.html(_ppp_header_html, height=44, scrolling=False)
+    st.components.v1.html(_ppp_copy_btn_html, height=38, scrolling=False)
 
 if ppp_list or ppp_yest:
     # ── NEW: map to industries for top-20 glow check ──
