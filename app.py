@@ -2984,7 +2984,11 @@ def setup_badge(sym, is_new=False, is_removed=False, extra_prefix="", extra_suff
 def render_copy_button(tickers):
     """Small copy-to-clipboard icon button for a ticker list. Must run inside
     st.components.v1.html — st.markdown(unsafe_allow_html=True) strips onXXX
-    attributes via its sanitizer, so an inline onclick there silently no-ops."""
+    attributes via its sanitizer, so an inline onclick there silently no-ops.
+    Some ticker lists (e.g. pt_list, vt_list) hold (ticker, atr_value) tuples
+    instead of plain strings — normalize the same way the rest of the file
+    already does (item[0] if isinstance(item, tuple) else item)."""
+    tickers = [t[0] if isinstance(t, tuple) else t for t in tickers]
     csv = ", ".join(tickers)
     btn_html = f"""
 <span id="copy-btn" title="Copy tickers" style="cursor:pointer;display:flex;align-items:center;color:#fafafa;">
