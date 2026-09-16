@@ -80,6 +80,66 @@ def yf_download_batched(symbols, batch_size=25, **kwargs):
         return pd.DataFrame()
     return pd.concat(frames, axis=1)
 
+def render_copy_button(tickers):
+    """Small copy-to-clipboard icon button for a ticker list. Must run inside
+    st.components.v1.html — st.markdown(unsafe_allow_html=True) strips onXXX
+    attributes via its sanitizer, so an inline onclick there silently no-ops.
+    Some ticker lists (e.g. pt_list, vt_list) hold (ticker, atr_value) tuples
+    instead of plain strings — normalize the same way the rest of the file
+    already does (item[0] if isinstance(item, tuple) else item)."""
+    tickers = [t[0] if isinstance(t, tuple) else t for t in tickers]
+    csv = ", ".join(tickers)
+    btn_html = f"""
+<span id="copy-btn" title="Copy tickers" style="cursor:pointer;display:flex;align-items:center;color:#fafafa;">
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+  </svg>
+</span>
+<script>
+(function() {{
+  var btn = document.getElementById('copy-btn');
+  var copyIcon = btn.innerHTML;
+  var checkIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3DD56D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+  btn.addEventListener('click', function() {{
+    var text = `{csv}`;
+    function fallbackCopy() {{
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      try {{ document.execCommand('copy'); }} catch (e) {{}}
+      document.body.removeChild(ta);
+    }}
+    if (navigator.clipboard && navigator.clipboard.writeText) {{
+      navigator.clipboard.writeText(text).catch(fallbackCopy);
+    }} else {{
+      fallbackCopy();
+    }}
+    btn.innerHTML = checkIcon;
+    setTimeout(function() {{ btn.innerHTML = copyIcon; }}, 1200);
+  }});
+}})();
+</script>
+"""
+    st.components.v1.html(btn_html, height=38, scrolling=False)
+
+def render_section_header_with_copy(render_title, tickers):
+    """Render a section's existing title (render_title is a zero-arg callable
+    wrapping its exact original st.markdown(...) call, unchanged) with a small
+    ticker-copy button beside it. Falls back to the plain title when there are
+    no tickers, so nothing changes on empty-result days."""
+    if tickers:
+        col_title, col_copy = st.columns([30, 1])
+        with col_title:
+            render_title()
+        with col_copy:
+            render_copy_button(tickers)
+    else:
+        render_title()
+
 # 1. Setup Streamlit Page
 st.set_page_config(page_title="Chrome Sector RS", page_icon="🐱", layout="wide")
 #st.title("🐱 Theme Tracker")
@@ -1328,6 +1388,9 @@ if breadth_total > 0:
     #with col_nh:
     with st.expander(f"New Highs ({len(new_high_tickers)})", expanded=True):
         if new_high_tickers:
+            _nh_col_copy, _nh_col_spacer = st.columns([1, 30])
+            with _nh_col_copy:
+                render_copy_button(sorted(new_high_tickers))
             nh_html = (
                 "<div style='display:flex;flex-wrap:wrap;gap:6px;"
                 "padding:12px 4px;'>"
@@ -1352,6 +1415,9 @@ if breadth_total > 0:
 
     with st.expander(f"New Lows ({len(new_low_tickers)})", expanded=True):
         if new_low_tickers:
+            _nl_col_copy, _nl_col_spacer = st.columns([1, 30])
+            with _nl_col_copy:
+                render_copy_button(sorted(new_low_tickers))
             nl_html = (
                 "<div style='display:flex;flex-wrap:wrap;gap:6px;"
                 "padding:12px 4px;'>"
@@ -2981,66 +3047,6 @@ def setup_badge(sym, is_new=False, is_removed=False, extra_prefix="", extra_suff
     return (f'<div class="ticker-badge" style="{extra_style}">{extra_prefix}'
             f'<span style="color:{text_color};font-weight:bold;">{sym}</span>{suffix_html}</div>')
 
-def render_copy_button(tickers):
-    """Small copy-to-clipboard icon button for a ticker list. Must run inside
-    st.components.v1.html — st.markdown(unsafe_allow_html=True) strips onXXX
-    attributes via its sanitizer, so an inline onclick there silently no-ops.
-    Some ticker lists (e.g. pt_list, vt_list) hold (ticker, atr_value) tuples
-    instead of plain strings — normalize the same way the rest of the file
-    already does (item[0] if isinstance(item, tuple) else item)."""
-    tickers = [t[0] if isinstance(t, tuple) else t for t in tickers]
-    csv = ", ".join(tickers)
-    btn_html = f"""
-<span id="copy-btn" title="Copy tickers" style="cursor:pointer;display:flex;align-items:center;color:#fafafa;">
-  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-  </svg>
-</span>
-<script>
-(function() {{
-  var btn = document.getElementById('copy-btn');
-  var copyIcon = btn.innerHTML;
-  var checkIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3DD56D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-  btn.addEventListener('click', function() {{
-    var text = `{csv}`;
-    function fallbackCopy() {{
-      var ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.focus(); ta.select();
-      try {{ document.execCommand('copy'); }} catch (e) {{}}
-      document.body.removeChild(ta);
-    }}
-    if (navigator.clipboard && navigator.clipboard.writeText) {{
-      navigator.clipboard.writeText(text).catch(fallbackCopy);
-    }} else {{
-      fallbackCopy();
-    }}
-    btn.innerHTML = checkIcon;
-    setTimeout(function() {{ btn.innerHTML = copyIcon; }}, 1200);
-  }});
-}})();
-</script>
-"""
-    st.components.v1.html(btn_html, height=38, scrolling=False)
-
-def render_section_header_with_copy(render_title, tickers):
-    """Render a section's existing title (render_title is a zero-arg callable
-    wrapping its exact original st.markdown(...) call, unchanged) with a small
-    ticker-copy button beside it. Falls back to the plain title when there are
-    no tickers, so nothing changes on empty-result days."""
-    if tickers:
-        col_title, col_copy = st.columns([30, 1])
-        with col_title:
-            render_title()
-        with col_copy:
-            render_copy_button(tickers)
-    else:
-        render_title()
-
 @st.cache_data(ttl=3600)
 def compute_industry_vol_flags(industries_dict, _ticker_dfs):
     """
@@ -4368,12 +4374,13 @@ if all_data:
     for tickers_list in engulf_industry_tickers.values():
         all_engulf_tickers.update(tickers_list)
 
-    engulf_html = (
+    _engulf_header_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
         f"🐳🐳 Engulfing Cluster [{len(engulf_industry_tickers)}] "
         #f"<span style='color:#FFFF00;'>({len(engulf_industry_tickers)} industries, {len(all_engulf_tickers)} tickers)</span>"
         f"</div>"
     )
+    engulf_html = ""
     if engulf_industry_tickers:
         sorted_engulf = sorted(
             engulf_industry_tickers.keys(),
@@ -4394,7 +4401,12 @@ if all_data:
                 f"<span>{ticker_badges}</span>"
                 f"</div>"
             )
-    st.markdown(engulf_html, unsafe_allow_html=True)
+    render_section_header_with_copy(
+        lambda: st.markdown(_engulf_header_html, unsafe_allow_html=True),
+        sorted(all_engulf_tickers)
+    )
+    if engulf_html:
+        st.markdown(engulf_html, unsafe_allow_html=True)
 
     # ── Botak summary (industries with >1 botak-today ticker) ──
     botak_industry_tickers = {}
@@ -4410,12 +4422,13 @@ if all_data:
     for tickers_list in botak_industry_tickers.values():
         all_botak_tickers.update(tickers_list)
 
-    botak_html = (
+    _botak_header_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
         f"🧑‍🦲🧑‍🦲🧑‍🦲 Botak Cluster [{len(botak_industry_tickers)}] (Not suitable on sideway market)"
         #f"<span style='color:#00FF00;'>({len(botak_industry_tickers)} industries, {len(all_botak_tickers)} tickers)</span>"
         f"</div>"
     )
+    botak_html = ""
     if botak_industry_tickers:
         sorted_botak = sorted(botak_industry_tickers.keys(), key=lambda ind: industry_rank_map.get(ind, 9999))
         for industry in sorted_botak:
@@ -4433,7 +4446,12 @@ if all_data:
                 f"<span>{ticker_badges}</span>"
                 f"</div>"
             )
-    st.markdown(botak_html, unsafe_allow_html=True)
+    render_section_header_with_copy(
+        lambda: st.markdown(_botak_header_html, unsafe_allow_html=True),
+        sorted(all_botak_tickers)
+    )
+    if botak_html:
+        st.markdown(botak_html, unsafe_allow_html=True)
 
     # ── Long Bottom Wick summary (industries with >2 long-bottom-wick-today tickers) ──
     lower_wick_industry_tickers = {}
@@ -4449,11 +4467,12 @@ if all_data:
     for tickers_list in lower_wick_industry_tickers.values():
         all_lower_wick_tickers.update(tickers_list)
 
-    lower_wick_html = (
+    _lower_wick_header_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
         f"✅✅✅ Long Bottom Wick Cluster [{len(lower_wick_industry_tickers)}] (Buying support into weakness)"
         f"</div>"
     )
+    lower_wick_html = ""
     if lower_wick_industry_tickers:
         sorted_lower_wick = sorted(lower_wick_industry_tickers.keys(), key=lambda ind: industry_rank_map.get(ind, 9999))
         for industry in sorted_lower_wick:
@@ -4471,7 +4490,12 @@ if all_data:
                 f"<span>{ticker_badges}</span>"
                 f"</div>"
             )
-    st.markdown(lower_wick_html, unsafe_allow_html=True)
+    render_section_header_with_copy(
+        lambda: st.markdown(_lower_wick_header_html, unsafe_allow_html=True),
+        sorted(all_lower_wick_tickers)
+    )
+    if lower_wick_html:
+        st.markdown(lower_wick_html, unsafe_allow_html=True)
 
     # ── Long Upper Wick summary (industries with >2 long-upper-wick-today tickers) ──
     upper_wick_industry_tickers = {}
@@ -4487,11 +4511,12 @@ if all_data:
     for tickers_list in upper_wick_industry_tickers.values():
         all_upper_wick_tickers.update(tickers_list)
 
-    upper_wick_html = (
+    _upper_wick_header_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
         f"❌❌❌ Long Upper Wick Cluster [{len(upper_wick_industry_tickers)}] (Selling pressure into strength)"
         f"</div>"
     )
+    upper_wick_html = ""
     if upper_wick_industry_tickers:
         sorted_upper_wick = sorted(upper_wick_industry_tickers.keys(), key=lambda ind: industry_rank_map.get(ind, 9999))
         for industry in sorted_upper_wick:
@@ -4509,7 +4534,12 @@ if all_data:
                 f"<span>{ticker_badges}</span>"
                 f"</div>"
             )
-    st.markdown(upper_wick_html, unsafe_allow_html=True)
+    render_section_header_with_copy(
+        lambda: st.markdown(_upper_wick_header_html, unsafe_allow_html=True),
+        sorted(all_upper_wick_tickers)
+    )
+    if upper_wick_html:
+        st.markdown(upper_wick_html, unsafe_allow_html=True)
 
     # ── Volume Cluster summary (industries with >=3 volume-above-50MA tickers) ──
     all_volume_tickers = set()
@@ -4517,12 +4547,13 @@ if all_data:
         all_volume_tickers.update(tickers_list)
     total_volume_ticker_count = len(all_volume_tickers)
 
-    volume_html = (
+    _volume_header_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
         f"📊📊📊 Volume Cluster [{len(vol_flagged_industries_volume)}] "
         #f"<span style='color:#29B5E8;'>({len(vol_flagged_industries_volume)} industries, {total_volume_ticker_count} tickers)</span>"
         f"</div>"
     )
+    volume_html = ""
     if vol_flagged_industries_volume:
         sorted_flagged_volume = sorted(
             vol_flagged_industries_volume,
@@ -4543,19 +4574,25 @@ if all_data:
                 f"<span>{ticker_badges}</span>"
                 f"</div>"
             )
-    st.markdown(volume_html, unsafe_allow_html=True)
+    render_section_header_with_copy(
+        lambda: st.markdown(_volume_header_html, unsafe_allow_html=True),
+        sorted(all_volume_tickers)
+    )
+    if volume_html:
+        st.markdown(volume_html, unsafe_allow_html=True)
 
     all_vol_tickers = set()
     for tickers_list in industry_vol_tickers.values():
         all_vol_tickers.update(tickers_list)
     total_vol_ticker_count = len(all_vol_tickers)
 
-    dist_html = (
+    _dist_header_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
         f"📉📉📉 Distribution Cluster [{len(vol_flagged_industries)}] "
         #f"<span style='color:#FF4B4B;'>({len(vol_flagged_industries)} industries, {total_vol_ticker_count} tickers)</span>"
         f"</div>"
     )
+    dist_html = ""
     if vol_flagged_industries:
         # Order by current table rank so it reads top-to-bottom like the main table
         sorted_flagged = sorted(
@@ -4577,7 +4614,12 @@ if all_data:
                 f"<span>{ticker_badges}</span>"
                 f"</div>"
             )
-    st.markdown(dist_html, unsafe_allow_html=True)
+    render_section_header_with_copy(
+        lambda: st.markdown(_dist_header_html, unsafe_allow_html=True),
+        sorted(all_vol_tickers)
+    )
+    if dist_html:
+        st.markdown(dist_html, unsafe_allow_html=True)
 
     st.markdown(
         f'<div style="text-align: right; font-size: 20px; color: #888888; margin-bottom: 4px; font-family: monospace;">'
