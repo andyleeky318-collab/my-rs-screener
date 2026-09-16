@@ -7331,7 +7331,14 @@ if in_send_window and st.session_state.get("telegram_setup_summary_sig") != setu
         st.sidebar.warning("Telegram secrets missing — Setup Summary not sent.")
 
 # --- 2. TIGHT PPP (Full Horizontal Row Below Two Botak) ---
-st.markdown(f"#### 📉 PPP = Opportunity ({len(ppp_list)})")
+_ppp_csv = ", ".join(ppp_list)
+st.markdown(
+    f'''<div style="display:flex;align-items:center;gap:8px;">
+<h4 style="margin:0;">📉 PPP = Opportunity ({len(ppp_list)})</h4>
+<span title="Copy tickers" onclick="navigator.clipboard.writeText('{_ppp_csv}')" style="cursor:pointer;font-size:1.1rem;">📋</span>
+</div>''',
+    unsafe_allow_html=True
+)
 
 if ppp_list or ppp_yest:
     # ── NEW: map to industries for top-20 glow check ──
@@ -15494,7 +15501,7 @@ else:
 # section or shared variable — all new names are unique.
 # ==============================================================================
 st.markdown("---")
-st.markdown("## 🧭 Lazy Exposure = % Invested / 21ema vs 50ma / 2R vs 1.5R TP / 2-stops vs 3-stops")
+st.markdown("## 🧭 Lazy Exposure = % Invested, 21ema/50ma, 2R/1.5R TP, 2-stops/3-stops")
 
 # ── Standalone data fetches used only by the verdict (run first so they're
 # available when compute_market_verdict() executes) ─────────────────────────
@@ -16250,8 +16257,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-if dist_triggered:
-    st.caption(f"⚠️ Distribution-day override active on: {', '.join(dist_triggered)} — this caps the verdict regardless of other pillars.")    
+# if dist_triggered:
+#     st.caption(f"⚠️ Distribution-day override active on: {', '.join(dist_triggered)} — this caps the verdict regardless of other pillars.")    
 
 # ==============================================================================
 # 27. LEVERAGED ETF BULL/BEAR TABLE — badge colored by underlying's setup category
@@ -16965,7 +16972,7 @@ else:
 # a trailing ⚠️ if any one of them flagged its latest bar via
 # _lazy_chart_alerts, else default.
 if _lazy_chart_alerts:
-    _lazy_chart_title_ph.markdown("#### :red[📊 Lazy Charts ⚠️]")
+    _lazy_chart_title_ph.markdown("#### :red[📊 Lazy Charts ⚠️⚠️⚠️]")
 
 # ==============================================================================
 # 25. RAPID ROTATION DETECTOR — high-sensitivity, 1-2 day rotation confirmation
