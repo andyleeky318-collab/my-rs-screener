@@ -1386,59 +1386,59 @@ if breadth_total > 0:
 
     #col_nh, col_nl = st.columns([1, 9])
     #with col_nh:
-    with st.expander(f"New Highs ({len(new_high_tickers)})", expanded=True):
-        if new_high_tickers:
-            _nh_col_copy, _nh_col_spacer = st.columns([1, 30])
-            with _nh_col_copy:
-                render_copy_button(sorted(new_high_tickers))
-            nh_html = (
-                "<div style='display:flex;flex-wrap:wrap;gap:6px;"
-                "padding:12px 4px;'>"
-            )
-            for sym in sorted(new_high_tickers):
-                if sym in LIME_STOCKS1:
-                    nh_html += (
-                        f'<div class="ticker-badge lime-badge">'
-                        f'<span style="color:#000;font-weight:bold;">{sym}</span></div>'
-                    )
-                elif sym in KNOWN_STOCKS:
-                    nh_html += (
-                        f'<div class="ticker-badge new-pattern-badge">'
-                        f'<span style="color:#111;font-weight:bold;">{sym}</span></div>'
-                    )
-                else:
-                    nh_html += f'<div class="ticker-badge">{sym}</div>'
-            nh_html += "</div>"
-            st.markdown(nh_html, unsafe_allow_html=True)
-        else:
-            st.info("")
+    render_section_header_with_copy(
+        lambda: st.markdown(f"**New Highs ({len(new_high_tickers)})**"),
+        sorted(new_high_tickers)
+    )
+    if new_high_tickers:
+        nh_html = (
+            "<div style='display:flex;flex-wrap:wrap;gap:6px;"
+            "padding:12px 4px;'>"
+        )
+        for sym in sorted(new_high_tickers):
+            if sym in LIME_STOCKS1:
+                nh_html += (
+                    f'<div class="ticker-badge lime-badge">'
+                    f'<span style="color:#000;font-weight:bold;">{sym}</span></div>'
+                )
+            elif sym in KNOWN_STOCKS:
+                nh_html += (
+                    f'<div class="ticker-badge new-pattern-badge">'
+                    f'<span style="color:#111;font-weight:bold;">{sym}</span></div>'
+                )
+            else:
+                nh_html += f'<div class="ticker-badge">{sym}</div>'
+        nh_html += "</div>"
+        st.markdown(nh_html, unsafe_allow_html=True)
+    else:
+        st.info("")
 
-    with st.expander(f"New Lows ({len(new_low_tickers)})", expanded=True):
-        if new_low_tickers:
-            _nl_col_copy, _nl_col_spacer = st.columns([1, 30])
-            with _nl_col_copy:
-                render_copy_button(sorted(new_low_tickers))
-            nl_html = (
-                "<div style='display:flex;flex-wrap:wrap;gap:6px;"
-                "padding:12px 4px;'>"
-            )
-            for sym in sorted(new_low_tickers):
-                if sym in LIME_STOCKS1:
-                    nl_html += (
-                        f'<div class="ticker-badge lime-badge">'
-                        f'<span style="color:#000;font-weight:bold;">{sym}</span></div>'
-                    )
-                elif sym in KNOWN_STOCKS:
-                    nl_html += (
-                        f'<div class="ticker-badge new-pattern-badge">'
-                        f'<span style="color:#111;font-weight:bold;">{sym}</span></div>'
-                    )
-                else:
-                    nl_html += f'<div class="ticker-badge">{sym}</div>'
-            nl_html += "</div>"
-            st.markdown(nl_html, unsafe_allow_html=True)
-        else:
-            st.info("")
+    render_section_header_with_copy(
+        lambda: st.markdown(f"**New Lows ({len(new_low_tickers)})**"),
+        sorted(new_low_tickers)
+    )
+    if new_low_tickers:
+        nl_html = (
+            "<div style='display:flex;flex-wrap:wrap;gap:6px;"
+            "padding:12px 4px;'>"
+        )
+        for sym in sorted(new_low_tickers):
+            if sym in LIME_STOCKS1:
+                nl_html += (
+                    f'<div class="ticker-badge lime-badge">'
+                    f'<span style="color:#000;font-weight:bold;">{sym}</span></div>'
+                )
+            elif sym in KNOWN_STOCKS:
+                nl_html += (
+                    f'<div class="ticker-badge new-pattern-badge">'
+                    f'<span style="color:#111;font-weight:bold;">{sym}</span></div>'
+                )
+            else:
+                nl_html += f'<div class="ticker-badge">{sym}</div>'
+        nl_html += "</div>"
+        st.markdown(nl_html, unsafe_allow_html=True)
+    else:
+        st.info("")
 
     # Remaining 4 breadth bars unchanged
     breadth_html = (
