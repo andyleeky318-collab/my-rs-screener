@@ -2981,6 +2981,62 @@ def setup_badge(sym, is_new=False, is_removed=False, extra_prefix="", extra_suff
     return (f'<div class="ticker-badge" style="{extra_style}">{extra_prefix}'
             f'<span style="color:{text_color};font-weight:bold;">{sym}</span>{suffix_html}</div>')
 
+def render_copy_button(tickers):
+    """Small copy-to-clipboard icon button for a ticker list. Must run inside
+    st.components.v1.html — st.markdown(unsafe_allow_html=True) strips onXXX
+    attributes via its sanitizer, so an inline onclick there silently no-ops."""
+    csv = ", ".join(tickers)
+    btn_html = f"""
+<span id="copy-btn" title="Copy tickers" style="cursor:pointer;display:flex;align-items:center;color:#fafafa;">
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+  </svg>
+</span>
+<script>
+(function() {{
+  var btn = document.getElementById('copy-btn');
+  var copyIcon = btn.innerHTML;
+  var checkIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3DD56D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+  btn.addEventListener('click', function() {{
+    var text = `{csv}`;
+    function fallbackCopy() {{
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      try {{ document.execCommand('copy'); }} catch (e) {{}}
+      document.body.removeChild(ta);
+    }}
+    if (navigator.clipboard && navigator.clipboard.writeText) {{
+      navigator.clipboard.writeText(text).catch(fallbackCopy);
+    }} else {{
+      fallbackCopy();
+    }}
+    btn.innerHTML = checkIcon;
+    setTimeout(function() {{ btn.innerHTML = copyIcon; }}, 1200);
+  }});
+}})();
+</script>
+"""
+    st.components.v1.html(btn_html, height=38, scrolling=False)
+
+def render_section_header_with_copy(render_title, tickers):
+    """Render a section's existing title (render_title is a zero-arg callable
+    wrapping its exact original st.markdown(...) call, unchanged) with a small
+    ticker-copy button beside it. Falls back to the plain title when there are
+    no tickers, so nothing changes on empty-result days."""
+    if tickers:
+        col_title, col_copy = st.columns([30, 1])
+        with col_title:
+            render_title()
+        with col_copy:
+            render_copy_button(tickers)
+    else:
+        render_title()
+
 @st.cache_data(ttl=3600)
 def compute_industry_vol_flags(industries_dict, _ticker_dfs):
     """
@@ -6089,12 +6145,16 @@ _minervini_avg_str = (
     f" , <span style='color:{_avg_color};'>{_minervini_avg:+.2f}%</span>"
     if _minervini_avg is not None else ""
 )
-st.markdown(
-    f"#### ⭐ Minervini ("
-    f"Positive Pct = <span style='color:{pct_color};'>{know_pos_pct:.1f}%</span> ... "
-    f"Total = {know_total_count} ... "
-    f"ATH = {len(ath_list)}{_minervini_avg_str})",
-    unsafe_allow_html=True,
+_minervini_syms_for_copy = [sym for sym, _, _ in email_content_stocks]
+render_section_header_with_copy(
+    lambda: st.markdown(
+        f"#### ⭐ Minervini ("
+        f"Positive Pct = <span style='color:{pct_color};'>{know_pos_pct:.1f}%</span> ... "
+        f"Total = {know_total_count} ... "
+        f"ATH = {len(ath_list)}{_minervini_avg_str})",
+        unsafe_allow_html=True,
+    ),
+    _minervini_syms_for_copy
 )
 
 if email_content_stocks or email_content_removed:
@@ -6375,10 +6435,13 @@ _rsleader_avg_str = (
     f" , <span style='color:{_rsleader_avg_color};'>{_rsleader_avg:+.2f}%</span>"
     if _rsleader_avg is not None else ""
 )
-st.markdown(
-    f"#### 🏆 RS Leader = Long Term ({len(leader_list)}{_rsleader_avg_str}) "
-    f"<span style='color:#888; font-size:12px;'>(Be vigilant of the strikethrough)</span>",
-    unsafe_allow_html=True,
+render_section_header_with_copy(
+    lambda: st.markdown(
+        f"#### 🏆 RS Leader = Long Term ({len(leader_list)}{_rsleader_avg_str}) "
+        f"<span style='color:#888; font-size:12px;'>(Be vigilant of the strikethrough)</span>",
+        unsafe_allow_html=True,
+    ),
+    leader_list
 )
 st.markdown(f"#### 🔵 Blue Dot = Short term ({len([s for s in leader_rs_nh_matches if s != 'SPY'])})")
 
@@ -7110,7 +7173,10 @@ _tml_avg_str = (
     f" , <span style='color:{_tml_avg_color};'>{_tml_avg:+.2f}%</span>"
     if _tml_avg is not None else ""
 )
-st.markdown(f"#### 👑 True Market Leader = A+ Leader on weakness is a gift (<span style='color:{tml_count_color};'>{tml_count}</span>{_tml_avg_str}) <span style='color:#888; font-size:12px;'>(Be vigilant of the strikethrough)</span>", unsafe_allow_html=True)
+render_section_header_with_copy(
+    lambda: st.markdown(f"#### 👑 True Market Leader = A+ Leader on weakness is a gift (<span style='color:{tml_count_color};'>{tml_count}</span>{_tml_avg_str}) <span style='color:#888; font-size:12px;'>(Be vigilant of the strikethrough)</span>", unsafe_allow_html=True),
+    tml_list
+)
 
 if tml_list or tml_yest:
     tml_industry_counts, tml_ticker_industry = build_leader_industry_map(tml_list, INDUSTRIES)
@@ -7331,53 +7397,10 @@ if in_send_window and st.session_state.get("telegram_setup_summary_sig") != setu
         st.sidebar.warning("Telegram secrets missing — Setup Summary not sent.")
 
 # --- 2. TIGHT PPP (Full Horizontal Row Below Two Botak) ---
-# NOTE: st.markdown(unsafe_allow_html=True) strips onXXX attributes (DOMPurify
-# sanitizer), so an inline onclick silently does nothing there — must use
-# st.components.v1.html (its iframe runs unsanitized JS) for the click to work.
-# The title stays as native st.markdown (pixel-identical original size) since
-# an iframe has no access to Streamlit's own header CSS; only the tiny copy
-# button itself needs the iframe, placed in a narrow column beside it.
-_ppp_csv = ", ".join(ppp_list)
-_col_ppp_title, _col_ppp_copy = st.columns([30, 1])
-with _col_ppp_title:
-    st.markdown(f"#### 📉 PPP = Opportunity ({len(ppp_list)})")
-with _col_ppp_copy:
-    _ppp_copy_btn_html = f"""
-<span id="ppp-copy-btn" title="Copy tickers" style="cursor:pointer;display:flex;align-items:center;color:#fafafa;">
-  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-  </svg>
-</span>
-<script>
-(function() {{
-  var btn = document.getElementById('ppp-copy-btn');
-  var copyIcon = btn.innerHTML;
-  var checkIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3DD56D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-  btn.addEventListener('click', function() {{
-    var text = `{_ppp_csv}`;
-    function fallbackCopy() {{
-      var ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.focus(); ta.select();
-      try {{ document.execCommand('copy'); }} catch (e) {{}}
-      document.body.removeChild(ta);
-    }}
-    if (navigator.clipboard && navigator.clipboard.writeText) {{
-      navigator.clipboard.writeText(text).catch(fallbackCopy);
-    }} else {{
-      fallbackCopy();
-    }}
-    btn.innerHTML = checkIcon;
-    setTimeout(function() {{ btn.innerHTML = copyIcon; }}, 1200);
-  }});
-}})();
-</script>
-"""
-    st.components.v1.html(_ppp_copy_btn_html, height=38, scrolling=False)
+render_section_header_with_copy(
+    lambda: st.markdown(f"#### 📉 PPP = Opportunity ({len(ppp_list)})"),
+    ppp_list
+)
 
 if ppp_list or ppp_yest:
     # ── NEW: map to industries for top-20 glow check ──
@@ -7607,7 +7630,10 @@ with st.spinner("Scanning RS New High Before Price..."):
     )
 
 # st.markdown("---")
-st.markdown(f"#### 🔵 RS NH B4 Price = Opportunity ({len(rs_nh_b4_today)})")
+render_section_header_with_copy(
+    lambda: st.markdown(f"#### 🔵 RS NH B4 Price = Opportunity ({len(rs_nh_b4_today)})"),
+    rs_nh_b4_today
+)
 
 if rs_nh_b4_today or rs_nh_b4_yest:
     # ── NEW: map to industries for top-20 glow check ──
@@ -7773,14 +7799,17 @@ with st.spinner("Scanning for downtrend line breakouts..."):
 downtrend_today = sorted(sym for sym, (t, y) in downtrend_bo_results.items() if t)
 downtrend_yest = sorted(sym for sym, (t, y) in downtrend_bo_results.items() if y)
 
-st.markdown(
-    f"""
-    <h4>
-        📐 Downtrend Line Breakout ({len(downtrend_today)})
-        <span style="color:#888; font-size:12px; font-weight:normal;">(Star = High Volume)</span>
-    </h4>
-    """,
-    unsafe_allow_html=True,
+render_section_header_with_copy(
+    lambda: st.markdown(
+        f"""
+        <h4>
+            📐 Downtrend Line Breakout ({len(downtrend_today)})
+            <span style="color:#888; font-size:12px; font-weight:normal;">(Star = High Volume)</span>
+        </h4>
+        """,
+        unsafe_allow_html=True,
+    ),
+    downtrend_today
 )
 
 if downtrend_today or downtrend_yest:
@@ -7881,7 +7910,10 @@ def compute_quality_filter_pass(stocks_list, ticker_dfs):
 st.markdown("---")
 
 # --- GAPPER SECTION ---
-st.markdown(f"#### 🚀 Gapper Earning Drift = Opportunity ({len(gapper_list)})")
+render_section_header_with_copy(
+    lambda: st.markdown(f"#### 🚀 Gapper Earning Drift = Opportunity ({len(gapper_list)})"),
+    gapper_list
+)
 
 if gapper_list or gapper_yest:
     # ── NEW: map to industries for top-20 glow check ──
@@ -8587,7 +8619,10 @@ with st.spinner("Scanning Early Bull setups..."):
         stocks_tuple, ticker_dfs_shared, benchmark_df_shared
     )
 
-st.markdown(f"#### 🐂 Early Bull = buyable + Sector + ALL ({len(early_bull_list)} + ... + {len(early_bull_no_filter_list)})")
+render_section_header_with_copy(
+    lambda: st.markdown(f"#### 🐂 Early Bull = buyable + Sector + ALL ({len(early_bull_list)} + ... + {len(early_bull_no_filter_list)})"),
+    early_bull_no_filter_list
+)
 
 if early_bull_no_filter_list:
     eb_nf_industry_counts, eb_nf_ticker_industry = build_leader_industry_map(early_bull_no_filter_list, INDUSTRIES)
@@ -8664,9 +8699,12 @@ with st.spinner("Scanning for Two Botak History..."):
 
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
 two_botak_count_color = "#FF6B6B" if len(b_list) == 0 else "inherit"
-st.markdown(
-    f"<h4>🧑‍🦲 Two Botak = Short term Group burst <span style='color:{two_botak_count_color}; font-weight:bold;'>({len(b_list)})</span></h4>",
-    unsafe_allow_html=True
+render_section_header_with_copy(
+    lambda: st.markdown(
+        f"<h4>🧑‍🦲 Two Botak = Short term Group burst <span style='color:{two_botak_count_color}; font-weight:bold;'>({len(b_list)})</span></h4>",
+        unsafe_allow_html=True
+    ),
+    b_list
 )
 if b_list or b_yest:
     html_b = ""
@@ -8759,9 +8797,12 @@ with st.spinner("Scanning for Bullish Engulfing History..."):
 # --- 3. BULLISH ENGULFING (Full Horizontal Row Below Tight PPP) ---
 total_engulf = len(e2_list) + len(e3_list)
 engulf_count_color = "#FF6B6B" if total_engulf == 0 else "inherit"
-st.markdown(
-    f"<h4>🐳 Engulfing = HL <span style='color:{engulf_count_color}; font-weight:bold;'>({total_engulf})</span></h4>",
-    unsafe_allow_html=True
+render_section_header_with_copy(
+    lambda: st.markdown(
+        f"<h4>🐳 Engulfing = HL <span style='color:{engulf_count_color}; font-weight:bold;'>({total_engulf})</span></h4>",
+        unsafe_allow_html=True
+    ),
+    sorted(set(e2_list) | set(e3_list))
 )
 
 if e2_list or e2_yest:
@@ -8899,9 +8940,12 @@ with st.spinner("Scanning for PowerTrend History..."):
 
 # --- 4. POWERTREND (Full Horizontal Row) ---
 powertrend_count_color = "#FF6B6B" if len(pt_list) == 0 else "inherit"
-st.markdown(
-    f"<h4>⚡ PowerTrend = Thematic Parabolic <span style='color:{powertrend_count_color}; font-weight:bold;'>({len(pt_list)})</span></h4>",
-    unsafe_allow_html=True
+render_section_header_with_copy(
+    lambda: st.markdown(
+        f"<h4>⚡ PowerTrend = Thematic Parabolic <span style='color:{powertrend_count_color}; font-weight:bold;'>({len(pt_list)})</span></h4>",
+        unsafe_allow_html=True
+    ),
+    pt_list
 )
 if pt_list or pt_yest:
     html_pt = ""
@@ -9061,10 +9105,13 @@ with st.spinner("Scanning volatility pickup..."):
 volatility_count_color = "#FF6B6B" if len(volatility_hits) == 0 else "inherit"
 volatility_up_count = sum(1 for sym, z, pct in volatility_hits if pct >= 0)
 volatility_down_count = len(volatility_hits) - volatility_up_count
-st.markdown(
-    f"<h4>〽️ Volatility = TV Horizontal Line <span style='color:{volatility_count_color}; font-weight:bold;'>"
-    f"({len(volatility_hits)} = {volatility_up_count} + {volatility_down_count})</span></h4>",
-    unsafe_allow_html=True
+render_section_header_with_copy(
+    lambda: st.markdown(
+        f"<h4>〽️ Volatility = TV Horizontal Line <span style='color:{volatility_count_color}; font-weight:bold;'>"
+        f"({len(volatility_hits)} = {volatility_up_count} + {volatility_down_count})</span></h4>",
+        unsafe_allow_html=True
+    ),
+    [sym for sym, z, pct in volatility_hits]
 )
 
 if volatility_hits:
@@ -9198,9 +9245,12 @@ def fetch_wide_moat_tickers(tickers_tuple):
 
 # --- 6. VALUE TRAP (Full Horizontal Row Below PowerTrend Not Extended) ---
 value_trap_count_color = "#00FF00" if len(vt_list) == 0 else "inherit"
-st.markdown(
-    f"<h4>⚠️ Value Trap = MAG7 & MOAT <span style='color:{value_trap_count_color}; font-weight:bold;'>({len(vt_list)})</span></h4>",
-    unsafe_allow_html=True
+render_section_header_with_copy(
+    lambda: st.markdown(
+        f"<h4>⚠️ Value Trap = MAG7 & MOAT <span style='color:{value_trap_count_color}; font-weight:bold;'>({len(vt_list)})</span></h4>",
+        unsafe_allow_html=True
+    ),
+    vt_list
 )
 
 if vt_list or vt_yest:
@@ -9474,10 +9524,13 @@ with st.spinner("Scanning for Change / Breakdown of Character (Score Δ≥20)...
     )
 
 # ═══════════════════ CHANGE OF CHARACTER (Δ ≥ +20) ═══════════════════
-st.markdown(
-    f"#### 🔀 Change of Character ({len(coc_today)}) "
-    f"<span style='color:#888; font-size:12px;'>[Grey out = 2x CoC]</span>",
-    unsafe_allow_html=True,
+render_section_header_with_copy(
+    lambda: st.markdown(
+        f"#### 🔀 Change of Character ({len(coc_today)}) "
+        f"<span style='color:#888; font-size:12px;'>[Grey out = 2x CoC]</span>",
+        unsafe_allow_html=True,
+    ),
+    coc_today
 )
 
 if coc_today or coc_yest:
@@ -9554,7 +9607,10 @@ if not coc_hist.empty:
 st.markdown("---")
 
 # ═══════════════════ BREAKDOWN OF CHARACTER (Δ ≤ -20) ═══════════════════
-st.markdown(f"#### 🔻 Breakdown of Character ({len(boc_today)})")
+render_section_header_with_copy(
+    lambda: st.markdown(f"#### 🔻 Breakdown of Character ({len(boc_today)})"),
+    boc_today
+)
 
 if boc_today or boc_yest:
     boc_industry_counts, boc_ticker_industry = build_leader_industry_map(boc_today, INDUSTRIES)
@@ -9681,7 +9737,10 @@ with st.spinner("Scanning for biggest up/down day extremes..."):
         stocks_tuple, ticker_dfs_shared
     )
 
-st.markdown(f"#### 📈📉 Biggest Move Today ({len(biggest_up_today)} vs {len(biggest_down_today)})")
+render_section_header_with_copy(
+    lambda: st.markdown(f"#### 📈📉 Biggest Move Today ({len(biggest_up_today)} vs {len(biggest_down_today)})"),
+    [sym for sym, pct in biggest_up_today] + [sym for sym, pct in biggest_down_today]
+)
 
 col_up, col_down = st.columns(2)
 
@@ -9954,15 +10013,15 @@ def _render_volume_badges(sym_list, vol_map):  # CHANGED: dropped badge_color_st
         html_v += setup_badge(sym, extra_style=glow_style)  # CHANGED: base = precedence
     st.markdown(html_v, unsafe_allow_html=True)
 
-st.markdown(f"**🔴 HVE Cluster ({len(hve_syms)})**")
+render_section_header_with_copy(lambda: st.markdown(f"**🔴 HVE Cluster ({len(hve_syms)})**"), hve_syms)
 _render_volume_badges(hve_syms, unusual_vol_map)  # CHANGED: removed style arg
 
 st.write("")
-st.markdown(f"**🟠 HVQ Cluster ({len(hvq_syms)})**")
+render_section_header_with_copy(lambda: st.markdown(f"**🟠 HVQ Cluster ({len(hvq_syms)})**"), hvq_syms)
 _render_volume_badges(hvq_syms, unusual_vol_map)  # CHANGED: removed style arg
 
 st.write("")
-st.markdown(f"**🟡 HVM Cluster ({len(hvm_syms)})**")
+render_section_header_with_copy(lambda: st.markdown(f"**🟡 HVM Cluster ({len(hvm_syms)})**"), hvm_syms)
 _render_volume_badges(hvm_syms, unusual_vol_map)  # CHANGED: removed style arg
 
 #st.markdown(html_e2, unsafe_allow_html=True)
@@ -10006,7 +10065,6 @@ _render_volume_badges(hvm_syms, unusual_vol_map)  # CHANGED: removed style arg
 # Turnover rate = latest session volume / 50-day average volume.
 #st.markdown("---")
 st.write("")
-st.markdown("#### 🔥 High Turnover Rate")
 
 try:
     _turnover_rows = []
@@ -10022,6 +10080,11 @@ try:
 
     _turnover_rows.sort(key=lambda x: x[1], reverse=True)
     _top_turnover = _turnover_rows[:25]
+
+    render_section_header_with_copy(
+        lambda: st.markdown("#### 🔥 High Turnover Rate"),
+        [_sym for _sym, _ratio in _top_turnover]
+    )
 
     if _top_turnover:
         _HIGH_TURNOVER = 2.0  # today's volume >= 2x its 50-day average
@@ -10798,8 +10861,9 @@ valid_breakout_history_v1, today_breakout_tickers_v1 = timed(
     ticker_dfs_shared,
 )
 
-st.markdown(
-    f"### 📈 Breakout Count ({len(today_breakout_tickers_v1)})"
+render_section_header_with_copy(
+    lambda: st.markdown(f"### 📈 Breakout Count ({len(today_breakout_tickers_v1)})"),
+    today_breakout_tickers_v1
 )
 if today_breakout_tickers_v1:
     breakout_industry_counts, breakout_ticker_industry = build_leader_industry_map(
