@@ -11842,17 +11842,21 @@ def fetch_ibd_stock_market_today_tickers(max_videos_to_scan=25):
 # ── Render section ────────────────────────────────────────────────────────
 #st.markdown("---")
 st.write("")
-st.markdown(
-    "#### 🎓 IBD "
-    "<span style='color:#888; font-size:12px;'>(Youtube Live)</span>",
-    unsafe_allow_html=True,
-)
 
 with st.spinner("Checking IBD's latest Stock Market Today video..."):
     ibd_result = timed(
         "fetch_ibd_stock_market_today_tickers",
         fetch_ibd_stock_market_today_tickers,
     )
+
+render_section_header_with_copy(
+    lambda: st.markdown(
+        "#### 🎓 IBD "
+        "<span style='color:#888; font-size:12px;'>(Youtube Live)</span>",
+        unsafe_allow_html=True,
+    ),
+    ibd_result.get("tickers", []) if not ibd_result.get("error") else []
+)
 
 if ibd_result.get("error"):
     st.info(f"Unable to fetch IBD video data — {ibd_result['error']}")
@@ -12174,11 +12178,6 @@ def fetch_ibd_stock_of_the_day(known_universe_tuple, max_articles=10):
 # ── Render section ────────────────────────────────────────────────────────
 #st.markdown("---")
 st.write("")
-st.markdown(
-    "#### 🎓 IBD "
-    "<span style='color:#888; font-size:12px;'>(Stock Of The Day)</span>",
-    unsafe_allow_html=True,
-)
 
 with st.spinner("Fetching IBD Stock Of The Day..."):
     ibd_sotd_result = timed(
@@ -12187,14 +12186,26 @@ with st.spinner("Fetching IBD Stock Of The Day..."):
         tuple(KNOWN_STOCKS),
     )
 
-if ibd_sotd_result.get("error"):
-    st.info(f"Unable to fetch IBD Stock Of The Day — {ibd_sotd_result['error']}")
-else:
+if not ibd_sotd_result.get("error"):
     all_sotd_tickers = []
     for art in ibd_sotd_result["articles"]:
         all_sotd_tickers.extend(art["tickers"])
     all_sotd_tickers_unique = list(dict.fromkeys(all_sotd_tickers))
+else:
+    all_sotd_tickers_unique = []
 
+render_section_header_with_copy(
+    lambda: st.markdown(
+        "#### 🎓 IBD "
+        "<span style='color:#888; font-size:12px;'>(Stock Of The Day)</span>",
+        unsafe_allow_html=True,
+    ),
+    all_sotd_tickers_unique
+)
+
+if ibd_sotd_result.get("error"):
+    st.info(f"Unable to fetch IBD Stock Of The Day — {ibd_sotd_result['error']}")
+else:
     if all_sotd_tickers_unique:
         sotd_industry_counts, sotd_ticker_industry = build_leader_industry_map(all_sotd_tickers_unique, INDUSTRIES)  # NEW
         html_sotd = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
@@ -12641,7 +12652,6 @@ else:
 # action vocabulary ("up"/"down"/"main"/"reit"/"init"), so the row schema and
 # everything downstream (grouping, badges, expander table) is unchanged.
 st.markdown("---")
-st.markdown("#### 🎓 Analyst Upgrades / Downgrades")
 
 @st.cache_data(ttl=21600)
 def fetch_analyst_grade_changes(stocks_tuple, days_back=3, max_tickers=80):
@@ -12683,13 +12693,22 @@ with st.spinner("Fetching recent analyst upgrades/downgrades..."):
         tuple(KNOWN_STOCKS)
     )
 
-if analyst_grades_df.empty:
-    st.info("No recent analyst grade changes found.")
-else:
+if not analyst_grades_df.empty:
     grade_counts = analyst_grades_df.groupby(["Ticker", "Action"]).size().unstack(fill_value=0)
     grade_counts["Total"] = grade_counts.sum(axis=1)
     top_movers = grade_counts.sort_values("Total", ascending=False).head(10)
+    _analyst_copy_tickers = list(top_movers.index)
+else:
+    _analyst_copy_tickers = []
 
+render_section_header_with_copy(
+    lambda: st.markdown("#### 🎓 Analyst Upgrades / Downgrades"),
+    _analyst_copy_tickers
+)
+
+if analyst_grades_df.empty:
+    st.info("No recent analyst grade changes found.")
+else:
     html_grades = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
     for sym, row in top_movers.iterrows():
         ups = int(row.get("Upgrade", 0))
@@ -15428,8 +15447,12 @@ def compute_breakout_health(stocks_tuple_bh, _ticker_dfs):
 # ==============================================================================
 st.markdown("---")
 # Filled in after hp_df is built below with (Risk Off)/(Risk On), based on
-# whether more than half the table reads Deterioration.
-_hp_title_ph = st.empty()
+# whether more than half the table reads Deterioration. Copy button (in the
+# adjacent narrow column) fills in at the same time, once hp_df's tickers
+# are known.
+_hp_col_title, _hp_col_copy = st.columns([30, 1])
+_hp_title_ph = _hp_col_title.empty()
+_hp_copy_ph = _hp_col_copy.empty()
 _hp_title_ph.markdown("#### 🩺 Healthy Pullback vs Deterioration")
 
 
@@ -15450,6 +15473,8 @@ if hp_rows:
     _hp_deter_count = hp_df["Conclusion"].str.contains("Deterioration").sum()
     _hp_regime = "Risk Off" if _hp_deter_count > len(hp_df) / 2 else "Risk On"
     _hp_title_ph.markdown(f"#### 🩺 Healthy Pullback vs Deterioration ({_hp_regime})")
+    with _hp_copy_ph.container():
+        render_copy_button(hp_df["Ticker"].tolist())
     # st.caption(
     #     f"{len(hp_df)} tickers scanned from cloud_valid_syms / cloud21ema_all / cloudwick_all / "
     #     f"ma50bounce_all · Healthy Pullback threshold = weighted score ≥ {HP_HEALTHY_THRESHOLD:.0f}/100"
