@@ -7331,14 +7331,49 @@ if in_send_window and st.session_state.get("telegram_setup_summary_sig") != setu
         st.sidebar.warning("Telegram secrets missing — Setup Summary not sent.")
 
 # --- 2. TIGHT PPP (Full Horizontal Row Below Two Botak) ---
+# NOTE: st.markdown(unsafe_allow_html=True) strips onXXX attributes (DOMPurify
+# sanitizer), so an inline onclick silently does nothing there — must use
+# st.components.v1.html (its iframe runs unsanitized JS) for the click to work.
 _ppp_csv = ", ".join(ppp_list)
-st.markdown(
-    f'''<div style="display:flex;align-items:center;gap:8px;">
-<h4 style="margin:0;">📉 PPP = Opportunity ({len(ppp_list)})</h4>
-<span title="Copy tickers" onclick="navigator.clipboard.writeText('{_ppp_csv}')" style="cursor:pointer;font-size:1.1rem;">📋</span>
-</div>''',
-    unsafe_allow_html=True
-)
+_ppp_header_html = f"""
+<div style="display:flex;align-items:center;gap:8px;background:#0e1117;">
+  <h4 style="margin:0;color:#fafafa;font-family:'Source Sans Pro',sans-serif;">📉 PPP = Opportunity ({len(ppp_list)})</h4>
+  <span id="ppp-copy-btn" title="Copy tickers" style="cursor:pointer;display:flex;align-items:center;color:#fafafa;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+    </svg>
+  </span>
+</div>
+<script>
+(function() {{
+  var btn = document.getElementById('ppp-copy-btn');
+  var copyIcon = btn.innerHTML;
+  var checkIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3DD56D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+  btn.addEventListener('click', function() {{
+    var text = `{_ppp_csv}`;
+    function fallbackCopy() {{
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      try {{ document.execCommand('copy'); }} catch (e) {{}}
+      document.body.removeChild(ta);
+    }}
+    if (navigator.clipboard && navigator.clipboard.writeText) {{
+      navigator.clipboard.writeText(text).catch(fallbackCopy);
+    }} else {{
+      fallbackCopy();
+    }}
+    btn.innerHTML = checkIcon;
+    setTimeout(function() {{ btn.innerHTML = copyIcon; }}, 1200);
+  }});
+}})();
+</script>
+"""
+st.components.v1.html(_ppp_header_html, height=44, scrolling=False)
 
 if ppp_list or ppp_yest:
     # ── NEW: map to industries for top-20 glow check ──
