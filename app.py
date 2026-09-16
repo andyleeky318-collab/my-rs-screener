@@ -16400,7 +16400,12 @@ st.markdown(
 # This corner of the ETF market delists/splits often — verify periodically.
 # ==============================================================================
 st.markdown("---")
-st.markdown(
+# Copy button (filled in later, once the colored-badge tickers are known —
+# see _lev_colored_tickers below) sits in the adjacent narrow column.
+_lev_col_title, _lev_col_copy = st.columns([30, 1])
+_lev_title_ph = _lev_col_title.empty()
+_lev_copy_ph = _lev_col_copy.empty()
+_lev_title_ph.markdown(
     """
     <h4>
         🎢 Leveraged ETF Bull / Bear Table
@@ -16614,6 +16619,13 @@ def _lev_badge(display_sym, underlying_sym, direction):
     return (f'<div class="ticker-badge" style="background-color:{default_bg};border:1px solid {default_border};">'
             f'<span style="color:{default_color};font-weight:bold;">{display_sym}</span></div>')
 
+def _lev_has_colored_bg(underlying_sym):
+    """True exactly when _lev_badge() above would give this ticker's BULL
+    badge one of the special setup-category backgrounds (orange/aqua/purple/
+    blue) instead of the plain neutral bull-green — bear badges never get
+    these colors, so bear tickers are always excluded."""
+    return underlying_sym in (ma50bounce_all | cloudwick_all | cloud21ema_all | cloud_valid_syms)
+
 VOL_TIERS = [
     (">$500M", lambda v: v > 500_000_000),
     ("$100M – $500M", lambda v: 100_000_000 <= v <= 500_000_000),
@@ -16624,11 +16636,13 @@ bull_map = {t: u for t, (u, d) in LEVERAGED_ETF_MAP.items() if d == "bull"}
 bear_map = {t: u for t, (u, d) in LEVERAGED_ETF_MAP.items() if d == "bear"}
 
 rows_html = ""
+_lev_colored_tickers = []
 for tier_label, tier_fn in VOL_TIERS:
     bull_syms = sorted([t for t in bull_map if t in lev_dollar_vol and tier_fn(lev_dollar_vol[t])],
                         key=lambda t: -lev_dollar_vol[t])
     bear_syms = sorted([t for t in bear_map if t in lev_dollar_vol and tier_fn(lev_dollar_vol[t])],
                         key=lambda t: -lev_dollar_vol[t])
+    _lev_colored_tickers.extend(t for t in bull_syms if _lev_has_colored_bg(bull_map[t]))
     bull_html = "".join(_lev_badge(t, bull_map[t], "bull") for t in bull_syms) or "<span style='color:#555;'>—</span>"
     bear_html = "".join(_lev_badge(t, bear_map[t], "bear") for t in bear_syms) or "<span style='color:#555;'>—</span>"
     rows_html += (
@@ -16638,6 +16652,10 @@ for tier_label, tier_fn in VOL_TIERS:
         f"<td style='padding:8px;vertical-align:top;'>{bear_html}</td>"
         f"</tr>"
     )
+
+if _lev_colored_tickers:
+    with _lev_copy_ph.container():
+        render_copy_button(_lev_colored_tickers)
 
 st.markdown(
     f"""
