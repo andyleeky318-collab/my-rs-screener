@@ -16278,6 +16278,32 @@ def compute_market_verdict():
         p_accum_score, p_accum_label = 50, "Insufficient data"
     breakdown.append(("Accumulation Rating", p_accum_score, p_accum_label, ""))
 
+    # ── Pillar: Market Internal (MCO/MCSI breadth timing) ──────────────────
+    mcclellan_df_v = _safe("mcclellan_df", pd.DataFrame())
+    if isinstance(mcclellan_df_v, pd.DataFrame) and not mcclellan_df_v.empty and len(mcclellan_df_v) >= 30:
+        latest_mco_v = mcclellan_df_v["MCO_Z"].iloc[-1]
+        latest_mcsi_v = mcclellan_df_v["MCSI_Z"].iloc[-1]
+        latest_mcsi_sma_v = mcclellan_df_v["MCSI_Z_SMA"].iloc[-1]
+        mcsi_5ago_v = mcclellan_df_v["MCSI_Z"].iloc[-6] if len(mcclellan_df_v) >= 6 else latest_mcsi_v
+        mcsi_curling_up_v = latest_mcsi_v > mcsi_5ago_v
+        mcsi_above_sma_v = pd.notna(latest_mcsi_sma_v) and latest_mcsi_v > latest_mcsi_sma_v
+
+        p_internal_score = 50
+        p_internal_score += 20 if mcsi_curling_up_v else -15
+        p_internal_score += 15 if mcsi_above_sma_v else -10
+        if latest_mco_v <= -1 and mcsi_curling_up_v:
+            p_internal_score += 10
+        elif latest_mco_v >= 1.5 and not mcsi_curling_up_v:
+            p_internal_score -= 10
+        p_internal_score = max(0, min(100, p_internal_score))
+
+        mcsi_trend = "curling up" if mcsi_curling_up_v else "curling down"
+        mcsi_sma_state = "above 10SMA" if mcsi_above_sma_v else "below 10SMA"
+        p_internal_label = f"MCO {latest_mco_v:.2f}σ, MCSI {latest_mcsi_v:.2f}σ ({mcsi_trend}, {mcsi_sma_state})"
+    else:
+        p_internal_score, p_internal_label = 50, "Insufficient data"
+    breakdown.append(("Market Internal", p_internal_score, p_internal_label, ""))
+
     # ── Pillar: Healthy Pullback vs Deterioration (section 29's own verdict) ──
     hp_rows_v = _safe("hp_rows", [])
     if hp_rows_v:
@@ -16299,21 +16325,22 @@ def compute_market_verdict():
 
     # ── Weighted Composite ──────────────────────────────────────────────────
     weights = {
-        # Existing 17 pillars, each trimmed to make room for the 2 new ones
-        # below so the full set still sums to exactly 1.00 (100%).
+        # Existing pillars, trimmed to include Market Internal and keep the
+        # full set at exactly 1.00 (100%).
         "1 Month Leading Theme": 0.04,
         "Pine RS Table Breadth": 0.04,
-        "RS Quadrant Map": 0.06,
+        "RS Quadrant Map": 0.05,
         "Pie Chart RSI (Sector Momentum)": 0.04,
         "ETF Risk Appetite": 0.04,
         "Sector Heatmap Breadth": 0.04,
-        "RRG Rotation": 0.06,
-        "Stage Breadth": 0.06,
+        "RRG Rotation": 0.05,
+        "Stage Breadth": 0.05,
         "ETF Stage2/4 (watchlist)": 0.05,
-        "Market Regime": 0.09,
-        "Minervini Breadth Trend": 0.06,
+        "Market Regime": 0.08,
+        "Minervini Breadth Trend": 0.05,
         "Distribution Days": 0.10,
         "Accumulation Rating": 0.04,
+        "Market Internal": 0.05,
         "VIX Term Structure": 0.04,
         "Credit Spread (HYG/LQD)": 0.04,
         "Equity Risk Premium (ERP)": 0.04,
@@ -16338,6 +16365,7 @@ def compute_market_verdict():
         "Stage Breadth",
         "Market Regime",
         "Minervini Breadth Trend",
+        "Market Internal",
         "Healthy Pullback vs Deterioration",
         "Breakout Health",
         "Distribution Days",
