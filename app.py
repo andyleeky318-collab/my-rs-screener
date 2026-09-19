@@ -9255,8 +9255,8 @@ def fetch_wide_moat_tickers(tickers_tuple):
     for ticker in tickers_tuple:
         try:
             resp = requests.get(
-                f"https://financialmodelingprep.com/api/v3/key-metrics/{ticker}",
-                params={"period": "annual", "limit": 10, "apikey": fmp_key},
+                "https://financialmodelingprep.com/stable/key-metrics",
+                params={"symbol": ticker, "period": "annual", "limit": 10, "apikey": fmp_key},
                 timeout=10,
             )
             resp.raise_for_status()
