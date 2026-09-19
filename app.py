@@ -16334,12 +16334,12 @@ def compute_market_verdict():
         "Sector Heatmap Breadth",
         "RRG Rotation",
         "Accumulation Rating",
-        "Healthy Pullback vs Deterioration",
-        "Breakout Health",
         "ETF Stage2/4 (watchlist)",
         "Stage Breadth",
         "Market Regime",
         "Minervini Breadth Trend",
+        "Healthy Pullback vs Deterioration",
+        "Breakout Health",
         "Distribution Days",
         "VIX Term Structure",
         "Credit Spread (HYG/LQD)",
@@ -16397,10 +16397,10 @@ def compute_market_verdict():
         verdict = "🛡️ DEFENSIVE"
         verdict_note = "Multiple pillars deteriorating. Prioritize capital preservation — raise cash, avoid new longs, focus only on the highest-conviction setups if any. Less is More"
 
-    return verdict, verdict_note, composite, breakdown, tilt_label, triggered
+    return verdict, verdict_note, composite, breakdown, tilt_label, triggered, weights
 
 
-verdict, verdict_note, composite_score, pillar_breakdown, tilt_label, dist_triggered = timed(
+verdict, verdict_note, composite_score, pillar_breakdown, tilt_label, dist_triggered, pillar_weights = timed(
     "compute_market_verdict", compute_market_verdict
 )
 
@@ -16440,6 +16440,7 @@ for name, score, label, detail in pillar_breakdown:
         f"</div></td>"
         f"<td style='padding:6px 10px;color:{bar_color};font-weight:bold;text-align:right;'>{score:.0f}</td>"
         f"<td style='padding:6px 10px;color:#aaa;font-size:0.85em;'>{label}{(' — ' + detail) if detail else ''}</td>"
+        f"<td style='padding:6px 6px;color:#888;font-size:0.8em;text-align:right;white-space:nowrap;width:1%;'>{pillar_weights.get(name, 0) * 100:.0f}%</td>"
         f"</tr>"
     )
 
