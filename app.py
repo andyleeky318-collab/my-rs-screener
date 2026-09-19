@@ -16206,7 +16206,14 @@ def compute_market_verdict():
         if rs21_vals:
             strong_count = sum(1 for v in rs21_vals if v >= 80)
             p12_score = (strong_count / len(rs21_vals)) * 100
-            p12_label = f"{strong_count}/{len(rs21_vals)} themes with RS21 >= 80"
+            top3 = ", ".join(
+                r["Ticker"] for r in sorted(
+                    (r for r in pine_rows_v if r.get("RS21") is not None and not pd.isna(r["RS21"])),
+                    key=lambda r: r["RS21"],
+                    reverse=True,
+                )[:3]
+            )
+            p12_label = f"{strong_count}/{len(rs21_vals)} themes with RS21 >= 80 | Leaders: {top3}"
         else:
             p12_score, p12_label = 50, "Insufficient data"
     else:
@@ -16423,8 +16430,9 @@ st.markdown(
 pillar_rows_html = ""
 for name, score, label, detail in pillar_breakdown:
     bar_color = "#00FF00" if score >= 65 else "#FFA500" if score >= 40 else "#FF4B4B"
+    row_border = "border-bottom:3px solid #666;" if name in {"Distribution Days", "Accumulation Rating"} else ""
     pillar_rows_html += (
-        f"<tr>"
+        f"<tr style='{row_border}'>"
         f"<td style='padding:6px 10px;color:#e0e0e0;font-weight:bold;white-space:nowrap;'>{name}</td>"
         f"<td style='padding:6px 10px;'>"
         f"<div style='width:100%;background:#333;border-radius:4px;height:14px;position:relative;'>"
