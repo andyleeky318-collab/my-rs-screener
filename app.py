@@ -266,7 +266,7 @@ INDUSTRIES = {
     'BLDG-WOOD PRDS': ['UFPI', 'LPX', 'TREX'],
     'UTILITY-GAS DSTRIBTN': ['TRGP', 'CQP', 'ATO', 'NI', 'MDU', 'BIPC', 'SWX', 'NJR', 'OGS', 'SR', 'CPK', 'EE'],
     'RTAIL-HME FRNSHNGS': ['MBC', 'WSM', 'W', 'RH', 'LOVE'],
-    'RETL WHSLE BLDG PRDS': ['HD', 'LOW', 'BLDR', 'FND', 'CNM', 'BCC'],
+    'RETL WHSLE BLDG PRDS': ['XHB', 'HD', 'LOW', 'BLDR', 'FND', 'CNM', 'BCC'],
     'MEDCAL-HOSPITALS': ['HCA', 'THC', 'UHS'],
     'MED-LONG-TRM CARE': ['CHE', 'PACS', 'SGRY', 'ARDT', 'ENSG', 'ADUS'],
     'MEDICAL-SERVICES': ['DVA', 'SOLV', 'EHC', 'ACHC', 'RDNT', 'OPCH', 'HIMS', 'GH', 'BTSG', 'CON', 'AZTA', 'TDOC'],
@@ -1673,6 +1673,7 @@ st.markdown("---")
 @st.cache_data(ttl=3600)
 def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, _benchmark_df):
     tickers = list(tickers_tuple)
+    #tickers = list(dict.fromkeys(tickers_tuple))
     try:
         #all_tickers = tickers + [benchmark_ticker]
         #data = yf.download(all_tickers, period="2y", interval="1d", progress=False, auto_adjust=True)
@@ -13789,7 +13790,11 @@ for sym in master_ticker_set:
 # with the exact same Stage 1-4 %s shown in the table under the RS Quadrant Map,
 # plus a stacked distribution bar and a derived health label.
 st.markdown("---")
-st.markdown("#### 🧭 Stage Distribution by Industry")
+st.markdown(
+    "#### 🧭 Stage Distribution by Industry "
+    "<span style='color:#888; font-size:12px;'>(Short term)</span>",
+    unsafe_allow_html=True,
+)
 
 try:
     _STAGE_COLORS = {1: "#a9a9a9", 2: "#378ADD", 3: "#EF9F27", 4: "#FF69B4"}  # matches app stage_colors
@@ -14142,7 +14147,11 @@ else:
 # Read-only, additive. Appended at the very bottom; touches nothing else.
 # ==============================================================================
 st.markdown("---")
-st.markdown("### 🔄 Finviz Industry Rotation Report")
+st.markdown(
+    "### 🔄 Finviz Industry Rotation Report "
+    "<span style='color:#888; font-size:12px;'>(Short term)</span>",
+    unsafe_allow_html=True,
+)
 
 def _github_filepath_finviz(date_obj):
     return f"finviz_history/finviz_{date_obj.isoformat()}.json"
@@ -14462,7 +14471,11 @@ Keep it tight, data-driven, cite the actual % numbers, no fluff, no disclaimers.
 # any other section or shared variable.
 # ==============================================================================
 st.markdown("---")
-st.markdown("### 🌊 Market Internal")
+st.markdown(
+    "### 🌊 Market Internal "
+    "<span style='color:#888; font-size:12px;'>(Short term + Long term)</span>",
+    unsafe_allow_html=True,
+)
 
 @st.cache_data(ttl=3600)
 def compute_mcclellan_indicators(_ticker_dfs, stocks_list, z_window=252, mcsi_sma_len=10):
