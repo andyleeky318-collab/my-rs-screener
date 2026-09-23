@@ -4625,7 +4625,10 @@ if all_data:
     st.markdown(
         f'<div style="text-align: right; font-size: 20px; color: #888888; margin-bottom: 4px; font-family: monospace;">'
         f'Setup = <span style="color: #4ecdc4; font-weight: bold;">{global_setup_count}</span>'
-        f'<span style="color: #888888; font-size: 16px; margin-left: 6px;">{setup_rank_str}</span></div>',
+        f'<span style="color: #888888; font-size: 16px; margin-left: 6px;">{setup_rank_str}</span>'
+        f'<span style="color: #888888; font-size: 16px; margin-left: 14px;">⚠️ NaN-today: '
+        f'<span style="color: #FF4B4B; font-weight: bold;">{len(_latest_nan_tickers)}</span></span>'
+        f'</div>',
         unsafe_allow_html=True
     )
 
@@ -6192,7 +6195,7 @@ _minervini_avg_str = (
     f" , <span style='color:{_avg_color};'>{_minervini_avg:+.2f}%</span>"
     if _minervini_avg is not None else ""
 )
-_minervini_syms_for_copy = [sym for sym, _, _ in email_content_stocks]
+_minervini_syms_for_copy = sorted(sym for sym, _, _ in email_content_stocks)
 render_section_header_with_copy(
     lambda: st.markdown(
         f"#### ⭐ Minervini ("
@@ -9318,11 +9321,24 @@ if vt_list or vt_yest:
         sym = item[0] if isinstance(item, tuple) else item
         atr_value = item[1] if isinstance(item, tuple) else None
         suffix = f"{atr_value:.1f}x" if atr_value is not None else ""
+
+        # NEW: green glow if today's candle is a long bottom wick or doji
+        _df_vt = ticker_dfs_shared.get(sym)
+        is_wick_or_doji = False
+        if _df_vt is not None and len(_df_vt) >= 1:
+            _o, _h, _l, _c = _df_vt['Open'].iloc[-1], _df_vt['High'].iloc[-1], _df_vt['Low'].iloc[-1], _df_vt['Close'].iloc[-1]
+            _rng = _h - _l
+            if _rng > 0:
+                _lower_wick_pct = (min(_o, _c) - _l) / _rng
+                _body_pct = abs(_c - _o) / _rng
+                is_wick_or_doji = _lower_wick_pct > 0.5 or _body_pct < 0.1
+
         moat_glow = (
             "box-shadow:0 0 8px 2px #FF0000; border:1px solid #FF0000;"
             if sym in wide_moat_tickers else ""
         )
-        html_vt += setup_badge(sym, is_new=(sym not in vt_yest_set), extra_suffix=suffix, extra_style=moat_glow)
+        wick_glow = "box-shadow:0 0 8px 2px #00FF00; border:1px solid #00FF00;" if is_wick_or_doji else ""
+        html_vt += setup_badge(sym, is_new=(sym not in vt_yest_set), extra_suffix=suffix, extra_style=wick_glow or moat_glow)
     
     # Process and append removed stocks
     removed_vt = [sym for sym in vt_yest if sym not in current_vt_tickers]
@@ -13723,6 +13739,7 @@ SECTION_DEFINITIONS = {
     "TML":                set(globals().get("tml_list", [])),
     "PPP":                set(globals().get("ppp_list", [])),    
     "RS NH B4 Price":     set(globals().get("rs_nh_b4_today", [])),
+    "DT BO":              set(globals().get("downtrend_today", [])),
     "Gapper":             set(globals().get("gapper_list", [])),          # short form
     "Early Bull":         set(globals().get("early_bull_list", [])),
     "Two Botak":          set(globals().get("b_list", [])),
