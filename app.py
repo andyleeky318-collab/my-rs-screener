@@ -15640,6 +15640,60 @@ def load_breakout_health_history_github(max_days=90):
     except Exception:
         return pd.DataFrame()
 
+def _github_filepath_lazy(date_obj):
+    return f"lazy_table_history/lazy_{date_obj.isoformat()}.json"
+
+def save_lazy_table_snapshot_github(date_obj, rows):
+    import json
+    repo   = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    if not repo or not st.secrets.get("GITHUB_TOKEN"):
+        return
+    path = _github_filepath_lazy(date_obj)
+    url  = f"{GITHUB_API}/repos/{repo}/contents/{path}"
+    scores = {r["Ticker"]: r["Count"] for r in rows}
+    content_b64 = base64.b64encode(json.dumps(scores).encode()).decode()
+    sha = None
+    try:
+        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
+        if resp.status_code == 200:
+            sha = resp.json().get("sha")
+    except Exception:
+        pass
+    payload = {"message": f"Lazy Table snapshot {date_obj.isoformat()}", "content": content_b64, "branch": branch}
+    if sha:
+        payload["sha"] = sha
+    try:
+        requests.put(url, headers=_github_headers(), json=payload, timeout=10)
+    except Exception:
+        pass
+
+@st.cache_data(ttl=3600)
+def load_lazy_table_snapshot_github(date_obj):
+    import json
+    repo   = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    if not repo or not st.secrets.get("GITHUB_TOKEN"):
+        return None
+    path = _github_filepath_lazy(date_obj)
+    url  = f"{GITHUB_API}/repos/{repo}/contents/{path}"
+    try:
+        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
+        if resp.status_code != 200:
+            return None
+        return json.loads(base64.b64decode(resp.json()["content"]).decode())
+    except Exception:
+        return None
+
+@st.cache_data(ttl=3600)
+def find_nearest_backward_lazy_snapshot_github(start_date, max_lookback_days=14):
+    for i in range(1, max_lookback_days + 1):
+        check_date = start_date - datetime.timedelta(days=i)
+        data = load_lazy_table_snapshot_github(check_date)
+        if data:
+            return data, check_date
+    return None, None
+
 st.markdown("---")
 _bh_title_ph = st.empty()
 _bh_title_ph.markdown("#### 🚀 Breakout Health")
@@ -16791,6 +16845,18 @@ st.markdown(
 
 # Most sections first, then alphabetical tiebreaker
 master_rows.sort(key=lambda r: (-r["Count"], r["Ticker"]))
+
+_lazy_today = datetime.date.today()
+timed("save_lazy_table_snapshot_github", save_lazy_table_snapshot_github, _lazy_today, master_rows)
+_lazy_prev_scores, _lazy_prev_date = timed(
+    "find_nearest_backward_lazy_snapshot_github",
+    find_nearest_backward_lazy_snapshot_github,
+    _lazy_today
+)
+for row in master_rows:
+    _prev = _lazy_prev_scores.get(row["Ticker"]) if _lazy_prev_scores else None
+    row["Δ"] = (row["Count"] - _prev) if _prev is not None else None
+
 st.markdown("---")
 st.markdown(f"#### 📋 Lazy Table ({len(master_rows)})")
 
@@ -16847,13 +16913,20 @@ if master_rows:
             f"</td>"
             for col in extra_cols
         )
+        _dv = row["Δ"]
+        if _dv is None:
+            delta_cell = "<td style='text-align:center;color:#888888;'>-</td>"
+        else:
+            _dcolor = "#00FF00" if _dv > 0 else "#FF4B4B" if _dv < 0 else "#888888"
+            _dsign = f"+{_dv}" if _dv > 0 else str(_dv)
+            delta_cell = f"<td style='text-align:center;color:{_dcolor};font-weight:bold;'>{_dsign}</td>"
         rows_html += (
             f"<tr style='background-color:{bg};'>"
             f"<td style='text-align:center;color:#888888;'>{row_num}</td>"
-            f"<td style='{ticker_style}'>{row['Ticker']}</td>"  # CHANGED: inline style -> {ticker_style}
+            f"<td style='{ticker_style}'>{row['Ticker']}</td>"
             f"<td style='text-align:center;color:#4ecdc4;font-weight:bold;{THICK_DIVIDER_STYLE}'>{row['Count']}</td>"
             f"<td style='text-align:center;'>{top20_mark}</td>"
-            f"{section_cells}{extra_cells}</tr>"
+            f"{section_cells}{extra_cells}{delta_cell}</tr>"
         )
 
     header_cells = "".join(
@@ -16865,6 +16938,7 @@ if master_rows:
         f"<th style='text-align:center;font-size:11px;white-space:nowrap;padding:4px 6px;'>{col}</th>"
         for col in extra_cols
     )
+    extra_header_cells += "<th style='text-align:center;font-size:11px;white-space:nowrap;padding:4px 6px;'>Δ vs Yday</th>"
 
     master_table_html = f"""
     <style>
