@@ -16938,7 +16938,7 @@ if master_rows:
         f"<th style='text-align:center;font-size:11px;white-space:nowrap;padding:4px 6px;'>{col}</th>"
         for col in extra_cols
     )
-    extra_header_cells += "<th style='text-align:center;font-size:11px;white-space:nowrap;padding:4px 6px;'>Δ vs Yday</th>"
+    extra_header_cells += "<th style='text-align:center;font-size:11px;white-space:nowrap;padding:4px 6px;'>Δ</th>"
 
     master_table_html = f"""
     <style>
