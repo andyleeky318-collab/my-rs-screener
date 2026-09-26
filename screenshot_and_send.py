@@ -128,7 +128,8 @@ WAKE_BUTTON_TEXTS = [
 SECTION_KEYWORDS = [
     "New Highs vs New Lows",
     "Refresh Theme Insight",
-    "Setup =",
+    #"Setup =",
+    "Distribution Cluster [",
     "Weekly vs Monthly",
     "Stage",
     #"Market Regime",

@@ -364,7 +364,7 @@ INDUSTRIES = {
 
 # Cleaned Known Stocks List Reference Array
 KNOWN_STOCKS = [
-    'NCLD', 'PALL', 'PLTM', 'IHF', 'ESTC', 'PRU', 'RGEN', 'UBS', 'TRV', 'WEN', 'OKLO', 'IBB', 'Q', 'OUST', 'VPG', 'WOLF', 'NOK', 'HSBC', 'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
+    'CME', 'ICE', 'NCLD', 'PALL', 'PLTM', 'IHF', 'ESTC', 'PRU', 'RGEN', 'UBS', 'TRV', 'WEN', 'OKLO', 'IBB', 'Q', 'OUST', 'VPG', 'WOLF', 'NOK', 'HSBC', 'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
     'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EWY', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'OR', 
     'OWL', 'Q', 'QQQ', 'RNG', 'RKT', 'SCCO', 'SHLD', 'SO', 'SOLS', 'SPMO', 'SPY', 'SPHB', 'TSEM', 'UNP', 'VTV', 
@@ -8751,7 +8751,7 @@ with st.spinner("Scanning for Two Botak History..."):
 two_botak_count_color = "#FF6B6B" if len(b_list) == 0 else "inherit"
 render_section_header_with_copy(
     lambda: st.markdown(
-        f"<h4>🧑‍🦲 Two Botak = Short term Group burst <span style='color:{two_botak_count_color}; font-weight:bold;'>({len(b_list)})</span></h4>",
+        f"<h4>🧑‍🦲🧑‍🦲 Two Botak = Short term Group burst <span style='color:{two_botak_count_color}; font-weight:bold;'>({len(b_list)})</span></h4>",
         unsafe_allow_html=True
     ),
     b_list
@@ -9009,7 +9009,7 @@ if pt_list or pt_yest:
         if atr_value is not None and atr_value < 4:
             suffix_color = "#00FF00"
         elif atr_value is not None and atr_value >= 10:
-            suffix_color = "#D8B4FE"  # light purple
+            suffix_color = "#C084FC"  # sharper purple
         else:
             suffix_color = "#888888"
         # NEW: top-20 industry glow
@@ -9297,7 +9297,8 @@ def fetch_wide_moat_tickers(tickers_tuple):
 value_trap_count_color = "#00FF00" if len(vt_list) == 0 else "inherit"
 render_section_header_with_copy(
     lambda: st.markdown(
-        f"<h4>⚠️ Value Trap = MAG7 & MOAT <span style='color:{value_trap_count_color}; font-weight:bold;'>({len(vt_list)})</span></h4>",
+        f"<h4>⚠️ Value Trap = MAG7 & MOAT <span style='color:{value_trap_count_color}; font-weight:bold;'>({len(vt_list)})</span> "
+        f"<span style='color:#888; font-size:12px; font-weight:normal;'>[Green = Stop Bleeding , Gold = Strong Moat]</span></h4>",
         unsafe_allow_html=True
     ),
     vt_list
@@ -9338,7 +9339,7 @@ if vt_list or vt_yest:
             if sym in wide_moat_tickers else ""
         )
         wick_glow = "box-shadow:0 0 8px 2px #00FF00; border:1px solid #00FF00;" if is_wick_or_doji else ""
-        html_vt += setup_badge(sym, is_new=(sym not in vt_yest_set), extra_suffix=suffix, extra_style=wick_glow or moat_glow)
+        html_vt += setup_badge(sym, is_new=(sym not in vt_yest_set), extra_suffix=suffix, extra_style=moat_glow or wick_glow)
     
     # Process and append removed stocks
     removed_vt = [sym for sym in vt_yest if sym not in current_vt_tickers]
@@ -9589,7 +9590,7 @@ with st.spinner("Scanning for Change / Breakdown of Character (Score Δ≥20)...
 # ═══════════════════ CHANGE OF CHARACTER (Δ ≥ +20) ═══════════════════
 render_section_header_with_copy(
     lambda: st.markdown(
-        f"#### 🔀 Change of Character ({len(coc_today)}) "
+        f"#### 🔺 Breakup of Character ({len(coc_today)}) "
         f"<span style='color:#888; font-size:12px;'>[Grey out = 2x CoC]</span>",
         unsafe_allow_html=True,
     ),
@@ -10925,7 +10926,7 @@ valid_breakout_history_v1, today_breakout_tickers_v1 = timed(
 )
 
 render_section_header_with_copy(
-    lambda: st.markdown(f"### 📈 Breakout Count ({len(today_breakout_tickers_v1)})"),
+    lambda: st.markdown(f"### 📈 Breakout Count Quality ({len(today_breakout_tickers_v1)})"),
     today_breakout_tickers_v1
 )
 if today_breakout_tickers_v1:
@@ -15543,7 +15544,7 @@ if hp_rows:
     hp_df.insert(0, "#", range(1, len(hp_df) + 1))
 
     _hp_deter_count = hp_df["Conclusion"].str.contains("Deterioration").sum()
-    _hp_regime = "Risk Off" if _hp_deter_count > len(hp_df) / 2 else "Risk On"
+    _hp_regime = "Edge Off" if _hp_deter_count > len(hp_df) / 2 else "Edge On"
     _hp_title_ph.markdown(f"#### 🩺 Healthy Pullback vs Deterioration ({_hp_regime})")
     with _hp_copy_ph.container():
         render_copy_button(hp_df["Ticker"].tolist())
@@ -15715,9 +15716,9 @@ if bh_rows:
 
     _bh_agg_score = bh_df["Score"].mean()
     if _bh_agg_score >= BH_HEALTHY_THRESHOLD:
-        _bh_verdict, _bh_color = "Healthy", "green"
+        _bh_verdict, _bh_color = "Edge On", "green"
     elif _bh_agg_score < BH_WEAK_THRESHOLD:
-        _bh_verdict, _bh_color = "Weak", "red"
+        _bh_verdict, _bh_color = "Edge Off", "red"
     else:
         _bh_verdict, _bh_color = "Neutral", "orange"
     _bh_title_ph.markdown(
