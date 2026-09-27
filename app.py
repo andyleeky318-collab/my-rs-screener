@@ -4626,6 +4626,7 @@ if all_data:
         f'<div style="text-align: right; font-size: 20px; color: #888888; margin-bottom: 4px; font-family: monospace;">'
         f'Setup = <span style="color: #4ecdc4; font-weight: bold;">{global_setup_count}</span>'
         f'<span style="color: #888888; font-size: 16px; margin-left: 6px;">{setup_rank_str}</span>'
+        f'<br>'
         f'<span style="color: #888888; font-size: 16px; margin-left: 14px;">⚠️ NaN-today: '
         f'<span style="color: #FF4B4B; font-weight: bold;">{len(_latest_nan_tickers)}</span></span>'
         f'</div>',
