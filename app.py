@@ -16917,16 +16917,16 @@ if master_rows:
         )
         _dv = row["Δ"]
         if _dv is None:
-            delta_cell = "<td style='text-align:center;color:#888888;'>-</td>"
+            delta_cell = f"<td style='text-align:center;color:#888888;{THICK_DIVIDER_STYLE}'>-</td>"
         else:
             _dcolor = "#00FF00" if _dv > 0 else "#FF4B4B" if _dv < 0 else "#888888"
             _dsign = f"+{_dv}" if _dv > 0 else str(_dv)
-            delta_cell = f"<td style='text-align:center;color:{_dcolor};font-weight:bold;'>{_dsign}</td>"
+            delta_cell = f"<td style='text-align:center;color:{_dcolor};font-weight:bold;{THICK_DIVIDER_STYLE}'>{_dsign}</td>"
         rows_html += (
             f"<tr style='background-color:{bg};'>"
             f"<td style='text-align:center;color:#888888;'>{row_num}</td>"
             f"<td style='{ticker_style}'>{row['Ticker']}</td>"
-            f"<td style='text-align:center;color:#4ecdc4;font-weight:bold;{THICK_DIVIDER_STYLE}'>{row['Count']}</td>"
+            f"<td style='text-align:center;color:#4ecdc4;font-weight:bold;'>{row['Count']}</td>"
             f"{delta_cell}"
             f"<td style='text-align:center;'>{top20_mark}</td>"
             f"{section_cells}{extra_cells}</tr>"
@@ -16958,8 +16958,8 @@ if master_rows:
     <thead><tr>
     <th style="width:30px; text-align:center;">#</th>
     <th style="text-align:center;">Ticker</th>
-    <th style="width:55px; text-align:center;{THICK_DIVIDER_STYLE}">Count</th>
-    <th style="text-align:center;font-size:11px;white-space:nowrap;padding:4px 6px;">Δ</th>
+    <th style="width:55px; text-align:center;">Count</th>
+    <th style="text-align:center;font-size:11px;white-space:nowrap;padding:4px 6px;{THICK_DIVIDER_STYLE}">Δ</th>
     <th style="width:70px; text-align:center;">Industry</th>
     {header_cells}
     {extra_header_cells}
