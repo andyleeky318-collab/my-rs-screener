@@ -15760,7 +15760,7 @@ else:
 # section or shared variable — all new names are unique.
 # ==============================================================================
 st.markdown("---")
-st.markdown("## 🧭 Lazy Exposure = % Invested, 21ema/50ma, 2R/1.5R TP, 2-stops/3-stops")
+st.markdown("## 🧭 Lazy Exposure = % Invested.. 21ema/50ma.. 2R/1.5R TP.. Sell 33%/50%.. 2/3-stops")
 
 # ── Standalone data fetches used only by the verdict (run first so they're
 # available when compute_market_verdict() executes) ─────────────────────────
@@ -16926,8 +16926,9 @@ if master_rows:
             f"<td style='text-align:center;color:#888888;'>{row_num}</td>"
             f"<td style='{ticker_style}'>{row['Ticker']}</td>"
             f"<td style='text-align:center;color:#4ecdc4;font-weight:bold;{THICK_DIVIDER_STYLE}'>{row['Count']}</td>"
+            f"{delta_cell}"
             f"<td style='text-align:center;'>{top20_mark}</td>"
-            f"{section_cells}{extra_cells}{delta_cell}</tr>"
+            f"{section_cells}{extra_cells}</tr>"
         )
 
     header_cells = "".join(
@@ -16939,17 +16940,15 @@ if master_rows:
         f"<th style='text-align:center;font-size:11px;white-space:nowrap;padding:4px 6px;'>{col}</th>"
         for col in extra_cols
     )
-    extra_header_cells += "<th style='text-align:center;font-size:11px;white-space:nowrap;padding:4px 6px;'>Δ</th>"
-
     master_table_html = f"""
     <style>
     .master-setup-table tbody tr:nth-child(21) td {{
         border-top: none !important;
     }}
     .master-setup-table th:nth-child(3), .master-setup-table td:nth-child(3),
-    .master-setup-table th:nth-child(5), .master-setup-table td:nth-child(5),
     .master-setup-table th:nth-child(6), .master-setup-table td:nth-child(6),
-    .master-setup-table th:nth-child(7), .master-setup-table td:nth-child(7) {{
+    .master-setup-table th:nth-child(7), .master-setup-table td:nth-child(7),
+    .master-setup-table th:nth-child(8), .master-setup-table td:nth-child(8) {{
         border-right: none !important;
     }}
     </style>
@@ -16959,6 +16958,7 @@ if master_rows:
     <th style="width:30px; text-align:center;">#</th>
     <th style="text-align:center;">Ticker</th>
     <th style="width:55px; text-align:center;{THICK_DIVIDER_STYLE}">Count</th>
+    <th style="text-align:center;font-size:11px;white-space:nowrap;padding:4px 6px;">Δ</th>
     <th style="width:70px; text-align:center;">Industry</th>
     {header_cells}
     {extra_header_cells}
