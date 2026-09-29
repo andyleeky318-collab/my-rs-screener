@@ -13711,6 +13711,127 @@ with ema21_col4:
     st.markdown(_atr_multiple_box_html("IWM 21EMA Extension", iwm_ema21_atr_mult, IWM_EMA21_ATR_THRESHOLD, iwm_ema21_atr_triggered), unsafe_allow_html=True)
 
 # ==============================================================================
+# % OF KNOWN_STOCKS BELOW THEIR OWN 50-DAY MOVING AVERAGE — breadth deterioration
+# tracker. Snapshotted to GitHub daily (same soft-fail pattern as the Breakout
+# Health / Lazy Table history), so the streak of consecutive days at/above the
+# 30% threshold can be counted across app runs. Box uses the same visual
+# format as the Distribution Day boxes above; flags red once the streak
+# reaches 10+ days.
+# ==============================================================================
+def compute_pct_below_sma50(stocks_list, _ticker_dfs):
+    below, total = 0, 0
+    for ticker in stocks_list:
+        df = _ticker_dfs.get(ticker)
+        if df is None or df.empty or len(df) < 50:
+            continue
+        close = df['Close']
+        sma50 = close.rolling(50).mean().iloc[-1]
+        if pd.isna(sma50):
+            continue
+        total += 1
+        if close.iloc[-1] < sma50:
+            below += 1
+    return (below / total * 100) if total > 0 else None
+
+def _github_filepath_below50(date_obj):
+    return f"pct_below_sma50_history/below50_{date_obj.isoformat()}.json"
+
+def save_pct_below_sma50_snapshot_github(date_obj, pct):
+    import json
+    repo   = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    if not repo or not st.secrets.get("GITHUB_TOKEN") or pct is None:
+        return
+    path = _github_filepath_below50(date_obj)
+    url  = f"{GITHUB_API}/repos/{repo}/contents/{path}"
+    content_str = json.dumps({"date": date_obj.isoformat(), "pct": round(float(pct), 1)})
+    content_b64 = base64.b64encode(content_str.encode()).decode()
+    sha = None
+    try:
+        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
+        if resp.status_code == 200:
+            sha = resp.json().get("sha")
+    except Exception:
+        pass
+    payload = {"message": f"% below 50DMA snapshot {date_obj.isoformat()}", "content": content_b64, "branch": branch}
+    if sha:
+        payload["sha"] = sha
+    try:
+        requests.put(url, headers=_github_headers(), json=payload, timeout=10)
+    except Exception:
+        pass
+
+@st.cache_data(ttl=3600)
+def load_pct_below_sma50_history_github(max_days=60):
+    import json
+    repo   = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    if not repo or not st.secrets.get("GITHUB_TOKEN"):
+        return pd.DataFrame()
+    url = f"{GITHUB_API}/repos/{repo}/contents/pct_below_sma50_history"
+    try:
+        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
+        if resp.status_code != 200:
+            return pd.DataFrame()
+        entries = sorted(resp.json(), key=lambda e: e["name"])[-max_days:]
+        rows = []
+        for entry in entries:
+            file_resp = requests.get(entry["url"], headers=_github_headers(), params={"ref": branch}, timeout=10)
+            if file_resp.status_code == 200:
+                rows.append(json.loads(base64.b64decode(file_resp.json()["content"]).decode()))
+        return pd.DataFrame(rows)
+    except Exception:
+        return pd.DataFrame()
+
+def _pct_below_sma50_box_html(label, pct, streak_days, triggered):
+    if triggered:
+        bg, border, text_color = "#2a1212", "#4a1f1f", "#ff5252"
+    else:
+        bg, border, text_color = "#0d2818", "#1a4a2e", "#00e676"
+
+    pct_str = f"{pct:.1f}%" if pct is not None else "n/a"
+
+    return f"""
+    <div style="background:{bg}; border:2px solid {border}; border-radius:8px;
+                padding:12px; min-height:120px;">
+        <div style="font-size:14px; font-weight:bold; color:{text_color}; margin-bottom:6px;">
+            {label}
+        </div>
+        <div style="font-size:22px; font-weight:900; color:{text_color}; margin-bottom:6px;">
+            {streak_days} days
+        </div>
+        <div style="font-size:11px; color:#ccc; line-height:1.4; word-wrap:break-word;">
+            {pct_str} of stocks below 50DMA (streak while >= 30%)
+        </div>
+    </div>
+    """
+
+pct_below_sma50 = timed("compute_pct_below_sma50", compute_pct_below_sma50, stocks_tuple, ticker_dfs_shared)
+
+_below50_today = datetime.date.today()
+timed("save_pct_below_sma50_snapshot_github", save_pct_below_sma50_snapshot_github, _below50_today, pct_below_sma50)
+_below50_hist_df = timed("load_pct_below_sma50_history_github", load_pct_below_sma50_history_github)
+
+_below30_streak = 0
+if pct_below_sma50 is not None and pct_below_sma50 >= 30:
+    _below30_streak = 1
+    if not _below50_hist_df.empty:
+        for _pct in reversed(_below50_hist_df["pct"].tolist()):
+            if _pct >= 30:
+                _below30_streak += 1
+            else:
+                break
+
+_below30_triggered = _below30_streak >= 10
+
+st.write("")
+
+below50_col1, below50_col2, below50_col3, below50_col4 = st.columns(4)
+
+with below50_col1:
+    st.markdown(_pct_below_sma50_box_html("Stocks < 50DMA", pct_below_sma50, _below30_streak, _below30_triggered), unsafe_allow_html=True)
+
+# ==============================================================================
 # MASTER SETUP CONSOLIDATION TABLE
 # Aggregates every tracked screen into one ticker x section table, ticked where
 # a ticker currently qualifies for that section, sorted by how many sections
