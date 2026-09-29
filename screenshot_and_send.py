@@ -147,7 +147,7 @@ SECTION_KEYWORDS = [
     "PowerTrend = Thematic Parabolic",
     "Volatility = ",
     "Value Trap = ",
-    "Change of Character",
+    "Breakup of Character",
     "Breakdown of Character",
     "Biggest Move Today",    
     "Pie Chart",
