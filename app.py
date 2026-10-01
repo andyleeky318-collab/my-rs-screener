@@ -9248,15 +9248,25 @@ def fetch_wide_moat_tickers(tickers_tuple):
       - No more than 1 negative-ROE year, with at least 3 years of data
     On ANY failure (missing key, bad response, ticker not covered,
     malformed data) that ticker is silently skipped — never flagged,
-    never raises. Returns a set of tickers considered wide-moat.
+    never raises. Returns (moat_set, diagnostics) — diagnostics records
+    WHY each skipped ticker was skipped, since the FMP key is shared with
+    other sections of the app (e.g. IBD ticker-name resolution) and can
+    hit its daily/rate-limit quota, which otherwise looks identical to
+    "no tickers here have a moat."
     """
     fmp_key = st.secrets.get("FMP_API_KEY")
     moat_set = set()
+    diag = {"no_key": False, "checked": 0, "http_errors": 0, "no_data": 0,
+            "insufficient_history": 0, "qualified": 0, "sample_errors": []}
 
-    if not fmp_key or not tickers_tuple:
-        return moat_set
+    if not fmp_key:
+        diag["no_key"] = True
+        return moat_set, diag
+    if not tickers_tuple:
+        return moat_set, diag
 
     for ticker in tickers_tuple:
+        diag["checked"] += 1
         try:
             resp = requests.get(
                 "https://financialmodelingprep.com/stable/key-metrics",
@@ -9267,6 +9277,7 @@ def fetch_wide_moat_tickers(tickers_tuple):
             data = resp.json()
 
             if not data or not isinstance(data, list):
+                diag["no_data"] += 1
                 continue
 
             roe_vals = [
@@ -9279,6 +9290,7 @@ def fetch_wide_moat_tickers(tickers_tuple):
             ]
 
             if len(roe_vals) < 3:
+                diag["insufficient_history"] += 1
                 continue
 
             avg_roe = sum(roe_vals) / len(roe_vals)
@@ -9287,12 +9299,16 @@ def fetch_wide_moat_tickers(tickers_tuple):
 
             if avg_roe >= 0.15 and avg_roic >= 0.12 and negative_years <= 1:
                 moat_set.add(ticker)
+                diag["qualified"] += 1
 
-        except Exception:
+        except Exception as e:
             # Fallback: treat as not-wide-moat, never error out
+            diag["http_errors"] += 1
+            if len(diag["sample_errors"]) < 3:
+                diag["sample_errors"].append(f"{ticker}: {e}")
             continue
 
-    return moat_set
+    return moat_set, diag
 
 # --- 6. VALUE TRAP (Full Horizontal Row Below PowerTrend Not Extended) ---
 value_trap_count_color = "#00FF00" if len(vt_list) == 0 else "inherit"
@@ -9313,10 +9329,18 @@ if vt_list or vt_yest:
     # NEW: check wide-moat status for today's Value Trap tickers only
     vt_syms_for_moat = tuple(sorted(current_vt_tickers))
     with st.spinner("Checking wide-moat status..."):
-        wide_moat_tickers = timed(
+        wide_moat_tickers, wide_moat_diag = timed(
             "fetch_wide_moat_tickers",
             fetch_wide_moat_tickers,
             vt_syms_for_moat
+        )
+    if wide_moat_diag["no_key"]:
+        st.caption("⚠️ Wide-moat check skipped: FMP_API_KEY not configured.")
+    elif wide_moat_diag["http_errors"] > 0:
+        st.caption(
+            f"⚠️ Wide-moat check: {wide_moat_diag['http_errors']}/{wide_moat_diag['checked']} ticker(s) "
+            f"failed the FMP API call (likely rate-limited — this key is shared with other sections) "
+            f"and were skipped, not flagged. Sample: {'; '.join(wide_moat_diag['sample_errors'])}"
         )
 
     for item in vt_list:
@@ -9327,10 +9351,12 @@ if vt_list or vt_yest:
         # NEW: green glow if today's candle is a long bottom wick or doji,
         # OR the stock has stopped bleeding via other "stabilizing" signals:
         # 3 straight days of contracting daily range (volatility cooling
-        # off), a bullish engulfing bar (buyers took control), or two botak
-        # candles in a row (close pinned near the high, no upper wick).
+        # off), a bullish engulfing bar (buyers took control), two botak
+        # candles in a row (close pinned near the high, no upper wick), or a
+        # standalone doji (tiny body with wicks on both sides — indecision).
         _df_vt = ticker_dfs_shared.get(sym)
         is_wick_or_doji = False
+        is_doji = False
         is_stabilized_3d = False
         is_bullish_engulf = False
         is_two_botak = False
@@ -9339,8 +9365,10 @@ if vt_list or vt_yest:
             _rng = _h - _l
             if _rng > 0:
                 _lower_wick_pct = (min(_o, _c) - _l) / _rng
+                _upper_wick_pct = (_h - max(_o, _c)) / _rng
                 _body_pct = abs(_c - _o) / _rng
                 is_wick_or_doji = _lower_wick_pct > 0.5 or _body_pct < 0.1
+                is_doji = _body_pct < 0.1 and _lower_wick_pct > 0.1 and _upper_wick_pct > 0.1
 
             if len(_df_vt) >= 23:
                 _range_pct_vt = (_df_vt['High'] - _df_vt['Low']) / _df_vt['Close'] * 100
@@ -9359,7 +9387,7 @@ if vt_list or vt_yest:
             "box-shadow:0 0 8px 2px #FF0000; border:1px solid #FF0000;"
             if sym in wide_moat_tickers else ""
         )
-        stopped_bleeding = is_wick_or_doji or is_stabilized_3d or is_bullish_engulf or is_two_botak
+        stopped_bleeding = is_wick_or_doji or is_doji or is_stabilized_3d or is_bullish_engulf or is_two_botak
         wick_glow = "box-shadow:0 0 8px 2px #00FF00; border:1px solid #00FF00;" if stopped_bleeding else ""
         html_vt += setup_badge(sym, is_new=(sym not in vt_yest_set), extra_suffix=suffix, extra_style=moat_glow or wick_glow)
     
