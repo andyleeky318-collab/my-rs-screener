@@ -9324,9 +9324,14 @@ if vt_list or vt_yest:
         atr_value = item[1] if isinstance(item, tuple) else None
         suffix = f"{atr_value:.1f}x" if atr_value is not None else ""
 
-        # NEW: green glow if today's candle is a long bottom wick or doji
+        # NEW: green glow if today's candle is a long bottom wick or doji,
+        # OR the stock has stopped bleeding via one of two other "stabilizing"
+        # signals: 3 straight days of contracting daily range (volatility
+        # cooling off), or a bullish engulfing bar (buyers took control).
         _df_vt = ticker_dfs_shared.get(sym)
         is_wick_or_doji = False
+        is_stabilized_3d = False
+        is_bullish_engulf = False
         if _df_vt is not None and len(_df_vt) >= 1:
             _o, _h, _l, _c = _df_vt['Open'].iloc[-1], _df_vt['High'].iloc[-1], _df_vt['Low'].iloc[-1], _df_vt['Close'].iloc[-1]
             _rng = _h - _l
@@ -9335,11 +9340,21 @@ if vt_list or vt_yest:
                 _body_pct = abs(_c - _o) / _rng
                 is_wick_or_doji = _lower_wick_pct > 0.5 or _body_pct < 0.1
 
+            if len(_df_vt) >= 23:
+                _range_pct_vt = (_df_vt['High'] - _df_vt['Low']) / _df_vt['Close'] * 100
+                _avg_range20_vt = _range_pct_vt.rolling(20).mean()
+                is_stabilized_3d = bool((_range_pct_vt.iloc[-3:] < _avg_range20_vt.iloc[-3:]).all())
+
+            if len(_df_vt) >= 2:
+                _po, _ph, _pl = _df_vt['Open'].iloc[-2], _df_vt['High'].iloc[-2], _df_vt['Low'].iloc[-2]
+                is_bullish_engulf = _o < _pl and _c > _ph
+
         moat_glow = (
             "box-shadow:0 0 8px 2px #FF0000; border:1px solid #FF0000;"
             if sym in wide_moat_tickers else ""
         )
-        wick_glow = "box-shadow:0 0 8px 2px #00FF00; border:1px solid #00FF00;" if is_wick_or_doji else ""
+        stopped_bleeding = is_wick_or_doji or is_stabilized_3d or is_bullish_engulf
+        wick_glow = "box-shadow:0 0 8px 2px #00FF00; border:1px solid #00FF00;" if stopped_bleeding else ""
         html_vt += setup_badge(sym, is_new=(sym not in vt_yest_set), extra_suffix=suffix, extra_style=moat_glow or wick_glow)
     
     # Process and append removed stocks
