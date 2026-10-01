@@ -13512,7 +13512,7 @@ def _dist_box_html(label, count, dates, triggered):
 
     return f"""
     <div style="background:{bg}; border:2px solid {border}; border-radius:8px;
-                padding:12px; min-height:120px;">
+                padding:12px; min-height:102px;">
         <div style="font-size:14px; font-weight:bold; color:{text_color}; margin-bottom:6px;">
             {label}
         </div>
@@ -13626,7 +13626,7 @@ def _atr_multiple_box_html(label, value, threshold, triggered):
 
     return f"""
     <div style="background:{bg}; border:2px solid {border}; border-radius:8px;
-                padding:12px; min-height:120px;">
+                padding:12px; min-height:102px;">
         <div style="font-size:14px; font-weight:bold; color:{text_color}; margin-bottom:6px;">
             {label}
         </div>
@@ -13793,7 +13793,7 @@ def _pct_below_sma50_box_html(label, pct, streak_days, triggered):
 
     return f"""
     <div style="background:{bg}; border:2px solid {border}; border-radius:8px;
-                padding:12px; min-height:120px;">
+                padding:12px; min-height:102px;">
         <div style="font-size:14px; font-weight:bold; color:{text_color}; margin-bottom:6px;">
             {label}
         </div>
