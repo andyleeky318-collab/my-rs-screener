@@ -9325,13 +9325,15 @@ if vt_list or vt_yest:
         suffix = f"{atr_value:.1f}x" if atr_value is not None else ""
 
         # NEW: green glow if today's candle is a long bottom wick or doji,
-        # OR the stock has stopped bleeding via one of two other "stabilizing"
-        # signals: 3 straight days of contracting daily range (volatility
-        # cooling off), or a bullish engulfing bar (buyers took control).
+        # OR the stock has stopped bleeding via other "stabilizing" signals:
+        # 3 straight days of contracting daily range (volatility cooling
+        # off), a bullish engulfing bar (buyers took control), or two botak
+        # candles in a row (close pinned near the high, no upper wick).
         _df_vt = ticker_dfs_shared.get(sym)
         is_wick_or_doji = False
         is_stabilized_3d = False
         is_bullish_engulf = False
+        is_two_botak = False
         if _df_vt is not None and len(_df_vt) >= 1:
             _o, _h, _l, _c = _df_vt['Open'].iloc[-1], _df_vt['High'].iloc[-1], _df_vt['Low'].iloc[-1], _df_vt['Close'].iloc[-1]
             _rng = _h - _l
@@ -9346,14 +9348,18 @@ if vt_list or vt_yest:
                 is_stabilized_3d = bool((_range_pct_vt.iloc[-3:] < _avg_range20_vt.iloc[-3:]).all())
 
             if len(_df_vt) >= 2:
-                _po, _ph, _pl = _df_vt['Open'].iloc[-2], _df_vt['High'].iloc[-2], _df_vt['Low'].iloc[-2]
+                _po, _ph, _pl, _pc = _df_vt['Open'].iloc[-2], _df_vt['High'].iloc[-2], _df_vt['Low'].iloc[-2], _df_vt['Close'].iloc[-2]
                 is_bullish_engulf = _o < _pl and _c > _ph
+
+                def _is_botak(o, h, c):
+                    return (abs(c - h) < 0.05 and c > o) or (c > o and ((c - o) / (h - o if h != o else 0.001)) > 0.9)
+                is_two_botak = _is_botak(_o, _h, _c) and _is_botak(_po, _ph, _pc)
 
         moat_glow = (
             "box-shadow:0 0 8px 2px #FF0000; border:1px solid #FF0000;"
             if sym in wide_moat_tickers else ""
         )
-        stopped_bleeding = is_wick_or_doji or is_stabilized_3d or is_bullish_engulf
+        stopped_bleeding = is_wick_or_doji or is_stabilized_3d or is_bullish_engulf or is_two_botak
         wick_glow = "box-shadow:0 0 8px 2px #00FF00; border:1px solid #00FF00;" if stopped_bleeding else ""
         html_vt += setup_badge(sym, is_new=(sym not in vt_yest_set), extra_suffix=suffix, extra_style=moat_glow or wick_glow)
     
