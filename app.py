@@ -7763,8 +7763,8 @@ def is_ppp_tight_prior_3bars(df):
         if pd.isna(sens) or pd.isna(day1) or pd.isna(day2) or pd.isna(day3) or day2 == 0 or day3 == 0:
             return False
 
-        diff1 = abs(day1 - day2) / day2
-        diff2 = abs(day2 - day3) / day3
+        diff1 = abs(day1 - day2) / day2 * 100
+        diff2 = abs(day2 - day3) / day3 * 100
         return bool(diff1 < sens and diff2 < sens)
     except Exception:
         return False
