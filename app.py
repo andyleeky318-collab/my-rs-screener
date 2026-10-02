@@ -7898,7 +7898,7 @@ render_section_header_with_copy(
         f"""
         <h4>
             📐 Downtrend Line Breakout ({len(downtrend_today)})
-            <span style="color:#888; font-size:12px; font-weight:normal;">(Star = High Volume) (green glow = PPP breakout)</span>
+            <span style="color:#888; font-size:12px; font-weight:normal;">(Star = High Volume, Green glow = PPP breakout)</span>
         </h4>
         """,
         unsafe_allow_html=True,
@@ -7929,9 +7929,9 @@ if downtrend_today or downtrend_yest:
         # is a stronger, lower-risk entry than a breakout alone. Top-20-
         # industry red glow still takes precedence when both apply.
         is_ppp = is_ppp_tight_prior_3bars(df)
-        if is_top20_industry:
-            glow_style = "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
-        elif is_ppp:
+        #if is_top20_industry:
+        #    glow_style = "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+        if is_ppp:
             glow_style = "box-shadow:0 0 8px 2px #00FF00; border:1px solid #00FF00;"
         else:
             glow_style = ""
@@ -9292,53 +9292,56 @@ st.markdown("---")
 @st.cache_data(ttl=86400)
 def fetch_wide_moat_tickers(tickers_tuple):
     """
-    Approximate 'wide moat' flag using FMP fundamental data.
-    FMP has no direct moat field, so this proxies durable competitive
-    advantage via sustained high returns on capital:
+    Approximate 'wide moat' flag using yfinance's free annual financial
+    statements (no API key, no paid tier — FMP's key-metrics endpoint
+    turned out to be premium-only on the free plan, returning 402 Payment
+    Required regardless of the 'limit' param, so this replaces it entirely).
+    Proxies durable competitive advantage via sustained high returns on
+    capital, computed directly from each ticker's own income statement /
+    balance sheet (up to ~4-5 annual periods that yfinance exposes):
+      - ROE = Net Income / Stockholders Equity
+      - ROIC = EBIT * (1 - effective tax rate) / Invested Capital
       - Avg ROE >= 15% and Avg ROIC >= 12% over available annual years
       - No more than 1 negative-ROE year, with at least 3 years of data
-    On ANY failure (missing key, bad response, ticker not covered,
-    malformed data) that ticker is silently skipped — never flagged,
-    never raises. Returns (moat_set, diagnostics) — diagnostics records
-    WHY each skipped ticker was skipped, since the FMP key is shared with
-    other sections of the app (e.g. IBD ticker-name resolution) and can
-    hit its daily/rate-limit quota, which otherwise looks identical to
-    "no tickers here have a moat."
+    On ANY failure (ticker not covered, missing fields, malformed data)
+    that ticker is silently skipped — never flagged, never raises.
+    Returns (moat_set, diagnostics).
     """
-    fmp_key = st.secrets.get("FMP_API_KEY")
     moat_set = set()
-    diag = {"no_key": False, "checked": 0, "http_errors": 0, "no_data": 0,
+    diag = {"checked": 0, "errors": 0, "no_data": 0,
             "insufficient_history": 0, "qualified": 0, "sample_errors": []}
 
-    if not fmp_key:
-        diag["no_key"] = True
-        return moat_set, diag
     if not tickers_tuple:
         return moat_set, diag
 
     for ticker in tickers_tuple:
         diag["checked"] += 1
         try:
-            resp = requests.get(
-                "https://financialmodelingprep.com/stable/key-metrics",
-                params={"symbol": ticker, "period": "annual", "limit": 5, "apikey": fmp_key},
-                timeout=10,
-            )
-            resp.raise_for_status()
-            data = resp.json()
+            tk = yf.Ticker(ticker)
+            inc = tk.income_stmt
+            bs = tk.balance_sheet
 
-            if not data or not isinstance(data, list):
+            if inc is None or bs is None or inc.empty or bs.empty:
                 diag["no_data"] += 1
                 continue
 
-            roe_vals = [
-                d.get("roe") for d in data
-                if isinstance(d, dict) and isinstance(d.get("roe"), (int, float))
-            ]
-            roic_vals = [
-                d.get("roic") for d in data
-                if isinstance(d, dict) and isinstance(d.get("roic"), (int, float))
-            ]
+            roe_vals, roic_vals = [], []
+            for col in inc.columns:
+                try:
+                    net_income = inc.loc["Net Income", col]
+                    equity = bs.loc["Stockholders Equity", col]
+                    if pd.notna(net_income) and pd.notna(equity) and equity != 0:
+                        roe_vals.append(net_income / equity)
+
+                    ebit = inc.loc["EBIT", col]
+                    invested_capital = bs.loc["Invested Capital", col]
+                    pretax = inc.loc["Pretax Income", col]
+                    tax = inc.loc["Tax Provision", col]
+                    tax_rate = (tax / pretax) if pd.notna(tax) and pd.notna(pretax) and pretax != 0 else 0.21
+                    if pd.notna(ebit) and pd.notna(invested_capital) and invested_capital != 0:
+                        roic_vals.append((ebit * (1 - tax_rate)) / invested_capital)
+                except (KeyError, ZeroDivisionError):
+                    continue
 
             if len(roe_vals) < 3:
                 diag["insufficient_history"] += 1
@@ -9353,8 +9356,7 @@ def fetch_wide_moat_tickers(tickers_tuple):
                 diag["qualified"] += 1
 
         except Exception as e:
-            # Fallback: treat as not-wide-moat, never error out
-            diag["http_errors"] += 1
+            diag["errors"] += 1
             if len(diag["sample_errors"]) < 3:
                 diag["sample_errors"].append(f"{ticker}: {e}")
             continue
@@ -9385,13 +9387,11 @@ if vt_list or vt_yest:
             fetch_wide_moat_tickers,
             vt_syms_for_moat
         )
-    if wide_moat_diag["no_key"]:
-        st.caption("⚠️ Wide-moat check skipped: FMP_API_KEY not configured.")
-    elif wide_moat_diag["http_errors"] > 0:
+    if wide_moat_diag["errors"] > 0:
         st.caption(
-            f"⚠️ Wide-moat check: {wide_moat_diag['http_errors']}/{wide_moat_diag['checked']} ticker(s) "
-            f"failed the FMP API call (likely rate-limited — this key is shared with other sections) "
-            f"and were skipped, not flagged. Sample: {'; '.join(wide_moat_diag['sample_errors'])}"
+            f"⚠️ Wide-moat check: {wide_moat_diag['errors']}/{wide_moat_diag['checked']} ticker(s) "
+            f"failed to fetch yfinance financials and were skipped, not flagged. "
+            f"Sample: {'; '.join(wide_moat_diag['sample_errors'])}"
         )
 
     for item in vt_list:
@@ -10178,15 +10178,20 @@ def _render_volume_badges(sym_list, vol_map):  # CHANGED: dropped badge_color_st
         html_v += setup_badge(sym, extra_style=glow_style)  # CHANGED: base = precedence
     st.markdown(html_v, unsafe_allow_html=True)
 
+_TIGHT_SPACER = "<div style='margin-top:-18px;'></div>"
+
 render_section_header_with_copy(lambda: st.markdown(f"<p style='margin-bottom:2px;'><strong>🔴 HVE Cluster ({len(hve_syms)})</strong></p>", unsafe_allow_html=True), hve_syms)
+st.markdown(_TIGHT_SPACER, unsafe_allow_html=True)
 _render_volume_badges(hve_syms, unusual_vol_map)  # CHANGED: removed style arg
 
 st.write("")
 render_section_header_with_copy(lambda: st.markdown(f"<p style='margin-bottom:2px;'><strong>🟠 HVQ Cluster ({len(hvq_syms)})</strong></p>", unsafe_allow_html=True), hvq_syms)
+st.markdown(_TIGHT_SPACER, unsafe_allow_html=True)
 _render_volume_badges(hvq_syms, unusual_vol_map)  # CHANGED: removed style arg
 
 st.write("")
 render_section_header_with_copy(lambda: st.markdown(f"<p style='margin-bottom:2px;'><strong>🟡 HVM Cluster ({len(hvm_syms)})</strong></p>", unsafe_allow_html=True), hvm_syms)
+st.markdown(_TIGHT_SPACER, unsafe_allow_html=True)
 _render_volume_badges(hvm_syms, unusual_vol_map)  # CHANGED: removed style arg
 
 #st.markdown(html_e2, unsafe_allow_html=True)
