@@ -10178,21 +10178,32 @@ def _render_volume_badges(sym_list, vol_map):  # CHANGED: dropped badge_color_st
         html_v += setup_badge(sym, extra_style=glow_style)  # CHANGED: base = precedence
     st.markdown(html_v, unsafe_allow_html=True)
 
-_TIGHT_SPACER = "<div style='margin-top:-18px;'></div>"
+st.markdown(
+    """
+    <style>
+    div.st-key-hve_cluster, div.st-key-hve_cluster > div[data-testid="stVerticalBlock"],
+    div.st-key-hvq_cluster, div.st-key-hvq_cluster > div[data-testid="stVerticalBlock"],
+    div.st-key-hvm_cluster, div.st-key-hvm_cluster > div[data-testid="stVerticalBlock"] {
+        gap: 0.15rem !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-render_section_header_with_copy(lambda: st.markdown(f"<p style='margin-bottom:2px;'><strong>🔴 HVE Cluster ({len(hve_syms)})</strong></p>", unsafe_allow_html=True), hve_syms)
-st.markdown(_TIGHT_SPACER, unsafe_allow_html=True)
-_render_volume_badges(hve_syms, unusual_vol_map)  # CHANGED: removed style arg
+with st.container(key="hve_cluster"):
+    render_section_header_with_copy(lambda: st.markdown(f"<p style='margin:0;'><strong>🔴 HVE Cluster ({len(hve_syms)})</strong></p>", unsafe_allow_html=True), hve_syms)
+    _render_volume_badges(hve_syms, unusual_vol_map)  # CHANGED: removed style arg
 
 st.write("")
-render_section_header_with_copy(lambda: st.markdown(f"<p style='margin-bottom:2px;'><strong>🟠 HVQ Cluster ({len(hvq_syms)})</strong></p>", unsafe_allow_html=True), hvq_syms)
-st.markdown(_TIGHT_SPACER, unsafe_allow_html=True)
-_render_volume_badges(hvq_syms, unusual_vol_map)  # CHANGED: removed style arg
+with st.container(key="hvq_cluster"):
+    render_section_header_with_copy(lambda: st.markdown(f"<p style='margin:0;'><strong>🟠 HVQ Cluster ({len(hvq_syms)})</strong></p>", unsafe_allow_html=True), hvq_syms)
+    _render_volume_badges(hvq_syms, unusual_vol_map)  # CHANGED: removed style arg
 
 st.write("")
-render_section_header_with_copy(lambda: st.markdown(f"<p style='margin-bottom:2px;'><strong>🟡 HVM Cluster ({len(hvm_syms)})</strong></p>", unsafe_allow_html=True), hvm_syms)
-st.markdown(_TIGHT_SPACER, unsafe_allow_html=True)
-_render_volume_badges(hvm_syms, unusual_vol_map)  # CHANGED: removed style arg
+with st.container(key="hvm_cluster"):
+    render_section_header_with_copy(lambda: st.markdown(f"<p style='margin:0;'><strong>🟡 HVM Cluster ({len(hvm_syms)})</strong></p>", unsafe_allow_html=True), hvm_syms)
+    _render_volume_badges(hvm_syms, unusual_vol_map)  # CHANGED: removed style arg
 
 #st.markdown(html_e2, unsafe_allow_html=True)
 
