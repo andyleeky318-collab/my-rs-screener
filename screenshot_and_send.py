@@ -138,7 +138,7 @@ SECTION_KEYWORDS = [
     #"Retry AI Analysis",
     "True Market Leader",
     "PPP = Opportunity",
-    "RS NH B4 Price = Opportunity",
+    #"RS NH B4 Price = Opportunity",
     "Gapper Earning Drift = Opportunity",
     "Early Bull = buyable",
     "Two Botak = Short term Group burst",
@@ -149,7 +149,8 @@ SECTION_KEYWORDS = [
     "Value Trap = ",
     "Breakup of Character",
     "Breakdown of Character",
-    "Biggest Move Today",    
+    "Biggest Move Today",
+    "Gap Up (",
     "Pie Chart",
     #"ETF Ratio",
     "Pullback Setup Quality",
@@ -168,7 +169,7 @@ SECTION_KEYWORDS = [
     "Lazy Table",
     "Lazy Charts",
     "Stage 2 vs Stage 4",
-    "Test Time",
+    #"Test Time",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the

@@ -3193,6 +3193,16 @@ def generate_top_industries_theme_insight(
 
     top_rows = df_main_sorted.head(top_n_industries)
 
+    # Tickers currently making a fresh 52-week low are excluded from each
+    # industry's "top" RS list below — a stock can still carry a decent
+    # normalized RS score (it's only a 90-day lookback) while its absolute
+    # price is breaking down, and showing it as supporting evidence for an
+    # otherwise-strong industry (e.g. POOL under a "strong" theme) is
+    # misleading. If an industry's only qualifying members are new-low
+    # tickers, its bracket simply comes up empty, same as an industry with
+    # no KNOWN_STOCKS members at all.
+    _new_low_set = set(new_low_tickers or [])
+
     lines = []
     for _, row in top_rows.iterrows():
         industry = row["Industry"]
@@ -3200,6 +3210,7 @@ def generate_top_industries_theme_insight(
         top_tickers = ""
         if item is not None:
             known_only = item["Tickers"][item["Tickers"]["Ticker"].isin(KNOWN_STOCKS)]
+            known_only = known_only[~known_only["Ticker"].isin(_new_low_set)]
             top5 = known_only.sort_values("RS Score", ascending=False).head(5)
             top_tickers = ", ".join(f"{t}({s:.0f})" for t, s in zip(top5["Ticker"], top5["RS Score"]))
 
@@ -7726,6 +7737,38 @@ else:
 # ==============================================================================
 st.markdown("---")
 
+def is_ppp_tight_prior_3bars(df):
+    """True if the 3 bars BEFORE today (bars -2,-3,-4 — i.e. excluding
+    today's own bar) show PPP-style tight consolidation: consecutive
+    open/close midpoints within a dynamic ATR-based sensitivity band.
+    Mirrors the PPP tightness formula from process_pattern_scanners, but
+    evaluated as of yesterday's close so a breakout bar itself (which is
+    expected to be a big move, not tight) never has to satisfy it."""
+    try:
+        if df is None or len(df) < 18:
+            return False
+        o, h, l, c = df["Open"], df["High"], df["Low"], df["Close"]
+        tr = pd.concat([
+            h - l,
+            (h - c.shift(1)).abs(),
+            (l - c.shift(1)).abs()
+        ], axis=1).max(axis=1)
+        atr14 = tr.rolling(14).mean()
+        atr_pct = atr14 / c * 100
+        sensitivity = atr_pct * 0.2
+        midpoint = (o + c) / 2
+
+        day1, day2, day3 = midpoint.iloc[-2], midpoint.iloc[-3], midpoint.iloc[-4]
+        sens = sensitivity.iloc[-2]
+        if pd.isna(sens) or pd.isna(day1) or pd.isna(day2) or pd.isna(day3) or day2 == 0 or day3 == 0:
+            return False
+
+        diff1 = abs(day1 - day2) / day2
+        diff2 = abs(day2 - day3) / day3
+        return bool(diff1 < sens and diff2 < sens)
+    except Exception:
+        return False
+
 def is_volume_above_50d_avg(df):
     """True if the latest bar's Volume is above its 50-day average volume."""
     try:
@@ -7855,7 +7898,7 @@ render_section_header_with_copy(
         f"""
         <h4>
             📐 Downtrend Line Breakout ({len(downtrend_today)})
-            <span style="color:#888; font-size:12px; font-weight:normal;">(Star = High Volume)</span>
+            <span style="color:#888; font-size:12px; font-weight:normal;">(Star = High Volume) (green glow = PPP breakout)</span>
         </h4>
         """,
         unsafe_allow_html=True,
@@ -7880,10 +7923,18 @@ if downtrend_today or downtrend_yest:
         ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
         is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
 
-        glow_style = (
-            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
-            if is_top20_industry else ""
-        )
+        # NEW: green glow if the 3 bars BEFORE today's breakout (not
+        # today's own bar, which is expected to be a big move) were a tight,
+        # PPP-style consolidation — a downtrend line breakout out of a coil
+        # is a stronger, lower-risk entry than a breakout alone. Top-20-
+        # industry red glow still takes precedence when both apply.
+        is_ppp = is_ppp_tight_prior_3bars(df)
+        if is_top20_industry:
+            glow_style = "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+        elif is_ppp:
+            glow_style = "box-shadow:0 0 8px 2px #00FF00; border:1px solid #00FF00;"
+        else:
+            glow_style = ""
 
         vol_above_avg = is_volume_above_50d_avg(df)
 
@@ -9270,7 +9321,7 @@ def fetch_wide_moat_tickers(tickers_tuple):
         try:
             resp = requests.get(
                 "https://financialmodelingprep.com/stable/key-metrics",
-                params={"symbol": ticker, "period": "annual", "limit": 10, "apikey": fmp_key},
+                params={"symbol": ticker, "period": "annual", "limit": 5, "apikey": fmp_key},
                 timeout=10,
             )
             resp.raise_for_status()
@@ -9640,7 +9691,7 @@ with st.spinner("Scanning for Change / Breakdown of Character (Score Δ≥20)...
 # ═══════════════════ CHANGE OF CHARACTER (Δ ≥ +20) ═══════════════════
 render_section_header_with_copy(
     lambda: st.markdown(
-        f"#### 🔺 Breakup of Character ({len(coc_today)}) "
+        f"#### ▲ Breakup of Character ({len(coc_today)}) "
         f"<span style='color:#888; font-size:12px;'>[Grey out = 2x CoC]</span>",
         unsafe_allow_html=True,
     ),
@@ -10127,15 +10178,15 @@ def _render_volume_badges(sym_list, vol_map):  # CHANGED: dropped badge_color_st
         html_v += setup_badge(sym, extra_style=glow_style)  # CHANGED: base = precedence
     st.markdown(html_v, unsafe_allow_html=True)
 
-render_section_header_with_copy(lambda: st.markdown(f"**🔴 HVE Cluster ({len(hve_syms)})**"), hve_syms)
+render_section_header_with_copy(lambda: st.markdown(f"<p style='margin-bottom:2px;'><strong>🔴 HVE Cluster ({len(hve_syms)})</strong></p>", unsafe_allow_html=True), hve_syms)
 _render_volume_badges(hve_syms, unusual_vol_map)  # CHANGED: removed style arg
 
 st.write("")
-render_section_header_with_copy(lambda: st.markdown(f"**🟠 HVQ Cluster ({len(hvq_syms)})**"), hvq_syms)
+render_section_header_with_copy(lambda: st.markdown(f"<p style='margin-bottom:2px;'><strong>🟠 HVQ Cluster ({len(hvq_syms)})</strong></p>", unsafe_allow_html=True), hvq_syms)
 _render_volume_badges(hvq_syms, unusual_vol_map)  # CHANGED: removed style arg
 
 st.write("")
-render_section_header_with_copy(lambda: st.markdown(f"**🟡 HVM Cluster ({len(hvm_syms)})**"), hvm_syms)
+render_section_header_with_copy(lambda: st.markdown(f"<p style='margin-bottom:2px;'><strong>🟡 HVM Cluster ({len(hvm_syms)})</strong></p>", unsafe_allow_html=True), hvm_syms)
 _render_volume_badges(hvm_syms, unusual_vol_map)  # CHANGED: removed style arg
 
 #st.markdown(html_e2, unsafe_allow_html=True)
@@ -10195,23 +10246,30 @@ try:
     _turnover_rows.sort(key=lambda x: x[1], reverse=True)
     _top_turnover = _turnover_rows[:25]
 
+    _HIGH_TURNOVER = 2.0  # today's volume >= 2x its 50-day average
+
     render_section_header_with_copy(
-        lambda: st.markdown("#### 🔥 High Turnover Rate"),
+        lambda: st.markdown(
+            f"""
+            <h4>
+                🔥 High Turnover Rate
+                <span style="color:#888; font-size:12px; font-weight:normal;">
+                    (Turnover rate = latest volume ÷ 50-day average volume. Lime badges = ≥ {_HIGH_TURNOVER:.0f}x (high turnover))
+                </span>
+            </h4>
+            """,
+            unsafe_allow_html=True,
+        ),
         [_sym for _sym, _ratio in _top_turnover]
     )
 
     if _top_turnover:
-        _HIGH_TURNOVER = 2.0  # today's volume >= 2x its 50-day average
         _badges = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
         for _sym, _ratio in _top_turnover:
             _cls = "ticker-badge lime-badge" if _ratio >= _HIGH_TURNOVER else "ticker-badge"
             _badges += f'<div class="{_cls}">{_sym} · {_ratio:.1f}x</div>'
         _badges += "</div>"
         st.markdown(_badges, unsafe_allow_html=True)
-        st.caption(
-            f"Turnover rate = latest volume ÷ 50-day average volume. "
-            f"Lime badges = ≥ {_HIGH_TURNOVER:.0f}x (high turnover)."
-        )
     else:
         st.info("Not enough volume history to compute turnover rate.")
 except Exception as _e:
@@ -10274,6 +10332,222 @@ def download_all_industry_stocks_data(stocks_tuple, _known_ticker_dfs):
             benchmark_df = pd.DataFrame({'Close': raw_data['Close'][benchmark_symbol]}).dropna()
 
     return ticker_dfs, benchmark_df
+
+# ==============================================================================
+# GAP UP / GAP DOWN SCANNER
+# Gap Up   = today's Low  > yesterday's High
+# Gap Down = today's High < yesterday's Low
+# ==============================================================================
+@st.cache_data(ttl=3600)
+def compute_gap_up_down(stocks_list, ticker_dfs):
+    """
+    Scans each ticker's last two bars for a clean gap:
+      Gap Up:   today Low  > yesterday High
+      Gap Down: today High < yesterday Low
+    Requires close >= 20 (consistent with the rest of the dashboard's
+    price filter). Returns (up_today, up_yest, down_today, down_yest),
+    each sorted alphabetically.
+    """
+    up_today, up_yest = [], []
+    down_today, down_yest = [], []
+
+    for ticker in stocks_list:
+        try:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < 3:
+                continue
+
+            close = df['Close']; high = df['High']; low = df['Low']
+
+            # Today (idx -1) vs Yesterday (idx -2)
+            if close.iloc[-1] >= 20:
+                if low.iloc[-1] > high.iloc[-2]:
+                    up_today.append(ticker)
+                elif high.iloc[-1] < low.iloc[-2]:
+                    down_today.append(ticker)
+
+            # Yesterday (idx -2) vs Day Before (idx -3)
+            if close.iloc[-2] >= 20:
+                if low.iloc[-2] > high.iloc[-3]:
+                    up_yest.append(ticker)
+                elif high.iloc[-2] < low.iloc[-3]:
+                    down_yest.append(ticker)
+
+        except Exception:
+            continue
+
+    return sorted(up_today), sorted(up_yest), sorted(down_today), sorted(down_yest)
+
+
+@st.cache_data(ttl=3600)
+def compute_gap_up_down_history(stocks_list, ticker_dfs):
+    """
+    Vectorized daily count of tickers gapping up / gapping down, evaluated
+    across the full time series for a 60-day breadth history — mirrors
+    compute_two_botak_history / compute_gapper_history's pattern.
+    """
+    try:
+        if not ticker_dfs:
+            return pd.DataFrame()
+
+        up_series_list = []
+        down_series_list = []
+
+        for ticker, df in ticker_dfs.items():
+            if not all(col in df.columns for col in ['High', 'Low', 'Close']):
+                continue
+            if len(df) < 2:
+                continue
+            try:
+                high, low, close = df['High'], df['Low'], df['Close']
+
+                gap_up = (low > high.shift(1)) & (close >= 20)
+                gap_down = (high < low.shift(1)) & (close >= 20)
+
+                up_series_list.append(gap_up.astype(int))
+                down_series_list.append(gap_down.astype(int))
+            except Exception:
+                continue
+
+        if not up_series_list:
+            return pd.DataFrame()
+
+        up_combined = pd.concat(up_series_list, axis=1).fillna(0)
+        down_combined = pd.concat(down_series_list, axis=1).fillna(0)
+
+        up_counts = up_combined.sum(axis=1)
+        down_counts = down_combined.sum(axis=1)
+
+        result = pd.DataFrame({
+            "Date": up_counts.index,
+            "Gap Up Count": up_counts.values,
+            "Gap Down Count": down_counts.reindex(up_counts.index).values,
+        }).tail(60)
+        result["Date"] = pd.to_datetime(result["Date"]).dt.strftime("%Y-%m-%d")
+        return result.reset_index(drop=True)
+    except Exception:
+        return pd.DataFrame()
+
+
+st.markdown("---")
+
+with st.spinner("Scanning for Gap Up / Gap Down..."):
+    gap_up_today, gap_up_yest, gap_down_today, gap_down_yest = timed(
+        "compute_gap_up_down",
+        compute_gap_up_down,
+        stocks_tuple, ticker_dfs_shared
+    )
+    gap_up_down_hist = timed(
+        "compute_gap_up_down_history",
+        compute_gap_up_down_history,
+        stocks_tuple, ticker_dfs_shared
+    )
+
+# ── GAP UP ────────────────────────────────────────────────────────────────
+st.markdown(f"#### 🔼 Gap Up ({len(gap_up_today)})")
+
+if gap_up_today or gap_up_yest:
+    gapup_industry_counts, gapup_ticker_industry = build_leader_industry_map(gap_up_today, INDUSTRIES)
+
+    html_gapup = ""
+    for sym in gap_up_today:
+        industries = gapup_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+            if is_top20_industry else ""
+        )
+        html_gapup += setup_badge(sym, is_new=(sym not in gap_up_yest), extra_style=glow_style)
+
+    removed_gapup = [sym for sym in gap_up_yest if sym not in gap_up_today]
+    for sym in sorted(removed_gapup):
+        html_gapup += f'<div class="ticker-badge removed-badge">{sym}</div>'
+
+    st.markdown(html_gapup, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
+
+st.write("")
+if not gap_up_down_hist.empty:
+    chart_df_gu = gap_up_down_hist.copy()
+
+    today_gu = chart_df_gu["Gap Up Count"].iloc[-1]
+    max_gu   = chart_df_gu["Gap Up Count"].max()
+
+    mean_gu = chart_df_gu["Gap Up Count"].mean()
+    std_gu  = chart_df_gu["Gap Up Count"].std(ddof=1)
+    if std_gu and std_gu > 0:
+        z_scores_gu = (chart_df_gu["Gap Up Count"] - mean_gu) / std_gu
+    else:
+        z_scores_gu = pd.Series(0, index=chart_df_gu.index)
+
+    chart_df_gu["Bar_Color"] = "#29B5E8"
+    chart_df_gu.loc[z_scores_gu >= 2, "Bar_Color"] = "#FF4B4B"
+    if today_gu == max_gu:
+        chart_df_gu.iloc[-1, chart_df_gu.columns.get_loc("Bar_Color")] = "#FF4B4B"
+
+    st.bar_chart(
+        data=chart_df_gu,
+        x="Date",
+        y="Gap Up Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
+
+st.write("")
+
+# ── GAP DOWN ──────────────────────────────────────────────────────────────
+st.markdown(f"#### 🔽 Gap Down ({len(gap_down_today)})")
+
+if gap_down_today or gap_down_yest:
+    gapdown_industry_counts, gapdown_ticker_industry = build_leader_industry_map(gap_down_today, INDUSTRIES)
+
+    html_gapdown = ""
+    for sym in gap_down_today:
+        industries = gapdown_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+            if is_top20_industry else ""
+        )
+        html_gapdown += setup_badge(sym, is_new=(sym not in gap_down_yest), extra_style=glow_style)
+
+    removed_gapdown = [sym for sym in gap_down_yest if sym not in gap_down_today]
+    for sym in sorted(removed_gapdown):
+        html_gapdown += f'<div class="ticker-badge removed-badge">{sym}</div>'
+
+    st.markdown(html_gapdown, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
+
+st.write("")
+if not gap_up_down_hist.empty:
+    chart_df_gd = gap_up_down_hist.copy()
+
+    today_gd = chart_df_gd["Gap Down Count"].iloc[-1]
+    max_gd   = chart_df_gd["Gap Down Count"].max()
+
+    mean_gd = chart_df_gd["Gap Down Count"].mean()
+    std_gd  = chart_df_gd["Gap Down Count"].std(ddof=1)
+    if std_gd and std_gd > 0:
+        z_scores_gd = (chart_df_gd["Gap Down Count"] - mean_gd) / std_gd
+    else:
+        z_scores_gd = pd.Series(0, index=chart_df_gd.index)
+
+    chart_df_gd["Bar_Color"] = "#29B5E8"
+    chart_df_gd.loc[z_scores_gd >= 2, "Bar_Color"] = "#FF4B4B"
+    if today_gd == max_gd:
+        chart_df_gd.iloc[-1, chart_df_gd.columns.get_loc("Bar_Color")] = "#FF4B4B"
+
+    st.bar_chart(
+        data=chart_df_gd,
+        x="Date",
+        y="Gap Down Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
 
 st.markdown("---")
 st.markdown(
@@ -19109,218 +19383,3 @@ if _timing_log:
     total_str = f"{int(total_s // 60)}m {total_s % 60:.2f}s" if total_s >= 60 else f"{total_s:.2f}s"
     st.caption(f"Total measured wall-clock time: **{total_str}** across {len(_timing_log)} tracked calls")
 
-# ==============================================================================
-# GAP UP / GAP DOWN SCANNER
-# Gap Up   = today's Low  > yesterday's High
-# Gap Down = today's High < yesterday's Low
-# ==============================================================================
-@st.cache_data(ttl=3600)
-def compute_gap_up_down(stocks_list, ticker_dfs):
-    """
-    Scans each ticker's last two bars for a clean gap:
-      Gap Up:   today Low  > yesterday High
-      Gap Down: today High < yesterday Low
-    Requires close >= 20 (consistent with the rest of the dashboard's
-    price filter). Returns (up_today, up_yest, down_today, down_yest),
-    each sorted alphabetically.
-    """
-    up_today, up_yest = [], []
-    down_today, down_yest = [], []
-
-    for ticker in stocks_list:
-        try:
-            df = ticker_dfs.get(ticker)
-            if df is None or len(df) < 3:
-                continue
-
-            close = df['Close']; high = df['High']; low = df['Low']
-
-            # Today (idx -1) vs Yesterday (idx -2)
-            if close.iloc[-1] >= 20:
-                if low.iloc[-1] > high.iloc[-2]:
-                    up_today.append(ticker)
-                elif high.iloc[-1] < low.iloc[-2]:
-                    down_today.append(ticker)
-
-            # Yesterday (idx -2) vs Day Before (idx -3)
-            if close.iloc[-2] >= 20:
-                if low.iloc[-2] > high.iloc[-3]:
-                    up_yest.append(ticker)
-                elif high.iloc[-2] < low.iloc[-3]:
-                    down_yest.append(ticker)
-
-        except Exception:
-            continue
-
-    return sorted(up_today), sorted(up_yest), sorted(down_today), sorted(down_yest)
-
-
-@st.cache_data(ttl=3600)
-def compute_gap_up_down_history(stocks_list, ticker_dfs):
-    """
-    Vectorized daily count of tickers gapping up / gapping down, evaluated
-    across the full time series for a 60-day breadth history — mirrors
-    compute_two_botak_history / compute_gapper_history's pattern.
-    """
-    try:
-        if not ticker_dfs:
-            return pd.DataFrame()
-
-        up_series_list = []
-        down_series_list = []
-
-        for ticker, df in ticker_dfs.items():
-            if not all(col in df.columns for col in ['High', 'Low', 'Close']):
-                continue
-            if len(df) < 2:
-                continue
-            try:
-                high, low, close = df['High'], df['Low'], df['Close']
-
-                gap_up = (low > high.shift(1)) & (close >= 20)
-                gap_down = (high < low.shift(1)) & (close >= 20)
-
-                up_series_list.append(gap_up.astype(int))
-                down_series_list.append(gap_down.astype(int))
-            except Exception:
-                continue
-
-        if not up_series_list:
-            return pd.DataFrame()
-
-        up_combined = pd.concat(up_series_list, axis=1).fillna(0)
-        down_combined = pd.concat(down_series_list, axis=1).fillna(0)
-
-        up_counts = up_combined.sum(axis=1)
-        down_counts = down_combined.sum(axis=1)
-
-        result = pd.DataFrame({
-            "Date": up_counts.index,
-            "Gap Up Count": up_counts.values,
-            "Gap Down Count": down_counts.reindex(up_counts.index).values,
-        }).tail(60)
-        result["Date"] = pd.to_datetime(result["Date"]).dt.strftime("%Y-%m-%d")
-        return result.reset_index(drop=True)
-    except Exception:
-        return pd.DataFrame()
-
-
-st.markdown("---")
-
-with st.spinner("Scanning for Gap Up / Gap Down..."):
-    gap_up_today, gap_up_yest, gap_down_today, gap_down_yest = timed(
-        "compute_gap_up_down",
-        compute_gap_up_down,
-        stocks_tuple, ticker_dfs_shared
-    )
-    gap_up_down_hist = timed(
-        "compute_gap_up_down_history",
-        compute_gap_up_down_history,
-        stocks_tuple, ticker_dfs_shared
-    )
-
-# ── GAP UP ────────────────────────────────────────────────────────────────
-st.markdown(f"#### 🔼 Gap Up ({len(gap_up_today)})")
-
-if gap_up_today or gap_up_yest:
-    gapup_industry_counts, gapup_ticker_industry = build_leader_industry_map(gap_up_today, INDUSTRIES)
-
-    html_gapup = ""
-    for sym in gap_up_today:
-        industries = gapup_ticker_industry.get(sym, [])
-        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
-        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
-        glow_style = (
-            "box-shadow:0 0 8px 2px #00FF00; border:1px solid #00FF00;"
-            if is_top20_industry else ""
-        )
-        html_gapup += setup_badge(sym, is_new=(sym not in gap_up_yest), extra_style=glow_style)
-
-    removed_gapup = [sym for sym in gap_up_yest if sym not in gap_up_today]
-    for sym in sorted(removed_gapup):
-        html_gapup += f'<div class="ticker-badge removed-badge">{sym}</div>'
-
-    st.markdown(html_gapup, unsafe_allow_html=True)
-else:
-    st.info("No active setups discovered.")
-
-st.write("")
-if not gap_up_down_hist.empty:
-    chart_df_gu = gap_up_down_hist.copy()
-
-    today_gu = chart_df_gu["Gap Up Count"].iloc[-1]
-    max_gu   = chart_df_gu["Gap Up Count"].max()
-
-    mean_gu = chart_df_gu["Gap Up Count"].mean()
-    std_gu  = chart_df_gu["Gap Up Count"].std(ddof=1)
-    if std_gu and std_gu > 0:
-        z_scores_gu = (chart_df_gu["Gap Up Count"] - mean_gu) / std_gu
-    else:
-        z_scores_gu = pd.Series(0, index=chart_df_gu.index)
-
-    chart_df_gu["Bar_Color"] = "#29B5E8"
-    chart_df_gu.loc[z_scores_gu >= 2, "Bar_Color"] = "#FF4B4B"
-    if today_gu == max_gu:
-        chart_df_gu.iloc[-1, chart_df_gu.columns.get_loc("Bar_Color")] = "#FF4B4B"
-
-    st.bar_chart(
-        data=chart_df_gu,
-        x="Date",
-        y="Gap Up Count",
-        color="Bar_Color",
-        use_container_width=True
-    )
-
-st.markdown("---")
-
-# ── GAP DOWN ──────────────────────────────────────────────────────────────
-st.markdown(f"#### 🔽 Gap Down ({len(gap_down_today)})")
-
-if gap_down_today or gap_down_yest:
-    gapdown_industry_counts, gapdown_ticker_industry = build_leader_industry_map(gap_down_today, INDUSTRIES)
-
-    html_gapdown = ""
-    for sym in gap_down_today:
-        industries = gapdown_ticker_industry.get(sym, [])
-        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
-        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
-        glow_style = (
-            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
-            if is_top20_industry else ""
-        )
-        html_gapdown += setup_badge(sym, is_new=(sym not in gap_down_yest), extra_style=glow_style)
-
-    removed_gapdown = [sym for sym in gap_down_yest if sym not in gap_down_today]
-    for sym in sorted(removed_gapdown):
-        html_gapdown += f'<div class="ticker-badge removed-badge">{sym}</div>'
-
-    st.markdown(html_gapdown, unsafe_allow_html=True)
-else:
-    st.info("No active setups discovered.")
-
-st.write("")
-if not gap_up_down_hist.empty:
-    chart_df_gd = gap_up_down_hist.copy()
-
-    today_gd = chart_df_gd["Gap Down Count"].iloc[-1]
-    max_gd   = chart_df_gd["Gap Down Count"].max()
-
-    mean_gd = chart_df_gd["Gap Down Count"].mean()
-    std_gd  = chart_df_gd["Gap Down Count"].std(ddof=1)
-    if std_gd and std_gd > 0:
-        z_scores_gd = (chart_df_gd["Gap Down Count"] - mean_gd) / std_gd
-    else:
-        z_scores_gd = pd.Series(0, index=chart_df_gd.index)
-
-    chart_df_gd["Bar_Color"] = "#29B5E8"
-    chart_df_gd.loc[z_scores_gd >= 2, "Bar_Color"] = "#FF4B4B"
-    if today_gd == max_gd:
-        chart_df_gd.iloc[-1, chart_df_gd.columns.get_loc("Bar_Color")] = "#FF4B4B"
-
-    st.bar_chart(
-        data=chart_df_gd,
-        x="Date",
-        y="Gap Down Count",
-        color="Bar_Color",
-        use_container_width=True
-    )
