@@ -165,6 +165,7 @@ SECTION_KEYWORDS = [
     "Finviz Industry Rotation Report",
     "Market Internal",
     "Healthy Pullback vs Deterioration",
+    "Breakout Health (",
     "Lazy Exposure",
     "Lazy Table",
     "Lazy Charts",
