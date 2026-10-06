@@ -167,6 +167,7 @@ SECTION_KEYWORDS = [
     "Healthy Pullback vs Deterioration",
     "Breakout Health (",
     "Lazy Exposure",
+    "Leveraged ETF Bull",
     "Lazy Table",
     "Lazy Charts",
     "Stage 2 vs Stage 4",

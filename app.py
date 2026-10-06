@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import time
 import re
+import binascii
 from google import genai
 import plotly.graph_objects as go
 import streamlit.components.v1 as components
@@ -5379,6 +5380,192 @@ def compute_global_setup_count_history(stocks_list, _ticker_dfs):
         return result
     except Exception:
         return pd.DataFrame()
+
+_PULLBACK_SETUP_QUALITY_HISTORY_DAYS = 60
+_PULLBACK_SETUP_QUALITY_HISTORY_PATH = "pullback_setup_quality_history/history.json"
+
+def _pullback_setup_quality_github_headers():
+    token = st.secrets.get("GITHUB_TOKEN")
+    return {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github+json",
+    }
+
+def _normalize_pullback_setup_quality_history(rows):
+    normalized = {}
+    for row in rows:
+        day = datetime.date.fromisoformat(str(row["date"])).isoformat()
+        avg_rank = float(row["avg_rank"])
+        setup_count_value = float(row["setup_count"])
+        if not np.isfinite(avg_rank) or avg_rank < 0:
+            raise ValueError("Avg Rank must be a finite non-negative number")
+        if (
+            not np.isfinite(setup_count_value)
+            or setup_count_value < 0
+            or not setup_count_value.is_integer()
+        ):
+            raise ValueError("Setup Count must be a finite non-negative integer")
+        normalized[day] = {
+            "date": day,
+            "avg_rank": round(avg_rank, 1),
+            "setup_count": int(setup_count_value),
+        }
+    return [normalized[day] for day in sorted(normalized)][-_PULLBACK_SETUP_QUALITY_HISTORY_DAYS:]
+
+@st.cache_data(ttl=3600)
+def load_pullback_setup_quality_history_github():
+    import json
+
+    repo = st.secrets.get("GITHUB_REPO")
+    token = st.secrets.get("GITHUB_TOKEN")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    if not repo or not token:
+        return None
+
+    url = f"{GITHUB_API}/repos/{repo}/contents/{_PULLBACK_SETUP_QUALITY_HISTORY_PATH}"
+    try:
+        resp = requests.get(
+            url,
+            headers=_pullback_setup_quality_github_headers(),
+            params={"ref": branch},
+            timeout=10,
+        )
+    except requests.RequestException as exc:
+        st.warning(f"Could not load Pullback Setup Quality history from GitHub: {exc}")
+        return None
+    if resp.status_code == 404:
+        return None
+    if resp.status_code != 200:
+        st.warning(
+            "Could not load Pullback Setup Quality history from GitHub "
+            f"(HTTP {resp.status_code})."
+        )
+        return None
+
+    try:
+        history = json.loads(
+            base64.b64decode(resp.json()["content"]).decode()
+        )["history"]
+        if not isinstance(history, list):
+            raise ValueError("history must be a list")
+        rows = _normalize_pullback_setup_quality_history(history)
+        if not rows:
+            return None
+        return pd.DataFrame(rows).rename(columns={
+            "date": "Date",
+            "avg_rank": "Avg Rank",
+            "setup_count": "Setup Count",
+        })
+    except (ValueError, KeyError, TypeError, binascii.Error) as exc:
+        st.warning(f"Could not read Pullback Setup Quality GitHub history: {exc}")
+        return None
+
+def save_pullback_setup_quality_history_github(rows):
+    import json
+
+    repo = st.secrets.get("GITHUB_REPO")
+    token = st.secrets.get("GITHUB_TOKEN")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    if not repo or not token or not rows:
+        return False
+    try:
+        new_rows = _normalize_pullback_setup_quality_history(rows)
+    except (ValueError, KeyError, TypeError) as exc:
+        st.warning(f"Could not save Pullback Setup Quality history: {exc}")
+        return False
+
+    url = f"{GITHUB_API}/repos/{repo}/contents/{_PULLBACK_SETUP_QUALITY_HISTORY_PATH}"
+    headers = _pullback_setup_quality_github_headers()
+    try:
+        resp = requests.get(url, headers=headers, params={"ref": branch}, timeout=10)
+    except requests.RequestException as exc:
+        st.warning(f"Could not check Pullback Setup Quality GitHub history: {exc}")
+        return False
+
+    sha = None
+    existing_rows = []
+    if resp.status_code == 200:
+        try:
+            existing = resp.json()
+            sha = existing["sha"]
+            existing_rows = _normalize_pullback_setup_quality_history(
+                json.loads(base64.b64decode(existing["content"]).decode())["history"]
+            )
+        except (ValueError, KeyError, TypeError, binascii.Error) as exc:
+            st.warning(f"Could not read existing Pullback Setup Quality history: {exc}")
+            return False
+    elif resp.status_code != 404:
+        st.warning(
+            "Could not check Pullback Setup Quality GitHub history "
+            f"(HTTP {resp.status_code})."
+        )
+        return False
+
+    merged_by_date = {row["date"]: row for row in existing_rows}
+    merged_by_date.update({row["date"]: row for row in new_rows})
+    merged_rows = _normalize_pullback_setup_quality_history(
+        list(merged_by_date.values())
+    )
+    if merged_rows == existing_rows:
+        return True
+
+    payload = {
+        "message": f"Pullback Setup Quality history through {merged_rows[-1]['date']}",
+        "content": base64.b64encode(
+            json.dumps({"history": merged_rows}).encode()
+        ).decode(),
+        "branch": branch,
+    }
+    if sha:
+        payload["sha"] = sha
+    try:
+        resp = requests.put(url, headers=headers, json=payload, timeout=10)
+    except requests.RequestException as exc:
+        st.warning(f"Could not save Pullback Setup Quality history to GitHub: {exc}")
+        return False
+    if resp.status_code not in (200, 201):
+        st.warning(
+            "Could not save Pullback Setup Quality history to GitHub "
+            f"(HTTP {resp.status_code})."
+        )
+        return False
+
+    load_pullback_setup_quality_history_github.clear()
+    return True
+
+def persist_pullback_setup_quality_history(rows):
+    normalized = _normalize_pullback_setup_quality_history(rows)
+    snapshot_key = tuple(
+        (row["date"], row["avg_rank"], row["setup_count"])
+        for row in normalized
+    )
+    if st.session_state.get("_pullback_setup_quality_saved") == snapshot_key:
+        return True
+    if not save_pullback_setup_quality_history_github(normalized):
+        return False
+    st.session_state["_pullback_setup_quality_saved"] = snapshot_key
+    return True
+
+def compute_current_pullback_setup_avg_rank(all_data_snapshot, setup_tickers, ticker_industry_groups):
+    group_rs = {
+        item["Industry"]: float(item["Group RS"])
+        for item in all_data_snapshot
+        if pd.notna(item.get("Group RS"))
+    }
+    if not group_rs or not setup_tickers:
+        return 0.0
+
+    ranks = pd.Series(group_rs).rank(ascending=False, method="min").astype(int)
+    ticker_ranks = []
+    for ticker in setup_tickers:
+        group_ranks = [
+            int(ranks[industry])
+            for industry in ticker_industry_groups.get(ticker, [])
+            if industry in ranks.index
+        ]
+        if group_ranks:
+            ticker_ranks.append(min(group_ranks))
+    return round(sum(ticker_ranks) / len(ticker_ranks), 1) if ticker_ranks else 0.0
 
 @st.cache_data(ttl=3600)
 def compute_setup_avgrank_history(all_data_snapshot, ticker_dfs_all, benchmark_df_all, rs_length, setup_tickers, ticker_industry_groups):
@@ -10829,26 +11016,88 @@ timed("Relative ETF Ratios", _relative_etf_ratios)
 
 st.markdown("---")
 
-ticker_dfs_all_industries, benchmark_df_all_industries = timed(
-    "download_all_industry_stocks_data",
-    download_all_industry_stocks_data,
-    all_industry_tickers_tuple, ticker_dfs_shared
+_pullback_setup_history = timed(
+    "load_pullback_setup_quality_history_github",
+    load_pullback_setup_quality_history_github,
 )
-
-with st.spinner("Computing Setup Rank history..."):
-    setup_avgrank_hist = timed(
-        "compute_setup_avgrank_history",
-        compute_setup_avgrank_history,
-        all_data, ticker_dfs_all_industries, benchmark_df_all_industries, 90,
-        tuple(sorted(global_setup_tickers)), global_setup_ticker_groups
+if _pullback_setup_history is not None and not _pullback_setup_history.empty:
+    _pullback_today = datetime.date.today().isoformat()
+    _pullback_today_rank = compute_current_pullback_setup_avg_rank(
+        all_data,
+        global_setup_tickers,
+        global_setup_ticker_groups,
+    )
+    _pullback_setup_history = _pullback_setup_history.copy()
+    _pullback_setup_history = _pullback_setup_history[
+        _pullback_setup_history["Date"] != _pullback_today
+    ]
+    _pullback_setup_history = pd.concat(
+        [
+            _pullback_setup_history,
+            pd.DataFrame([{
+                "Date": _pullback_today,
+                "Avg Rank": _pullback_today_rank,
+                "Setup Count": global_setup_count,
+            }]),
+        ],
+        ignore_index=True,
+    ).sort_values("Date").tail(_PULLBACK_SETUP_QUALITY_HISTORY_DAYS)
+    timed(
+        "save_pullback_setup_quality_history_github",
+        persist_pullback_setup_quality_history,
+        _pullback_setup_history.rename(columns={
+            "Date": "date",
+            "Avg Rank": "avg_rank",
+            "Setup Count": "setup_count",
+        }).to_dict("records"),
+    )
+    setup_avgrank_hist = _pullback_setup_history[["Date", "Avg Rank"]].copy()
+    setup_count_hist = _pullback_setup_history[["Date", "Setup Count"]].copy()
+else:
+    ticker_dfs_all_industries, benchmark_df_all_industries = timed(
+        "download_all_industry_stocks_data",
+        download_all_industry_stocks_data,
+        all_industry_tickers_tuple, ticker_dfs_shared
     )
 
-with st.spinner("Computing Setup Count history..."):
-    setup_count_hist = timed(
-        "compute_global_setup_count_history",
-        compute_global_setup_count_history,
-        stocks_tuple, ticker_dfs_shared
-    )
+    with st.spinner("Computing Setup Rank history..."):
+        setup_avgrank_hist = timed(
+            "compute_setup_avgrank_history",
+            compute_setup_avgrank_history,
+            all_data, ticker_dfs_all_industries, benchmark_df_all_industries, 90,
+            tuple(sorted(global_setup_tickers)), global_setup_ticker_groups
+        )
+
+    with st.spinner("Computing Setup Count history..."):
+        setup_count_hist = timed(
+            "compute_global_setup_count_history",
+            compute_global_setup_count_history,
+            stocks_tuple, ticker_dfs_shared
+        )
+
+    if not setup_avgrank_hist.empty:
+        _pullback_bootstrap = setup_avgrank_hist.merge(
+            setup_count_hist, on="Date", how="left"
+        )
+        _pullback_bootstrap["Setup Count"] = (
+            _pullback_bootstrap["Setup Count"].ffill().fillna(0)
+        )
+        _pullback_bootstrap["Date"] = _pullback_bootstrap["Date"].astype(str)
+        _pullback_bootstrap = (
+            _pullback_bootstrap
+            .drop_duplicates(subset="Date", keep="last")
+            .sort_values("Date")
+            .tail(_PULLBACK_SETUP_QUALITY_HISTORY_DAYS)
+        )
+        timed(
+            "save_pullback_setup_quality_history_github",
+            persist_pullback_setup_quality_history,
+            _pullback_bootstrap.rename(columns={
+                "Date": "date",
+                "Avg Rank": "avg_rank",
+                "Setup Count": "setup_count",
+            }).to_dict("records"),
+        )
 
 st.markdown(f"#### 📐 Pullback Setup Quality ({global_setup_count})")
 
@@ -16107,6 +16356,115 @@ def load_breakout_health_history_github(max_days=90):
     except Exception:
         return pd.DataFrame()
 
+def _github_filepath_lazy_exposure():
+    return "lazy_exposure_history/history.json"
+
+def save_lazy_exposure_snapshot_github(date_obj, score):
+    import json
+    repo = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    if not repo or not st.secrets.get("GITHUB_TOKEN"):
+        return
+    score = float(score)
+    if not np.isfinite(score) or not 0 <= score <= 100:
+        st.warning("Could not save the Lazy Exposure GitHub snapshot: score must be between 0 and 100.")
+        return
+
+    path = _github_filepath_lazy_exposure()
+    url = f"{GITHUB_API}/repos/{repo}/contents/{path}"
+    try:
+        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
+    except requests.RequestException as exc:
+        st.warning(f"Could not check the Lazy Exposure GitHub snapshot: {exc}")
+        return
+
+    sha = None
+    history = []
+    if resp.status_code == 200:
+        try:
+            existing = resp.json()
+            sha = existing["sha"]
+            history = json.loads(
+                base64.b64decode(existing["content"]).decode()
+            )["history"]
+            if not isinstance(history, list):
+                raise ValueError("history must be a list")
+        except (ValueError, KeyError, TypeError) as exc:
+            st.warning(f"Could not read Lazy Exposure GitHub history: {exc}")
+            return
+    elif resp.status_code != 404:
+        st.warning(f"Could not check the Lazy Exposure GitHub snapshot (HTTP {resp.status_code}).")
+        return
+
+    history_by_date = {}
+    try:
+        for item in history:
+            item_date = datetime.date.fromisoformat(item["date"])
+            item_score = float(item["score"])
+            if not np.isfinite(item_score) or not 0 <= item_score <= 100:
+                raise ValueError("saved scores must be between 0 and 100")
+            history_by_date[item_date.isoformat()] = round(item_score, 1)
+    except (ValueError, KeyError, TypeError) as exc:
+        st.warning(f"Could not validate Lazy Exposure GitHub history: {exc}")
+        return
+    history_by_date[date_obj.isoformat()] = round(score, 1)
+    history = [
+        {"date": saved_date, "score": saved_score}
+        for saved_date, saved_score in sorted(history_by_date.items())[-90:]
+    ]
+    content = json.dumps({"history": history})
+    payload = {
+        "message": f"Lazy Exposure snapshot {date_obj.isoformat()}",
+        "content": base64.b64encode(content.encode()).decode(),
+        "branch": branch,
+    }
+    if sha:
+        payload["sha"] = sha
+    try:
+        resp = requests.put(url, headers=_github_headers(), json=payload, timeout=10)
+    except requests.RequestException as exc:
+        st.warning(f"Could not save the Lazy Exposure GitHub snapshot: {exc}")
+        return
+    if resp.status_code not in (200, 201):
+        st.warning(f"Could not save the Lazy Exposure GitHub snapshot (HTTP {resp.status_code}).")
+
+@st.cache_data(ttl=3600)
+def load_lazy_exposure_history_github(max_days=90):
+    import json
+    repo = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    if not repo or not st.secrets.get("GITHUB_TOKEN"):
+        return pd.DataFrame()
+
+    url = f"{GITHUB_API}/repos/{repo}/contents/{_github_filepath_lazy_exposure()}"
+    try:
+        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
+    except requests.RequestException as exc:
+        st.warning(f"Could not load Lazy Exposure history from GitHub: {exc}")
+        return pd.DataFrame()
+    if resp.status_code == 404:
+        return pd.DataFrame()
+    if resp.status_code != 200:
+        st.warning(f"Could not load Lazy Exposure history from GitHub (HTTP {resp.status_code}).")
+        return pd.DataFrame()
+    try:
+        history = json.loads(
+            base64.b64decode(resp.json()["content"]).decode()
+        )["history"]
+        if not isinstance(history, list):
+            raise ValueError("history must be a list")
+        rows = []
+        for item in history[-max_days:]:
+            score = float(item["score"])
+            if not np.isfinite(score) or not 0 <= score <= 100:
+                raise ValueError("saved scores must be between 0 and 100")
+            saved_date = datetime.date.fromisoformat(item["date"]).isoformat()
+            rows.append({"date": saved_date, "score": score})
+        return pd.DataFrame(rows)
+    except (ValueError, KeyError, TypeError) as exc:
+        st.warning(f"Could not read Lazy Exposure GitHub history: {exc}")
+        return pd.DataFrame()
+
 def _github_filepath_lazy(date_obj):
     return f"lazy_table_history/lazy_{date_obj.isoformat()}.json"
 
@@ -17017,6 +17375,41 @@ st.markdown(
     </table>
     """,
     unsafe_allow_html=True,
+)
+
+_lazy_exposure_today = datetime.date.today()
+timed(
+    "save_lazy_exposure_snapshot_github",
+    save_lazy_exposure_snapshot_github,
+    _lazy_exposure_today,
+    composite_score,
+)
+_lazy_exposure_history = timed(
+    "load_lazy_exposure_history_github",
+    load_lazy_exposure_history_github,
+    90,
+)
+_lazy_exposure_history = pd.concat(
+    [
+        _lazy_exposure_history,
+        pd.DataFrame([{
+            "date": _lazy_exposure_today.isoformat(),
+            "score": float(composite_score),
+        }]),
+    ],
+    ignore_index=True,
+)
+_lazy_exposure_history["date"] = pd.to_datetime(_lazy_exposure_history["date"])
+_lazy_exposure_history = (
+    _lazy_exposure_history
+    .drop_duplicates(subset="date", keep="last")
+    .sort_values("date")
+    .tail(90)
+)
+st.caption("Lazy Exposure score history (last 90 days)")
+st.line_chart(
+    _lazy_exposure_history.set_index("date")["score"],
+    use_container_width=True,
 )
 
 # if dist_triggered:
@@ -19399,4 +19792,3 @@ if _timing_log:
     total_s = total_ms / 1000
     total_str = f"{int(total_s // 60)}m {total_s % 60:.2f}s" if total_s >= 60 else f"{total_s:.2f}s"
     st.caption(f"Total measured wall-clock time: **{total_str}** across {len(_timing_log)} tracked calls")
-
