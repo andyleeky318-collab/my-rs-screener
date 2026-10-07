@@ -11622,6 +11622,12 @@ def compute_healthy_pullback_rows(universe_tuple, industry_trend_map, ticker_to_
 
     return hp_rows
 
+# Reverse lookup: ticker -> industries it belongs to (built once, O(1) lookups after)
+ticker_to_industries = {}
+for _industry, _tickers_in_group in INDUSTRIES.items():
+    for _t in _tickers_in_group:
+        ticker_to_industries.setdefault(_t, []).append(_industry)
+
 # ==============================================================================
 # 29. HEALTHY PULLBACK vs. DETERIORATION — weighted multi-factor classifier
 #
@@ -15318,12 +15324,6 @@ SECTION_DEFINITIONS = {
     "21ema_wick":         cloudwick_all,
     "50ma_bounce":        ma50bounce_all,
 }
-
-# Reverse lookup: ticker -> industries it belongs to (built once, O(1) lookups after)
-ticker_to_industries = {}
-for _industry, _tickers_in_group in INDUSTRIES.items():
-    for _t in _tickers_in_group:
-        ticker_to_industries.setdefault(_t, []).append(_industry)
 
 def _ticker_is_top20_industry(sym):
     """True if ANY industry this ticker belongs to is currently ranked <= 20 by Group RS."""
