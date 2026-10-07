@@ -11470,6 +11470,51 @@ def _hp_score_delta_series(close_s, high_s, low_s, bench_close_s):
     score = s1 + s2 + s3 + s4 + s6 + s7 + s8 + s9 + s10
     return score.diff()
 
+@st.cache_data(ttl=3600)
+def compute_up_down_vol_ratio_series(ticker, _ticker_dfs, udvr_len=50, ma_len=10):
+    """
+    Mirrors the Pine Script Up/Down Volume Ratio indicator:
+      upVol   = sum(volume where close > close[1], udvr_len)
+      downVol = sum(volume where close < close[1], udvr_len)
+      ratio   = upVol / downVol
+      smoothed = SMA(ratio, ma_len)
+    Returns the full smoothed ratio Series (indexed same as price), or
+    None if insufficient data.
+    """
+    df = _ticker_dfs.get(ticker)
+    if df is None or len(df) < udvr_len + ma_len + 2:
+        return None
+    try:
+        close = df['Close']
+        volume = df['Volume']
+
+        is_up = close > close.shift(1)
+        is_down = close < close.shift(1)
+
+        up_vol = (volume.where(is_up, 0)).rolling(udvr_len).sum()
+        down_vol = (volume.where(is_down, 0)).rolling(udvr_len).sum()
+
+        ratio = up_vol / down_vol.replace(0, np.nan)
+        smoothed = ratio.rolling(ma_len).mean() if ma_len > 0 else ratio
+        return smoothed.dropna()
+    except Exception:
+        return None
+
+
+def _udvr_rating(value):
+    if value is None or pd.isna(value):
+        return "-"
+    if value >= 1.75:
+        return "A+"
+    if value >= 1.50:
+        return "A"
+    if value >= 1.25:
+        return "B"
+    if value >= 1.00:
+        return "C"
+    if value >= 0.75:
+        return "D"
+    return "E"
 
 @st.cache_data(ttl=3600)
 def compute_healthy_pullback_rows(universe_tuple, industry_trend_map, ticker_to_industries,
@@ -15474,52 +15519,6 @@ except Exception as _e:
 #   table), and renders a small sparkline colored green/red by the >=1
 #   threshold. Does not touch any other section or shared variable.
 # ==============================================================================
-
-@st.cache_data(ttl=3600)
-def compute_up_down_vol_ratio_series(ticker, _ticker_dfs, udvr_len=50, ma_len=10):
-    """
-    Mirrors the Pine Script Up/Down Volume Ratio indicator:
-      upVol   = sum(volume where close > close[1], udvr_len)
-      downVol = sum(volume where close < close[1], udvr_len)
-      ratio   = upVol / downVol
-      smoothed = SMA(ratio, ma_len)
-    Returns the full smoothed ratio Series (indexed same as price), or
-    None if insufficient data.
-    """
-    df = _ticker_dfs.get(ticker)
-    if df is None or len(df) < udvr_len + ma_len + 2:
-        return None
-    try:
-        close = df['Close']
-        volume = df['Volume']
-
-        is_up = close > close.shift(1)
-        is_down = close < close.shift(1)
-
-        up_vol = (volume.where(is_up, 0)).rolling(udvr_len).sum()
-        down_vol = (volume.where(is_down, 0)).rolling(udvr_len).sum()
-
-        ratio = up_vol / down_vol.replace(0, np.nan)
-        smoothed = ratio.rolling(ma_len).mean() if ma_len > 0 else ratio
-        return smoothed.dropna()
-    except Exception:
-        return None
-
-
-def _udvr_rating(value):
-    if value is None or pd.isna(value):
-        return "-"
-    if value >= 1.75:
-        return "A+"
-    if value >= 1.50:
-        return "A"
-    if value >= 1.25:
-        return "B"
-    if value >= 1.00:
-        return "C"
-    if value >= 0.75:
-        return "D"
-    return "E"
 
 
 @st.cache_data(ttl=3600)
