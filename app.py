@@ -16047,6 +16047,293 @@ Keep it tight, data-driven, cite the actual % numbers, no fluff, no disclaimers.
         st.dataframe(finviz_perf_df.sort_values("1W", ascending=False), use_container_width=True, hide_index=True)
 
 # ==============================================================================
+# 27. LEVERAGED ETF BULL/BEAR TABLE — badge colored by underlying's setup category
+# NOTE: financecharts.com's screener blocks automated fetches (bot detection),
+# so this uses a curated list of major/liquid leveraged & single-stock ETFs
+# (Direxion/ProShares/GraniteShares/T-Rex) instead of scraping that page live.
+# This corner of the ETF market delists/splits often — verify periodically.
+# ==============================================================================
+st.markdown("---")
+# Copy button (filled in later, once the colored-badge tickers are known —
+# see _lev_colored_tickers below) sits in the adjacent narrow column.
+_lev_col_title, _lev_col_copy = st.columns([30, 1])
+_lev_title_ph = _lev_col_title.empty()
+_lev_copy_ph = _lev_col_copy.empty()
+_lev_title_ph.markdown(
+    """
+    <h4>
+        🎢 Leveraged ETF Bull / Bear Table
+        <span style="color:#888; font-size:12px;">(Require precision + conducive market conditions)</span>
+    </h4>
+    """,
+    unsafe_allow_html=True
+)
+
+LEVERAGED_ETF_MAP = {
+    # ── Index / broad market ──
+    "TQQQ": ("QQQ", "bull"),  "SQQQ": ("QQQ", "bear"),
+    "QLD":  ("QQQ", "bull"),  "QID":  ("QQQ", "bear"),
+    "MQQQ": ("QQQ", "bull"),
+    "QQUP": ("QQQ", "bull"),
+    "SPXL": ("SPY", "bull"),  "SPXS": ("SPY", "bear"),
+    "UPRO": ("SPY", "bull"),  "SPXU": ("SPY", "bear"),
+    "SSO":  ("SPY", "bull"),  "SDS":  ("SPY", "bear"),
+    "SPYU": ("SPY", "bull"),
+    "SPUU": ("SPY", "bull"),
+    "URSP": ("RSP", "bull"),
+    "TNA":  ("IWM", "bull"),  "TZA":  ("IWM", "bear"),
+    "URTY": ("IWM", "bull"),  "SRTY": ("IWM", "bear"),
+    "UWM":  ("IWM", "bull"),
+    "UDOW": ("DIA", "bull"),  "SDOW": ("DIA", "bear"),
+    "DDM":  ("DIA", "bull"),
+    "MIDU": ("MDY", "bull"),  "MVV":  ("MDY", "bull"),
+    "UMDD": ("MDY", "bull"),
+    "SAA":  ("IJR", "bull"),
+    "EFO":  ("EFA", "bull"),
+    "EET":  ("EEM", "bull"),  "EDC": ("EEM", "bull"),
+    "INDL": ("INDA", "bull"),
+    "EURL": ("IEUR", "bull"),
+    "BRZU": ("EWZ", "bull"),
+    "KORU": ("EWY", "bull"),
+    "HIBL": ("SPHB", "bull"),
+    "UVIX": ("VIXY", "bull"),
+
+    # ── Sector / thematic ──
+    "SOXL": ("SMH", "bull"),  "SOXS": ("SMH", "bear"),  "USD": ("SMH", "bull"),
+    "TECL": ("XLK", "bull"),  "TECS": ("XLK", "bear"),  "ROM": ("XLK", "bull"),
+    "FAS":  ("XLF", "bull"),  "FAZ":  ("XLF", "bear"),  "UYG": ("XLF", "bull"),
+    "LABU": ("XBI", "bull"),  "LABD": ("XBI", "bear"),  "BIB": ("XBI", "bull"),
+    "CURE": ("XLV", "bull"),  "RXL":  ("XLV", "bull"),
+    "NUGT": ("GDX", "bull"),  "DUST": ("GDX", "bear"),  "GDXU": ("GDX", "bull"),
+    "GDXD": ("GDX", "bear"),
+    "JNUG": ("GDXJ", "bull"), "JDST": ("GDXJ", "bear"),
+    "AGQ":  ("SLV", "bull"),
+    "UGL":  ("GLD", "bull"),  "DGP": ("GLD", "bull"),
+    "SHNY": ("GLD", "bull"),
+    "URAA": ("URA", "bull"),
+    "LITX": ("LIT", "bull"),
+    "TMF":  ("TLT", "bull"),  "TMV":  ("TLT", "bear"),  "UBT": ("TLT", "bull"),
+    "TYD":  ("TLT", "bull"),
+    "YINN": ("KWEB", "bull"), "YANG": ("KWEB", "bear"),
+    "CWEB": ("KWEB", "bull"), "CHAU": ("KWEB", "bull"),
+    "UCO":  ("USO", "bull"),  "SCO":  ("USO", "bear"),
+    "OILU": ("USO", "bull"),  "OILD": ("USO", "bear"),
+    "BOIL": ("UNG", "bull"),  "KOLD": ("UNG", "bear"),
+    "ERX":  ("XLE", "bull"),  "ERY":  ("XLE", "bear"),
+    "DIG":  ("XLE", "bull"),  "NRGU": ("XLE", "bull"),
+    "GUSH": ("XOP", "bull"),
+    "DPST": ("KRE", "bull"),  "BNKU": ("KBE", "bull"),
+    "DRN":  ("IYR", "bull"),  "DRV":  ("IYR", "bear"),  "URE": ("IYR", "bull"),
+    "BITU": ("BITO", "bull"), "SBIT": ("BITO", "bear"),
+    "UYM":  ("XLB", "bull"),
+    "UXI":  ("XLI", "bull"),  "DUSL": ("ITA", "bull"),  "DFEN": ("ITA", "bull"),
+    "NAIL": ("ITB", "bull"),
+    "UTSL": ("XLU", "bull"),
+    "FNGU": ("MAGS", "bull"), "FNGD": ("MAGS", "bear"), "FNGO": ("MAGS", "bull"),
+    "BULZ": ("MAGS", "bull"), "MAGX": ("MAGS", "bull"), "FNGG": ("MAGS", "bull"),
+    "QQQU": ("MAGS", "bull"),
+    "WEBL": ("FDN", "bull"),
+    "QPUX": ("QTUM", "bull"),
+
+    # ── Single-stock ──
+    "NVDL": ("NVDA", "bull"), "NVD":  ("NVDA", "bear"), "NVDU": ("NVDA", "bull"),
+    "NVDX": ("NVDA", "bull"), "NVDG": ("NVDA", "bull"), "NVII": ("NVDA", "bull"),
+    "TSLL": ("TSLA", "bull"), "TSLR": ("TSLA", "bull"), "TSLT": ("TSLA", "bull"), "TSLG": ("TSLA", "bull"),
+    "TSLS": ("TSLA", "bear"), "TSLQ": ("TSLA", "bear"), "TSLZ": ("TSLA", "bear"),
+    "TSII": ("TSLA", "bull"),
+    "MSTU": ("MSTR", "bull"), "MSTX": ("MSTR", "bull"), "MSTZ": ("MSTR", "bear"),
+    "MUU":  ("MU", "bull"),   "MULL": ("MU", "bull"),
+    "AMDL": ("AMD", "bull"),  "AMDS": ("AMD", "bear"), "AMUU": ("AMD", "bull"),
+    "CONL": ("COIN", "bull"), "CONI": ("COIN", "bear"),
+    "GGLL": ("GOOGL", "bull"), "GOOX": ("GOOG", "bull"),
+    "METU": ("META", "bull"), "METD": ("META", "bear"), "FBL": ("META", "bull"),
+    "AMZU": ("AMZN", "bull"), "AMZD": ("AMZN", "bear"), "AMZZ": ("AMZN", "bull"),
+    "MSFU": ("MSFT", "bull"), "MSFD": ("MSFT", "bear"), "MSFL": ("MSFT", "bull"),
+    "AAPU": ("AAPL", "bull"), "AAPD": ("AAPL", "bear"),
+    "PLTU": ("PLTR", "bull"), "PLTD": ("PLTR", "bear"), "PTIR": ("PLTR", "bull"), "PLTG": ("PLTR", "bull"),
+    "NFLU": ("NFLX", "bull"), "NFLD": ("NFLX", "bear"), "NFXL": ("NFLX", "bull"),
+    "AVL":  ("AVGO", "bull"), "AVGG": ("AVGO", "bull"),
+    "BABX": ("BABA", "bull"),
+    "TSMX": ("TSM", "bull"),  "TSMU": ("TSM", "bull"),  "TSMG": ("TSM", "bull"),
+    "RDTL": ("RDDT", "bull"),
+    "SOFX": ("SOFI", "bull"),
+    "DLLL": ("DELL", "bull"),
+    "BRKU": ("BRK-B", "bull"),
+    "NVOX": ("NVO", "bull"),
+    "ARMG": ("ARM", "bull"),
+    "RKLX": ("RKLB", "bull"),
+    "OKLL": ("OKLO", "bull"),
+    "RGTX": ("RGTI", "bull"),
+    "GEVX": ("GEV", "bull"),
+    "RDWU": ("RDW", "bull"),
+    "ONDL": ("ONDS", "bull"), "ONDG": ("ONDS", "bull"),
+    "LUNL": ("LUNR", "bull"),
+    "QBTX": ("QBTS", "bull"),
+    "IREX": ("IREN", "bull"), "IRE":  ("IREN", "bull"),
+    "VRTL": ("VRT", "bull"),
+    "ROBN": ("HOOD", "bull"), "HOOG": ("HOOD", "bull"),
+    "CRMG": ("CRM", "bull"),
+    "ADBG": ("ADBE", "bull"),
+    "ORCX": ("ORCL", "bull"), "ORCU": ("ORCL", "bull"),
+    "CRWG": ("CRWD", "bull"), "CRWL": ("CRWD", "bull"), "CRWU": ("CRWD", "bull"),
+    "COHX": ("COHR", "bull"),
+    "APPX": ("APP", "bull"),
+    "LRCU": ("LRCX", "bull"),
+    "MRVU": ("MRVL", "bull"), "MVLL": ("MRVL", "bull"),
+    "QCML": ("QCOM", "bull"),
+    "SMCX": ("SMCI", "bull"), "SMCL": ("SMCI", "bull"),
+    "WDCX": ("WDC", "bull"),
+    "IONX": ("IONQ", "bull"), "IONL": ("IONQ", "bull"),
+    "ASTX": ("ASTS", "bull"),
+    "CRDU": ("CRWV", "bull"), "CWVX": ("CRWV", "bull"),
+    "CRCG": ("CRCL", "bull"), "CRCA": ("CRCL", "bull"), "CCUP": ("CRCL", "bull"),
+    "NBIL": ("NBIS", "bull"), "NEBX": ("NBIS", "bull"), "NBIG": ("NBIS", "bull"),
+    "HIMZ": ("HIMS", "bear"),
+    "SNXX": ("SNDK", "bull"), "SNDU": ("SNDK", "bull"), "SNDG": ("SNDK", "bull"),
+    "BMNU": ("BMNR", "bull"), "BMNG": ("BMNR", "bull"),
+    "SPCH": ("SPCX", "bull"), "LOFF": ("SPCX", "bull"), "SPCU": ("SPCX", "bull"), "SPAL": ("SPCX", "bull"),
+    "INTW": ("INTC", "bull"), "LINT": ("INTC", "bull"),
+    "NOWL": ("NOW", "bull"),
+    "SKUU": ("SKHY", "bull"), "SKHX": ("SKHY", "bull"),
+    "AAOX": ("AAOI", "bull"),
+    "BEX":  ("BE", "bull"),   "BEG":  ("BE", "bull"),
+    "CBRG": ("CBRS", "bull"),
+    "MSOX": ("MSOS", "bull"),
+    "TEMT": ("TEM", "bull"),
+    "TDAX": ("TDAQ", "bull"),
+    "SMU":  ("SMR", "bull"),
+    "LABX": ("ALAB", "bull"),
+    "APLX": ("APLD", "bull"),
+    "MRAL": ("MARA", "bull"),
+    "IBX":  ("IBM", "bull"),
+    "ASMG": ("ASML", "bull"),
+    "AMA":  ("AMAT", "bull"),
+    "NVTX": ("NVTS", "bull"),
+    "PALU": ("PANW", "bull"),
+    "FUTG": ("FUTU", "bull"),
+    "LNOK": ("NOK", "bull"),
+}
+
+# Drop any placeholder Nones (kept above only to show what was explicitly checked and skipped)
+LEVERAGED_ETF_MAP = {t: v for t, v in LEVERAGED_ETF_MAP.items() if v is not None}
+
+@st.cache_data(ttl=3600)
+def fetch_leveraged_etf_dollar_volume(lev_tuple):
+    """20-day avg dollar volume (Close * Volume) per ticker. Silently skips
+    any ticker yfinance can't resolve (delisted/renamed) instead of failing."""
+    try:
+        raw = yf.download(list(lev_tuple), period="1mo", interval="1d",
+                           progress=False, auto_adjust=True)
+    except Exception:
+        return {}
+    result = {}
+    for t in lev_tuple:
+        try:
+            if isinstance(raw.columns, pd.MultiIndex):
+                c = raw['Close'][t].dropna()
+                v = raw['Volume'][t].dropna()
+            else:
+                c = raw['Close'].dropna()
+                v = raw['Volume'].dropna()
+            if c.empty or v.empty:
+                continue
+            dv = (c * v).tail(20).mean()
+            if pd.notna(dv) and dv > 0:
+                result[t] = float(dv)
+        except Exception:
+            continue
+    return result
+
+_lev_tickers_tuple = tuple(LEVERAGED_ETF_MAP.keys())
+lev_dollar_vol = timed(
+    "fetch_leveraged_etf_dollar_volume", fetch_leveraged_etf_dollar_volume, _lev_tickers_tuple
+)
+
+def _lev_badge(display_sym, underlying_sym, direction):
+    """Colored like setup_badge(), but keyed off the UNDERLYING ticker's
+    current setup category — only applied to the Bull side. Bear badges
+    always use the neutral red styling regardless of underlying setup."""
+    if direction == "bull":
+        if underlying_sym in ma50bounce_all:
+            return (f'<div class="ticker-badge orange-badge">'
+                    f'<span style="color:#111111;font-weight:bold;">{display_sym}</span></div>')
+        if underlying_sym in cloudwick_all:
+            return (f'<div class="ticker-badge aqua-badge">'
+                    f'<span style="color:#000000;font-weight:bold;">{display_sym}</span></div>')
+        if underlying_sym in cloud21ema_all:
+            return (f'<div class="ticker-badge purple-badge">'
+                    f'<span style="color:#000000;font-weight:bold;">{display_sym}</span></div>')
+        if underlying_sym in cloud_valid_syms:
+            return (f'<div class="ticker-badge" style="background-color:#378ADD;border:1px solid #378ADD;">'
+                    f'<span style="color:#111111;font-weight:bold;">{display_sym}</span></div>')
+
+    default_bg, default_border, default_color = (
+        ("#1b3a2e", "#2e7d52", "#9be8b8") if direction == "bull" else ("#3a1b1b", "#a13a3a", "#f0a8a8")
+    )
+    return (f'<div class="ticker-badge" style="background-color:{default_bg};border:1px solid {default_border};">'
+            f'<span style="color:{default_color};font-weight:bold;">{display_sym}</span></div>')
+
+def _lev_has_colored_bg(underlying_sym):
+    """True exactly when _lev_badge() above would give this ticker's BULL
+    badge one of the special setup-category backgrounds (orange/aqua/purple/
+    blue) instead of the plain neutral bull-green — bear badges never get
+    these colors, so bear tickers are always excluded."""
+    return underlying_sym in (ma50bounce_all | cloudwick_all | cloud21ema_all | cloud_valid_syms)
+
+VOL_TIERS = [
+    (">$500M", lambda v: v > 500_000_000),
+    ("$100M – $500M", lambda v: 100_000_000 <= v <= 500_000_000),
+    ("<$100M", lambda v: v < 100_000_000),
+]
+
+bull_map = {t: u for t, (u, d) in LEVERAGED_ETF_MAP.items() if d == "bull"}
+bear_map = {t: u for t, (u, d) in LEVERAGED_ETF_MAP.items() if d == "bear"}
+
+rows_html = ""
+_lev_colored_tickers = []
+for tier_label, tier_fn in VOL_TIERS:
+    bull_syms = sorted([t for t in bull_map if t in lev_dollar_vol and tier_fn(lev_dollar_vol[t])],
+                        key=lambda t: -lev_dollar_vol[t])
+    bear_syms = sorted([t for t in bear_map if t in lev_dollar_vol and tier_fn(lev_dollar_vol[t])],
+                        key=lambda t: -lev_dollar_vol[t])
+    _lev_colored_tickers.extend(t for t in bull_syms if _lev_has_colored_bg(bull_map[t]))
+    bull_html = "".join(_lev_badge(t, bull_map[t], "bull") for t in bull_syms) or "<span style='color:#555;'>—</span>"
+    bear_html = "".join(_lev_badge(t, bear_map[t], "bear") for t in bear_syms) or "<span style='color:#555;'>—</span>"
+    rows_html += (
+        f"<tr>"
+        f"<td style='padding:8px;color:#888;font-weight:bold;white-space:nowrap;vertical-align:top;'>{tier_label}</td>"
+        f"<td style='padding:8px;vertical-align:top;'>{bull_html}</td>"
+        f"<td style='padding:8px;vertical-align:top;'>{bear_html}</td>"
+        f"</tr>"
+    )
+
+if _lev_colored_tickers:
+    with _lev_copy_ph.container():
+        render_copy_button(_lev_colored_tickers)
+
+st.markdown(
+    f"""
+    <div style="overflow-x:auto; background:#0e1117; border-radius:6px;">
+    <table style="width:100%; border-collapse:collapse;">
+    <thead><tr>
+    <th style="text-align:left; padding:8px; width:130px;">Avg $ Volume</th>
+    <th style="text-align:left; padding:8px; color:#00FF00;">🟢 Bull</th>
+    <th style="text-align:left; padding:8px; color:#FF4B4B;">🔴 Bear</th>
+    </tr></thead>
+    <tbody>{rows_html}</tbody>
+    </table>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+# st.caption(
+#     "Badge color follows the underlying ticker's current setup (aqua=21ema_wick, "
+#     "purple=21ema_cloud, orange=50ma_bounce, blue=cloud_valid); neutral green/red "
+#     "otherwise. Curated list, not live-scraped from financecharts.com — verify "
+#     "tickers before trading, this corner of the ETF market delists/splits often."
+# )
+
+# ==============================================================================
 # 24. MCCLELLAN OSCILLATOR (MCO) & SUMMATION INDEX (MCSI) — BREADTH TIMING
 # Read-only, additive. Computed from the existing KNOWN_STOCKS universe
 # (proxy breadth universe via ticker_dfs_shared, already downloaded) since a
@@ -17417,293 +17704,6 @@ st.line_chart(
 
 # if dist_triggered:
 #     st.caption(f"⚠️ Distribution-day override active on: {', '.join(dist_triggered)} — this caps the verdict regardless of other pillars.")    
-
-# ==============================================================================
-# 27. LEVERAGED ETF BULL/BEAR TABLE — badge colored by underlying's setup category
-# NOTE: financecharts.com's screener blocks automated fetches (bot detection),
-# so this uses a curated list of major/liquid leveraged & single-stock ETFs
-# (Direxion/ProShares/GraniteShares/T-Rex) instead of scraping that page live.
-# This corner of the ETF market delists/splits often — verify periodically.
-# ==============================================================================
-st.markdown("---")
-# Copy button (filled in later, once the colored-badge tickers are known —
-# see _lev_colored_tickers below) sits in the adjacent narrow column.
-_lev_col_title, _lev_col_copy = st.columns([30, 1])
-_lev_title_ph = _lev_col_title.empty()
-_lev_copy_ph = _lev_col_copy.empty()
-_lev_title_ph.markdown(
-    """
-    <h4>
-        🎢 Leveraged ETF Bull / Bear Table
-        <span style="color:#888; font-size:12px;">(Require precision + conducive market conditions)</span>
-    </h4>
-    """,
-    unsafe_allow_html=True
-)
-
-LEVERAGED_ETF_MAP = {
-    # ── Index / broad market ──
-    "TQQQ": ("QQQ", "bull"),  "SQQQ": ("QQQ", "bear"),
-    "QLD":  ("QQQ", "bull"),  "QID":  ("QQQ", "bear"),
-    "MQQQ": ("QQQ", "bull"),
-    "QQUP": ("QQQ", "bull"),
-    "SPXL": ("SPY", "bull"),  "SPXS": ("SPY", "bear"),
-    "UPRO": ("SPY", "bull"),  "SPXU": ("SPY", "bear"),
-    "SSO":  ("SPY", "bull"),  "SDS":  ("SPY", "bear"),
-    "SPYU": ("SPY", "bull"),
-    "SPUU": ("SPY", "bull"),
-    "URSP": ("RSP", "bull"),
-    "TNA":  ("IWM", "bull"),  "TZA":  ("IWM", "bear"),
-    "URTY": ("IWM", "bull"),  "SRTY": ("IWM", "bear"),
-    "UWM":  ("IWM", "bull"),
-    "UDOW": ("DIA", "bull"),  "SDOW": ("DIA", "bear"),
-    "DDM":  ("DIA", "bull"),
-    "MIDU": ("MDY", "bull"),  "MVV":  ("MDY", "bull"),
-    "UMDD": ("MDY", "bull"),
-    "SAA":  ("IJR", "bull"),
-    "EFO":  ("EFA", "bull"),
-    "EET":  ("EEM", "bull"),  "EDC": ("EEM", "bull"),
-    "INDL": ("INDA", "bull"),
-    "EURL": ("IEUR", "bull"),
-    "BRZU": ("EWZ", "bull"),
-    "KORU": ("EWY", "bull"),
-    "HIBL": ("SPHB", "bull"),
-    "UVIX": ("VIXY", "bull"),
-
-    # ── Sector / thematic ──
-    "SOXL": ("SMH", "bull"),  "SOXS": ("SMH", "bear"),  "USD": ("SMH", "bull"),
-    "TECL": ("XLK", "bull"),  "TECS": ("XLK", "bear"),  "ROM": ("XLK", "bull"),
-    "FAS":  ("XLF", "bull"),  "FAZ":  ("XLF", "bear"),  "UYG": ("XLF", "bull"),
-    "LABU": ("XBI", "bull"),  "LABD": ("XBI", "bear"),  "BIB": ("XBI", "bull"),
-    "CURE": ("XLV", "bull"),  "RXL":  ("XLV", "bull"),
-    "NUGT": ("GDX", "bull"),  "DUST": ("GDX", "bear"),  "GDXU": ("GDX", "bull"),
-    "GDXD": ("GDX", "bear"),
-    "JNUG": ("GDXJ", "bull"), "JDST": ("GDXJ", "bear"),
-    "AGQ":  ("SLV", "bull"),
-    "UGL":  ("GLD", "bull"),  "DGP": ("GLD", "bull"),
-    "SHNY": ("GLD", "bull"),
-    "URAA": ("URA", "bull"),
-    "LITX": ("LIT", "bull"),
-    "TMF":  ("TLT", "bull"),  "TMV":  ("TLT", "bear"),  "UBT": ("TLT", "bull"),
-    "TYD":  ("TLT", "bull"),
-    "YINN": ("KWEB", "bull"), "YANG": ("KWEB", "bear"),
-    "CWEB": ("KWEB", "bull"), "CHAU": ("KWEB", "bull"),
-    "UCO":  ("USO", "bull"),  "SCO":  ("USO", "bear"),
-    "OILU": ("USO", "bull"),  "OILD": ("USO", "bear"),
-    "BOIL": ("UNG", "bull"),  "KOLD": ("UNG", "bear"),
-    "ERX":  ("XLE", "bull"),  "ERY":  ("XLE", "bear"),
-    "DIG":  ("XLE", "bull"),  "NRGU": ("XLE", "bull"),
-    "GUSH": ("XOP", "bull"),
-    "DPST": ("KRE", "bull"),  "BNKU": ("KBE", "bull"),
-    "DRN":  ("IYR", "bull"),  "DRV":  ("IYR", "bear"),  "URE": ("IYR", "bull"),
-    "BITU": ("BITO", "bull"), "SBIT": ("BITO", "bear"),
-    "UYM":  ("XLB", "bull"),
-    "UXI":  ("XLI", "bull"),  "DUSL": ("ITA", "bull"),  "DFEN": ("ITA", "bull"),
-    "NAIL": ("ITB", "bull"),
-    "UTSL": ("XLU", "bull"),
-    "FNGU": ("MAGS", "bull"), "FNGD": ("MAGS", "bear"), "FNGO": ("MAGS", "bull"),
-    "BULZ": ("MAGS", "bull"), "MAGX": ("MAGS", "bull"), "FNGG": ("MAGS", "bull"),
-    "QQQU": ("MAGS", "bull"),
-    "WEBL": ("FDN", "bull"),
-    "QPUX": ("QTUM", "bull"),
-
-    # ── Single-stock ──
-    "NVDL": ("NVDA", "bull"), "NVD":  ("NVDA", "bear"), "NVDU": ("NVDA", "bull"),
-    "NVDX": ("NVDA", "bull"), "NVDG": ("NVDA", "bull"), "NVII": ("NVDA", "bull"),
-    "TSLL": ("TSLA", "bull"), "TSLR": ("TSLA", "bull"), "TSLT": ("TSLA", "bull"), "TSLG": ("TSLA", "bull"),
-    "TSLS": ("TSLA", "bear"), "TSLQ": ("TSLA", "bear"), "TSLZ": ("TSLA", "bear"),
-    "TSII": ("TSLA", "bull"),
-    "MSTU": ("MSTR", "bull"), "MSTX": ("MSTR", "bull"), "MSTZ": ("MSTR", "bear"),
-    "MUU":  ("MU", "bull"),   "MULL": ("MU", "bull"),
-    "AMDL": ("AMD", "bull"),  "AMDS": ("AMD", "bear"), "AMUU": ("AMD", "bull"),
-    "CONL": ("COIN", "bull"), "CONI": ("COIN", "bear"),
-    "GGLL": ("GOOGL", "bull"), "GOOX": ("GOOG", "bull"),
-    "METU": ("META", "bull"), "METD": ("META", "bear"), "FBL": ("META", "bull"),
-    "AMZU": ("AMZN", "bull"), "AMZD": ("AMZN", "bear"), "AMZZ": ("AMZN", "bull"),
-    "MSFU": ("MSFT", "bull"), "MSFD": ("MSFT", "bear"), "MSFL": ("MSFT", "bull"),
-    "AAPU": ("AAPL", "bull"), "AAPD": ("AAPL", "bear"),
-    "PLTU": ("PLTR", "bull"), "PLTD": ("PLTR", "bear"), "PTIR": ("PLTR", "bull"), "PLTG": ("PLTR", "bull"),
-    "NFLU": ("NFLX", "bull"), "NFLD": ("NFLX", "bear"), "NFXL": ("NFLX", "bull"),
-    "AVL":  ("AVGO", "bull"), "AVGG": ("AVGO", "bull"),
-    "BABX": ("BABA", "bull"),
-    "TSMX": ("TSM", "bull"),  "TSMU": ("TSM", "bull"),  "TSMG": ("TSM", "bull"),
-    "RDTL": ("RDDT", "bull"),
-    "SOFX": ("SOFI", "bull"),
-    "DLLL": ("DELL", "bull"),
-    "BRKU": ("BRK-B", "bull"),
-    "NVOX": ("NVO", "bull"),
-    "ARMG": ("ARM", "bull"),
-    "RKLX": ("RKLB", "bull"),
-    "OKLL": ("OKLO", "bull"),
-    "RGTX": ("RGTI", "bull"),
-    "GEVX": ("GEV", "bull"),
-    "RDWU": ("RDW", "bull"),
-    "ONDL": ("ONDS", "bull"), "ONDG": ("ONDS", "bull"),
-    "LUNL": ("LUNR", "bull"),
-    "QBTX": ("QBTS", "bull"),
-    "IREX": ("IREN", "bull"), "IRE":  ("IREN", "bull"),
-    "VRTL": ("VRT", "bull"),
-    "ROBN": ("HOOD", "bull"), "HOOG": ("HOOD", "bull"),
-    "CRMG": ("CRM", "bull"),
-    "ADBG": ("ADBE", "bull"),
-    "ORCX": ("ORCL", "bull"), "ORCU": ("ORCL", "bull"),
-    "CRWG": ("CRWD", "bull"), "CRWL": ("CRWD", "bull"), "CRWU": ("CRWD", "bull"),
-    "COHX": ("COHR", "bull"),
-    "APPX": ("APP", "bull"),
-    "LRCU": ("LRCX", "bull"),
-    "MRVU": ("MRVL", "bull"), "MVLL": ("MRVL", "bull"),
-    "QCML": ("QCOM", "bull"),
-    "SMCX": ("SMCI", "bull"), "SMCL": ("SMCI", "bull"),
-    "WDCX": ("WDC", "bull"),
-    "IONX": ("IONQ", "bull"), "IONL": ("IONQ", "bull"),
-    "ASTX": ("ASTS", "bull"),
-    "CRDU": ("CRWV", "bull"), "CWVX": ("CRWV", "bull"),
-    "CRCG": ("CRCL", "bull"), "CRCA": ("CRCL", "bull"), "CCUP": ("CRCL", "bull"),
-    "NBIL": ("NBIS", "bull"), "NEBX": ("NBIS", "bull"), "NBIG": ("NBIS", "bull"),
-    "HIMZ": ("HIMS", "bear"),
-    "SNXX": ("SNDK", "bull"), "SNDU": ("SNDK", "bull"), "SNDG": ("SNDK", "bull"),
-    "BMNU": ("BMNR", "bull"), "BMNG": ("BMNR", "bull"),
-    "SPCH": ("SPCX", "bull"), "LOFF": ("SPCX", "bull"), "SPCU": ("SPCX", "bull"), "SPAL": ("SPCX", "bull"),
-    "INTW": ("INTC", "bull"), "LINT": ("INTC", "bull"),
-    "NOWL": ("NOW", "bull"),
-    "SKUU": ("SKHY", "bull"), "SKHX": ("SKHY", "bull"),
-    "AAOX": ("AAOI", "bull"),
-    "BEX":  ("BE", "bull"),   "BEG":  ("BE", "bull"),
-    "CBRG": ("CBRS", "bull"),
-    "MSOX": ("MSOS", "bull"),
-    "TEMT": ("TEM", "bull"),
-    "TDAX": ("TDAQ", "bull"),
-    "SMU":  ("SMR", "bull"),
-    "LABX": ("ALAB", "bull"),
-    "APLX": ("APLD", "bull"),
-    "MRAL": ("MARA", "bull"),
-    "IBX":  ("IBM", "bull"),
-    "ASMG": ("ASML", "bull"),
-    "AMA":  ("AMAT", "bull"),
-    "NVTX": ("NVTS", "bull"),
-    "PALU": ("PANW", "bull"),
-    "FUTG": ("FUTU", "bull"),
-    "LNOK": ("NOK", "bull"),
-}
-
-# Drop any placeholder Nones (kept above only to show what was explicitly checked and skipped)
-LEVERAGED_ETF_MAP = {t: v for t, v in LEVERAGED_ETF_MAP.items() if v is not None}
-
-@st.cache_data(ttl=3600)
-def fetch_leveraged_etf_dollar_volume(lev_tuple):
-    """20-day avg dollar volume (Close * Volume) per ticker. Silently skips
-    any ticker yfinance can't resolve (delisted/renamed) instead of failing."""
-    try:
-        raw = yf.download(list(lev_tuple), period="1mo", interval="1d",
-                           progress=False, auto_adjust=True)
-    except Exception:
-        return {}
-    result = {}
-    for t in lev_tuple:
-        try:
-            if isinstance(raw.columns, pd.MultiIndex):
-                c = raw['Close'][t].dropna()
-                v = raw['Volume'][t].dropna()
-            else:
-                c = raw['Close'].dropna()
-                v = raw['Volume'].dropna()
-            if c.empty or v.empty:
-                continue
-            dv = (c * v).tail(20).mean()
-            if pd.notna(dv) and dv > 0:
-                result[t] = float(dv)
-        except Exception:
-            continue
-    return result
-
-_lev_tickers_tuple = tuple(LEVERAGED_ETF_MAP.keys())
-lev_dollar_vol = timed(
-    "fetch_leveraged_etf_dollar_volume", fetch_leveraged_etf_dollar_volume, _lev_tickers_tuple
-)
-
-def _lev_badge(display_sym, underlying_sym, direction):
-    """Colored like setup_badge(), but keyed off the UNDERLYING ticker's
-    current setup category — only applied to the Bull side. Bear badges
-    always use the neutral red styling regardless of underlying setup."""
-    if direction == "bull":
-        if underlying_sym in ma50bounce_all:
-            return (f'<div class="ticker-badge orange-badge">'
-                    f'<span style="color:#111111;font-weight:bold;">{display_sym}</span></div>')
-        if underlying_sym in cloudwick_all:
-            return (f'<div class="ticker-badge aqua-badge">'
-                    f'<span style="color:#000000;font-weight:bold;">{display_sym}</span></div>')
-        if underlying_sym in cloud21ema_all:
-            return (f'<div class="ticker-badge purple-badge">'
-                    f'<span style="color:#000000;font-weight:bold;">{display_sym}</span></div>')
-        if underlying_sym in cloud_valid_syms:
-            return (f'<div class="ticker-badge" style="background-color:#378ADD;border:1px solid #378ADD;">'
-                    f'<span style="color:#111111;font-weight:bold;">{display_sym}</span></div>')
-
-    default_bg, default_border, default_color = (
-        ("#1b3a2e", "#2e7d52", "#9be8b8") if direction == "bull" else ("#3a1b1b", "#a13a3a", "#f0a8a8")
-    )
-    return (f'<div class="ticker-badge" style="background-color:{default_bg};border:1px solid {default_border};">'
-            f'<span style="color:{default_color};font-weight:bold;">{display_sym}</span></div>')
-
-def _lev_has_colored_bg(underlying_sym):
-    """True exactly when _lev_badge() above would give this ticker's BULL
-    badge one of the special setup-category backgrounds (orange/aqua/purple/
-    blue) instead of the plain neutral bull-green — bear badges never get
-    these colors, so bear tickers are always excluded."""
-    return underlying_sym in (ma50bounce_all | cloudwick_all | cloud21ema_all | cloud_valid_syms)
-
-VOL_TIERS = [
-    (">$500M", lambda v: v > 500_000_000),
-    ("$100M – $500M", lambda v: 100_000_000 <= v <= 500_000_000),
-    ("<$100M", lambda v: v < 100_000_000),
-]
-
-bull_map = {t: u for t, (u, d) in LEVERAGED_ETF_MAP.items() if d == "bull"}
-bear_map = {t: u for t, (u, d) in LEVERAGED_ETF_MAP.items() if d == "bear"}
-
-rows_html = ""
-_lev_colored_tickers = []
-for tier_label, tier_fn in VOL_TIERS:
-    bull_syms = sorted([t for t in bull_map if t in lev_dollar_vol and tier_fn(lev_dollar_vol[t])],
-                        key=lambda t: -lev_dollar_vol[t])
-    bear_syms = sorted([t for t in bear_map if t in lev_dollar_vol and tier_fn(lev_dollar_vol[t])],
-                        key=lambda t: -lev_dollar_vol[t])
-    _lev_colored_tickers.extend(t for t in bull_syms if _lev_has_colored_bg(bull_map[t]))
-    bull_html = "".join(_lev_badge(t, bull_map[t], "bull") for t in bull_syms) or "<span style='color:#555;'>—</span>"
-    bear_html = "".join(_lev_badge(t, bear_map[t], "bear") for t in bear_syms) or "<span style='color:#555;'>—</span>"
-    rows_html += (
-        f"<tr>"
-        f"<td style='padding:8px;color:#888;font-weight:bold;white-space:nowrap;vertical-align:top;'>{tier_label}</td>"
-        f"<td style='padding:8px;vertical-align:top;'>{bull_html}</td>"
-        f"<td style='padding:8px;vertical-align:top;'>{bear_html}</td>"
-        f"</tr>"
-    )
-
-if _lev_colored_tickers:
-    with _lev_copy_ph.container():
-        render_copy_button(_lev_colored_tickers)
-
-st.markdown(
-    f"""
-    <div style="overflow-x:auto; background:#0e1117; border-radius:6px;">
-    <table style="width:100%; border-collapse:collapse;">
-    <thead><tr>
-    <th style="text-align:left; padding:8px; width:130px;">Avg $ Volume</th>
-    <th style="text-align:left; padding:8px; color:#00FF00;">🟢 Bull</th>
-    <th style="text-align:left; padding:8px; color:#FF4B4B;">🔴 Bear</th>
-    </tr></thead>
-    <tbody>{rows_html}</tbody>
-    </table>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-# st.caption(
-#     "Badge color follows the underlying ticker's current setup (aqua=21ema_wick, "
-#     "purple=21ema_cloud, orange=50ma_bounce, blue=cloud_valid); neutral green/red "
-#     "otherwise. Curated list, not live-scraped from financecharts.com — verify "
-#     "tickers before trading, this corner of the ETF market delists/splits often."
-# )
 
 
 # Most sections first, then alphabetical tiebreaker
