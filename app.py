@@ -17198,10 +17198,7 @@ def compute_market_verdict():
         p4_score = (strong + improving) / n * 100
         p4_label = f"Strong {strong} / Improving {improving} / Weakening {weakening} / Weak {weak}"
         top_rs_sectors = sorted(quad_pts, key=lambda p: p["weekly_rs"], reverse=True)[:3]
-        p4_label += " | Top RS: " + ", ".join(
-            f'{p["industry"]} (W {p["weekly_rs"]:.1f}, M {p["monthly_rs"]:.1f})'
-            for p in top_rs_sectors
-        )
+        p4_label += " | Top RS: " + ", ".join(p["industry"] for p in top_rs_sectors)
     else:
         p4_score, p4_label = 50, "Insufficient data | Top RS: unavailable"
     breakdown.append(("RS Quadrant Map", p4_score, p4_label, ""))
@@ -17249,9 +17246,7 @@ def compute_market_verdict():
         risk_direction = "Risk-ON" if avg_slope > 0 else "Risk-OFF"
         p6_label = f"{risk_direction} ({sum(1 for _, s in slopes if s > 0)}/{len(slopes)} pairs up)"
         top_risk_pairs = sorted(slopes, key=lambda pair: pair[1], reverse=True)[:3]
-        p6_label += " | Top pairs: " + ", ".join(
-            f"{pair} ({slope * 100:+.3f}%/d)" for pair, slope in top_risk_pairs
-        )
+        p6_label += " | Top pairs: " + ", ".join(pair for pair, _ in top_risk_pairs)
     else:
         p6_score, p6_label = 50, "Insufficient data | Top pairs: unavailable"
     breakdown.append(("ETF Risk Appetite", p6_score, p6_label, ""))
@@ -17367,10 +17362,10 @@ def compute_market_verdict():
         p9_score = (leading_count + improving_count) / total_rrg * 100
         p9_label = f"Leading {leading_count} / Improving {improving_count} / Weakening {weakening_count} / Lagging {lagging_count}"
         if leading_sectors:
-            leader, leader_rr, leader_rm = max(
+            leader = max(
                 leading_sectors, key=lambda item: item[1] + item[2]
-            )
-            p9_label += f" | Leader: {leader} (RS-Ratio {leader_rr:.1f}, Momentum {leader_rm:.1f})"
+            )[0]
+            p9_label += f" | Leader: {leader}"
         else:
             p9_label += " | Leader: none"
     else:
@@ -17465,8 +17460,8 @@ def compute_market_verdict():
             key=lambda row: row[1],
             reverse=True,
         )
-        above_spy_detail = ", ".join(f"{sym} ({rsi:.1f})" for sym, rsi in above_spy) or "none"
-        p13_label += f" | RSI > SPY ({spy_rsi_v13:.1f}): {above_spy_detail}"
+        above_spy_detail = ", ".join(sym for sym, _ in above_spy) or "none"
+        p13_label += f" | RSI > SPY: {above_spy_detail}"
     else:
         p13_label += " | RSI > SPY: unavailable"
     breakdown.append(("Pie Chart RSI (Sector Momentum)", p13_score, p13_label, ""))
@@ -17486,9 +17481,7 @@ def compute_market_verdict():
         p14_score = (positive_sectors / len(heat_returns)) * 100
         p14_label = f"{positive_sectors}/{len(heat_returns)} sectors with +ve 21D return"
         top_heat_sectors = sorted(heat_returns, key=lambda row: row[1], reverse=True)[:3]
-        p14_label += " | Top sectors: " + ", ".join(
-            f"{sym} ({value:+.1f}%)" for sym, value in top_heat_sectors
-        )
+        p14_label += " | Top sectors: " + ", ".join(sym for sym, _ in top_heat_sectors)
     else:
         p14_score, p14_label = 50, "Insufficient data | Top sectors: unavailable"
     breakdown.append(("Sector Heatmap Breadth", p14_score, p14_label, ""))
@@ -17513,10 +17506,7 @@ def compute_market_verdict():
             key=lambda row: row["Avg Value"],
             reverse=True,
         )[:3]
-        top_accum_detail = ", ".join(
-            f'{row["Industry"]} ({row["Rating"]}, {row["Avg Value"]:.2f})'
-            for row in top_accum_sectors
-        ) or "unavailable"
+        top_accum_detail = ", ".join(row["Industry"] for row in top_accum_sectors) or "unavailable"
         p_accum_label += f" | Top ratings: {top_accum_detail}"
     else:
         p_accum_score, p_accum_label = 50, "Insufficient data | Top ratings: unavailable"
