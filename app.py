@@ -17383,8 +17383,20 @@ def compute_market_verdict():
             p10_label = f"Stage2 = {stg2_avg:.1f}% vs Stage4 = {stg4_avg:.1f}%"
         else:
             p10_score, p10_label = 50, "Insufficient data"
+        stage_rows_v = _safe("stage_pct_rows", [])
+        top_stage_rows = sorted(
+            (
+                row for row in stage_rows_v
+                if pd.notna(row.get("Stage2 %")) and pd.notna(row.get("Stage4 %"))
+            ),
+            key=lambda row: row["Stage2 %"] - row["Stage4 %"],
+            reverse=True,
+        )[:3]
+        p10_label += " | Top sectors: " + (
+            ", ".join(row["Ticker"] for row in top_stage_rows) or "unavailable"
+        )
     else:
-        p10_score, p10_label = 50, "Insufficient data"
+        p10_score, p10_label = 50, "Insufficient data | Top sectors: unavailable"
     breakdown.append(("ETF Stage2/4 (watchlist)", p10_score, p10_label, ""))
 
     # ── Pillar 11: 1-Month Leading Theme (LIME_STOCKS momentum breadth) ────
@@ -17506,7 +17518,7 @@ def compute_market_verdict():
             key=lambda row: row["Avg Value"],
             reverse=True,
         )[:3]
-        top_accum_detail = ", ".join(row["Industry"] for row in top_accum_sectors) or "unavailable"
+        top_accum_detail = ", ".join(row["Ticker"] for row in top_accum_sectors) or "unavailable"
         p_accum_label += f" | Top ratings: {top_accum_detail}"
     else:
         p_accum_score, p_accum_label = 50, "Insufficient data | Top ratings: unavailable"
@@ -17692,7 +17704,7 @@ st.markdown(
 pillar_rows_html = ""
 for name, score, label, detail in pillar_breakdown:
     bar_color = "#00FF00" if score >= 65 else "#FFA500" if score >= 40 else "#FF4B4B"
-    row_border = "border-bottom:3px solid #666;" if name in {"Distribution Days", "Accumulation Rating"} else ""
+    row_border = "border-bottom:3px solid #666;" if name in {"Distribution Days", "ETF Stage2/4 (watchlist)"} else ""
     pillar_rows_html += (
         f"<tr style='{row_border}'>"
         f"<td style='padding:6px 10px;color:#e0e0e0;font-weight:bold;white-space:nowrap;'>{name}</td>"
