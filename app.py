@@ -17197,8 +17197,13 @@ def compute_market_verdict():
         weak = sum(1 for p in quad_pts if p["weekly_rs"] < 50 and p["monthly_rs"] < 50)
         p4_score = (strong + improving) / n * 100
         p4_label = f"Strong {strong} / Improving {improving} / Weakening {weakening} / Weak {weak}"
+        top_rs_sectors = sorted(quad_pts, key=lambda p: p["weekly_rs"], reverse=True)[:3]
+        p4_label += " |: Top RS: " + ", ".join(
+            f'{p["industry"]} (W {p["weekly_rs"]:.1f}, M {p["monthly_rs"]:.1f})'
+            for p in top_rs_sectors
+        )
     else:
-        p4_score, p4_label = 50, "Insufficient data"
+        p4_score, p4_label = 50, "Insufficient data |: Top RS: unavailable"
     breakdown.append(("RS Quadrant Map", p4_score, p4_label, ""))
 
     # ── Pillar 5: Minervini Breadth Trend (5D MA vs 20D MA + structure) ────
@@ -17235,16 +17240,20 @@ def compute_market_verdict():
             x = np.arange(len(ratio))
             slope = np.polyfit(x, ratio.values, 1)[0]
             norm_slope = slope / ratio.mean()  # % change per day, scale-free
-            slopes.append(norm_slope)
+            slopes.append((f"{num}/{den}", norm_slope))
         except Exception:
             continue
     if slopes:
-        avg_slope = np.mean(slopes)
+        avg_slope = np.mean([slope for _, slope in slopes])
         p6_score = max(0, min(100, 50 + avg_slope * 5000))
         risk_direction = "Risk-ON" if avg_slope > 0 else "Risk-OFF"
-        p6_label = f"{risk_direction} ({sum(1 for s in slopes if s > 0)}/{len(slopes)} pairs up)"
+        p6_label = f"{risk_direction} ({sum(1 for _, s in slopes if s > 0)}/{len(slopes)} pairs up)"
+        top_risk_pairs = sorted(slopes, key=lambda pair: pair[1], reverse=True)[:3]
+        p6_label += " |: Top pairs: " + ", ".join(
+            f"{pair} ({slope * 100:+.3f}%/d)" for pair, slope in top_risk_pairs
+        )
     else:
-        p6_score, p6_label = 50, "Insufficient data"
+        p6_score, p6_label = 50, "Insufficient data |: Top pairs: unavailable"
     breakdown.append(("ETF Risk Appetite", p6_score, p6_label, ""))
 
     # ── Pillar 7: VIX Term Structure ───────────────────────────────────────
@@ -17332,6 +17341,7 @@ def compute_market_verdict():
     # ── Pillar 9: RRG Rotation (Leading + Improving quadrant %) ───────────
     rrg_full_v = _safe("rrg_data_full", {})
     leading_count = improving_count = weakening_count = lagging_count = total_rrg = 0
+    leading_sectors = []
     for sym, df_t in rrg_full_v.items():
         try:
             if df_t is None or df_t.empty:
@@ -17343,6 +17353,7 @@ def compute_market_verdict():
             total_rrg += 1
             if rr >= 100 and rm >= 100:
                 leading_count += 1
+                leading_sectors.append((sym, rr, rm))
             elif rr < 100 and rm >= 100:
                 improving_count += 1
             elif rr >= 100 and rm < 100:
@@ -17355,8 +17366,15 @@ def compute_market_verdict():
     if total_rrg > 0:
         p9_score = (leading_count + improving_count) / total_rrg * 100
         p9_label = f"Leading {leading_count} / Improving {improving_count} / Weakening {weakening_count} / Lagging {lagging_count}"
+        if leading_sectors:
+            leader, leader_rr, leader_rm = max(
+                leading_sectors, key=lambda item: item[1] + item[2]
+            )
+            p9_label += f" |: Leader: {leader} (RS-Ratio {leader_rr:.1f}, Momentum {leader_rm:.1f})"
+        else:
+            p9_label += " |: Leader: none"
     else:
-        p9_score, p9_label = 50, "Insufficient data"
+        p9_score, p9_label = 50, "Insufficient data |: Leader: unavailable"
     breakdown.append(("RRG Rotation", p9_score, p9_label, f"({total_rrg} tickers tracked)"))
 
     # ── Pillar 10: ETF Stage2/4 Watchlist (stg2 % vs stg4 %) ───────────────
@@ -17419,19 +17437,38 @@ def compute_market_verdict():
     ticker_dfs_v13 = _safe("ticker_dfs_shared", {})
     sector_etfs_v13 = INDUSTRIES.get('ETF', [])
     rsi_vals = []
+    sector_rsi_rows = []
     for sym in sector_etfs_v13:
         df_sym = ticker_dfs_v13.get(sym)
         if df_sym is None or len(df_sym) < 15:
             continue
         rsi_series = _p13_rsi(df_sym['Close'], period=14).dropna()
         if not rsi_series.empty:
-            rsi_vals.append(float(rsi_series.iloc[-1]))
+            rsi_val = float(rsi_series.iloc[-1])
+            rsi_vals.append(rsi_val)
+            sector_rsi_rows.append((sym, rsi_val))
+    spy_df_v13 = ticker_dfs_v13.get("SPY")
+    spy_rsi_v13 = None
+    if spy_df_v13 is not None and len(spy_df_v13) >= 15:
+        spy_rsi_series_v13 = _p13_rsi(spy_df_v13["Close"], period=14).dropna()
+        if not spy_rsi_series_v13.empty:
+            spy_rsi_v13 = float(spy_rsi_series_v13.iloc[-1])
     if rsi_vals:
         avg_rsi = sum(rsi_vals) / len(rsi_vals)
         p13_score = max(0, min(100, avg_rsi))
         p13_label = f"Avg RSI = {avg_rsi:.1f}"
     else:
         p13_score, p13_label = 50, "Insufficient data"
+    if spy_rsi_v13 is not None:
+        above_spy = sorted(
+            (row for row in sector_rsi_rows if row[1] > spy_rsi_v13),
+            key=lambda row: row[1],
+            reverse=True,
+        )
+        above_spy_detail = ", ".join(f"{sym} ({rsi:.1f})" for sym, rsi in above_spy) or "none"
+        p13_label += f" |: RSI > SPY ({spy_rsi_v13:.1f}): {above_spy_detail}"
+    else:
+        p13_label += " |: RSI > SPY: unavailable"
     breakdown.append(("Pie Chart RSI (Sector Momentum)", p13_score, p13_label, ""))
 
     # ── Pillar 14: Sector Heatmap (21D return breadth across sector ETFs) ──
@@ -17443,13 +17480,17 @@ def compute_market_verdict():
         ret_series = df_sym['Close'].pct_change(21) * 100
         val = ret_series.iloc[-1]
         if pd.notna(val):
-            heat_returns.append(float(val))
+            heat_returns.append((sym, float(val)))
     if heat_returns:
-        positive_sectors = sum(1 for v in heat_returns if v > 0)
+        positive_sectors = sum(1 for _, v in heat_returns if v > 0)
         p14_score = (positive_sectors / len(heat_returns)) * 100
         p14_label = f"{positive_sectors}/{len(heat_returns)} sectors with +ve 21D return"
+        top_heat_sectors = sorted(heat_returns, key=lambda row: row[1], reverse=True)[:3]
+        p14_label += " |: Top sectors: " + ", ".join(
+            f"{sym} ({value:+.1f}%)" for sym, value in top_heat_sectors
+        )
     else:
-        p14_score, p14_label = 50, "Insufficient data"
+        p14_score, p14_label = 50, "Insufficient data |: Top sectors: unavailable"
     breakdown.append(("Sector Heatmap Breadth", p14_score, p14_label, ""))
 
     # ── Pillar: Accumulation Rating (Up/Down Volume Ratio breadth) ────────
@@ -17460,8 +17501,25 @@ def compute_market_verdict():
         p_accum_score = (above1_count / len(valid_accum_vals)) * 100
         avg_accum_val = sum(valid_accum_vals) / len(valid_accum_vals)
         p_accum_label = f"{above1_count}/{len(valid_accum_vals)} themes accumulating (avg {avg_accum_val:.2f})"
+        best_accum_by_industry = {}
+        for row in accumulation_rows_v:
+            industry = row.get("Industry")
+            value = row.get("Avg Value")
+            if industry and industry != "—" and value is not None:
+                if industry not in best_accum_by_industry or value > best_accum_by_industry[industry]["Avg Value"]:
+                    best_accum_by_industry[industry] = row
+        top_accum_sectors = sorted(
+            best_accum_by_industry.values(),
+            key=lambda row: row["Avg Value"],
+            reverse=True,
+        )[:3]
+        top_accum_detail = ", ".join(
+            f'{row["Industry"]} ({row["Rating"]}, {row["Avg Value"]:.2f})'
+            for row in top_accum_sectors
+        ) or "unavailable"
+        p_accum_label += f" |: Top ratings: {top_accum_detail}"
     else:
-        p_accum_score, p_accum_label = 50, "Insufficient data"
+        p_accum_score, p_accum_label = 50, "Insufficient data |: Top ratings: unavailable"
     breakdown.append(("Accumulation Rating", p_accum_score, p_accum_label, ""))
 
     # ── Pillar: Market Internal (MCO/MCSI breadth timing) ──────────────────
