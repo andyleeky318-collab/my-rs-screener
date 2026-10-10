@@ -17362,15 +17362,17 @@ def compute_market_verdict():
         p9_score = (leading_count + improving_count) / total_rrg * 100
         p9_label = f"Leading {leading_count} / Improving {improving_count} / Weakening {weakening_count} / Lagging {lagging_count}"
         if leading_sectors:
-            leader = max(
-                leading_sectors, key=lambda item: item[1] + item[2]
-            )[0]
-            p9_label += f" | Leader: {leader}"
+            leaders = ", ".join(
+                item[0] for item in sorted(
+                    leading_sectors, key=lambda item: item[1] + item[2], reverse=True
+                )
+            )
+            p9_label += f" | Leader: {leaders}"
         else:
             p9_label += " | Leader: none"
     else:
         p9_score, p9_label = 50, "Insufficient data | Leader: unavailable"
-    breakdown.append(("RRG Rotation", p9_score, p9_label, f"({total_rrg} tickers tracked)"))
+    breakdown.append(("RRG Rotation", p9_score, p9_label, ""))
 
     # ── Pillar 10: ETF Stage2/4 Watchlist (stg2 % vs stg4 %) ───────────────
     stage_pct_t_v = _safe("stage_pct_df_t", pd.DataFrame())
