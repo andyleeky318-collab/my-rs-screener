@@ -17703,13 +17703,37 @@ st.markdown(
 )
 
 # ── Pillar breakdown table ──────────────────────────────────────────────────
+pillar_timeframes = {
+    "1 Month Leading Theme": "Short term",
+    "Pine RS Table Breadth": "Short term",
+    "RS Quadrant Map": "Long term",
+    "Pie Chart RSI (Sector Momentum)": "Short term + Long term",
+    "ETF Risk Appetite": "Short term",
+    "Sector Heatmap Breadth": "Long term",
+    "RRG Rotation": "Short term",
+    "Accumulation Rating": "Short term",
+    "ETF Stage2/4 (watchlist)": "Short term",
+    "Stage Breadth": "Long term",
+    "Market Regime": "Long term",
+    "Minervini Breadth Trend": "Short term",
+    "Market Internal": "Short term + Long term",
+    "Healthy Pullback vs Deterioration": "Short term + Long term",
+    "Breakout Health": "Short term",
+    "Distribution Days": "Short term",
+    "VIX Term Structure": "Short term",
+    "Credit Spread (HYG/LQD)": "Short term",
+    "Equity Risk Premium (ERP)": "Long term",
+    "S&P 500 Valuation (P/E vs 10Y)": "Long term",
+}
+
 pillar_rows_html = ""
 for name, score, label, detail in pillar_breakdown:
     bar_color = "#00FF00" if score >= 65 else "#FFA500" if score >= 40 else "#FF4B4B"
     row_border = "border-bottom:3px solid #666;" if name in {"Distribution Days", "ETF Stage2/4 (watchlist)"} else ""
+    display_name = f"{name} ({pillar_timeframes[name]})"
     pillar_rows_html += (
         f"<tr style='{row_border}'>"
-        f"<td style='padding:6px 10px;color:#e0e0e0;font-weight:bold;white-space:nowrap;'>{name}</td>"
+        f"<td style='padding:6px 10px;color:#e0e0e0;font-weight:bold;white-space:nowrap;'>{display_name}</td>"
         f"<td style='padding:6px 10px;'>"
         f"<div style='width:100%;background:#333;border-radius:4px;height:14px;position:relative;'>"
         f"<div style='width:{score:.0f}%;background:{bar_color};height:14px;border-radius:4px;'></div>"
