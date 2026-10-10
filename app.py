@@ -17727,10 +17727,15 @@ pillar_timeframes = {
 }
 
 pillar_rows_html = ""
+pillar_display_names = {
+    "1 Month Leading Theme": "Deepvue 1 Month Leading Theme",
+    "Pie Chart RSI (Sector Momentum)": "Pie Chart RSI",
+    "ETF Stage2/4 (watchlist)": "ETF Stage2/4",
+}
 for name, score, label, detail in pillar_breakdown:
     bar_color = "#00FF00" if score >= 65 else "#FFA500" if score >= 40 else "#FF4B4B"
     row_border = "border-bottom:3px solid #666;" if name in {"Distribution Days", "ETF Stage2/4 (watchlist)"} else ""
-    display_name = f"{name} ({pillar_timeframes[name]})"
+    display_name = f"{pillar_display_names.get(name, name)} ({pillar_timeframes[name]})"
     pillar_rows_html += (
         f"<tr style='{row_border}'>"
         f"<td style='padding:6px 10px;color:#e0e0e0;font-weight:bold;white-space:nowrap;'>{display_name}</td>"
