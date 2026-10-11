@@ -348,7 +348,7 @@ INDUSTRIES = {
     'MCHNRY-CNSTR/MNG': ['CAT', 'PCAR', 'LGN', 'ICHR', 'UCTT'],
     'UTILITY-WATER SUPPLY': ['AWK', 'WTRG', 'AWR', 'CWT'],
     'TELCOM SVC-WIRLES': ['IYZ', 'TMUS', 'VZ', 'T', 'TIGO', 'TDS'],
-    'ELEC-SEMICON FBLSS': ['SMH', 'SIMO', 'ARM', 'NVDA', 'AVGO', 'AMD', 'QCOM', 'ADI', 'MRVL', 'NXPI', 'MPWR', 'MCHP', 'ON', 'SWKS', 'QRVO', 'ALAB', 'CRDO', 'MTSI', 'LSCC', 'CRUS', 'PI', 'RMBS', 'SITM', 'ALGM', 'SLAB', 'POWI', 'IPGP', 'SMTC', 'DIOD', 'SYNA', 'AMBA', 'WOLF', 'CBRS'],
+    'ELEC-SEMICON FBLSS': ['SMH', 'SIMO', 'ARM', 'NVDA', 'AVGO', 'AMD', 'QCOM', 'ADI', 'MRVL', 'NXPI', 'MPWR', 'MCHP', 'ON', 'SWKS', 'ALAB', 'CRDO', 'MTSI', 'LSCC', 'CRUS', 'PI', 'RMBS', 'SITM', 'ALGM', 'SLAB', 'POWI', 'IPGP', 'SMTC', 'DIOD', 'SYNA', 'AMBA', 'WOLF', 'CBRS'],
     'ELEC-SEMICON FNDRY': ['SOXX', 'TSM', 'TXN', 'INTC', 'GFS', 'AMKR', 'TSEM', 'FORM', 'STM', 'UMC'],
     'ROBOTIC': ['BOTZ', 'AMBA', 'ARBE', 'MBLY', 'NOVT', 'JOBY', 'CGNX', 'ZBRA', 'CRNC', 'RR', 'PRCT', 'PTC', 'NDSN', 'HSAI', 'EMR', 'SERV', 'TER', 'IPGP', 'TRMB', 'SYM', 'OUST'],
     'RARE EARTH': ['REMX', 'USAR', 'METC', 'TMC', 'MP', 'MOS', 'CRML', 'NB', 'PPTA', 'UAMY'],
@@ -392,7 +392,7 @@ KNOWN_STOCKS = [
     'COST', 'TGT', 'LOW', 'HD', 'DT', 'SNPS', 'CDNS', 'MDB', 'ORCL', 'NOW', 'ADP', 'SNOW', 'DDOG', 
     'FROG', 'ADSK', 'INTU', 'TEAM', 'WDAY', 'CRM', 'PAYC', 'ANET', 'ADBE', 'ACN', 'EPAM', 'ZM', 'TTD', 'TWLO', 
     'DASH', 'APPS', 'DOCU', 'AI', 'AKAM', 'QLYS', 'PANW', 'FTNT', 'CRWD', 'TENB', 'OKTA', 'ZS', 
-    'NET', 'S', 'UMC', 'ASML', 'KEYS', 'CRUS', 'AMD', 'AVGO', 'MU', 'KLAC', 'TXN', 'QRVO', 'TSM', 'SWKS', 'AMBA', 
+    'NET', 'S', 'UMC', 'ASML', 'KEYS', 'CRUS', 'AMD', 'AVGO', 'MU', 'KLAC', 'TXN', 'TSM', 'SWKS', 'AMBA', 
     'STM', 'MCHP', 'ON', 'QCOM', 'SOXX', 'MRVL', 'ADI', 'LRCX', 'AMAT', 'WDC', 'NXPI', 'TER', 'MPWR', 'INTC', 
     'GFS', 'STX', 'A', 'ZBRA', 'ENTG', 'ONTO', 'TRMB', 'BNTX', 'PFE', 'MRNA', 'NVAX', 'FCX', 'CF', 'DRI', 
     'PEP', 'XOM', 'LLY', 'CL', 'MCD', 'KO', 'GE', 'CVX', 'FISV', 'DE', 'WM', 'HLT', 'FUTU', 'UBER', 
@@ -1877,7 +1877,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, _bench
 
             adrPercent = 100 * (adr_sma - 1)
 
-            cond1 = (adrPercent.iloc[-1] >= 2.45) and (adrPercent.iloc[-1] < 8.05)
+            cond1 = (adrPercent.iloc[-1] >= 2.95) and (adrPercent.iloc[-1] < 8.05)
 
             cond2 = -0.5 <= atr21_R <= 1
             cond3 = 0 <= atr50_R <= 3
@@ -1948,7 +1948,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, _bench
             # DEBUG AMAT
             # ================================
             # if ticker == "AMAT":
-            #     debug_data = {"ticker": ticker,"close": round(close.iloc[-1], 2),"adrPercent": round(float(adrPercent.iloc[-1]), 2),"cond1_adr_2.45_to_8": cond1,"atr21_R": round(float(atr21_R), 2),"cond2_atr21": cond2,"atr50_R": round(float(atr50_R), 2),"cond3_atr50": cond3,"emaDistPercent": round(float(emaDistPercent), 2),"cond4_emaDist": cond4,"gradient": round(float(gradient), 4),"pbb_cond2_gradient_positive": pbb_cond2,"sma50": round(float(sma50), 2),"sma50_prev1": round(float(sma50_prev1), 2),"sma50_prev2": round(float(sma50_prev2), 2),"ma50Rising": ma50Rising,"close_gt_20": close.iloc[-1] >= 20,"FINAL_BUYABLE": buyable}
+            #     debug_data = {"ticker": ticker,"close": round(close.iloc[-1], 2),"adrPercent": round(float(adrPercent.iloc[-1]), 2),"cond1_adr_2.95_to_8": cond1,"atr21_R": round(float(atr21_R), 2),"cond2_atr21": cond2,"atr50_R": round(float(atr50_R), 2),"cond3_atr50": cond3,"emaDistPercent": round(float(emaDistPercent), 2),"cond4_emaDist": cond4,"gradient": round(float(gradient), 4),"pbb_cond2_gradient_positive": pbb_cond2,"sma50": round(float(sma50), 2),"sma50_prev1": round(float(sma50_prev1), 2),"sma50_prev2": round(float(sma50_prev2), 2),"ma50Rising": ma50Rising,"close_gt_20": close.iloc[-1] >= 20,"FINAL_BUYABLE": buyable}
             #     st.write(debug_data)
 
             # ================================
@@ -2777,7 +2777,7 @@ def process_pattern_scanners(stocks_list, ticker_dfs, benchmark_df_input):
                 if df_len >= 200 and sma50_series is not None and sma200_series is not None and atr_pct is not None:
                     hl_ratio_ppp = high_series / low_series
                     adr_ppp = 100 * (hl_ratio_ppp.rolling(20).mean() - 1)
-                    adr_ok = (adr_ppp.iloc[-1] >= 2.45) and (adr_ppp.iloc[-1] < 8.05)
+                    adr_ok = (adr_ppp.iloc[-1] >= 2.95) and (adr_ppp.iloc[-1] < 8.05)
 
                     pine7_ok = False
                     if df_len >= 260 and sma150_series is not None and sma200_series is not None:
@@ -5303,7 +5303,7 @@ def compute_global_setup_count_history(stocks_list, _ticker_dfs):
                 hl_ratio   = high / low
                 adrPercent = 100 * (hl_ratio.rolling(20).mean() - 1)
 
-                cond1 = (adrPercent >= 2.45) & (adrPercent < 8.05)
+                cond1 = (adrPercent >= 2.95) & (adrPercent < 8.05)
                 cond2 = (atr21_R >= -0.5) & (atr21_R <= 1)
                 cond3 = (atr50_R >= 0) & (atr50_R <= 3)
                 cond4 = (emaDistPercent > 0) & (emaDistPercent <= 8)
@@ -8184,7 +8184,7 @@ def compute_quality_filter_pass(stocks_list, ticker_dfs):
             hl_ratio = high / low
             adrPercent = 100 * (hl_ratio.rolling(20).mean() - 1)
 
-            cond1 = (adrPercent.iloc[-1] >= 2.45) and (adrPercent.iloc[-1] < 8.05)
+            cond1 = (adrPercent.iloc[-1] >= 2.95) and (adrPercent.iloc[-1] < 8.05)
             cond2 = -0.5 <= atr21_R.iloc[-1] <= 1
             cond3 = 0 <= atr50_R.iloc[-1] <= 3
             cond4 = 0 < emaDistPercent.iloc[-1] <= 8
@@ -8540,7 +8540,7 @@ def compute_early_bull(stocks_list, ticker_dfs, benchmark_df_input):
             hl_ratio = high / low
             adrPercent = 100 * (hl_ratio.rolling(20).mean() - 1)
 
-            cond1 = (adrPercent.iloc[-1] >= 2.45) and (adrPercent.iloc[-1] < 8.05)
+            cond1 = (adrPercent.iloc[-1] >= 2.95) and (adrPercent.iloc[-1] < 8.05)
             cond2 = -0.5 <= atr21_R.iloc[-1] <= 1
             cond3 = 0 <= atr50_R.iloc[-1] <= 3
             cond4 = 0 < emaDistPercent.iloc[-1] <= 8
@@ -8749,7 +8749,7 @@ def compute_early_bull_combined(stocks_list, ticker_dfs, benchmark_df_input):
             hl_ratio = high / low
             adrPercent = 100 * (hl_ratio.rolling(20).mean() - 1)
 
-            cond1 = (adrPercent.iloc[-1] >= 2.45) and (adrPercent.iloc[-1] < 8.05)
+            cond1 = (adrPercent.iloc[-1] >= 2.95) and (adrPercent.iloc[-1] < 8.05)
             cond2 = -0.5 <= atr21_R.iloc[-1] <= 1
             cond3 = 0 <= atr50_R.iloc[-1] <= 3
             cond4 = 0 < emaDistPercent.iloc[-1] <= 8
@@ -12064,7 +12064,7 @@ def compute_known_valid_breakout_history_v1(stocks_list, _ticker_dfs):
                 atr_percent = true_range.rolling(14, min_periods=14).mean() / close * 100
 
                 adr_percent = 100 * ((high / low).rolling(20, min_periods=20).mean() - 1)
-                cond1 = (adr_percent >= 2.45) & (adr_percent < 8.05)
+                cond1 = (adr_percent >= 2.95) & (adr_percent < 8.05)
                 ma50_rising = (sma50 > sma50.shift(1)) & (sma50.shift(1) > sma50.shift(2))
                 fiftyday_percent = ((close - sma50) / sma50) * 100
                 fiftyday_percent2 = np.trunc(fiftyday_percent * 10) / 10
@@ -12115,7 +12115,7 @@ valid_breakout_history_v1, today_breakout_tickers_v1 = timed(
 )
 
 render_section_header_with_copy(
-    lambda: st.markdown(f"### 📈 Breakout Count Quality ({len(today_breakout_tickers_v1)})"),
+    lambda: st.markdown(f"### 📈 Breakout Count ({len(today_breakout_tickers_v1)})"),
     today_breakout_tickers_v1
 )
 if today_breakout_tickers_v1:
@@ -18100,6 +18100,13 @@ if isinstance(globals().get("coc_hist", None), pd.DataFrame) and not coc_hist.em
 else:
     st.caption("**Change of Character Count** — no data")
 
+# ── Gap Up Count ──────────────────────────────────────────────────────────
+if isinstance(globals().get("gap_up_down_hist", None), pd.DataFrame) and not gap_up_down_hist.empty:
+    _colors = _zscore_outlier_colors(gap_up_down_hist["Gap Up Count"], check_max=True, check_min=False)
+    _render_bar_chart("Gap Up", gap_up_down_hist, "Date", "Gap Up Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**Gap Up Count** — no data")
+
 # ── Biggest Up Count ─────────────────────────────────────────────────────
 if isinstance(globals().get("biggest_move_hist", None), pd.DataFrame) and not biggest_move_hist.empty:
     _colors_up = _zscore_outlier_colors(biggest_move_hist["Biggest Up Count"], check_max=True, check_min=False)
@@ -18116,6 +18123,13 @@ if isinstance(globals().get("boc_hist", None), pd.DataFrame) and not boc_hist.em
     _render_bar_chart("Breakdown of Character", boc_hist, "Date", "BoC Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
 else:
     st.caption("**Breakdown of Character Count** — no data")
+
+# ── Gap Down Count ────────────────────────────────────────────────────────
+if isinstance(globals().get("gap_up_down_hist", None), pd.DataFrame) and not gap_up_down_hist.empty:
+    _colors = _zscore_outlier_colors(gap_up_down_hist["Gap Down Count"], check_max=True, check_min=False)
+    _render_bar_chart("Gap Down", gap_up_down_hist, "Date", "Gap Down Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
+else:
+    st.caption("**Gap Down Count** — no data")
 
 # ── Biggest Down Count ───────────────────────────────────────────────────
 if isinstance(globals().get("biggest_move_hist", None), pd.DataFrame) and not biggest_move_hist.empty:

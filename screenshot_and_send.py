@@ -154,7 +154,7 @@ SECTION_KEYWORDS = [
     "Pie Chart",
     #"ETF Ratio",
     "Pullback Setup Quality",
-    "Breakout Count Quality",
+    "Breakout Count",
     "Quant Sentiment",
     #"Setup Quality",
     "Upcoming Earnings",
