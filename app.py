@@ -8130,7 +8130,7 @@ if downtrend_today or downtrend_yest:
             sym,
             is_new=(sym not in downtrend_yest),
             extra_style=glow_style,
-            extra_prefix="★ " if vol_above_avg else ""
+            extra_prefix="✨ " if vol_above_avg else ""
         )
 
     # Show removed badges only when latest available price > $20
@@ -8910,7 +8910,11 @@ with st.spinner("Scanning Early Bull setups..."):
     )
 
 render_section_header_with_copy(
-    lambda: st.markdown(f"#### 🐂 Early Bull = buyable + Sector + ALL ({len(early_bull_list)} + ... + {len(early_bull_no_filter_list)})"),
+    lambda: st.markdown(
+        f"""<h4>🐂 Early Bull = buyable + Sector + ALL ({len(early_bull_list)} + ... + {len(early_bull_no_filter_list)})
+        <span style="color:#888; font-size:12px;">(stage1 -> 2)</span></h4>""",
+        unsafe_allow_html=True
+    ),
     early_bull_no_filter_list
 )
 
