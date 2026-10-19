@@ -1663,7 +1663,7 @@ st.markdown(
     }
     </style>
     <div class="calligraphy-banner">
-        <span>顺势而为</span>
+        <span>祸从口出</span>
     </div>
     """,
     unsafe_allow_html=True
