@@ -36,6 +36,9 @@ from playwright.sync_api import sync_playwright
 import io
 from datetime import date
 from PIL import Image
+import re
+
+LOGIN_BUTTON_RE = re.compile(r"^\s*(log\s*in|sign\s*in)\s*$", re.I)
 
 APP_URL   = os.environ["STREAMLIT_APP_URL"]
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
@@ -203,6 +206,29 @@ class Deadline:
 
 deadline = Deadline(MAX_RUNTIME_SECONDS)
 ALL_SCREENSHOT_BYTES = []
+
+def _tv_login_done(page):
+    """Login is done when we've left /accounts/signin OR the password field is gone."""
+    try:
+        if "/accounts/signin" not in page.url:
+            return True
+    except Exception:
+        pass
+    try:
+        if page.locator('input[name="id_password"]').count() == 0:
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _tv_wait_login_done(page, seconds):
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        if _tv_login_done(page):
+            return True
+        time.sleep(0.5)
+    return False
 
 def send_photo(image_bytes, caption):
     """Send exactly ONE screenshot to Telegram. Never combine/stitch."""
@@ -586,12 +612,9 @@ def is_recaptcha_challenge(page):
     
 def tradingview_login(browser):
     """
-    Logs into TradingView via email/password and returns an authenticated
-    Playwright page. On failure, instead of just skipping, captures
-    whatever is currently on screen (e.g. the signin page mid-failure) and
-    sends that to Telegram as a fallback so a login hiccup still produces
-    a photo. Returns None on any failure (never raises) so a login
-    problem just results in the login-specific page being closed.
+    Logs into TradingView (email/password) and returns an authenticated page.
+    Tries several ways of submitting the form and verifies after each one.
+    Returns None on failure (never raises), after sending a fallback screenshot.
     """
     if not (TV_EMAIL and TV_PASSWORD):
         print("TradingView credentials not set -- skipping TradingView screenshot.")
@@ -599,68 +622,92 @@ def tradingview_login(browser):
 
     page = None
     try:
-        page = browser.new_page(viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT})
+        page = browser.new_page(
+            viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT},
+            user_agent=STEALTH_USER_AGENT,
+            locale="en-US",
+        )
+        page.add_init_script(STEALTH_INIT_SCRIPT)
         page.goto("https://www.tradingview.com/accounts/signin/",
-                   wait_until="domcontentloaded", timeout=TV_LOGIN_TIMEOUT_MS)
+                  wait_until="domcontentloaded", timeout=TV_LOGIN_TIMEOUT_MS)
 
-        # The signin page shows social-login buttons first; click "Email" to
-        # reveal the email/password form. Target the real `name="Email"`
-        # button attribute directly -- get_by_text() was matching against
-        # generated CSS-module classes/duplicate hidden text nodes and
-        # unreliably finding nothing, which silently skipped the click.
-        #
-        # NOTE: right after goto(..., wait_until="domcontentloaded"), the
-        # button hasn't necessarily rendered into the DOM yet, so calling
-        # .count() immediately can return 0 even though the button shows up
-        # moments later -- that was silently skipping the click (count()==0
-        # -> print-only -> falls straight through to the username selector,
-        # which then times out because nothing was ever clicked, landing in
-        # the except block with a screenshot of the untouched signin page).
-        # wait_for(state="visible") already polls/retries on its own, so
-        # call it directly instead of gating on count() first.
-        email_toggle = page.locator('button[name="Email"]')
-        email_toggle.first.wait_for(state="visible", timeout=TV_LOGIN_TIMEOUT_MS)
-        email_toggle.first.click()
-
-        # Wait for the username field to actually be attached before filling,
-        # instead of assuming the click revealed it immediately.
-        page.wait_for_selector('input[name="id_username"]', state="visible", timeout=TV_LOGIN_TIMEOUT_MS)
-        page.fill('input[name="id_username"]', TV_EMAIL)
-        page.fill('input[name="id_password"]', TV_PASSWORD)
-
-        # The submit button has NO type="submit" attribute (confirmed via
-        # inspecting live markup -- it's a bare <button> with only hashed
-        # CSS-module class names like "mLEhCrVw", which are also unsafe to
-        # match on since they can change on any TradingView frontend
-        # deploy). button[type="submit"] therefore never matched anything,
-        # and page.click() was timing out waiting for the LOCATOR to even
-        # attach -- not waiting on a disabled state.
-        #
-        # Instead, target it by accessible role + name ("Sign in"), derived
-        # from the button's visible text. This is scoped to real <button>
-        # elements only, so it won't accidentally match the "Sign in with
-        # email" heading text elsewhere on the page, and survives class
-        # name/hash changes.
-        submit_btn = page.get_by_role("button", name="Sign in", exact=True).first
-        submit_btn.wait_for(state="visible", timeout=TV_LOGIN_TIMEOUT_MS)
-
+        # Reveal the email form only if it isn't already showing.
+        user_input = page.locator('input[name="id_username"]')
         try:
-            submit_btn.click(timeout=10000)
-        except Exception as e:
-            print(f"Normal click on 'Sign in' button failed: {e} -- "
-                  f"trying force click, then Enter-key fallback.")
-            try:
-                submit_btn.click(timeout=10000, force=True)
-            except Exception as e2:
-                print(f"Force click also failed: {e2} -- "
-                      f"pressing Enter in password field instead.")
-                page.press('input[name="id_password"]', "Enter")
+            user_input.first.wait_for(state="visible", timeout=4000)
+        except Exception:
+            email_toggle = page.locator('button[name="Email"]')
+            email_toggle.first.wait_for(state="visible", timeout=TV_LOGIN_TIMEOUT_MS)
+            email_toggle.first.click()
+            user_input.first.wait_for(state="visible", timeout=TV_LOGIN_TIMEOUT_MS)
 
-        # Wait for login to complete -- signin form disappears once redirected.
-        page.wait_for_selector('input[name="password"]', state="detached", timeout=TV_LOGIN_TIMEOUT_MS)
-        time.sleep(3)
-        print("TradingView login succeeded.")
-        return page
+        pwd_input = page.locator('input[name="id_password"]')
+        pwd_input.first.wait_for(state="visible", timeout=TV_LOGIN_TIMEOUT_MS)
+
+        user_input.first.fill(TV_EMAIL)
+        pwd_input.first.fill(TV_PASSWORD)
+        time.sleep(1)
+
+        # Scope to the form that contains the password field so we never hit
+        # some other "Log in"/"Sign in" element elsewhere on the page.
+        form = page.locator('form:has(input[name="id_password"])')
+        scope = form.first if form.count() > 0 else page
+        btn = scope.get_by_role("button", name=LOGIN_BUTTON_RE).first
+
+        def s_click():
+            btn.wait_for(state="visible", timeout=8000)
+            btn.click(timeout=8000)
+
+        def s_force_click():
+            btn.click(timeout=8000, force=True)
+
+        def s_js_click():
+            btn.evaluate("el => el.click()")
+
+        def s_enter():
+            pwd_input.first.click()
+            pwd_input.first.press("Enter")
+
+        def s_request_submit():
+            pwd_input.first.evaluate(
+                "el => { const f = el.closest('form'); "
+                "if (f) { f.requestSubmit ? f.requestSubmit() : f.submit(); } }"
+            )
+
+        strategies = [
+            ("normal click", s_click),
+            ("force click", s_force_click),
+            ("JS click", s_js_click),
+            ("Enter key", s_enter),
+            ("form.requestSubmit", s_request_submit),
+        ]
+
+        for name, action in strategies:
+            try:
+                print(f"TradingView login: trying {name}...")
+                action()
+            except Exception as e:
+                print(f"TradingView login: {name} raised: {e}")
+                continue
+
+            if _tv_wait_login_done(page, 12):
+                print(f"TradingView login succeeded via {name}.")
+                time.sleep(3)
+                return page
+            print(f"TradingView login: {name} did not complete login -- trying next.")
+
+        # Log any on-page error (wrong password, captcha, too many attempts...)
+        try:
+            err = page.locator('[class*="error"], [role="alert"]')
+            if err.count() > 0:
+                print("TradingView page message:", err.first.inner_text()[:300])
+            if page.locator('iframe[src*="recaptcha"], iframe[title*="reCAPTCHA"]').count() > 0:
+                print("TradingView is showing a reCAPTCHA -- headless login is being challenged.")
+        except Exception:
+            pass
+
+        raise RuntimeError("all submit strategies tried, still on sign-in page")
+
     except Exception as e:
         print(f"TradingView login failed: {e} -- capturing whatever is on screen instead of skipping.")
         if page is not None:
