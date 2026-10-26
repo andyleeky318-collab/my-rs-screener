@@ -8130,7 +8130,7 @@ if downtrend_today or downtrend_yest:
             sym,
             is_new=(sym not in downtrend_yest),
             extra_style=glow_style,
-            extra_prefix="✨ " if vol_above_avg else ""
+            extra_prefix="★ " if vol_above_avg else ""
         )
 
     # Show removed badges only when latest available price > $20
@@ -9433,11 +9433,19 @@ if volatility_hits:
     st.markdown(vol_html, unsafe_allow_html=True)
 
     vol_syms = [sym for sym, z, pct in volatility_hits]
+    vol_up_syms   = [sym for sym, z, pct in volatility_hits if pct >= 0]
+    vol_down_syms = [sym for sym, z, pct in volatility_hits if pct < 0]
     render_group_ai_insight(
         vol_syms,
         "Volatility pickup (Z-score ≥2)",
         "volatility",
-        extra_note="daily range Z-score (vs its 20-day mean/stdev) is at or above 2, flagging an unusually large range day"
+        extra_note=(
+            "daily range Z-score (vs its 20-day mean/stdev) is at or above 2, flagging an unusually large range day. "
+            f"POSITIVE volatility (range expansion on an UP day, {len(vol_up_syms)} tickers): {', '.join(vol_up_syms) or 'none'}. "
+            f"NEGATIVE volatility (range expansion on a DOWN day, {len(vol_down_syms)} tickers): {', '.join(vol_down_syms) or 'none'}. "
+            "In your answer, explicitly state for each industry/group whether it is moving UPWARD (positive volatility) "
+            "or DOWNWARD (negative volatility), and flag any group that has both as mixed"
+        )
     )
 else:
     st.info("No tickers with volatility Z-score ≥ 2 today.")
