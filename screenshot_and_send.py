@@ -173,6 +173,7 @@ SECTION_KEYWORDS = [
     "Lazy Exposure",
     "Lazy Table",
     "Lazy Charts",
+    "Breakdown of Characters"
     "Stage 2 vs Stage 4",
     #"Test Time",
 ]

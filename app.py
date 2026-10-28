@@ -15106,7 +15106,7 @@ iwm_status_text = (
 )
 
 
-
+st.write("")
 #st.markdown("---")
 
 def _dist_box_html(label, count, dates, triggered):
