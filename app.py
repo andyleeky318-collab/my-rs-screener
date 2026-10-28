@@ -200,7 +200,7 @@ INDUSTRIES = {
     'SPACE': ['SPCX', 'UFO', 'VSAT', 'RKLB', 'SATL', 'RDW', 'LUNR', 'BKSY', 'PL', 'IRDM', 'GSAT', 'ASTS', 'NASA', 'FLY', 'SPCE', 'KRMN', 'SIDU'],
     'CATHIE WOOD': ['ARKG', 'ARKK', 'ARKQ', 'ARKW', 'ARKF', 'ARKX'],
     'CHINA': ['FUTU', 'LI', 'KWEB', 'XPEV', 'NIO', 'PDD', 'BIDU', 'JD', 'BABA'],
-    'DATA CENTER': ['WGMI', 'CRWV', 'NBIS', 'IREN', 'WULF', 'CORZ', 'CIFR', 'HUT', 'BTDR', 'EQIX'],
+    'DATA CENTER': ['NCLD', 'WGMI', 'CRWV', 'NBIS', 'IREN', 'WULF', 'CORZ', 'CIFR', 'HUT', 'BTDR', 'EQIX'],
     'SOLAR': ['TAN', 'SEDG', 'ENPH', 'FSLR', 'ARRY', 'SHLS', 'CSIQ', 'RUN', 'DQ'],
     'COML SVCS-ADVRTSNG': ['OMC', 'DJT', 'TTD', 'MGNI', 'PUBM'],
     'AEROSPACE/DEFENSE': ['SHLD', 'ITA', 'XAR', 'RTX', 'LMT', 'HON', 'BA', 'NOC'],
@@ -408,9 +408,9 @@ LIME_STOCKS = [
     'CIBR', 'COPX', 'DRAM', 'GDX', 'IBIT', 'IGV', 'IHI',
     'IPAY', 'ITB', 'JETS', 'KRE', 'KWEB', 'LIT', 'MAGS',
     'PBW', 'REMX', 'SHLD', 'SIL', 'SLX', 'SMH', 'TAN',
-    'UFO', 'URA', 'USO', 'VTV', 'VUG', 'WGMI', 'XBI',
+    'UFO', 'URA', 'USO', 'VTV', 'VUG', 'NCLD', 'XBI',
     'XME', 'XRT', 'FOTO', 'SPY', 'QQQ', 'RSP'
-]#NCLD, LYTE
+]#LYTE
 
 LIME_STOCKS1 = [
     'IHF', 'CIBR', 'COPX', 'DRAM', 'GDX', 'IBIT', 'IGV', 'IHI', 'EWY',
@@ -419,24 +419,24 @@ LIME_STOCKS1 = [
     'UFO', 'URA', 'USO', 'VTV', 'VUG', 'WGMI', 'XBI',
     'XME', 'XRT', 'XTL', 'SPY', 'QQQ', 'RSP', 'FOTO', 'KBE', 'NLR', 
     'CLOU', 'XHB', 'BUG', 'HACK', 'ITA', 'IAT', 'XOP', 'NASA', 
-    'XTN', 'IYT', 'BOAT', 'MOO', 'BLOK', 'PICK', 'BOTZ', 'MJ', 'WQTM', 'IBB', 'KIE', 'IAI', 'SOXX'
-]#NCLD, LYTE
+    'XTN', 'IYT', 'BOAT', 'MOO', 'BLOK', 'PICK', 'BOTZ', 'MJ', 'WQTM', 'IBB', 'KIE', 'IAI', 'SOXX', 'NCLD'
+]#LYTE
 
 RRG_STOCKS = [
     'CIBR', 'COPX', 'DRAM', 'GDX', 'IBIT', 'IGV', 'IHI',
     'IPAY', 'ITB', 'JETS', 'KRE', 'KWEB', 'LIT', 'MAGS',
     'PBW', 'REMX', 'SHLD', 'SIL', 'SLX', 'SMH', 'TAN',
-    'UFO', 'URA', 'USO', 'WGMI', 'XBI',
+    'UFO', 'URA', 'USO', 'NCLD', 'XBI',
     'XME', 'XRT', 'FOTO'
-]#NCLD, LYTE
+]#LYTE
 
 STAGE_PCT_WATCHLIST = [
     'CIBR', 'DRAM', 'FOTO', 'IBIT', 'IGV', 'IHF', 'IHI',
     'IPAY', 'ITB', 'JETS', 'KRE', 'KWEB', 'LIT', 'MAGS',
     'PBW', 'REMX', 'SHLD', 'SMH', 'TAN',
-    'UFO', 'URA', 'USO', 'WGMI', 'XBI',
+    'UFO', 'URA', 'USO', 'NCLD', 'XBI',
     'XME', 'XRT', 'XOP', 'XTN', 'IYT', 'BOAT', 'MOO', 'PICK', 'BOTZ', 'MJ', 'WQTM', 'IBB', 'KIE', 'IAI', 'SOXX', 'PEJ'
-]#NCLD, LYTE
+]#LYTE
 
 TICKER_ALIASES = {
     "GOOG": "GOOGL",
@@ -13954,6 +13954,96 @@ def fetch_market_caps_for_earnings(tickers_tuple):
             caps[t] = 0.0
     return caps
 
+EARNINGS_7D_FILEPATH = "upcoming_earnings_7day.txt"
+
+
+@st.cache_data(ttl=21600)
+def fetch_known_stocks_earnings_next_7_days(stocks_tuple):
+    """
+    Fetch KNOWN_STOCKS tickers reporting earnings in the rolling next 7
+    calendar days (today through today+6) — independent of the Mon-Fri
+    weekly grid used by fetch_known_stocks_weekly_earnings.
+    Returns a sorted list of unique ticker symbols (no dates/hours).
+    """
+    finnhub_key = st.secrets.get("FINNHUB_API_KEY")
+    if not finnhub_key:
+        return []
+
+    today = datetime.date.today()
+    end_date = today + datetime.timedelta(days=6)  # 7 days inclusive: today .. today+6
+
+    known_set = set(stocks_tuple)
+
+    try:
+        resp = requests.get(
+            "https://finnhub.io/api/v1/calendar/earnings",
+            params={"from": str(today), "to": str(end_date), "token": finnhub_key},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        rows = data.get("earningsCalendar", []) or []
+    except Exception as e:
+        st.warning(f"Finnhub 7-day earnings fetch error: {e}")
+        return []
+
+    tickers = sorted({r.get("symbol") for r in rows if r.get("symbol") in known_set})
+    return tickers
+
+
+def save_earnings_7day_snapshot_github(tickers):
+    """Overwrite the single root-level upcoming_earnings_7day.txt file in the
+    GitHub data repo with today's rolling 7-day known-stock earnings ticker
+    list — always replaces content, no per-day history kept."""
+    repo   = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    if not repo or not st.secrets.get("GITHUB_TOKEN"):
+        return
+
+    url = f"{GITHUB_API}/repos/{repo}/contents/{EARNINGS_7D_FILEPATH}"
+
+    content_str = "\n".join(tickers)
+    content_b64 = base64.b64encode(content_str.encode()).decode()
+
+    sha = None
+    try:
+        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
+        if resp.status_code == 200:
+            sha = resp.json().get("sha")
+    except Exception:
+        pass
+
+    payload = {
+        "message": f"Update upcoming 7-day earnings — {datetime.date.today().isoformat()}",
+        "content": content_b64,
+        "branch": branch,
+    }
+    if sha:
+        payload["sha"] = sha
+    try:
+        put_resp = requests.put(url, headers=_github_headers(), json=payload, timeout=10)
+        if put_resp.status_code not in (200, 201):
+            st.warning(f"GitHub save failed (7-day earnings): {put_resp.status_code} {put_resp.text[:150]}")
+    except Exception as e:
+        st.warning(f"GitHub save error (7-day earnings): {e}")
+
+
+@st.cache_data(ttl=3600)
+def load_earnings_7day_snapshot_github():
+    """Load the current root-level 7-day earnings ticker list. Returns None if not found."""
+    repo   = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    if not repo or not st.secrets.get("GITHUB_TOKEN"):
+        return None
+    url = f"{GITHUB_API}/repos/{repo}/contents/{EARNINGS_7D_FILEPATH}"
+    try:
+        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
+        if resp.status_code != 200:
+            return None
+        decoded = base64.b64decode(resp.json()["content"]).decode()
+        return [line.strip() for line in decoded.splitlines() if line.strip()]
+    except Exception:
+        return None
 
 def render_weekly_earnings_grid(df, monday, friday, gold_tickers=None):
     """Render a 5-column (Mon-Fri) x 2-subcolumn (Before Open / After Close) ticker grid."""
@@ -14043,6 +14133,18 @@ with st.spinner("Fetching upcoming earnings..."):
         "fetch_known_stocks_weekly_earnings",
         fetch_known_stocks_weekly_earnings,
         stocks_tuple  # your existing tuple(KNOWN_STOCKS)
+    )
+
+with st.spinner("Saving 7-day rolling earnings snapshot..."):
+    earnings_7d_tickers = timed(
+        "fetch_known_stocks_earnings_next_7_days",
+        fetch_known_stocks_earnings_next_7_days,
+        stocks_tuple
+    )
+    timed(
+        "save_earnings_7day_snapshot_github",
+        save_earnings_7day_snapshot_github,
+        earnings_7d_tickers
     )
 
 total_week_count = len(weekly_earnings_df) if weekly_earnings_df is not None and not weekly_earnings_df.empty else 0
@@ -15007,7 +15109,7 @@ iwm_status_text = (
 
 
 
-st.markdown("---")
+#st.markdown("---")
 
 def _dist_box_html(label, count, dates, triggered):
     if triggered:
@@ -16065,7 +16167,7 @@ Keep it tight, data-driven, cite the actual % numbers, no fluff, no disclaimers.
 # (Direxion/ProShares/GraniteShares/T-Rex) instead of scraping that page live.
 # This corner of the ETF market delists/splits often — verify periodically.
 # ==============================================================================
-st.markdown("---")
+#st.markdown("---")
 # Copy button (filled in later, once the colored-badge tickers are known —
 # see _lev_colored_tickers below) sits in the adjacent narrow column.
 _lev_col_title, _lev_col_copy = st.columns([30, 1])
