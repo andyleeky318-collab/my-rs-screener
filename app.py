@@ -16918,6 +16918,119 @@ def load_lazy_exposure_history_github(max_days=90):
         st.warning(f"Could not read Lazy Exposure GitHub history: {exc}")
         return pd.DataFrame()
 
+LAZY_EXPOSURE_PUBLIC_FILEPATH = "lazy_exposure_history.txt"
+
+
+def save_lazy_exposure_to_public_repo(date_obj, score):
+    """
+    Append/update today's Lazy Exposure score (0-100) in a single growing
+    text file in the PUBLIC repo (GITHUB_PUBLIC_REPO), one line per day:
+        YYYY-MM-DD,score
+
+    If an entry for date_obj already exists, it is replaced (so reruns on
+    the same day don't create duplicate lines) rather than appended again.
+    Uses GITHUB_PUBLIC_TOKEN (falls back to GITHUB_TOKEN if not set) — same
+    pattern as save_earnings_7day_snapshot_github. Fully independent of
+    save_lazy_exposure_snapshot_github (the private-repo JSON history) —
+    never touches that file or its data.
+    """
+    score = float(score)
+    if not np.isfinite(score) or not 0 <= score <= 100:
+        st.warning("Could not save Lazy Exposure to public repo: score must be between 0 and 100.")
+        return
+
+    repo   = st.secrets.get("GITHUB_PUBLIC_REPO")
+    branch = st.secrets.get("GITHUB_PUBLIC_BRANCH", "main")
+    if not repo or not (st.secrets.get("GITHUB_PUBLIC_TOKEN") or st.secrets.get("GITHUB_TOKEN")):
+        st.warning("GITHUB_PUBLIC_REPO / token not configured — skipping public Lazy Exposure save.")
+        return
+
+    url = f"{GITHUB_API}/repos/{repo}/contents/{LAZY_EXPOSURE_PUBLIC_FILEPATH}"
+
+    # ── Read existing file (if any) to merge in today's value ──
+    sha = None
+    existing_lines = []
+    try:
+        resp = requests.get(url, headers=_github_public_headers(), params={"ref": branch}, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            sha = data.get("sha")
+            decoded = base64.b64decode(data["content"]).decode()
+            existing_lines = [ln.strip() for ln in decoded.splitlines() if ln.strip()]
+        elif resp.status_code not in (404,):
+            st.warning(f"Could not check public Lazy Exposure file (HTTP {resp.status_code}).")
+            return
+    except requests.RequestException as exc:
+        st.warning(f"Could not check public Lazy Exposure file: {exc}")
+        return
+
+    # ── Parse into {date_str: score_str}, dedupe/replace today's entry ──
+    entries = {}
+    for ln in existing_lines:
+        parts = ln.split(",", 1)
+        if len(parts) != 2:
+            continue
+        d, v = parts[0].strip(), parts[1].strip()
+        try:
+            datetime.date.fromisoformat(d)
+            float(v)
+        except ValueError:
+            continue
+        entries[d] = v
+
+    entries[date_obj.isoformat()] = f"{score:.0f}"
+
+    new_content = "\n".join(f"{d},{entries[d]}" for d in sorted(entries))
+    content_b64 = base64.b64encode(new_content.encode()).decode()
+
+    payload = {
+        "message": f"Update Lazy Exposure history — {date_obj.isoformat()}",
+        "content": content_b64,
+        "branch": branch,
+    }
+    if sha:
+        payload["sha"] = sha
+
+    try:
+        put_resp = requests.put(url, headers=_github_public_headers(), json=payload, timeout=10)
+        if put_resp.status_code not in (200, 201):
+            st.warning(f"GitHub save failed (public Lazy Exposure): {put_resp.status_code} {put_resp.text[:150]}")
+    except requests.RequestException as exc:
+        st.warning(f"GitHub save error (public Lazy Exposure): {exc}")
+
+
+@st.cache_data(ttl=3600)
+def load_lazy_exposure_from_public_repo():
+    """Load the public-repo Lazy Exposure history as a DataFrame[date, score].
+    Returns an empty DataFrame if unavailable."""
+    repo   = st.secrets.get("GITHUB_PUBLIC_REPO")
+    branch = st.secrets.get("GITHUB_PUBLIC_BRANCH", "main")
+    if not repo:
+        return pd.DataFrame()
+
+    url = f"{GITHUB_API}/repos/{repo}/contents/{LAZY_EXPOSURE_PUBLIC_FILEPATH}"
+    try:
+        resp = requests.get(url, headers=_github_public_headers(), params={"ref": branch}, timeout=10)
+        if resp.status_code != 200:
+            return pd.DataFrame()
+        decoded = base64.b64decode(resp.json()["content"]).decode()
+        rows = []
+        for ln in decoded.splitlines():
+            ln = ln.strip()
+            if not ln:
+                continue
+            parts = ln.split(",", 1)
+            if len(parts) != 2:
+                continue
+            d, v = parts[0].strip(), parts[1].strip()
+            try:
+                rows.append({"date": d, "score": float(v)})
+            except ValueError:
+                continue
+        return pd.DataFrame(rows)
+    except Exception:
+        return pd.DataFrame()
+
 def _github_filepath_lazy(date_obj):
     return f"lazy_table_history/lazy_{date_obj.isoformat()}.json"
 
@@ -17874,6 +17987,13 @@ _lazy_exposure_today = datetime.date.today()
 timed(
     "save_lazy_exposure_snapshot_github",
     save_lazy_exposure_snapshot_github,
+    _lazy_exposure_today,
+    composite_score,
+)
+# NEW: also mirror today's value into a simple growing text file in the public repo
+timed(
+    "save_lazy_exposure_to_public_repo",
+    save_lazy_exposure_to_public_repo,
     _lazy_exposure_today,
     composite_score,
 )
