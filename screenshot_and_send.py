@@ -101,6 +101,8 @@ EXTRA_SCREENSHOTS = [
      "Fear & Greed", 8, True, None),
     ("https://finviz.com/map",
      "S&P 500 Map", 12, True, None),
+     ("https://leveluptools.net/pulse/",
+     "Pulse", 12, False, None),
 ]
 #("https://stockcharts.com/freecharts/candleglance.html?SPY,XLY,XLC,XLK,XLI,XLB,XLE,XLP,XLV,XLU,XLF|C|B14|1",
 #"Sector RS", 8, False, None),
