@@ -18352,7 +18352,7 @@ st.markdown("---")
 # ── 14. Breakdown of Character (z-score + max-only highlight) ───────────────
 if isinstance(globals().get("boc_hist", None), pd.DataFrame) and not boc_hist.empty:
     _colors = _zscore_outlier_colors(boc_hist["BoC Count"], check_max=True, check_min=False)
-    _render_bar_chart("Breakdown of Character", boc_hist, "Date", "BoC Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
+    _render_bar_chart("Breakdown of Characters", boc_hist, "Date", "BoC Count", _colors, height=_NARROW_HEIGHT, days=_compare_days)
 else:
     st.caption("**Breakdown of Character Count** — no data")
 
