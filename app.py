@@ -7496,6 +7496,21 @@ if not tml_hist.empty:
         use_container_width=True
     )
 
+# ── Tickers struck through in 2+ of {Minervini, RS Leader, TML} ───────────
+_strike_minervini = set(globals().get("email_content_removed", []))
+_strike_leader    = set(globals().get("removed_leaders", []))
+_strike_tml       = set(globals().get("removed_tml", []))
+_strike_common = {
+    t for t in (_strike_minervini | _strike_leader | _strike_tml)
+    if sum([t in _strike_minervini, t in _strike_leader, t in _strike_tml]) >= 2
+}
+if _strike_common:
+    st.markdown(f"**⚠️ Dropped from 2+ Leader Lists ({len(_strike_common)})**")
+    st.markdown(
+        "".join(f'<div class="ticker-badge removed-badge">{sym}</div>' for sym in sorted(_strike_common)),
+        unsafe_allow_html=True
+    )
+
 st.markdown("---")
 
 # ==============================================================================
