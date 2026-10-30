@@ -20286,3 +20286,195 @@ if _timing_log:
     total_s = total_ms / 1000
     total_str = f"{int(total_s // 60)}m {total_s % 60:.2f}s" if total_s >= 60 else f"{total_s:.2f}s"
     st.caption(f"Total measured wall-clock time: **{total_str}** across {len(_timing_log)} tracked calls")
+
+# ==============================================================================
+# BOTTOM HUNT — long bottom wick, closing below its own 50-day MA, with the
+# low poking far (>=1.5 ATR) below that MA. Ported from the user's Pine v5
+# snippet. Read-only, additive.
+# ==============================================================================
+@st.cache_data(ttl=3600)
+def compute_bottom_hunt(stocks_list, ticker_dfs, wick_pct=70.0, ma_len=50, atr_mult_threshold=1.5):
+    matches = []
+    for ticker in stocks_list:
+        try:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < ma_len + 15:
+                continue
+
+            close = df['Close']
+            open_ = df['Open']
+            high = df['High']
+            low = df['Low']
+
+            ma = close.rolling(ma_len).mean()
+
+            tr = pd.concat([
+                high - low,
+                (high - close.shift(1)).abs(),
+                (low - close.shift(1)).abs()
+            ], axis=1).max(axis=1)
+            atr_val = tr.rolling(14).mean()
+
+            c = close.iloc[-1]
+            o = open_.iloc[-1]
+            h = high.iloc[-1]
+            l = low.iloc[-1]
+            m = ma.iloc[-1]
+            atr_today = atr_val.iloc[-1]
+
+            if pd.isna(m) or pd.isna(atr_today) or atr_today == 0:
+                continue
+
+            below_ma = c < m
+
+            dist_from_ma = m - l  # how far the low poked below the MA
+            atr_multiple = dist_from_ma / atr_today
+            far_from_ma = atr_multiple >= atr_mult_threshold
+
+            range_total = h - l
+            body_bot = min(o, c)
+            bottom_wick = body_bot - l
+            bottom_wick_pct = (bottom_wick / range_total * 100) if range_total > 0 else 0
+
+            # cond1: ADR% band (same filter used elsewhere in the dashboard)
+            adr_pct = 100 * ((high / low).rolling(20).mean() - 1)
+            adr_today = adr_pct.iloc[-1]
+            cond1 = pd.notna(adr_today) and (2.95 <= adr_today < 8.05)
+
+            if (bottom_wick_pct >= wick_pct and below_ma and far_from_ma
+                    and 20 <= c < 3000 and cond1):
+                matches.append(ticker)
+
+        except Exception:
+            continue
+
+    return sorted(matches)
+
+
+st.markdown("---")
+
+with st.spinner("Scanning for Bottom Hunt setups..."):
+    bottom_hunt_list = timed(
+        "compute_bottom_hunt",
+        compute_bottom_hunt,
+        stocks_tuple, ticker_dfs_shared
+    )
+
+render_section_header_with_copy(
+    lambda: st.markdown(f"#### 🎯 Bottom Hunt ({len(bottom_hunt_list)})"),
+    bottom_hunt_list
+)
+
+if bottom_hunt_list:
+    bh_industry_counts, bh_ticker_industry = build_leader_industry_map(bottom_hunt_list, INDUSTRIES)
+    html_bh = ""
+    for sym in bottom_hunt_list:
+        industries = bh_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+            if is_top20_industry else ""
+        )
+        html_bh += setup_badge(sym, extra_style=glow_style)
+    st.markdown(html_bh, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
+
+# ==============================================================================
+# GAP UP 10%+ UNFILLED (LAST 30 DAYS) — ported from Pine v6 indicator.
+# Tracks the most recent qualifying gap-up bar's low, persisting until price
+# trades back below it (filled) or falls outside the lookback window. Flags
+# tickers where the gap is still unfilled, we're past the gap day itself, and
+# today's close has drifted back down to within riskPct of the gap low.
+# Read-only, additive.
+# ==============================================================================
+@st.cache_data(ttl=3600)
+def compute_gap_up_unfilled(stocks_list, ticker_dfs, gap_pct=5.0, risk_pct=5.0, lookback_bars=30, min_price=20):
+    matches = []
+    for ticker in stocks_list:
+        try:
+            df = ticker_dfs.get(ticker)
+            if df is None or len(df) < lookback_bars + 5:
+                continue
+
+            close = df['Close'].to_numpy()
+            high = df['High'].to_numpy()
+            low = df['Low'].to_numpy()
+            n = len(close)
+
+            gap_low = np.nan
+            gap_bar_idx = None
+            gap_unfilled = False
+
+            for i in range(1, n):
+                gap_up_pct = (low[i] - high[i - 1]) / high[i - 1] * 100
+                is_gap_up = gap_up_pct >= gap_pct
+
+                if is_gap_up:
+                    gap_low = low[i]
+                    gap_bar_idx = i
+                    gap_unfilled = True
+
+                if gap_unfilled and not np.isnan(gap_low) and low[i] < gap_low:
+                    gap_unfilled = False
+                    gap_low = np.nan
+                    gap_bar_idx = None
+
+            # ── Evaluate state at the LAST bar (mirrors barstate.islast) ──
+            last_idx = n - 1
+            if gap_bar_idx is None:
+                continue
+
+            bars_since_gap = last_idx - gap_bar_idx
+            within_lookback = bars_since_gap <= lookback_bars
+            still_unfilled = gap_unfilled and within_lookback
+
+            is_gap_up_today = (low[last_idx] - high[last_idx - 1]) / high[last_idx - 1] * 100 >= gap_pct
+            still_unfilled_after_gap_day = still_unfilled and not is_gap_up_today
+
+            if np.isnan(gap_low):
+                continue
+            close_to_gap_low_pct = (close[last_idx] - gap_low) / gap_low * 100
+            near_gap_low = 0 <= close_to_gap_low_pct <= risk_pct
+
+            still_unfilled_near_low = still_unfilled_after_gap_day and near_gap_low
+
+            if still_unfilled_near_low and close[last_idx] >= min_price:
+                matches.append(ticker)
+
+        except Exception:
+            continue
+
+    return sorted(matches)
+
+
+st.markdown("---")
+
+with st.spinner("Scanning for Gap Up Unfilled setups..."):
+    gap_up_unfilled_list = timed(
+        "compute_gap_up_unfilled",
+        compute_gap_up_unfilled,
+        stocks_tuple, ticker_dfs_shared
+    )
+
+render_section_header_with_copy(
+    lambda: st.markdown(f"#### 🧡 Gap Up Unfilled (Last 30 Days) ({len(gap_up_unfilled_list)})"),
+    gap_up_unfilled_list
+)
+
+if gap_up_unfilled_list:
+    gu_industry_counts, gu_ticker_industry = build_leader_industry_map(gap_up_unfilled_list, INDUSTRIES)
+    html_gu = ""
+    for sym in gap_up_unfilled_list:
+        industries = gu_ticker_industry.get(sym, [])
+        ranks = [industry_rank_map[ind] for ind in industries if ind in industry_rank_map]
+        is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+        glow_style = (
+            "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+            if is_top20_industry else ""
+        )
+        html_gu += setup_badge(sym, extra_style=glow_style)
+    st.markdown(html_gu, unsafe_allow_html=True)
+else:
+    st.info("No active setups discovered.")
