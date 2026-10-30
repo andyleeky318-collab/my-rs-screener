@@ -10078,6 +10078,8 @@ def compute_biggest_move_today(stocks_list, ticker_dfs):
 
             if pd.isna(today_chg) or pd.isna(today_up) or pd.isna(today_down):
                 continue
+            if close.iloc[-1] < 20:          # ← ADD THIS
+                continue
 
             if today_chg >= today_up:
                 biggest_up_today.append((ticker, round(float(today_chg), 2)))
@@ -10167,8 +10169,10 @@ def compute_biggest_move_history(stocks_list, ticker_dfs):
                 biggest_up   = pct_chg.rolling(window=win, min_periods=20).max()
                 biggest_drop = pct_chg.rolling(window=win, min_periods=20).min()
 
-                up_flag   = (pct_chg >= biggest_up).astype(int)
-                down_flag = (pct_chg <= biggest_drop).astype(int)
+                price_ok = close >= 20                      # ← ADD THIS
+
+                up_flag   = ((pct_chg >= biggest_up) & price_ok).astype(int)   # ← CHANGED
+                down_flag = ((pct_chg <= biggest_drop) & price_ok).astype(int) # ← CHANGED
 
                 all_up_series.append(up_flag)
                 all_down_series.append(down_flag)
