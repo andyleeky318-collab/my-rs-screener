@@ -1061,6 +1061,11 @@ if lime_perf_rows:
     idx_1w = build_index(rows_1w, "pct_1w", max_abs_1w, X0_1w)
     idx_1m = build_index(rows_1m, "pct_1m", max_abs_1m, X0_1m)
 
+    # Auto-highlight: top-1 ticker shared between adjacent columns
+    top1_1d = rows_1d[0]["sym"] if rows_1d else None
+    top1_1w = rows_1w[0]["sym"] if rows_1w else None
+    top1_1m = rows_1m[0]["sym"] if rows_1m else None
+
     lines_html = ""
 
     for sym, (i_1d, ex_1d) in idx_1d.items():
@@ -1069,10 +1074,11 @@ if lime_perf_rows:
         i_1w, ex_1w = idx_1w[sym]
         y1 = row_y(i_1d); y2 = row_y(i_1w)
         c  = color(rows_1d[i_1d]["pct"])
+        auto_opacity = "0.9" if (sym == top1_1d and sym == top1_1w) else "0"
         lines_html += (
             f'<line class="mesh mesh-{sym}" '
             f'x1="{ex_1d}" y1="{y1}" x2="{ex_1w}" y2="{y2}" '
-            f'stroke="{c}" stroke-width="1.2" stroke-opacity="0" '
+            f'stroke="{c}" stroke-width="1.2" stroke-opacity="{auto_opacity}" '
             f'style="transition:stroke-opacity 0.2s;pointer-events:none;"/>'
         )
 
@@ -1082,10 +1088,11 @@ if lime_perf_rows:
         i_1m, ex_1m = idx_1m[sym]
         y1 = row_y(i_1w); y2 = row_y(i_1m)
         c  = color(rows_1w[i_1w]["pct_1w"])
+        auto_opacity = "0.9" if (sym == top1_1w and sym == top1_1m) else "0"
         lines_html += (
             f'<line class="mesh mesh-{sym}" '
             f'x1="{ex_1w}" y1="{y1}" x2="{ex_1m}" y2="{y2}" '
-            f'stroke="{c}" stroke-width="1.2" stroke-opacity="0" '
+            f'stroke="{c}" stroke-width="1.2" stroke-opacity="{auto_opacity}" '
             f'style="transition:stroke-opacity 0.2s;pointer-events:none;"/>'
         )
 
