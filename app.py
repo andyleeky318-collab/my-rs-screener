@@ -4483,7 +4483,7 @@ if all_data:
 
     _lower_wick_header_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"✅✅✅ Long Bottom Wick Cluster [{len(lower_wick_industry_tickers)}] (Buying support into weakness)"
+        f"✅✅✅ Long Bottom Wick Cluster [{len(lower_wick_industry_tickers)}] (End of Correction? Buying support into weakness)"
         f"</div>"
     )
     lower_wick_html = ""
@@ -8085,7 +8085,7 @@ render_section_header_with_copy(
     lambda: st.markdown(
         f"""
         <h4>
-            📐 Downtrend Line Breakout ({len(downtrend_today)})
+            📐 Downtrend Line Breakout = Pure technical ({len(downtrend_today)})
             <span style="color:#888; font-size:12px; font-weight:normal;">(Star = High Volume, Green glow = PPP breakout)</span>
         </h4>
         """,
@@ -8912,7 +8912,7 @@ with st.spinner("Scanning Early Bull setups..."):
 render_section_header_with_copy(
     lambda: st.markdown(
         f"""<h4>🐂 Early Bull = buyable + Sector + ALL ({len(early_bull_list)} + ... + {len(early_bull_no_filter_list)})
-        <span style="color:#888; font-size:12px;">(stage1 -> 2)</span></h4>""",
+        <span style="color:#888; font-size:12px;">(stage1 -> 2 after Bear market)</span></h4>""",
         unsafe_allow_html=True
     ),
     early_bull_no_filter_list
@@ -10764,6 +10764,134 @@ if not gap_up_down_hist.empty:
         color="Bar_Color",
         use_container_width=True
     )
+
+# ==============================================================================
+# WICK CLUSTER HISTORY — total daily count of tickers showing a long upper
+# wick or long lower wick (wick > 50% of the day's High-Low range), mirroring
+# the single-bar _long_upper_wick_today_set / _long_lower_wick_today_set logic
+# used elsewhere, evaluated across the full time series for a 60-day breadth
+# history. Pure count charts — no ticker lists shown.
+# ==============================================================================
+@st.cache_data(ttl=3600)
+def compute_wick_cluster_history(stocks_list, _ticker_dfs):
+    try:
+        if not _ticker_dfs:
+            return pd.DataFrame()
+
+        upper_series_list = []
+        lower_series_list = []
+        for ticker in stocks_list:
+            df = _ticker_dfs.get(ticker)
+            if df is None or not all(col in df.columns for col in ['Open', 'High', 'Low', 'Close']):
+                continue
+            if len(df) < 1:
+                continue
+            try:
+                o, h, l, c = df['Open'], df['High'], df['Low'], df['Close']
+                rng = h - l
+                valid = (rng > 0) & (c > 20)
+
+                upper_wick = h - pd.concat([o, c], axis=1).max(axis=1)
+                lower_wick = pd.concat([o, c], axis=1).min(axis=1) - l
+
+                upper_flag = valid & ((upper_wick / rng.replace(0, np.nan)) > 0.5)
+                lower_flag = valid & ((lower_wick / rng.replace(0, np.nan)) > 0.5)
+
+                upper_series_list.append(upper_flag.fillna(False).astype(int))
+                lower_series_list.append(lower_flag.fillna(False).astype(int))
+            except Exception:
+                continue
+
+        if not upper_series_list:
+            return pd.DataFrame()
+
+        upper_combined = pd.concat(upper_series_list, axis=1).fillna(0)
+        lower_combined = pd.concat(lower_series_list, axis=1).fillna(0)
+
+        upper_counts = upper_combined.sum(axis=1)
+        lower_counts = lower_combined.sum(axis=1)
+
+        result = pd.DataFrame({
+            "Date": upper_counts.index,
+            "Upper Wick Cluster Count": upper_counts.values,
+            "Lower Wick Cluster Count": lower_counts.reindex(upper_counts.index).values,
+        }).tail(60)
+        result["Date"] = pd.to_datetime(result["Date"]).dt.strftime("%Y-%m-%d")
+        return result.reset_index(drop=True)
+    except Exception:
+        return pd.DataFrame()
+
+
+with st.spinner("Scanning for Wick Cluster History..."):
+    wick_cluster_hist = timed(
+        "compute_wick_cluster_history",
+        compute_wick_cluster_history,
+        stocks_tuple, ticker_dfs_shared
+    )
+
+st.markdown("---")
+st.markdown("#### 📊 Long Bottom Wick Cluster (Total Count)")
+
+if not wick_cluster_hist.empty:
+    chart_df_lwc = wick_cluster_hist.copy()
+
+    today_lwc = chart_df_lwc["Lower Wick Cluster Count"].iloc[-1]
+    max_lwc = chart_df_lwc["Lower Wick Cluster Count"].max()
+
+    chart_df_lwc["Bar_Color"] = "#29B5E8"
+
+    mean_lwc = chart_df_lwc["Lower Wick Cluster Count"].mean()
+    std_lwc = chart_df_lwc["Lower Wick Cluster Count"].std(ddof=1)
+    if std_lwc and std_lwc > 0:
+        z_scores_lwc = (chart_df_lwc["Lower Wick Cluster Count"] - mean_lwc) / std_lwc
+    else:
+        z_scores_lwc = pd.Series(0, index=chart_df_lwc.index)
+    chart_df_lwc.loc[z_scores_lwc >= 2, "Bar_Color"] = "#FF4B4B"
+
+    if today_lwc == max_lwc:
+        chart_df_lwc.iloc[-1, chart_df_lwc.columns.get_loc("Bar_Color")] = "#FF4B4B"
+
+    st.bar_chart(
+        data=chart_df_lwc,
+        x="Date",
+        y="Lower Wick Cluster Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
+else:
+    st.info("Insufficient data to compute Long Bottom Wick Cluster history.")
+
+st.write("")
+st.markdown("#### 📊 Long Upper Wick Cluster (Total Count)")
+
+if not wick_cluster_hist.empty:
+    chart_df_uwc = wick_cluster_hist.copy()
+
+    today_uwc = chart_df_uwc["Upper Wick Cluster Count"].iloc[-1]
+    max_uwc = chart_df_uwc["Upper Wick Cluster Count"].max()
+
+    chart_df_uwc["Bar_Color"] = "#29B5E8"
+
+    mean_uwc = chart_df_uwc["Upper Wick Cluster Count"].mean()
+    std_uwc = chart_df_uwc["Upper Wick Cluster Count"].std(ddof=1)
+    if std_uwc and std_uwc > 0:
+        z_scores_uwc = (chart_df_uwc["Upper Wick Cluster Count"] - mean_uwc) / std_uwc
+    else:
+        z_scores_uwc = pd.Series(0, index=chart_df_uwc.index)
+    chart_df_uwc.loc[z_scores_uwc >= 2, "Bar_Color"] = "#FF4B4B"
+
+    if today_uwc == max_uwc:
+        chart_df_uwc.iloc[-1, chart_df_uwc.columns.get_loc("Bar_Color")] = "#FF4B4B"
+
+    st.bar_chart(
+        data=chart_df_uwc,
+        x="Date",
+        y="Upper Wick Cluster Count",
+        color="Bar_Color",
+        use_container_width=True
+    )
+else:
+    st.info("Insufficient data to compute Long Upper Wick Cluster history.")
 
 st.markdown("---")
 st.markdown(
@@ -17885,7 +18013,7 @@ def compute_market_verdict():
     if triggered:
         verdict = "🛡️ DEFENSIVE" if composite < 35 else "⚠️ PULLBACK ONLY"
         verdict_note = "Distribution days triggered — avoid chasing extended breakouts even if breadth looks fine. Buy pullbacks in confirmed leaders only, tighten stops, reduce size."
-    elif composite >= 72:
+    elif composite >= 75:
         verdict = "🚀 BREAKOUT"
         verdict_note = "Regime, breadth, and rotation all aligned bullish with no distribution flags. Fresh breakouts from proper bases have a statistical tailwind — this is when position size and aggression are justified."
     elif composite >= 55:
