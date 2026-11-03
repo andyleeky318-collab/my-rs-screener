@@ -20361,7 +20361,7 @@ with st.spinner("Scanning for Bottom Hunt setups..."):
     )
 
 render_section_header_with_copy(
-    lambda: st.markdown(f"#### 🎯 Bottom Hunt ({len(bottom_hunt_list)})"),
+    lambda: st.markdown(f"#### 🎯 Bottom Hunt Shooting Star ({len(bottom_hunt_list)})"),
     bottom_hunt_list
 )
 
@@ -20459,7 +20459,7 @@ with st.spinner("Scanning for Gap Up Unfilled setups..."):
     )
 
 render_section_header_with_copy(
-    lambda: st.markdown(f"#### 🧡 Gap Up Unfilled (Last 30 Days) ({len(gap_up_unfilled_list)})"),
+    lambda: st.markdown(f"#### 🧡 Gap Up Unfilled (Risk/Reward) ({len(gap_up_unfilled_list)})"),
     gap_up_unfilled_list
 )
 
