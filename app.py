@@ -1061,10 +1061,16 @@ if lime_perf_rows:
     idx_1w = build_index(rows_1w, "pct_1w", max_abs_1w, X0_1w)
     idx_1m = build_index(rows_1m, "pct_1m", max_abs_1m, X0_1m)
 
-    # Auto-highlight: top-1 ticker shared between adjacent columns
+    # Auto-highlight: top-1 and last ticker shared between adjacent columns
     top1_1d = rows_1d[0]["sym"] if rows_1d else None
     top1_1w = rows_1w[0]["sym"] if rows_1w else None
     top1_1m = rows_1m[0]["sym"] if rows_1m else None
+    last_1d = rows_1d[-1]["sym"] if rows_1d else None
+    last_1w = rows_1w[-1]["sym"] if rows_1w else None
+    last_1m = rows_1m[-1]["sym"] if rows_1m else None
+
+    def is_auto(sym, a_top, a_last, b_top, b_last):
+        return (sym == a_top and sym == b_top) or (sym == a_last and sym == b_last)
 
     lines_html = ""
 
@@ -1074,9 +1080,10 @@ if lime_perf_rows:
         i_1w, ex_1w = idx_1w[sym]
         y1 = row_y(i_1d); y2 = row_y(i_1w)
         c  = color(rows_1d[i_1d]["pct"])
-        auto_opacity = "0.9" if (sym == top1_1d and sym == top1_1w) else "0"
+        auto = is_auto(sym, top1_1d, last_1d, top1_1w, last_1w)
+        auto_opacity = "0.9" if auto else "0"
         lines_html += (
-            f'<line class="mesh mesh-{sym}" '
+            f'<line class="mesh mesh-{sym}{" mesh-auto" if auto else ""}" '
             f'x1="{ex_1d}" y1="{y1}" x2="{ex_1w}" y2="{y2}" '
             f'stroke="{c}" stroke-width="1.2" stroke-opacity="{auto_opacity}" '
             f'style="transition:stroke-opacity 0.2s;pointer-events:none;"/>'
@@ -1088,9 +1095,10 @@ if lime_perf_rows:
         i_1m, ex_1m = idx_1m[sym]
         y1 = row_y(i_1w); y2 = row_y(i_1m)
         c  = color(rows_1w[i_1w]["pct_1w"])
-        auto_opacity = "0.9" if (sym == top1_1w and sym == top1_1m) else "0"
+        auto = is_auto(sym, top1_1w, last_1w, top1_1m, last_1m)
+        auto_opacity = "0.9" if auto else "0"
         lines_html += (
-            f'<line class="mesh mesh-{sym}" '
+            f'<line class="mesh mesh-{sym}{" mesh-auto" if auto else ""}" '
             f'x1="{ex_1w}" y1="{y1}" x2="{ex_1m}" y2="{y2}" '
             f'stroke="{c}" stroke-width="1.2" stroke-opacity="{auto_opacity}" '
             f'style="transition:stroke-opacity 0.2s;pointer-events:none;"/>'
@@ -1154,7 +1162,7 @@ if lime_perf_rows:
 
       function reset() {
         document.querySelectorAll('.mesh').forEach(function(el) {
-          el.style.strokeOpacity = '0';
+          el.style.strokeOpacity = el.classList.contains('mesh-auto') ? '0.9' : '0';
         });
         document.querySelectorAll('.bar, .lbl').forEach(function(el) {
           el.style.opacity = '1';
