@@ -15319,6 +15319,98 @@ with stall_col4:
     st.markdown(_dist_box_html("IWM Stalling", iwm_stall_count, iwm_stall_dates, iwm_stall_triggered), unsafe_allow_html=True)
 
 # ==============================================================================
+# DIST HISTORY — dist_history.txt in the PUBLIC repo root (GITHUB_PUBLIC_REPO),
+# alongside lazy_exposure_history.txt / upcoming_earnings_7day.txt (same
+# repo/branch/token pattern as save_lazy_exposure_to_public_repo; never
+# touches those files). One line per trading day: "YYYY-MM-DD,yes" if ALL 4 indexes (SPY, QQQ, SMH,
+# IWM) have Distribution TRIGGERED (same >= 5 active dist-days rule as the
+# boxes above), else "YYYY-MM-DD,no". Today's line is upserted (overwritten
+# if it changes intraday). Lazy write: only commits when the value changed,
+# and a process-wide memo skips the GitHub call on reruns. Soft-fail; never
+# blocks or alters any other section.
+# ==============================================================================
+DIST_HISTORY_PUBLIC_FILEPATH = "dist_history.txt"
+_DIST_HISTORY_LINE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}),(yes|no)$")
+
+
+@st.cache_resource(show_spinner=False)
+def _dist_history_memo():
+    """Process-wide memo of the last (date, value) successfully saved."""
+    return {}
+
+
+def _parse_dist_history_txt(text):
+    rows = {}
+    for line in text.splitlines():
+        m = _DIST_HISTORY_LINE_RE.match(line.strip())
+        if m:
+            rows[m.group(1)] = m.group(2)
+    return rows
+
+
+def save_dist_history_to_public_repo(date_str, value):
+    """Upsert 'date_str,value' into dist_history.txt (public repo). Returns True on
+    success (including 'already up to date'), False otherwise."""
+    repo   = st.secrets.get("GITHUB_PUBLIC_REPO")
+    branch = st.secrets.get("GITHUB_PUBLIC_BRANCH", "main")
+    if not repo or not (st.secrets.get("GITHUB_PUBLIC_TOKEN") or st.secrets.get("GITHUB_TOKEN")):
+        return False
+
+    url = f"{GITHUB_API}/repos/{repo}/contents/{DIST_HISTORY_PUBLIC_FILEPATH}"
+    resp = requests.get(url, headers=_github_public_headers(), params={"ref": branch}, timeout=10)
+
+    sha, rows = None, {}
+    if resp.status_code == 200:
+        data = resp.json()
+        sha = data.get("sha")
+        rows = _parse_dist_history_txt(base64.b64decode(data["content"]).decode())
+    elif resp.status_code != 404:
+        return False
+
+    if rows.get(date_str) == value:
+        return True                      # lazy: nothing changed, no commit
+
+    rows[date_str] = value
+    content_str = "\n".join(f"{d},{rows[d]}" for d in sorted(rows))   # same format as lazy_exposure_history.txt
+    payload = {
+        "message": f"Update Distribution history — {date_str},{value}",
+        "content": base64.b64encode(content_str.encode()).decode(),
+        "branch": branch,
+    }
+    if sha:
+        payload["sha"] = sha
+    put_resp = requests.put(url, headers=_github_public_headers(), json=payload, timeout=10)
+    return put_resp.status_code in (200, 201)
+
+
+def _persist_dist_history():
+    _flags = (spy_triggered, qqq_triggered, smh_triggered, iwm_triggered)
+    value = "yes" if all(bool(f) for f in _flags) else "no"
+
+    # Trading date of the data used (latest SPY bar), fallback US/Eastern today.
+    _spy_df = ticker_dfs_shared.get("SPY") if isinstance(ticker_dfs_shared, dict) else None
+    _spy_close = _spy_df["Close"].dropna() if _spy_df is not None and "Close" in _spy_df else None
+    if _spy_close is not None and len(_spy_close):
+        # last bar with a real close (matches the dropna() in the dist-day calc)
+        date_str = pd.Timestamp(_spy_close.index[-1]).date().isoformat()
+    else:
+        date_str = datetime.datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+
+    memo = _dist_history_memo()
+    if memo.get("last") == (date_str, value):
+        return True
+    ok = save_dist_history_to_public_repo(date_str, value)
+    if ok:
+        memo["last"] = (date_str, value)
+    return ok
+
+
+try:
+    timed("save_dist_history_to_public_repo", _persist_dist_history)
+except Exception:
+    pass   # soft-fail: never affect the rest of the page
+
+# ==============================================================================
 # ATR MULTIPLE ABOVE MA50 — SPY / QQQ / SMH / IWM
 # Same visual style as the Distribution/Stalling boxes above.
 # ==============================================================================
