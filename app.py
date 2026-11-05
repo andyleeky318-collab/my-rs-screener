@@ -20486,3 +20486,201 @@ if gap_up_unfilled_list:
     st.markdown(html_gu, unsafe_allow_html=True)
 else:
     st.info("No active setups discovered.")
+# ==============================================================================
+# FUNDAMENTAL — William O'Neil EPS & Sales filter, ported from Pine v6
+# "EPS & Sales (O'Neil Filter)". Latest reported quarter vs same quarter a
+# year ago (YoY):
+#   1. EPS growth  >= min_eps %
+#   2. EPS > 0 in both quarters (a shrinking loss is not growth)
+#   3. Sales growth >= min_sales %
+#   4/5. Optional (OFF by default) EPS / Sales growth accelerating vs prior qtr
+# EPS = reported (adjusted) EPS per earnings event (same series as Pine's
+# earnings.actual). Sales = quarterly Total Revenue. Fetched once per 12h
+# (fundamentals only change on earnings), in parallel. Read-only, additive.
+# Badge "new" (gold) = latest earnings released within the last 7 days AND the
+# stock did not pass on the prior quarter (i.e. newly entered the list).
+# ==============================================================================
+def _oneil_pct(cur, prev):
+    if cur is None or prev is None or pd.isna(cur) or pd.isna(prev) or prev == 0:
+        return None
+    return (cur - prev) / abs(prev) * 100
+
+
+def _oneil_pass(eps, sal, L, R, min_eps, min_sales, need_acc_eps, need_acc_sales):
+    """Evaluate O'Neil test with eps[L] as latest EPS event and sal[R] as latest
+    revenue quarter. Mirrors the Pine 'pass' logic exactly (incl. sz >= 6)."""
+    if L < 5 or R < 4:
+        return False
+    eps0, eps4 = eps[L], eps[L - 4]
+    sal0, sal4 = sal[R], sal[R - 4]
+    gE = _oneil_pct(eps0, eps4)
+    gS = _oneil_pct(sal0, sal4)
+    eps_ok = gE is not None and eps0 > 0 and eps4 > 0 and gE >= min_eps
+    sal_ok = gS is not None and gS >= min_sales
+    acc_e = True
+    if need_acc_eps:
+        gEp = _oneil_pct(eps[L - 1], eps[L - 5])
+        acc_e = gEp is not None and gE is not None and gE > gEp
+    acc_s = True
+    if need_acc_sales:
+        gSp = _oneil_pct(sal[R - 1], sal[R - 5]) if R >= 5 else None
+        acc_s = gSp is not None and gS is not None and gS > gSp
+    return bool(eps_ok and sal_ok and acc_e and acc_s)
+
+
+def _fetch_oneil_one(sym, min_eps, min_sales, need_acc_eps, need_acc_sales):
+    """Returns (passes_now, is_new) or None if data unavailable."""
+    t = yf.Ticker(sym)
+    try:
+        ed = t.get_earnings_dates(limit=12)
+    except Exception:
+        time.sleep(1.5)                      # one retry (Yahoo throttling)
+        ed = yf.Ticker(sym).get_earnings_dates(limit=12)
+    if ed is None or ed.empty or "Reported EPS" not in ed.columns:
+        return None
+    ed = ed[ed["Reported EPS"].notna()].copy()
+    if ed.empty:
+        return None
+    ed.index = pd.to_datetime(ed.index, utc=True)
+    ed = ed.sort_index()
+    ed = ed[~ed.index.normalize().duplicated(keep="last")]   # one event per day
+    eps = [float(v) for v in ed["Reported EPS"].tolist()][-9:]  # Pine maxKeep = nQ+5
+    eps_dates = list(ed.index)[-9:]
+
+    q = t.quarterly_income_stmt
+    if q is None or q.empty or "Total Revenue" not in q.index:
+        return None
+    rev = q.loc["Total Revenue"].dropna()
+    rev.index = pd.to_datetime(rev.index)
+    rev = rev.sort_index()
+    if len(rev) < 5:
+        return None
+    sal = [float(v) for v in rev.tolist()]
+    rev_dates = list(rev.index)
+
+    # Revenue YoY must compare quarters ~1 year apart (no missing quarters).
+    def _yoy_ok(r):
+        return r >= 4 and 330 <= (rev_dates[r] - rev_dates[r - 4]).days <= 400
+
+    L, R = len(eps) - 1, len(sal) - 1
+    if not _yoy_ok(R):
+        return None
+    # Latest revenue quarter must belong to the latest earnings report
+    # (period end within 0..120 days before the release), else data is stale.
+    lag = (eps_dates[L].tz_convert(None).normalize() - rev_dates[R].normalize()).days
+    if not (0 <= lag <= 120):
+        return None
+
+    passes = _oneil_pass(eps, sal, L, R, min_eps, min_sales, need_acc_eps, need_acc_sales)
+    if not passes:
+        return (False, False)
+
+    days_since = (pd.Timestamp.now(tz="UTC") - eps_dates[L]).days
+    prev_pass = _yoy_ok(R - 1) and _oneil_pass(
+        eps, sal, L - 1, R - 1, min_eps, min_sales, need_acc_eps, need_acc_sales
+    )
+    is_new = days_since <= 7 and not prev_pass
+    return (True, is_new)
+
+
+@st.cache_resource(show_spinner=False)
+def _oneil_store():
+    """Process-wide per-ticker result store: {key: (fetched_ts, result)}.
+    Only successful fetches are stored, so throttled tickers retry next run."""
+    return {}
+
+
+def compute_oneil_fundamental(stocks_tuple_in, min_eps=25.0, min_sales=25.0,
+                              need_acc_eps=False, need_acc_sales=False,
+                              ttl_sec=43200, err_retry_sec=900, max_err_per_run=25):
+    """Per-ticker cached O'Neil scan. Successful results live 12h; failed
+    (rate-limited) tickers are retried after 15 min, and a run stops calling
+    Yahoo after max_err_per_run errors so page reruns never hang."""
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+
+    store = _oneil_store()
+    params = (min_eps, min_sales, need_acc_eps, need_acc_sales)
+    now = time.time()
+    syms = sorted(set(stocks_tuple_in))
+
+    def _stale(sym):
+        entry = store.get((sym, params))
+        if entry is None:
+            return True
+        age = now - entry[0]
+        return age > (err_retry_sec if entry[1] == "ERR" else ttl_sec)
+
+    todo = [s_ for s_ in syms if _stale(s_)]
+    lock = threading.Lock()
+    run_err = [0]
+
+    def _safe(sym):
+        if run_err[0] >= max_err_per_run:        # circuit breaker: Yahoo throttling
+            return sym, "ERR"
+        try:
+            return sym, _fetch_oneil_one(sym, *params)
+        except Exception:
+            with lock:
+                run_err[0] += 1
+            return sym, "ERR"
+
+    if todo:
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            for sym, res in ex.map(_safe, todo):
+                prev = store.get((sym, params))
+                if res == "ERR" and prev is not None and prev[1] != "ERR":
+                    # keep last good result; make it due for retry in err_retry_sec
+                    store[(sym, params)] = (now - ttl_sec + err_retry_sec, prev[1])
+                else:
+                    store[(sym, params)] = (now, res)
+
+    passed, new_syms, n_err = [], [], 0
+    for sym in syms:
+        res = store.get((sym, params), (0, "ERR"))[1]
+        if res == "ERR":
+            n_err += 1
+        elif res and res[0]:
+            passed.append(sym)
+            if res[1]:
+                new_syms.append(sym)
+    return passed, new_syms, n_err
+
+
+st.markdown("---")
+
+try:
+    with st.spinner("Scanning O'Neil fundamentals (EPS & Sales)..."):
+        oneil_list, oneil_new, oneil_err = timed(
+            "compute_oneil_fundamental",
+            compute_oneil_fundamental,
+            tuple(sorted(set(stocks_tuple)))
+        )
+
+    render_section_header_with_copy(
+        lambda: st.markdown(f"#### 📑 Fundamental — O'Neil EPS & Sales ≥25% YoY ({len(oneil_list)})"),
+        oneil_list
+    )
+
+    if oneil_err:
+        st.caption(f"⚠️ {oneil_err} tickers could not be loaded from Yahoo (rate limit) — retried automatically after 15 min.")
+
+    if oneil_list:
+        _oneil_new_set = set(oneil_new)
+        _oneil_rank_map = industry_rank_map if "industry_rank_map" in globals() else {}
+        on_industry_counts, on_ticker_industry = build_leader_industry_map(oneil_list, INDUSTRIES)
+        html_on = ""
+        for sym in oneil_list:
+            industries = on_ticker_industry.get(sym, [])
+            ranks = [_oneil_rank_map[ind] for ind in industries if ind in _oneil_rank_map]
+            is_top20_industry = any(r <= 20 for r in ranks) if ranks else False
+            glow_style = (
+                "box-shadow:0 0 8px 2px #FF4B4B; border:1px solid #FF4B4B;"
+                if is_top20_industry else ""
+            )
+            html_on += setup_badge(sym, is_new=(sym in _oneil_new_set), extra_style=glow_style)
+        st.markdown(html_on, unsafe_allow_html=True)
+    else:
+        st.info("No stocks currently meet the O'Neil EPS & Sales criteria.")
+except Exception as _e:
+    st.warning(f"Fundamental section error: {_e}")
