@@ -20776,3 +20776,678 @@ try:
         st.info("No stocks currently meet the O'Neil EPS & Sales criteria.")
 except Exception as _e:
     st.warning(f"Fundamental section error: {_e}")
+
+# ==============================================================================
+# MARKET MONITOR — breadth & industry momentum (Kelileo-CUP-style methodology).
+# Independent section, read-only, additive. Own data path:
+#   * Universe: Nasdaq screener API (free, 1 call) — US common stocks + ADRs
+#     on NASDAQ/NYSE/AMEX, no ETFs / preferreds / warrants / units / rights.
+#   * Prices: one bulk yfinance download (1y daily Close/Volume), cached 1h.
+# Per-day filters are applied to each day's own bar:
+#   breadth sample  : close >= $5 and volume >= 300k shares
+#   momentum sample : close >= $5 and dollar volume >= $5M
+#   momentum stock  : 63-trading-day return >= +20%
+# Industry metrics (latest day, momentum sample):
+#   lift  = industry momentum % / market momentum %
+#   z     = (k - n*p) / sqrt(n*p*(1-p))      (significant if z > 1.96, base >= 20)
+#   qtr median = median 63d return of ALL stocks in the industry
+#   Δlift = lift today - lift 21 trading days ago (same fixed set of stocks)
+#   pace  = median 21d return - qtr median / 3
+# Any failure only shows a warning inside this section.
+# ==============================================================================
+MM_NASDAQ_URL = "https://api.nasdaq.com/api/screener/stocks?tableonly=true&download=true"
+MM_MIN_PRICE = 5.0
+MM_MIN_SHARES = 300_000
+MM_MIN_DOLLAR_VOL = 5_000_000
+MM_MOM_LOOKBACK = 63
+MM_MOM_THRESHOLD = 0.20
+MM_DELTA_DAYS = 21
+MM_MIN_BASE = 20
+MM_Z_CUTOFF = 1.96
+MM_TABLE_DAYS = 42          # ~2 months of trading days in the daily table / pulse chart
+MM_UNCLASSIFIED = "Unclassified"
+
+# Nasdaq industry -> broad bucket (sector-specific overrides in _MM_SECTOR_OVERRIDES).
+_MM_INDUSTRY_BUCKETS = {
+    "Biotech & Pharma": [
+        "Biotechnology: Biological Products (No Diagnostic Substances)",
+        "Biotechnology: Pharmaceutical Preparations",
+        "Medicinal Chemicals and Botanical Products",
+        "Other Pharmaceuticals", "Pharmaceuticals and Biotechnology",
+        "Biotechnology: Commercial Physical & Biological Resarch",
+        "Biotechnology: In Vitro & In Vivo Diagnostic Substances",
+        "Misc Health and Biotechnology Services",
+    ],
+    "Medical Devices & Instruments": [
+        "Medical/Dental Instruments", "Medical Specialities",
+        "Biotechnology: Electromedical & Electrotherapeutic Apparatus",
+        "Medical Electronics", "Ophthalmic Goods", "Precision Instruments",
+        "Biotechnology: Laboratory Analytical Instruments",
+    ],
+    "Health Care Services": ["Hospital/Nursing Management", "Medical/Nursing Services"],
+    "Software & IT Services": [
+        "Computer Software: Prepackaged Software",
+        "Computer Software: Programming Data Processing",
+        "EDP Services", "Retail: Computer Software & Peripheral Equipment",
+    ],
+    "Semiconductors": ["Semiconductors"],
+    "Computer Hardware & Electronics": [
+        "Computer Manufacturing", "Computer peripheral equipment",
+        "Electronic Components", "Electronics Distribution",
+        "Consumer Electronics/Appliances", "Consumer Electronics/Video Chains",
+    ],
+    "Communications Equipment": [
+        "Telecommunications Equipment", "Computer Communications Equipment",
+        "Radio And Television Broadcasting And Communications Equipment",
+    ],
+    "Electrical Equipment": ["Electrical Products"],
+    "Business & Professional Services": [
+        "Business Services", "Professional Services", "Diversified Commercial Services",
+        "Office Equipment/Supplies/Services", "Misc Corporate Leasing Services",
+        "Rental/Leasing Companies", "Advertising", "Environmental Services",
+        "Pollution Control Equipment",
+    ],
+    "Media & Telecom Services": [
+        "Cable & Other Pay Television Services", "Broadcasting", "Publishing",
+        "Newspapers/Magazines", "Books",
+    ],
+    "Entertainment & Leisure": [
+        "Movies/Entertainment", "Services-Misc. Amusement & Recreation",
+        "Recreational Games/Products/Toys", "Hotels/Resorts",
+    ],
+    "Restaurants": ["Restaurants"],
+    "Retail": [
+        "Department/Specialty Retail Stores", "Clothing/Shoe/Accessory Stores",
+        "Other Specialty Stores", "Catalog/Specialty Distribution",
+        "RETAIL: Building Materials", "Retail-Auto Dealers and Gas Stations",
+        "Auto & Home Supply Stores", "Retail-Drug Stores and Proprietary Stores",
+        "Food Chains",
+    ],
+    "Apparel & Footwear": ["Apparel", "Shoe Manufacturing", "Garments and Clothing", "Textiles"],
+    "Consumer Services & Durables": [
+        "Other Consumer Services", "Consumer Specialties", "Home Furnishings", "Durable Goods",
+    ],
+    "Food, Beverage & Staples": [
+        "Beverages (Production/Distribution)", "Packaged Foods", "Specialty Foods",
+        "Meat/Poultry/Fish", "Farming/Seeds/Milling", "Food Distributors", "Tobacco",
+        "Package Goods/Cosmetics",
+    ],
+    "Autos & Parts": ["Auto Manufacturing", "Motor Vehicles", "Auto Parts:O.E.M.", "Automotive Aftermarket"],
+    "Homebuilding": ["Homebuilding"],
+    "Construction & Building Products": [
+        "Building Materials", "Building Products", "Engineering & Construction",
+        "General Bldg Contractors - Nonresidential Bldgs",
+        "Water Sewer Pipeline Comm & Power Line Construction",
+        "Mining & Quarrying of Nonmetallic Minerals (No Fuels)",
+    ],
+    "Industrial Machinery & Manufacturing": [
+        "Industrial Machinery/Components", "Fluid Controls",
+        "Construction/Ag Equipment/Trucks", "Metal Fabrications", "Tools/Hardware",
+        "Miscellaneous manufacturing industries", "Professional and commerical equipment",
+        "Industrial Specialties", "Plastic Products", "Containers/Packaging",
+        "Multi-Sector Companies", "Wholesale Distributors",
+    ],
+    "Aerospace & Defense": ["Aerospace", "Military/Government/Technical", "Ordnance And Accessories"],
+    "Transportation & Logistics": [
+        "Air Freight/Delivery Services", "Trucking Freight/Courier Services",
+        "Integrated Freight & Logistics", "Railroads", "Transportation Services",
+    ],
+    "Marine Shipping": ["Marine Transportation"],
+    "Oil & Gas E&P": ["Oil & Gas Production"],
+    "Oil & Gas Integrated & Midstream": [
+        "Integrated oil Companies", "Oil Refining/Marketing", "Oil/Gas Transmission",
+    ],
+    "Oilfield Services & Equipment": ["Oilfield Services/Equipment", "Oil and Gas Field Machinery"],
+    "Metals & Coal Mining": [
+        "Metal Mining", "Other Metals and Minerals", "Coal Mining", "Steel/Iron Ore", "Aluminum",
+    ],
+    "Precious Metals": ["Precious Metals"],
+    "Chemicals & Materials": [
+        "Major Chemicals", "Specialty Chemicals", "Agricultural Chemicals",
+        "Paints/Coatings", "Paper", "Forest Products",
+    ],
+    "Utilities": [
+        "Electric Utilities: Central", "Natural Gas Distribution", "Water Supply", "Power Generation",
+    ],
+    "Banks": ["Major Banks", "Commercial Banks", "Banks", "Savings Institutions"],
+    "Insurance": [
+        "Property-Casualty Insurers", "Life Insurance", "Specialty Insurers", "Accident &Health Insurance",
+    ],
+    "Capital Markets & Asset Mgmt": [
+        "Investment Bankers/Brokers/Service", "Investment Managers",
+        "Finance/Investors Services", "Diversified Financial Services",
+    ],
+    "Consumer & Specialty Finance": ["Finance: Consumer Services", "Finance Companies"],
+    "REITs & Real Estate": ["Real Estate Investment Trusts", "Real Estate", "Building operators"],
+}
+_MM_INDUSTRY_TO_BUCKET = {
+    ind.strip().lower(): bucket
+    for bucket, inds in _MM_INDUSTRY_BUCKETS.items() for ind in inds
+}
+# (sector, industry) pairs whose meaning depends on the Nasdaq sector.
+_MM_SECTOR_OVERRIDES = {
+    ("health care", "industrial specialties"): "Medical Devices & Instruments",
+    ("real estate", "other consumer services"): "REITs & Real Estate",
+    ("utilities", "environmental services"): "Utilities",
+    ("utilities", "oil & gas production"): "Utilities",
+    ("utilities", "telecommunications equipment"): "Utilities",
+    ("energy", "natural gas distribution"): "Oil & Gas Integrated & Midstream",
+    ("energy", "industrial machinery/components"): "Oilfield Services & Equipment",
+    ("energy", "electric utilities: central"): "Utilities",
+    ("industrials", "electric utilities: central"): "Utilities",
+    ("consumer discretionary", "aerospace"): "Aerospace & Defense",
+}
+_MM_BAD_NAME_RE = re.compile(
+    r"\b(Warrants?|Units?|Rights?|Preferred|Notes?|Debentures?|Beneficial)\b|%", re.I
+)
+
+
+def _mm_bucket(sector, industry):
+    s = (sector or "").strip().lower()
+    i = (industry or "").strip().lower()
+    if (s, i) in _MM_SECTOR_OVERRIDES:
+        return _MM_SECTOR_OVERRIDES[(s, i)]
+    return _MM_INDUSTRY_TO_BUCKET.get(i, MM_UNCLASSIFIED)
+
+
+def _mm_num(x):
+    try:
+        return float(str(x).replace("$", "").replace(",", "").strip())
+    except (TypeError, ValueError):
+        return 0.0
+
+
+@st.cache_data(ttl=43200, show_spinner=False)
+def mm_fetch_universe():
+    """US common stocks + ADRs from the Nasdaq screener (all US exchanges).
+    Loose pre-filter (price >= $4, volume >= 100k today) only bounds the
+    download; the exact per-day filters are applied later on each bar.
+    Raises on failure so a bad response is never cached."""
+    resp = requests.get(
+        MM_NASDAQ_URL,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+        },
+        timeout=30,
+    )
+    resp.raise_for_status()
+    rows = resp.json()["data"]["rows"]
+    out = {}
+    for r in rows:
+        sym = str(r.get("symbol", "")).strip().upper()
+        name = str(r.get("name", ""))
+        if not sym or "^" in sym or _mm_bad_symbol(sym):
+            continue
+        if _MM_BAD_NAME_RE.search(name):
+            continue
+        if "Depositary" in name and "American Depositary" not in name:
+            continue       # preferred depositary shares, not ADRs
+        if _mm_num(r.get("lastsale")) < 4 or _mm_num(r.get("volume")) < 100_000:
+            continue
+        out[sym.replace("/", "-")] = _mm_bucket(r.get("sector"), r.get("industry"))
+    if len(out) < 1000:
+        raise RuntimeError(f"Nasdaq universe too small ({len(out)} symbols)")
+    return out
+
+
+def _mm_bad_symbol(sym):
+    return any(ch in sym for ch in (" ", "$", "."))
+
+
+def _mm_download_close_volume(symbols):
+    raw = yf_download_batched(
+        sorted(symbols), batch_size=25, period="1y", interval="1d",
+        progress=False, auto_adjust=True, threads=True,
+    )
+    if raw is None or raw.empty:
+        raise RuntimeError("price download returned no data")
+    close = raw["Close"].copy()
+    vol = raw["Volume"].copy()
+    close = close.loc[:, ~close.columns.duplicated()]
+    vol = vol.loc[:, ~vol.columns.duplicated()].reindex(columns=close.columns)
+    close.index = pd.to_datetime(close.index).tz_localize(None)
+    vol.index = close.index
+    close = close.sort_index()
+    vol = vol.sort_index()
+    # Drop trailing dates that most tickers don't have yet (partial bars).
+    counts = close.notna().sum(axis=1)
+    keep = counts >= 0.5 * counts.max()
+    close, vol = close[keep], vol[keep]
+    if close.notna().iloc[-1].sum() < 0.5 * len(symbols):
+        raise RuntimeError(
+            f"price data incomplete ({int(close.notna().iloc[-1].sum())}/{len(symbols)} tickers)"
+        )
+    return close, vol
+
+
+def mm_compute_breadth(close, vol):
+    """Per-day breadth & momentum series (index = trading dates)."""
+    prev = close.shift(1)
+    ret1 = close / prev - 1
+    e1 = (close >= MM_MIN_PRICE) & (vol >= MM_MIN_SHARES) & prev.notna()
+    up = ((ret1 >= 0.04) & e1).sum(axis=1)
+    dn = ((ret1 <= -0.04) & e1).sum(axis=1)
+    sample = e1.sum(axis=1)
+
+    def _pct_above(n):
+        sma = close.rolling(n).mean()
+        valid = e1 & sma.notna()
+        return ((close > sma) & valid).sum(axis=1) / valid.sum(axis=1).replace(0, np.nan) * 100
+
+    base_ok = close.shift(MM_MOM_LOOKBACK).notna()
+    e2 = (close >= MM_MIN_PRICE) & (close * vol >= MM_MIN_DOLLAR_VOL) & base_ok
+    r63 = close / close.shift(MM_MOM_LOOKBACK) - 1
+    mom_n = ((r63 >= MM_MOM_THRESHOLD) & e2).sum(axis=1)
+    mom_base = e2.sum(axis=1)
+
+    df = pd.DataFrame({
+        "up4": up, "dn4": dn, "sample": sample,
+        "ratio10": up.rolling(10).sum() / dn.rolling(10).sum().replace(0, np.nan),
+        "pct20": _pct_above(20), "pct50": _pct_above(50),
+        "mom_n": mom_n, "mom_base": mom_base,
+        "mom_pct": mom_n / mom_base.replace(0, np.nan) * 100,
+    })
+    return df
+
+
+def mm_compute_industries(close, vol, buckets):
+    """Industry table for the latest date + 21-day direction (fixed stock set)."""
+    t = close.index[-1]
+    c_t = close.iloc[-1]
+    v_t = vol.iloc[-1]
+    c63 = close.shift(MM_MOM_LOOKBACK).iloc[-1]
+    c21 = close.shift(MM_DELTA_DAYS).iloc[-1]
+    c5 = close.shift(5).iloc[-1]
+    c84 = close.shift(MM_MOM_LOOKBACK + MM_DELTA_DAYS).iloc[-1]
+
+    elig = (c_t >= MM_MIN_PRICE) & (c_t * v_t >= MM_MIN_DOLLAR_VOL) & c63.notna()
+    df = pd.DataFrame({
+        "bucket": pd.Series(buckets).reindex(close.columns).fillna(MM_UNCLASSIFIED),
+        "r63": c_t / c63 - 1, "r21": c_t / c21 - 1, "r5": c_t / c5 - 1,
+        "r63_then": c21 / c84 - 1,
+    })[elig]
+    df["mom"] = df["r63"] >= MM_MOM_THRESHOLD
+    n_total = len(df)
+    p = df["mom"].mean() if n_total else np.nan
+
+    # Fixed set for Δlift: same stocks, judged today and 21 trading days ago.
+    fixed = df[df["r63_then"].notna()].copy()
+    fixed["mom_then"] = fixed["r63_then"] >= MM_MOM_THRESHOLD
+    p_now_f = fixed["mom"].mean() if len(fixed) else np.nan
+    p_then_f = fixed["mom_then"].mean() if len(fixed) else np.nan
+
+    rows = []
+    for bucket, g in df.groupby("bucket"):
+        if bucket == MM_UNCLASSIFIED:
+            continue
+        n, k = len(g), int(g["mom"].sum())
+        pen = k / n
+        z = (k - n * p) / np.sqrt(n * p * (1 - p)) if 0 < p < 1 else np.nan
+        med63 = g["r63"].median() * 100
+        med21 = g["r21"].median() * 100
+        med5 = g["r5"].median() * 100
+        gf = fixed[fixed["bucket"] == bucket]
+        if len(gf) and p_now_f and p_then_f:
+            lift_now_f = gf["mom"].mean() / p_now_f
+            lift_then_f = gf["mom_then"].mean() / p_then_f
+        else:
+            lift_now_f = lift_then_f = np.nan
+        rows.append({
+            "Industry": bucket, "base": n, "k": k, "pen": pen * 100,
+            "lift": pen / p if p else np.nan, "z": z,
+            "med63": med63, "med21": med21, "med5": med5,
+            "pace": med21 - med63 / 3,
+            "lift_then": lift_then_f, "lift_now_f": lift_now_f,
+            "dlift": lift_now_f - lift_then_f,
+        })
+    ind = pd.DataFrame(rows)
+    n_uncl = int((df["bucket"] == MM_UNCLASSIFIED).sum())
+    meta = {
+        "date": t, "n_total": n_total, "k_total": int(df["mom"].sum()),
+        "p": p * 100 if n_total else np.nan,
+        "n_fixed": len(fixed),
+        "p_then_f": p_then_f * 100 if len(fixed) else np.nan,
+        "p_now_f": p_now_f * 100 if len(fixed) else np.nan,
+        "n_uncl": n_uncl,
+    }
+    return ind, meta
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def compute_market_monitor():
+    buckets = mm_fetch_universe()
+    close, vol = _mm_download_close_volume(list(buckets))
+    breadth = mm_compute_breadth(close, vol)
+    ind, meta = mm_compute_industries(close, vol, buckets)
+    meta["n_universe"] = len(buckets)
+    meta["n_downloaded"] = int(close.notna().iloc[-1].sum())
+    return breadth, ind, meta
+
+
+def _mm_atr_distance(df):
+    """(Close - EMA50) / ATR14 — distance from the 50-day EMA in ATRs.
+    ATR14 = simple 14-day mean of true range (best match to the reference report)."""
+    if df is None or len(df) < 60 or not {"High", "Low", "Close"}.issubset(df.columns):
+        return pd.Series(dtype=float)
+    c, h, l = df["Close"], df["High"], df["Low"]
+    pc = c.shift(1)
+    tr = pd.concat([h - l, (h - pc).abs(), (l - pc).abs()], axis=1).max(axis=1)
+    atr = tr.rolling(14).mean()
+    ema50 = c.ewm(span=50, adjust=False).mean()
+    out = (c - ema50) / atr
+    out.index = pd.to_datetime(out.index).tz_localize(None)
+    return out
+
+
+_MM_G_STRONG = ("#1b7a4c", "#ffffff")
+_MM_G_LIGHT = ("#a5d6b7", "#111111")
+_MM_R_STRONG = ("#b3261e", "#ffffff")
+_MM_R_LIGHT = ("#f2b8b5", "#111111")
+_MM_NONE = ("transparent", "#e6e6e6")
+
+
+def _mm_td(text, colors=_MM_NONE, align="right", bold=False):
+    bg, fg = colors
+    weight = "700" if bold else "400"
+    return (f'<td style="background:{bg};color:{fg};text-align:{align};padding:4px 8px;'
+            f'font-weight:{weight};border-bottom:1px solid #2a2f3a;white-space:nowrap;">{text}</td>')
+
+
+def _mm_th(text, align="right"):
+    return (f'<th style="text-align:{align};padding:5px 8px;color:#9aa0a6;font-size:11px;'
+            f'letter-spacing:0.5px;border-bottom:1px solid #444;white-space:nowrap;">{text}</th>')
+
+
+def _mm_table(headers, body_rows, left_cols=2):
+    head = "".join(_mm_th(h, "left" if i < left_cols else "right") for i, h in enumerate(headers))
+    return (
+        '<div style="overflow-x:auto;"><table style="border-collapse:collapse;width:100%;'
+        'font-family:Source Sans Pro,sans-serif;font-size:13px;">'
+        f"<thead><tr>{head}</tr></thead><tbody>{''.join(body_rows)}</tbody></table></div>"
+    )
+
+
+def _mm_card(title, value, sub, value_color="#ffffff"):
+    return (
+        '<div style="flex:1;min-width:180px;background:#161a23;border:1px solid #2a2f3a;'
+        'border-radius:8px;padding:10px 14px;">'
+        f'<div style="font-size:11px;color:#9aa0a6;letter-spacing:1px;">{title}</div>'
+        f'<div style="font-size:26px;font-weight:800;color:{value_color};line-height:1.25;">{value}</div>'
+        f'<div style="font-size:12px;color:#9aa0a6;">{sub}</div></div>'
+    )
+
+
+def _mm_updn_colors(up, dn):
+    if max(up, dn) >= 300:
+        return _MM_G_STRONG if up >= dn else _MM_R_STRONG
+    return _MM_G_LIGHT if up >= dn else _MM_R_LIGHT
+
+
+def _mm_signed(v, digits=2, suffix=""):
+    return "–" if pd.isna(v) else f"{v:+.{digits}f}{suffix}"
+
+
+def _mm_lift_colors(v):
+    if pd.isna(v):
+        return _MM_NONE
+    return _MM_G_STRONG if v >= 2 else _MM_G_LIGHT if v >= 1 else _MM_NONE
+
+
+def _mm_pct_colors(v, strong=10.0):
+    if pd.isna(v):
+        return _MM_NONE
+    if v >= strong:
+        return _MM_G_STRONG
+    if v > 0:
+        return _MM_G_LIGHT
+    if v <= -strong:
+        return _MM_R_STRONG
+    return _MM_R_LIGHT
+
+
+def _mm_dlift_colors(v):
+    if pd.isna(v):
+        return _MM_NONE
+    if v >= 0.3:
+        return _MM_G_STRONG
+    if v <= -0.3:
+        return _MM_R_STRONG
+    return _MM_NONE
+
+
+def _mm_industry_rows(df):
+    rows = []
+    for i, r in enumerate(df.itertuples(index=False), start=1):
+        z_ok = r.z > MM_Z_CUTOFF
+        rows.append(
+            "<tr>"
+            + _mm_td(str(i), align="left")
+            + _mm_td(r.Industry, align="left", bold=True)
+            + _mm_td(f"{r.lift:.2f}", _mm_lift_colors(r.lift), bold=True)
+            + _mm_td(_mm_signed(r.med63, 1, "%"), _mm_pct_colors(r.med63))
+            + _mm_td(_mm_signed(r.dlift, 2), _mm_dlift_colors(r.dlift))
+            + _mm_td(_mm_signed(r.pace, 1, "%"), _mm_pct_colors(r.pace, 5.0))
+            + _mm_td(f"{r.pen:.1f}")
+            + _mm_td(str(r.k))
+            + _mm_td(str(r.base))
+            + _mm_td(f"{r.z:+.2f}{' ✓' if z_ok else ''}", _MM_G_LIGHT if z_ok else _MM_NONE)
+            + "</tr>"
+        )
+    return rows
+
+
+def _mm_direction_rows(df):
+    rows = []
+    for i, r in enumerate(df.itertuples(index=False), start=1):
+        rows.append(
+            "<tr>"
+            + _mm_td(str(i), align="left")
+            + _mm_td(r.Industry, align="left", bold=True)
+            + _mm_td(_mm_signed(r.dlift, 2), _mm_dlift_colors(r.dlift), bold=True)
+            + _mm_td(f"{r.lift_then:.2f}")
+            + _mm_td(f"{r.lift_now_f:.2f}")
+            + _mm_td(_mm_signed(r.pace, 1, "%"), _mm_pct_colors(r.pace, 5.0))
+            + _mm_td(_mm_signed(r.med21, 1, "%"))
+            + _mm_td(_mm_signed(r.med5, 1, "%"))
+            + _mm_td(str(r.base))
+            + "</tr>"
+        )
+    return rows
+
+
+def render_market_monitor():
+    with st.spinner("Building Market Monitor (full US universe)..."):
+        breadth, ind, meta = timed("compute_market_monitor", compute_market_monitor)
+
+    b = breadth.dropna(subset=["mom_pct"])
+    if b.empty:
+        st.info("Market Monitor: not enough history yet.")
+        return
+    last, prev = b.iloc[-1], (b.iloc[-2] if len(b) > 1 else None)
+    asof = b.index[-1].strftime("%Y-%m-%d")
+
+    st.markdown(
+        f"#### 🧭 Market Monitor — Breadth & Industry Momentum "
+        f"<span style='color:#888;font-size:12px;'>(close {asof} · US common + ADR, no ETF · "
+        f"≥&#36;5 · ≥300k sh · sample {int(last['sample']):,})</span>",
+        unsafe_allow_html=True,
+    )
+
+    # ── Summary cards ──
+    def _chg(cur, old):
+        return "" if old is None or pd.isna(old) else f"prev {old:.1f} ({cur - old:+.1f})"
+    up, dn = int(last["up4"]), int(last["dn4"])
+    ratio_txt = f"up is {up / dn:.1f}× down" if dn else "no 4% decliners"
+    cards = (
+        _mm_card("UP 4% / DOWN 4%", f"{up} / {dn}", ratio_txt,
+                 "#3ddc84" if up >= dn else "#ff5252")
+        + _mm_card("% ABOVE 20D", f"{last['pct20']:.1f}",
+                   _chg(last["pct20"], None if prev is None else prev["pct20"]))
+        + _mm_card("% ABOVE 50D", f"{last['pct50']:.1f}",
+                   _chg(last["pct50"], None if prev is None else prev["pct50"]))
+        + _mm_card("MOMENTUM STOCKS %", f"{last['mom_pct']:.1f}%",
+                   f"{int(last['mom_n'])} stocks · "
+                   + _chg(last["mom_pct"], None if prev is None else prev["mom_pct"]))
+    )
+    st.markdown(f'<div style="display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 12px 0;">{cards}</div>',
+                unsafe_allow_html=True)
+
+    # ── Daily table (last ~2 months, newest first) ──
+    spy_atr = _mm_atr_distance(ticker_dfs_shared.get("SPY"))
+    qqq_atr = _mm_atr_distance(ticker_dfs_shared.get("QQQ"))
+    gspc = ticker_dfs_shared.get("^GSPC")
+    gspc_close = None
+    if gspc is not None and "Close" in gspc:
+        gspc_close = gspc["Close"].copy()
+        gspc_close.index = pd.to_datetime(gspc_close.index).tz_localize(None)
+
+    tbl = b.tail(MM_TABLE_DAYS).iloc[::-1]
+    body = []
+    for d, r in tbl.iterrows():
+        cu = _mm_updn_colors(r["up4"], r["dn4"])
+        ratio = r["ratio10"]
+        ratio_c = _MM_R_STRONG if pd.notna(ratio) and ratio < 1 else _MM_NONE
+        sa = spy_atr.get(d, np.nan)
+        qa = qqq_atr.get(d, np.nan)
+        sp = gspc_close.get(d, np.nan) if gspc_close is not None else np.nan
+        body.append(
+            "<tr>"
+            + _mm_td(d.strftime("%m-%d"), align="left", bold=True)
+            + _mm_td(f"{int(r['up4'])}", cu) + _mm_td(f"{int(r['dn4'])}", cu)
+            + _mm_td("–" if pd.isna(ratio) else f"{ratio:.2f}", ratio_c)
+            + _mm_td(f"{r['pct20']:.1f}") + _mm_td(f"{r['pct50']:.1f}")
+            + _mm_td(_mm_signed(sa)) + _mm_td(_mm_signed(qa))
+            + _mm_td(f"{r['mom_pct']:.1f}") + _mm_td(f"{int(r['mom_n'])}")
+            + _mm_td(f"{int(r['sample']):,}")
+            + _mm_td("–" if pd.isna(sp) else f"{sp:,.2f}")
+            + "</tr>"
+        )
+    with st.expander("Daily monitor table (last ~2 months)", expanded=False):
+        st.caption("SPY / QQQ ATR = (close − 50-day EMA) ÷ 14-day ATR. 10D ratio = 10-day sum of Up 4% ÷ Down 4%.")
+        st.markdown(_mm_table(
+            ["DATE", "UP 4%", "DN 4%", "10D RATIO", "% > 20D", "% > 50D", "SPY ATR",
+             "QQQ ATR", "MOM %", "MOM N", "SAMPLE", "S&P 500"],
+            body, left_cols=1), unsafe_allow_html=True)
+
+    # ── 4% momentum pulse ──
+    pulse = b.tail(MM_TABLE_DAYS)
+    x = pulse.index.strftime("%m-%d")
+    fig = go.Figure()
+    fig.add_bar(x=x, y=pulse["up4"],
+                marker_color=["#1b7a4c" if v >= 300 else "#5fbf8c" for v in pulse["up4"]],
+                name="Up 4%", hovertemplate="%{x}<br>Up 4%: %{y}<extra></extra>")
+    fig.add_bar(x=x, y=-pulse["dn4"],
+                marker_color=["#b3261e" if v >= 300 else "#e57373" for v in pulse["dn4"]],
+                name="Down 4%", customdata=pulse["dn4"],
+                hovertemplate="%{x}<br>Down 4%: %{customdata}<extra></extra>")
+    for yv in (300, -300):
+        fig.add_hline(y=yv, line_dash="dash", line_color="#888", line_width=1)
+    fig.update_layout(barmode="relative", height=300, showlegend=False,
+                      margin=dict(l=0, r=0, t=30, b=0),
+                      title=dict(text="4% Momentum Pulse (dark = ≥300)", font=dict(size=14)),
+                      xaxis=dict(type="category", tickangle=-45),
+                      yaxis=dict(zeroline=True, zerolinecolor="#888"))
+    st.plotly_chart(fig, use_container_width=True)
+
+    # ── Momentum stock % trend ──
+    fig2 = go.Figure()
+    for y0, y1, colr in ((0, 4.1, "rgba(179,38,30,0.35)"), (4.1, 6.3, "rgba(242,184,181,0.25)"),
+                         (31.1, 39.4, "rgba(165,214,183,0.20)"), (39.4, 60, "rgba(27,122,76,0.30)")):
+        fig2.add_hrect(y0=y0, y1=y1, fillcolor=colr, line_width=0, layer="below")
+    fig2.add_hline(y=15.4, line_dash="dash", line_color="#aaa", line_width=1,
+                   annotation_text="ref. 10y median 15.4%", annotation_position="top left")
+    fig2.add_scatter(x=b.index, y=b["mom_pct"], mode="lines", line=dict(color="#4f8fea", width=2),
+                     hovertemplate="%{x|%Y-%m-%d}<br>Momentum %: %{y:.1f}%<extra></extra>")
+    ymax = max(45.0, float(b["mom_pct"].max()) + 5)
+    fig2.update_layout(height=300, showlegend=False, margin=dict(l=0, r=0, t=30, b=0),
+                       title=dict(text=f"Momentum stocks % (63d ≥ +20%) — now {last['mom_pct']:.1f}%",
+                                  font=dict(size=14)),
+                       yaxis=dict(range=[0, ymax], ticksuffix="%"))
+    st.plotly_chart(fig2, use_container_width=True)
+    st.caption("Shaded bands = Kelileo's published 10-year percentiles (≤4.1% p5, ≤6.3% p10, "
+               "≥31.1% p90, ≥39.4% p95) for reference; our own history covers ~9 months.")
+
+    # ── Industry momentum ──
+    if ind is None or ind.empty:
+        st.info("Industry momentum data unavailable.")
+        return
+    big = ind[ind["base"] >= MM_MIN_BASE].copy()
+    sig = big[big["z"] > MM_Z_CUTOFF].sort_values("lift", ascending=False)
+    notsig = big[~(big["z"] > MM_Z_CUTOFF)].sort_values("lift", ascending=False)
+    small_n = int((ind["base"] < MM_MIN_BASE).sum())
+    uncl_pct = meta["n_uncl"] / meta["n_total"] * 100 if meta["n_total"] else 0
+
+    widest = big.sort_values("lift", ascending=False).iloc[0] if len(big) else None
+    deepest = big.sort_values("med63", ascending=False).iloc[0] if len(big) else None
+    cards2 = _mm_card("PASS Z > 1.96", f"{len(sig)}", f"of {len(big)} industries (base ≥ {MM_MIN_BASE})")
+    if widest is not None:
+        cards2 += _mm_card("WIDEST (LIFT)", f"{widest['lift']:.2f}x",
+                           f"{widest['Industry']} · {widest['pen']:.1f}%", "#3ddc84")
+    if deepest is not None:
+        cards2 += _mm_card("DEEPEST (QTR MEDIAN)", _mm_signed(deepest["med63"], 1, "%"),
+                           f"{deepest['Industry']} · base {int(deepest['base'])}",
+                           "#3ddc84" if deepest["med63"] >= 0 else "#ff5252")
+    cards2 += _mm_card("UNCLASSIFIED", f"{uncl_pct:.1f}%", f"{meta['n_uncl']} stocks not ranked")
+
+    st.markdown(
+        f"##### Industry Momentum "
+        f"<span style='color:#888;font-size:12px;'>(momentum {meta['k_total']} / {meta['n_total']:,} "
+        f"stocks = {meta['p']:.1f}% · ≥&#36;5 · ≥&#36;5M traded · ranked by lift, z > 1.96)</span>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(f'<div style="display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 12px 0;">{cards2}</div>',
+                unsafe_allow_html=True)
+
+    ind_headers = ["#", "Industry", "LIFT", "QTR MEDIAN", "ΔLIFT 21D", "PACE",
+                   "PEN %", "MOM", "BASE", "Z"]
+    st.markdown("**Statistically strong (z > 1.96)**", unsafe_allow_html=True)
+    if len(sig):
+        st.markdown(_mm_table(ind_headers, _mm_industry_rows(sig)), unsafe_allow_html=True)
+    else:
+        st.info("No industry passes z > 1.96 today.")
+    with st.expander(f"Not significant (base ≥ {MM_MIN_BASE}) — {len(notsig)} industries", expanded=False):
+        st.markdown(_mm_table(ind_headers, _mm_industry_rows(notsig)), unsafe_allow_html=True)
+
+    # ── Direction: strengthening / weakening ──
+    dirdf = big.dropna(subset=["dlift"])
+    up_df = dirdf[dirdf["dlift"] > 0].sort_values("dlift", ascending=False).head(7)
+    dn_df = dirdf[dirdf["dlift"] < 0].sort_values("dlift").head(7)
+    corr = dirdf["dlift"].corr(dirdf["pace"]) if len(dirdf) >= 3 else np.nan
+    st.markdown(
+        f"##### Industry Direction: Level vs Change "
+        f"<span style='color:#888;font-size:12px;'>(vs {MM_DELTA_DAYS} trading days ago · fixed set "
+        f"{meta['n_fixed']:,} stocks · momentum % {meta['p_then_f']:.1f}% → {meta['p_now_f']:.1f}% · "
+        f"corr(Δlift, pace) {corr:.2f})</span>",
+        unsafe_allow_html=True,
+    )
+    dir_headers = ["#", "Industry", "ΔLIFT", "21D AGO", "TODAY", "PACE",
+                   "21D MEDIAN", "5D MEDIAN", "BASE"]
+    col_up, col_dn = st.columns(2)
+    with col_up:
+        st.markdown("**Strengthening**")
+        if len(up_df):
+            st.markdown(_mm_table(dir_headers, _mm_direction_rows(up_df)), unsafe_allow_html=True)
+        else:
+            st.info("None.")
+    with col_dn:
+        st.markdown("**Weakening**")
+        if len(dn_df):
+            st.markdown(_mm_table(dir_headers, _mm_direction_rows(dn_df)), unsafe_allow_html=True)
+        else:
+            st.info("None.")
+    st.caption(
+        f"lift = industry momentum % ÷ market momentum %. z = (k − n·p) ÷ √(n·p·(1−p)). "
+        f"Qtr median / 21D / 5D median = median return of ALL stocks in the industry. "
+        f"pace = 21D median − qtr median ÷ 3. Δlift = lift today − lift {MM_DELTA_DAYS} days ago on the same "
+        f"stocks. {small_n} industries with base < {MM_MIN_BASE} excluded. Universe {meta['n_universe']:,} "
+        f"symbols from the Nasdaq screener (prices: yfinance). Objective breadth measures, not trade signals."
+    )
+
+
+st.markdown("---")
+try:
+    render_market_monitor()
+except Exception as _mm_e:
+    st.warning(f"Market Monitor unavailable right now: {_mm_e}")
