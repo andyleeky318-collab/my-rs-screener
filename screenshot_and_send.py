@@ -178,6 +178,7 @@ SECTION_KEYWORDS = [
     "Breakdown of Characters",
     "Stage 2 vs Stage 4",
     "Test Time",
+    "Breadth & Industry Momentum",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the
