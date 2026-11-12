@@ -15532,6 +15532,84 @@ with atr_col3:
 with atr_col4:
     st.markdown(_atr_multiple_box_html("IWM ATR Multiple", iwm_atr_mult, IWM_ATR_THRESHOLD, iwm_atr_triggered), unsafe_allow_html=True)
 
+# ==============================================================================
+# EXTENDED HISTORY — extended.txt in the PUBLIC repo root (GITHUB_PUBLIC_REPO),
+# same format/pattern as dist_history.txt (never touches that file). One line
+# per trading day: "YYYY-MM-DD,yes" if ALL 4 ATR Multiple boxes (SPY, QQQ, SMH,
+# IWM) are TRIGGERED (same >= threshold rule as the boxes above), else
+# "YYYY-MM-DD,no". Today's line is upserted; lazy write; soft-fail.
+# ==============================================================================
+EXTENDED_HISTORY_PUBLIC_FILEPATH = "extended.txt"
+
+
+@st.cache_resource(show_spinner=False)
+def _extended_history_memo():
+    """Process-wide memo of the last (date, value) successfully saved."""
+    return {}
+
+
+def save_extended_history_to_public_repo(date_str, value):
+    """Upsert 'date_str,value' into extended.txt (public repo). Returns True on
+    success (including 'already up to date'), False otherwise."""
+    repo   = st.secrets.get("GITHUB_PUBLIC_REPO")
+    branch = st.secrets.get("GITHUB_PUBLIC_BRANCH", "main")
+    if not repo or not (st.secrets.get("GITHUB_PUBLIC_TOKEN") or st.secrets.get("GITHUB_TOKEN")):
+        return False
+
+    url = f"{GITHUB_API}/repos/{repo}/contents/{EXTENDED_HISTORY_PUBLIC_FILEPATH}"
+    resp = requests.get(url, headers=_github_public_headers(), params={"ref": branch}, timeout=10)
+
+    sha, rows = None, {}
+    if resp.status_code == 200:
+        data = resp.json()
+        sha = data.get("sha")
+        rows = _parse_dist_history_txt(base64.b64decode(data["content"]).decode())   # same line format
+    elif resp.status_code != 404:
+        return False
+
+    if rows.get(date_str) == value:
+        return True                      # lazy: nothing changed, no commit
+
+    rows[date_str] = value
+    content_str = "\n".join(f"{d},{rows[d]}" for d in sorted(rows))   # same format as dist_history.txt
+    payload = {
+        "message": f"Update Extended history — {date_str},{value}",
+        "content": base64.b64encode(content_str.encode()).decode(),
+        "branch": branch,
+    }
+    if sha:
+        payload["sha"] = sha
+    put_resp = requests.put(url, headers=_github_public_headers(), json=payload, timeout=10)
+    return put_resp.status_code in (200, 201)
+
+
+def _persist_extended_history():
+    _flags = (spy_atr_triggered, qqq_atr_triggered, smh_atr_triggered, iwm_atr_triggered)
+    value = "yes" if all(bool(f) for f in _flags) else "no"
+
+    # Trading date of the data used (latest SPY bar), fallback US/Eastern today
+    # — same date logic as dist_history.txt so both files line up.
+    _spy_df = ticker_dfs_shared.get("SPY") if isinstance(ticker_dfs_shared, dict) else None
+    _spy_close = _spy_df["Close"].dropna() if _spy_df is not None and "Close" in _spy_df else None
+    if _spy_close is not None and len(_spy_close):
+        date_str = pd.Timestamp(_spy_close.index[-1]).date().isoformat()
+    else:
+        date_str = datetime.datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+
+    memo = _extended_history_memo()
+    if memo.get("last") == (date_str, value):
+        return True
+    ok = save_extended_history_to_public_repo(date_str, value)
+    if ok:
+        memo["last"] = (date_str, value)
+    return ok
+
+
+try:
+    timed("save_extended_history_to_public_repo", _persist_extended_history)
+except Exception:
+    pass   # soft-fail: never affect the rest of the page
+
 # ── 21EMA Extension — same ATR-multiple formula, measured off the 21-day EMA
 # instead of the 50-day SMA, so it reads short-term (not base-length) stretch.
 # Thresholds are suggested starting points, not backtested: since the 21ema
