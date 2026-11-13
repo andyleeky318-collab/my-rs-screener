@@ -247,7 +247,7 @@ INDUSTRIES = {
     'ELEC-MISC PRODUCTS': ['OLED', 'LFUS', 'VSH'],
     'WHOLESALE-ELECT': ['SNX', 'ARW', 'AVT', 'REZI', 'GWW', 'FAST', 'FERG', 'GPC', 'POOL', 'AIT', 'WCC', 'MSM', 'UGI'],
     'RETAIL-CNSMR ELEC': ['BBY', 'GME'],
-    'CONSUMER PROD-ELEC': ['SN', 'ROKU', 'WHR', 'SPB', 'SONY'],
+    'CONSUMER PROD-ELEC': ['SN', 'WHR', 'SPB', 'SONY'],
     'BLDG-HEAVY CONSTR': ['PWR', 'IESC', 'EME', 'FIX', 'ACM', 'TTEK', 'MTZ', 'APG', 'FLR', 'DY', 'STRL', 'ROAD', 'GVA', 'PRIM'],
     'BLDG-RSIDNT/COMML': ['ITB', 'IBP', 'EXPO', 'DHI', 'LEN', 'NVR', 'PHM', 'TOL', 'MTH', 'KBH', 'SKY', 'MHO', 'FTDR', 'GRBK', 'DFH', 'CCS', 'LGIH'],
     'BLDG-MBILE/MFG & RV': ['CVCO', 'PATK'],
@@ -397,7 +397,7 @@ KNOWN_STOCKS = [
     'GFS', 'STX', 'A', 'ZBRA', 'ENTG', 'ONTO', 'TRMB', 'BNTX', 'PFE', 'MRNA', 'NVAX', 'FCX', 'CF', 'DRI', 
     'PEP', 'XOM', 'LLY', 'CL', 'MCD', 'KO', 'GE', 'CVX', 'FISV', 'DE', 'WM', 'HLT', 'FUTU', 'UBER', 
     'TIGR', 'EQIX', 'DPZ', 'CSCO', 'COKE', 'SONY', 'FDS', 'MCO', 'GRAB', 'PTON', 'AMT', 'LIT', 'CMG', 'IPO', 
-    'INMD', 'NNDM', 'MP', 'FUBO', 'SPOT', 'ALGN', 'PZZA', 'LOVE', 'LMND', 'POOL', 'PLTR', 'ROKU', 
+    'INMD', 'NNDM', 'MP', 'FUBO', 'SPOT', 'ALGN', 'PZZA', 'LOVE', 'LMND', 'POOL', 'PLTR', 
     'CELH', 'NFLX', 'DHI', 'DELL'
 ]
 # Ensure uniqueness
@@ -21529,3 +21529,71 @@ try:
     render_market_monitor()
 except Exception as _mm_e:
     st.warning(f"Market Monitor unavailable right now: {_mm_e}")
+
+
+# ==============================================================================
+# SECULAR BULL BEAR — % of KNOWN_STOCKS whose latest close is ABOVE their own
+# close on 2026-11-05. Read-only: reuses ticker_dfs_shared (the single cached
+# download_known_stocks_data fetch upstream); no new downloads, no writes,
+# never mutates shared data. Tickers with no bar on 2026-11-05 (or no data)
+# are excluded from the denominator. Soft-fail; never affects other sections.
+# ==============================================================================
+SECULAR_BB_REF_DATE = datetime.date(2026, 11, 5)
+
+
+def _compute_secular_bull_bear(ticker_dfs, tickers, ref_date):
+    above, below, skipped = [], [], []
+    latest_date = None
+    for t in tickers:
+        df = ticker_dfs.get(t) if isinstance(ticker_dfs, dict) else None
+        if df is None or "Close" not in df:
+            skipped.append(t)
+            continue
+        close = df["Close"].dropna()
+        if close.empty:
+            skipped.append(t)
+            continue
+        ref_mask = close.index.date == ref_date
+        if not ref_mask.any():
+            skipped.append(t)
+            continue
+        ref_close = float(close[ref_mask].iloc[-1])
+        last_close = float(close.iloc[-1])
+        last_d = close.index[-1].date()
+        if latest_date is None or last_d > latest_date:
+            latest_date = last_d
+        if last_close > ref_close:
+            above.append(t)
+        else:
+            below.append(t)
+    return sorted(above), sorted(below), sorted(skipped), latest_date
+
+
+st.markdown("---")
+st.subheader("Secular Bull Bear")
+try:
+    _sbb_above, _sbb_below, _sbb_skipped, _sbb_latest = _compute_secular_bull_bear(
+        ticker_dfs_shared, sorted(set(KNOWN_STOCKS)), SECULAR_BB_REF_DATE
+    )
+    _sbb_total = len(_sbb_above) + len(_sbb_below)
+    if _sbb_total == 0:
+        st.info(f"No price data available for {SECULAR_BB_REF_DATE.isoformat()} yet.")
+    else:
+        _sbb_pct = len(_sbb_above) / _sbb_total * 100
+        _sbb_color = "#00e676" if _sbb_pct >= 50 else "#ff5252"
+        st.markdown(
+            f"<div style='font-size:28px;font-weight:900;color:{_sbb_color};'>{_sbb_pct:.1f}%</div>"
+            f"<div style='font-size:13px;color:#ccc;margin-bottom:8px;'>"
+            f"{len(_sbb_above):,} of {_sbb_total:,} known stocks closed above their "
+            f"{SECULAR_BB_REF_DATE.strftime('%d %b %Y')} close"
+            f"{' (latest bar ' + _sbb_latest.isoformat() + ')' if _sbb_latest else ''}</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(f"**Above ({len(_sbb_above)})**")
+        st.write(", ".join(_sbb_above) if _sbb_above else "None")
+        if _sbb_skipped:
+            st.caption(
+                f"Excluded (no bar on {SECULAR_BB_REF_DATE.isoformat()}): {', '.join(_sbb_skipped)}"
+            )
+except Exception as _sbb_e:
+    st.warning(f"Secular Bull Bear unavailable right now: {_sbb_e}")

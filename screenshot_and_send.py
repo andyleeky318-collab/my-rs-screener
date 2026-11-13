@@ -180,6 +180,7 @@ SECTION_KEYWORDS = [
     "Test Time",
     "Breadth & Industry Momentum",
     "Statistically strong",
+    "Secular Bull Bear",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the
