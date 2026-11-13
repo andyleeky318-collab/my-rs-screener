@@ -1652,9 +1652,9 @@ right_tail = dist_buckets["≥7%"] + dist_buckets["5~7%"]
 avg_bucket = sum(dist_buckets.values()) / len(dist_buckets)
 
 if left_tail > avg_bucket * 1.5:
-    st.markdown("⚠️ **Fat left tail — distribution day**", unsafe_allow_html=True)
+    st.markdown("⚠️⚠️⚠️ **Fat left tail — distribution day**", unsafe_allow_html=True)
 elif right_tail > avg_bucket * 1.5:
-    st.markdown("🚀 **Fat right tail — thrust day**", unsafe_allow_html=True)
+    st.markdown("🚀🚀🚀 **Fat right tail — thrust day**", unsafe_allow_html=True)
 
 st.markdown("---")
 
@@ -4453,7 +4453,7 @@ if all_data:
 
     _botak_header_html = (
         f"<div style='font-size:14px; font-weight:bold; color:#ffffff; margin:14px 0 6px;'>"
-        f"🧑‍🦲🧑‍🦲🧑‍🦲 Botak Cluster [{len(botak_industry_tickers)}] (Not suitable on sideway market)"
+        f"🧑‍🦲🧑‍🦲🧑‍🦲 Botak Cluster [{len(botak_industry_tickers)}] (Not suitable on sideway/chop market)"
         #f"<span style='color:#00FF00;'>({len(botak_industry_tickers)} industries, {len(all_botak_tickers)} tickers)</span>"
         f"</div>"
     )
@@ -7520,7 +7520,7 @@ _strike_common = {
     if sum([t in _strike_minervini, t in _strike_leader, t in _strike_tml]) >= 2
 }
 if _strike_common:
-    st.markdown(f"**⚠️ Dropped from 2+ Leader Lists ({len(_strike_common)})**")
+    st.markdown(f"**⚠️⚠️⚠️ Dropped from 2+ Leader Lists ({len(_strike_common)})**")
     st.markdown(
         "".join(f'<div class="ticker-badge removed-badge">{sym}</div>' for sym in sorted(_strike_common)),
         unsafe_allow_html=True

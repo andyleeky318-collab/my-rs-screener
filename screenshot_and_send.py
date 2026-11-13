@@ -179,6 +179,7 @@ SECTION_KEYWORDS = [
     "Stage 2 vs Stage 4",
     "Test Time",
     "Breadth & Industry Momentum",
+    "Statistically strong",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the
