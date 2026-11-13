@@ -12585,6 +12585,112 @@ def load_breakout_health_history_github(max_days=90):
     except Exception:
         return pd.DataFrame()
 
+# ── KQ Breakout Healthy helpers (10MA / 20MA of QQQ daily closes) ──────────
+# cond3: 10MA <= 20MA, or both MAs curving down          -> "no"
+# cond1: 10MA >  20MA and both MAs trending up           -> "yes"
+# cond2: 10MA >  20MA but at least one is flat / down    -> "yes"
+# None : QQQ data missing / < 21 daily closes            -> "no"
+# MAs are simple moving averages of QQQ Close from ticker_dfs_shared (the
+# shared 2y daily download — no new fetch). Slope = today's MA vs
+# yesterday's MA, both rounded to 2 decimals (equal after rounding = flat).
+KQ_BH_PUBLIC_FILEPATH = "KQ_Breakout_Healthy.txt"
+
+
+def _bh_kq_condition(qqq_close):
+    if qqq_close is None:
+        return None
+    s = pd.Series(qqq_close, dtype=float).dropna()
+    if len(s) < 21:
+        return None
+    ma10 = s.rolling(10).mean().round(2)
+    ma20 = s.rolling(20).mean().round(2)
+    m10, m10p, m20, m20p = ma10.iloc[-1], ma10.iloc[-2], ma20.iloc[-1], ma20.iloc[-2]
+    if m10 <= m20 or (m10 < m10p and m20 < m20p):
+        return "cond3"
+    if m10 > m10p and m20 > m20p:
+        return "cond1"
+    return "cond2"
+
+
+_KQ_BH_LINE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}),(yes|no)$")
+
+
+def _kq_bh_public_headers():
+    # Local copy of _github_public_headers (defined further down the file,
+    # so not yet available when this section runs).
+    token = st.secrets.get("GITHUB_PUBLIC_TOKEN") or st.secrets.get("GITHUB_TOKEN")
+    return {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+
+
+def _kq_bh_parse_txt(text):
+    # Local copy of _parse_dist_history_txt (defined further down the file).
+    rows = {}
+    for line in text.splitlines():
+        m = _KQ_BH_LINE_RE.match(line.strip())
+        if m:
+            rows[m.group(1)] = m.group(2)
+    return rows
+
+
+@st.cache_resource(show_spinner=False)
+def _kq_bh_memo():
+    """Process-wide memo of the last (date, value) successfully saved."""
+    return {}
+
+
+def save_kq_breakout_healthy_to_public_repo(date_str, value):
+    """Upsert 'date_str,value' into KQ_Breakout_Healthy.txt (public repo).
+    Same pattern/format as save_dist_history_to_public_repo."""
+    repo   = st.secrets.get("GITHUB_PUBLIC_REPO")
+    branch = st.secrets.get("GITHUB_PUBLIC_BRANCH", "main")
+    if not repo or not (st.secrets.get("GITHUB_PUBLIC_TOKEN") or st.secrets.get("GITHUB_TOKEN")):
+        return False
+
+    url = f"{GITHUB_API}/repos/{repo}/contents/{KQ_BH_PUBLIC_FILEPATH}"
+    resp = requests.get(url, headers=_kq_bh_public_headers(), params={"ref": branch}, timeout=10)
+
+    sha, rows = None, {}
+    if resp.status_code == 200:
+        data = resp.json()
+        sha = data.get("sha")
+        rows = _kq_bh_parse_txt(base64.b64decode(data["content"]).decode())   # same line format
+    elif resp.status_code != 404:
+        return False
+
+    if rows.get(date_str) == value:
+        return True                      # lazy: nothing changed, no commit
+
+    rows[date_str] = value
+    content_str = "\n".join(f"{d},{rows[d]}" for d in sorted(rows))
+    payload = {
+        "message": f"Update KQ Breakout Healthy — {date_str},{value}",
+        "content": base64.b64encode(content_str.encode()).decode(),
+        "branch": branch,
+    }
+    if sha:
+        payload["sha"] = sha
+    put_resp = requests.put(url, headers=_kq_bh_public_headers(), json=payload, timeout=10)
+    return put_resp.status_code in (200, 201)
+
+
+def _persist_kq_breakout_healthy(value):
+    # Same trading-date logic as dist_history.txt (latest SPY bar).
+    _spy_df = ticker_dfs_shared.get("SPY") if isinstance(ticker_dfs_shared, dict) else None
+    _spy_close = _spy_df["Close"].dropna() if _spy_df is not None and "Close" in _spy_df else None
+    if _spy_close is not None and len(_spy_close):
+        date_str = pd.Timestamp(_spy_close.index[-1]).date().isoformat()
+    else:
+        date_str = datetime.datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+
+    memo = _kq_bh_memo()
+    if memo.get("last") == (date_str, value):
+        return True
+    ok = save_kq_breakout_healthy_to_public_repo(date_str, value)
+    if ok:
+        memo["last"] = (date_str, value)
+    return ok
+
+
 st.markdown("---")
 _bh_title_ph = st.empty()
 _bh_title_ph.markdown("#### 🚀 Breakout Health")
@@ -12635,6 +12741,34 @@ if bh_rows:
 else:
     _bh_title_ph.markdown("#### 🚀 Breakout Health")
     st.info(f"No tickers had a qualifying 2nd-Pivot-Break in the last {BH_LOOKBACK_DAYS} trading days.")
+
+# ── KQ Breakout Healthy: 10MA / 20MA of QQQ daily closes. Additive &
+# soft-fail: only re-renders the title placeholder with a small cond label
+# appended, and upserts KQ_Breakout_Healthy.txt (same format as
+# dist_history.txt). Runs whether or not any breakouts qualified today.
+try:
+    _kq_qqq_df = ticker_dfs_shared.get("QQQ") if isinstance(ticker_dfs_shared, dict) else None
+    _kq_cond = _bh_kq_condition(
+        _kq_qqq_df["Close"] if _kq_qqq_df is not None and "Close" in _kq_qqq_df else None
+    )
+    _kq_text = {
+        "cond1": "cond1: QQQ 10MA above 20MA and both trending up",
+        "cond2": "cond2: QQQ 10MA above 20MA but at least one is flat or curving down",
+        "cond3": "cond3: QQQ 10MA below (or equal to) 20MA, or both curving down",
+    }.get(_kq_cond, "cond: n/a (QQQ data unavailable)")
+    _kq_title_base = (
+        f"#### 🚀 Breakout Health (:{_bh_color}[{_bh_agg_score:.0f}/100 · {_bh_verdict}])"
+        if bh_rows else "#### 🚀 Breakout Health"
+    )
+    _bh_title_ph.markdown(
+        f"{_kq_title_base} "
+        f"<span style='font-size:12px;font-weight:400;color:#aaa;'>{_kq_text}</span>",
+        unsafe_allow_html=True,
+    )
+    timed("save_kq_breakout_healthy_to_public_repo", _persist_kq_breakout_healthy,
+          "yes" if _kq_cond in ("cond1", "cond2") else "no")
+except Exception:
+    pass   # soft-fail: never affect the rest of the page
 
 # ============================================================
 # QUANT SENTIMENT — Trending Stocks (stockanalysis.com)
@@ -20637,7 +20771,7 @@ with st.spinner("Scanning for Gap Up Unfilled setups..."):
     )
 
 render_section_header_with_copy(
-    lambda: st.markdown(f"#### 🧡 Gap Up Unfilled (Risk/Reward) ({len(gap_up_unfilled_list)})"),
+    lambda: st.markdown(f"#### 🧡 Gap Up Unfilled (Risk/Reward, EP/PEAD/DEP) ({len(gap_up_unfilled_list)})"),
     gap_up_unfilled_list
 )
 
