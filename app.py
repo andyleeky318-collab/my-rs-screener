@@ -21683,7 +21683,7 @@ def _compute_secular_bull_bear(ticker_dfs, tickers, ref_date):
         if df is None or "Close" not in df:
             skipped.append(t)
             continue
-        close = df["Close"].dropna()
+        close = df["High"].dropna()
         if close.empty:
             skipped.append(t)
             continue
@@ -21719,7 +21719,7 @@ try:
             f"<div style='font-size:28px;font-weight:900;color:{_sbb_color};'>{_sbb_pct:.1f}%</div>"
             f"<div style='font-size:13px;color:#ccc;margin-bottom:8px;'>"
             f"{len(_sbb_above):,} of {_sbb_total:,} known stocks closed above their "
-            f"{SECULAR_BB_REF_DATE.strftime('%d %b %Y')} close"
+            f"{SECULAR_BB_REF_DATE.strftime('%d %b %Y')} high"
             f"{' (latest bar ' + _sbb_latest.isoformat() + ')' if _sbb_latest else ''}</div>",
             unsafe_allow_html=True,
         )
