@@ -180,7 +180,7 @@ SECTION_KEYWORDS = [
     "Test Time",
     "Breadth & Industry Momentum",
     "Statistically strong",
-    "Secular Bull Bear",
+    #"Secular Bull Bear",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the
@@ -433,6 +433,11 @@ def wait_for_full_content_loaded(page, timeout_seconds):
                   f"Waiting 30s for it to fully settle...")
             time.sleep(30)
             return True
+        # Bail out early if Streamlit Cloud is stuck on its slow/asleep screen,
+        # so the caller can reload instead of burning the whole timeout.
+        if time.monotonic() - start > 60 and page_has_slow_marker(page):
+            print("Slow/asleep screen detected while waiting for final section -- aborting wait early.")
+            return False
         time.sleep(FULL_LOAD_POLL_SECONDS)
     print(f"Timed out after {timeout_seconds:.0f}s waiting for final section "
           f"'{FINAL_SECTION_KEYWORD}' -- proceeding with captures anyway.")
@@ -774,20 +779,95 @@ def capture_and_send_tradingview(browser):
             pass
 
 
+SLOW_PAGE_MARKERS = [
+    "taking longer than normal",
+    "Check back in a minute or two",
+    "This app has gone to sleep",
+    "app is in the oven",
+    "Oh no.",
+]
+
+# The top-of-page header that only exists once the app has rendered real data.
+TOP_READY_KEYWORD = "DAILY ("
+
+APP_LOAD_ATTEMPTS = 5
+APP_HEALTHY_TIMEOUT_SECONDS = 150
+
+
+def page_has_slow_marker(page):
+    """True if Streamlit Cloud is showing its 'taking longer than normal' (or similar) screen."""
+    try:
+        body = page.inner_text("body", timeout=5000)
+        low = body.lower()
+        return any(m.lower() in low for m in SLOW_PAGE_MARKERS)
+    except Exception:
+        return False
+
+
+def app_is_healthy(page):
+    """Real app is up: sidebar rendered and no Streamlit-Cloud 'slow/asleep' screen."""
+    if page_has_slow_marker(page):
+        return False
+    try:
+        sidebar = page.locator('[data-testid="stSidebar"]')
+        return sidebar.count() > 0 and sidebar.first.is_visible()
+    except Exception:
+        return False
+
+
+def load_app_with_retries(page, attempts=APP_LOAD_ATTEMPTS):
+    """
+    Open the app and make sure the REAL app (not the 'Hmm... taking longer
+    than normal' screen) is showing. If not, wake it / reload / re-navigate
+    and try again, up to `attempts` times, within the global deadline.
+    """
+    for attempt in range(1, attempts + 1):
+        if deadline.expired():
+            return False
+        print(f"Loading app (attempt {attempt}/{attempts}) ...")
+        try:
+            if attempt == 1:
+                page.goto(APP_URL, wait_until="domcontentloaded", timeout=60000)
+            else:
+                # Fresh navigation (cache-busting) is more reliable than reload
+                # when Streamlit Cloud got stuck on its slow-start screen.
+                sep = "&" if "?" in APP_URL else "?"
+                page.goto(f"{APP_URL}{sep}_r={int(time.time())}",
+                          wait_until="domcontentloaded", timeout=60000)
+        except Exception as e:
+            print(f"goto failed on attempt {attempt}: {e}")
+            time.sleep(5)
+            continue
+
+        time.sleep(5)
+        if try_wake_app(page):
+            print("Clicked wake-up prompt, app should now start booting...")
+            time.sleep(5)
+
+        start = time.monotonic()
+        budget = min(APP_HEALTHY_TIMEOUT_SECONDS, max(20, deadline.remaining() - 60))
+        while time.monotonic() - start < budget:
+            if app_is_healthy(page):
+                print(f"App healthy after {time.monotonic() - start:.0f}s.")
+                return True
+            try_wake_app(page)
+            time.sleep(3)
+        print(f"App not healthy within {budget:.0f}s (slow/asleep screen?) -- retrying.")
+    print("App never became healthy -- proceeding anyway.")
+    return False
+
+
+def top_of_page_has_data(page):
+    return find_text_anywhere(page, TOP_READY_KEYWORD) is not None and not page_has_slow_marker(page)
+
+
 def run():
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page(viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT})
 
         print(f"Opening {APP_URL} ...")
-        page.goto(APP_URL, wait_until="domcontentloaded", timeout=60000)
-        time.sleep(5)
-
-        if try_wake_app(page):
-            print("Clicked wake-up prompt, app should now start booting...")
-            time.sleep(5)
-        else:
-            print("No wake-up prompt detected, app was likely already awake.")
+        load_app_with_retries(page)
 
         hide_fixed_chrome(page)
 
@@ -816,6 +896,19 @@ def run():
         hide_fixed_chrome(page)  # re-apply in case a rerun reset it
         sidebar_right = get_sidebar_right_edge(page)
         print(f"Sidebar right edge detected at x={sidebar_right}px")
+
+        # Guarantee the top of the page shows real data: if the slow/asleep
+        # screen is showing or the header never rendered, reload and re-wait.
+        for fix_try in range(1, 4):
+            if top_of_page_has_data(page) or deadline.remaining() < 120:
+                break
+            print(f"Top-of-page data missing (fix attempt {fix_try}/3) -- reloading app...")
+            if load_app_with_retries(page, attempts=2):
+                wait_for_running_widget_to_appear(page, 20)
+                wait_for_app_to_finish(page, min(FINISH_TIMEOUT_SECONDS, max(30, deadline.remaining() - 60)))
+                wait_for_full_content_loaded(page, min(FULL_LOAD_TIMEOUT_SECONDS, max(30, deadline.remaining() - 60)))
+                hide_fixed_chrome(page)
+                sidebar_right = get_sidebar_right_edge(page)
 
         # 1. Always capture the very top of the page first
         if not deadline.expired():
