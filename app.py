@@ -21738,3 +21738,87 @@ try:
             )
 except Exception as _sbb_e:
     st.warning(f"Secular Bull Bear unavailable right now: {_sbb_e}")
+
+
+# ==============================================================================
+# FIRST PULLBACK AFTER NEW HIGH — read-only; reuses ticker_dfs_shared.
+# Logic (per ticker, on its latest bar):
+#   1. Breakout: first bar of the most recent new-high streak where Close exceeds
+#      the highest High of the prior 260 bars, and that bar is within the last
+#      FPB_LOOKBACK bars. Pivot = that prior 260-bar high (the breakout level).
+#   2. Pullback: latest bar's Low comes back to the pivot area (Low <= pivot*(1+tol)).
+#   3. "First": no bar between the breakout and today has already touched the
+#      pivot area, and no close since the breakout fell below pivot*(1-tol)
+#      (the breakout must still be holding).
+# Soft-fail; never affects other sections.
+# ==============================================================================
+FPB_LOOKBACK = 20
+FPB_52W_BARS = 260
+FPB_PIVOT_TOL = 0.03
+
+
+def _compute_first_pullback_after_high(ticker_dfs, tickers, lookback=FPB_LOOKBACK,
+                                       bars_52w=FPB_52W_BARS, tol=FPB_PIVOT_TOL):
+    hits = []
+    for t in tickers:
+        df = ticker_dfs.get(t) if isinstance(ticker_dfs, dict) else None
+        if df is None or not all(c in df for c in ("High", "Low", "Close")):
+            continue
+        d = df[["High", "Low", "Close"]].dropna()
+        n = len(d)
+        if n < bars_52w + lookback + 1:
+            continue
+        hi = d["High"].values
+        lo = d["Low"].values
+        cl = d["Close"].values
+
+        def _is_nh(i):
+            return i >= bars_52w and cl[i] > hi[i - bars_52w:i].max()
+
+        bo = None
+        for i in range(n - 1 - lookback, n - 1):  # breakout can't be today
+            if _is_nh(i):
+                bo = i
+                break
+        if bo is None:
+            continue
+        while bo > bars_52w and _is_nh(bo - 1):  # walk back to start of streak
+            bo -= 1
+        if n - 1 - bo > lookback:
+            continue
+        pivot = float(hi[bo - bars_52w:bo].max())
+        upper = pivot * (1 + tol)
+        lower = pivot * (1 - tol)
+        post_lo = lo[bo + 1:]
+        post_cl = cl[bo + 1:]
+        if len(post_lo) == 0:
+            continue
+        if (post_cl < lower).any():          # breakout failed
+            continue
+        if (post_lo[:-1] <= upper).any():    # pivot already retested earlier
+            continue
+        if post_lo[-1] <= upper:             # today is the first pullback to pivot
+            hits.append(t)
+    return sorted(hits)
+
+
+st.markdown("---")
+st.subheader("First Pullback After New High")
+try:
+    _fpb_hits = _compute_first_pullback_after_high(
+        ticker_dfs_shared, sorted(set(KNOWN_STOCKS))
+    )
+    st.caption(
+        f"New 52-week high breakout within last {FPB_LOOKBACK} bars; today is the first "
+        f"pullback to the breakout pivot area (±{FPB_PIVOT_TOL * 100:.0f}%) with the breakout still holding."
+    )
+    st.markdown(f"**Matches ({len(_fpb_hits)})**")
+    if _fpb_hits:
+        st.markdown(
+            "".join(setup_badge(_t) for _t in _fpb_hits),
+            unsafe_allow_html=True,
+        )
+    else:
+        st.write("None")
+except Exception as _fpb_e:
+    st.warning(f"First Pullback After New High unavailable right now: {_fpb_e}")
