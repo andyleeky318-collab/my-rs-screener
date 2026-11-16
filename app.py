@@ -21803,7 +21803,11 @@ def _compute_first_pullback_after_high(ticker_dfs, tickers, lookback=FPB_LOOKBAC
 
 
 st.markdown("---")
-st.subheader("First Pullback After New High")
+st.markdown(
+    "<h3 style='margin-bottom:0;'>First Pullback After New High "
+    "<span style='font-size:12px;font-weight:normal;color:#888;'>if market permitted</span></h3>",
+    unsafe_allow_html=True,
+)
 try:
     _fpb_hits = _compute_first_pullback_after_high(
         ticker_dfs_shared, sorted(set(KNOWN_STOCKS))
