@@ -21724,7 +21724,14 @@ try:
             unsafe_allow_html=True,
         )
         st.markdown(f"**Above ({len(_sbb_above)})**")
-        st.write(", ".join(_sbb_above) if _sbb_above else "None")
+        if _sbb_above:
+            # Same setup color-coding as other sections (orange/aqua/purple/blue ring etc.)
+            st.markdown(
+                "".join(setup_badge(_t) for _t in _sbb_above),
+                unsafe_allow_html=True,
+            )
+        else:
+            st.write("None")
         if _sbb_skipped:
             st.caption(
                 f"Excluded (no bar on {SECULAR_BB_REF_DATE.isoformat()}): {', '.join(_sbb_skipped)}"
