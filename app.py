@@ -7566,6 +7566,35 @@ def send_telegram_text(text, bot_token, chat_id, parse_mode="HTML"):
             print(f"Telegram sendMessage error: {e}")
 
 
+@st.cache_resource(show_spinner=False)
+def _gh_push_alert_memo():
+    """Process-wide memo of (file label, ET date) already alerted, so Streamlit
+    reruns don't spam Telegram with the same failure."""
+    return {}
+
+
+def notify_github_push_failure(label, detail=""):
+    """Send one simple Telegram message when a public-repo file push fails.
+    Max once per file per day. Never raises; silently skips if Telegram
+    secrets are missing. Does not affect the caller in any way."""
+    try:
+        tg_token = st.secrets.get("TELEGRAM_BOT_TOKEN")
+        tg_chat  = st.secrets.get("TELEGRAM_CHAT_ID")
+        if not (tg_token and tg_chat):
+            return
+        today = datetime.datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+        memo = _gh_push_alert_memo()
+        key = (label, today)
+        if key in memo:
+            return
+        memo[key] = True
+        detail = str(detail)[:200].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        text = f"⚠️ GitHub push failed: {label}" + (f"\n{detail}" if detail else "")
+        send_telegram_text(text, tg_token, tg_chat)
+    except Exception:
+        pass
+
+
 def build_setup_summary_text(global_setup_tickers, global_setup_ticker_groups,
                                industry_rank_map, all_data,
                                cloud21ema_all, cloudwick_all, ma50bounce_all,
@@ -12685,7 +12714,13 @@ def _persist_kq_breakout_healthy(value):
     memo = _kq_bh_memo()
     if memo.get("last") == (date_str, value):
         return True
-    ok = save_kq_breakout_healthy_to_public_repo(date_str, value)
+    try:
+        ok = save_kq_breakout_healthy_to_public_repo(date_str, value)
+    except Exception as _exc:
+        notify_github_push_failure("KQ_Breakout_Healthy.txt", _exc)
+        raise
+    if not ok:
+        notify_github_push_failure("KQ_Breakout_Healthy.txt", "GitHub error or config missing")
     if ok:
         memo["last"] = (date_str, value)
     return ok
@@ -14293,6 +14328,7 @@ def save_earnings_7day_snapshot_github(tickers):
     branch = st.secrets.get("GITHUB_PUBLIC_BRANCH", "main")
     if not repo or not (st.secrets.get("GITHUB_PUBLIC_TOKEN") or st.secrets.get("GITHUB_TOKEN")):
         st.warning("GITHUB_PUBLIC_REPO / token not configured — skipping public earnings save.")
+        notify_github_push_failure("upcoming_earnings_7day.txt", "GitHub repo/token not configured")
         return
 
     url = f"{GITHUB_API}/repos/{repo}/contents/{EARNINGS_7D_FILEPATH}"
@@ -14319,8 +14355,10 @@ def save_earnings_7day_snapshot_github(tickers):
         put_resp = requests.put(url, headers=_github_public_headers(), json=payload, timeout=10)
         if put_resp.status_code not in (200, 201):
             st.warning(f"GitHub save failed (public repo earnings): {put_resp.status_code} {put_resp.text[:150]}")
+            notify_github_push_failure("upcoming_earnings_7day.txt", f"HTTP {put_resp.status_code}")
     except Exception as e:
         st.warning(f"GitHub save error (public repo earnings): {e}")
+        notify_github_push_failure("upcoming_earnings_7day.txt", e)
 
 
 @st.cache_data(ttl=3600)
@@ -15533,7 +15571,13 @@ def _persist_dist_history():
     memo = _dist_history_memo()
     if memo.get("last") == (date_str, value):
         return True
-    ok = save_dist_history_to_public_repo(date_str, value)
+    try:
+        ok = save_dist_history_to_public_repo(date_str, value)
+    except Exception as _exc:
+        notify_github_push_failure("dist_history.txt", _exc)
+        raise
+    if not ok:
+        notify_github_push_failure("dist_history.txt", "GitHub error or config missing")
     if ok:
         memo["last"] = (date_str, value)
     return ok
@@ -15733,7 +15777,13 @@ def _persist_extended_history():
     memo = _extended_history_memo()
     if memo.get("last") == (date_str, value):
         return True
-    ok = save_extended_history_to_public_repo(date_str, value)
+    try:
+        ok = save_extended_history_to_public_repo(date_str, value)
+    except Exception as _exc:
+        notify_github_push_failure("extended.txt", _exc)
+        raise
+    if not ok:
+        notify_github_push_failure("extended.txt", "GitHub error or config missing")
     if ok:
         memo["last"] = (date_str, value)
     return ok
@@ -17409,6 +17459,7 @@ def save_lazy_exposure_to_public_repo(date_obj, score):
     branch = st.secrets.get("GITHUB_PUBLIC_BRANCH", "main")
     if not repo or not (st.secrets.get("GITHUB_PUBLIC_TOKEN") or st.secrets.get("GITHUB_TOKEN")):
         st.warning("GITHUB_PUBLIC_REPO / token not configured — skipping public Lazy Exposure save.")
+        notify_github_push_failure("lazy_exposure_history.txt", "GitHub repo/token not configured")
         return
 
     url = f"{GITHUB_API}/repos/{repo}/contents/{LAZY_EXPOSURE_PUBLIC_FILEPATH}"
@@ -17425,9 +17476,11 @@ def save_lazy_exposure_to_public_repo(date_obj, score):
             existing_lines = [ln.strip() for ln in decoded.splitlines() if ln.strip()]
         elif resp.status_code not in (404,):
             st.warning(f"Could not check public Lazy Exposure file (HTTP {resp.status_code}).")
+            notify_github_push_failure("lazy_exposure_history.txt", f"HTTP {resp.status_code} on read")
             return
     except requests.RequestException as exc:
         st.warning(f"Could not check public Lazy Exposure file: {exc}")
+        notify_github_push_failure("lazy_exposure_history.txt", exc)
         return
 
     # ── Parse into {date_str: score_str}, dedupe/replace today's entry ──
@@ -17461,8 +17514,10 @@ def save_lazy_exposure_to_public_repo(date_obj, score):
         put_resp = requests.put(url, headers=_github_public_headers(), json=payload, timeout=10)
         if put_resp.status_code not in (200, 201):
             st.warning(f"GitHub save failed (public Lazy Exposure): {put_resp.status_code} {put_resp.text[:150]}")
+            notify_github_push_failure("lazy_exposure_history.txt", f"HTTP {put_resp.status_code}")
     except requests.RequestException as exc:
         st.warning(f"GitHub save error (public Lazy Exposure): {exc}")
+        notify_github_push_failure("lazy_exposure_history.txt", exc)
 
 
 @st.cache_data(ttl=3600)
