@@ -17916,7 +17916,7 @@ def compute_market_verdict():
     avg_dist = sum(dist_counts.values()) / len(dist_counts)
     p2_score = max(0, 100 - (avg_dist / 25) * 100 * 1.6)  # steep penalty curve
     if triggered:
-        p2_score = min(p2_score, 25)  # hard cap when any index is triggered
+        p2_score = min(p2_score, 20)  # hard cap when any index is triggered
     p2_label = f"TRIGGERED: {', '.join(triggered)}" if triggered else "Clean"
     breakdown.append(("Distribution Days", p2_score, p2_label,
                        ", ".join(f"{k}:{v}" for k, v in dist_counts.items())))
@@ -18332,17 +18332,17 @@ def compute_market_verdict():
         "ETF Stage2/4 (watchlist)": 0.05,
         "Market Regime": 0.08,
         "Minervini Breadth Trend": 0.05,
-        "Distribution Days": 0.10,
+        "Distribution Days": 0.18,
         "Accumulation Rating": 0.04,
-        "Market Internal": 0.05,
+        "Market Internal": 0.00,
         "VIX Term Structure": 0.04,
         "Credit Spread (HYG/LQD)": 0.04,
         "Equity Risk Premium (ERP)": 0.04,
         "S&P 500 Valuation (P/E vs 10Y)": 0.03,
         # New pillars (computed in sections 29/30, which now run BEFORE this
         # relocated section, so hp_rows/bh_rows are already populated globals)
-        "Healthy Pullback vs Deterioration": 0.07,
-        "Breakout Health": 0.06,
+        "Healthy Pullback vs Deterioration": 0.05,
+        "Breakout Health": 0.05,
     }
 
     # ── Reorder pillars for display ──────────────────────────────────────
