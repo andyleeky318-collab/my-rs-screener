@@ -15494,7 +15494,7 @@ with stall_col4:
 # DIST HISTORY — dist_history.txt in the PUBLIC repo root (GITHUB_PUBLIC_REPO),
 # alongside lazy_exposure_history.txt / upcoming_earnings_7day.txt (same
 # repo/branch/token pattern as save_lazy_exposure_to_public_repo; never
-# touches those files). One line per trading day: "YYYY-MM-DD,yes" if ALL 4 indexes (SPY, QQQ, SMH,
+# touches those files). One line per trading day: "YYYY-MM-DD,yes" if at least 3 of the 4 indexes (SPY, QQQ, SMH,
 # IWM) have Distribution TRIGGERED (same >= 5 active dist-days rule as the
 # boxes above), else "YYYY-MM-DD,no". Today's line is upserted (overwritten
 # if it changes intraday). Lazy write: only commits when the value changed,
@@ -15557,7 +15557,7 @@ def save_dist_history_to_public_repo(date_str, value):
 
 def _persist_dist_history():
     _flags = (spy_triggered, qqq_triggered, smh_triggered, iwm_triggered)
-    value = "yes" if all(bool(f) for f in _flags) else "no"
+    value = "yes" if sum(bool(f) for f in _flags) >= 3 else "no"
 
     # Trading date of the data used (latest SPY bar), fallback US/Eastern today.
     _spy_df = ticker_dfs_shared.get("SPY") if isinstance(ticker_dfs_shared, dict) else None
@@ -15713,7 +15713,7 @@ with atr_col4:
 # ==============================================================================
 # EXTENDED HISTORY — extended.txt in the PUBLIC repo root (GITHUB_PUBLIC_REPO),
 # same format/pattern as dist_history.txt (never touches that file). One line
-# per trading day: "YYYY-MM-DD,yes" if ALL 4 ATR Multiple boxes (SPY, QQQ, SMH,
+# per trading day: "YYYY-MM-DD,yes" if at least 3 of the 4 ATR Multiple boxes (SPY, QQQ, SMH,
 # IWM) are TRIGGERED (same >= threshold rule as the boxes above), else
 # "YYYY-MM-DD,no". Today's line is upserted; lazy write; soft-fail.
 # ==============================================================================
@@ -15763,7 +15763,7 @@ def save_extended_history_to_public_repo(date_str, value):
 
 def _persist_extended_history():
     _flags = (spy_atr_triggered, qqq_atr_triggered, smh_atr_triggered, iwm_atr_triggered)
-    value = "yes" if all(bool(f) for f in _flags) else "no"
+    value = "yes" if sum(bool(f) for f in _flags) >= 3 else "no"
 
     # Trading date of the data used (latest SPY bar), fallback US/Eastern today
     # — same date logic as dist_history.txt so both files line up.
