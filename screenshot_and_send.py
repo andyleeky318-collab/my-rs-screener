@@ -54,7 +54,7 @@ TV_CHART_SETTLE_SECONDS = 10
 VIEWPORT_WIDTH  = 1600
 VIEWPORT_HEIGHT = 1200
 
-MAX_RUNTIME_SECONDS   = 29 * 60   # hard cutoff for the ENTIRE run
+MAX_RUNTIME_SECONDS   = 35 * 60   # hard cutoff for the ENTIRE run
 SCROLL_SETTLE_SECONDS = 3         # let charts / custom HTML components re-render after a scroll
 
 # How long (seconds) to keep retrying to find a single section keyword
@@ -193,7 +193,7 @@ FINAL_SECTION_KEYWORD = SECTION_KEYWORDS[-1]
 # capturing anyway (falls back gracefully rather than blocking forever).
 # Quant Sentiment has been observed to take up to ~8 minutes to appear, so
 # this is set with some buffer above that.
-FULL_LOAD_TIMEOUT_SECONDS = 10 * 60
+FULL_LOAD_TIMEOUT_SECONDS = 15 * 60
 FULL_LOAD_POLL_SECONDS    = 3
 
 
@@ -852,7 +852,14 @@ def load_app_with_retries(page, attempts=APP_LOAD_ATTEMPTS):
                 return True
             try_wake_app(page)
             time.sleep(3)
-        print(f"App not healthy within {budget:.0f}s (slow/asleep screen?) -- retrying.")
+        # Only reload when the slow/asleep screen is POSITIVELY detected.
+        # If it's simply a long-running app (no slow marker), reloading would
+        # restart its computation and waste time -- so keep this session.
+        if not page_has_slow_marker(page):
+            print(f"No slow/asleep screen after {budget:.0f}s -- app is just still computing; "
+                  f"keeping this session instead of reloading.")
+            return True
+        print(f"Slow/asleep screen still showing after {budget:.0f}s -- retrying.")
     print("App never became healthy -- proceeding anyway.")
     return False
 
