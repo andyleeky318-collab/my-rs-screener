@@ -190,7 +190,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# 2. Cleaned Industry Database (Preserved as requested)
+# ANT
 INDUSTRIES = {
     '3D Printing': ['XMTR', 'VELO', 'DDD', 'PRLB', 'MTLS', 'SSYS', 'NNDM'],
     'Crypto': ['BLOK', 'MSTR', 'CRCL', 'COIN', 'IBIT', 'RIOT', 'BMNR'],
