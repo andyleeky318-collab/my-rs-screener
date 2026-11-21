@@ -892,6 +892,9 @@ def render_pine_rs_table_html(rows, max_height):
 
     body_html = ""
     n = len(rows)
+    # Defensive trio (XLV, XLP, XLU) all in the top 10 of the (RS21-sorted) ranking
+    defensive_trio = {"XLV", "XLP", "XLU"}
+    defensive_top10 = defensive_trio <= {r["Ticker"] for r in rows[:10]}
     for i, r in enumerate(rows):
         sym = r["Ticker"]
         ticker_label = f"{sym}**" if r.get("Is52WHigh", False) else sym
@@ -900,6 +903,8 @@ def render_pine_rs_table_html(rows, max_height):
             name_bg, name_color = "#ff0000", "#ffffff"
         if sym in sector_etfs:
             name_bg, name_color = "#00ffff", "#000000"
+        if defensive_top10 and sym in defensive_trio:
+            name_bg, name_color = "#ff9900", "#000000"
         if sym in index_etfs:
             name_bg, name_color = "#FFD700", "#ff0000"
 
