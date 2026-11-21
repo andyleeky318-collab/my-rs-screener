@@ -21878,6 +21878,7 @@ try:
             unsafe_allow_html=True,
         )
     else:
-        st.write("None")
+        #st.write("None")
+        st.info("None")
 except Exception as _fpb_e:
     st.warning(f"First Pullback After New High unavailable right now: {_fpb_e}")
