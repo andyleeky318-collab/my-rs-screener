@@ -7707,7 +7707,7 @@ if in_send_window and st.session_state.get("telegram_setup_summary_sig") != setu
 
 # --- 2. TIGHT PPP (Full Horizontal Row Below Two Botak) ---
 render_section_header_with_copy(
-    lambda: st.markdown(f"#### 📉 PPP = Opportunity ({len(ppp_list)})"),
+    lambda: st.markdown(f"<h4>📉 PPP = Opportunity <span style='color:{'#FF6B6B' if len(ppp_list) == 0 else 'inherit'}; font-weight:bold;'>({len(ppp_list)})</span></h4>", unsafe_allow_html=True),
     ppp_list
 )
 
@@ -7940,7 +7940,7 @@ with st.spinner("Scanning RS New High Before Price..."):
 
 # st.markdown("---")
 render_section_header_with_copy(
-    lambda: st.markdown(f"#### 🔵 RS NH B4 Price = Opportunity ({len(rs_nh_b4_today)})"),
+    lambda: st.markdown(f"<h4>🔵 RS NH B4 Price = Opportunity <span style='color:{'#FF6B6B' if len(rs_nh_b4_today) == 0 else 'inherit'}; font-weight:bold;'>({len(rs_nh_b4_today)})</span></h4>", unsafe_allow_html=True),
     rs_nh_b4_today
 )
 
@@ -8144,7 +8144,7 @@ render_section_header_with_copy(
     lambda: st.markdown(
         f"""
         <h4>
-            📐 Downtrend Line Breakout = Pure technical ({len(downtrend_today)})
+            📐 Downtrend Line Breakout = Pure technical <span style="color:{'#FF6B6B' if len(downtrend_today) == 0 else 'inherit'}; font-weight:bold;">({len(downtrend_today)})</span>
             <span style="color:#888; font-size:12px; font-weight:normal;">(Star = High Volume, Green glow = PPP breakout)</span>
         </h4>
         """,
@@ -8260,7 +8260,7 @@ st.markdown("---")
 
 # --- GAPPER SECTION ---
 render_section_header_with_copy(
-    lambda: st.markdown(f"#### 🚀 Gapper Earning Drift = Opportunity ({len(gapper_list)})"),
+    lambda: st.markdown(f"<h4>🚀 Gapper Earning Drift = Opportunity <span style='color:{'#FF6B6B' if len(gapper_list) == 0 else 'inherit'}; font-weight:bold;'>({len(gapper_list)})</span></h4>", unsafe_allow_html=True),
     gapper_list
 )
 
