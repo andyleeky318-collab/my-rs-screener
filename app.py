@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import time
 import re
+import functools
 import binascii
 from google import genai
 import plotly.graph_objects as go
@@ -3456,6 +3457,22 @@ SECTOR_KEYWORDS = {
     "biotechnology": "#FF69B4", "Commodities": "#FF69B4", "commodity": "#FF69B4", "mining": "#FF69B4", "pharmaceutical": "#FF69B4", 
 }
 
+@functools.lru_cache(maxsize=1024)
+def _fuzzy_industry_pattern(ind):
+    """Regex matching `ind` with exactly one character dropped, changed or
+    added (case-insensitive), as a whole word. Used by
+    format_ai_analysis_text to colour slightly mistyped industry names."""
+    variants = set()
+    n = len(ind)
+    for k in range(n):
+        variants.add(re.escape(ind[:k] + ind[k + 1:]))                          # 1 dropped
+        variants.add(re.escape(ind[:k]) + "[A-Za-z0-9]" + re.escape(ind[k + 1:]))  # 1 changed
+    for k in range(1, n):
+        variants.add(re.escape(ind[:k]) + "[A-Za-z0-9 ]" + re.escape(ind[k:]))     # 1 added (not at the ends)
+    alternation = "|".join(sorted(variants, key=len, reverse=True))
+    return re.compile(rf"(?<![A-Za-z0-9])(?:{alternation})(?![A-Za-z0-9])", re.IGNORECASE)
+
+
 def format_ai_analysis_text(text, tickers=None, industries=None, number_color="#FFE5CC"):
     """
     Post-process AI markdown output to highlight key terms:
@@ -3513,6 +3530,26 @@ def format_ai_analysis_text(text, tickers=None, industries=None, number_color="#
                 return token
 
             text = pattern.sub(_stash, text)
+
+        # Fuzzy pass — the AI sometimes mistypes an industry name by one
+        # character (e.g. "FINANC-CARD/PMTPR" for "FINANCE-CARD/PMTPR").
+        # Runs AFTER the exact pass (exact hits are already stashed as
+        # tokens, so they are never re-matched), only for names >= 10 chars,
+        # and only for a whole-word match within 1 edit. No two known
+        # industry names are within 1 edit of each other, so this can't
+        # swap one industry for another. The AI's own spelling is kept.
+        _fuzzy_offset = len(industries)
+        for i, ind in enumerate(sorted(set(industries), key=len, reverse=True)):
+            if not ind or len(ind) < 10:
+                continue
+            token = f"@@IND{_fuzzy_offset + i}@@"
+            pattern = _fuzzy_industry_pattern(ind)
+
+            def _stash_fuzzy(m, token=token):
+                industry_placeholders[token] = m.group(0)
+                return token
+
+            text = pattern.sub(_stash_fuzzy, text)
 
     for word, color in sorted(SECTOR_KEYWORDS.items(), key=lambda x: len(x[0]), reverse=True):
         pattern = re.compile(rf'\b{re.escape(word)}\b', re.IGNORECASE)
@@ -14961,7 +14998,7 @@ else:
                 x=[xs[-1]], y=[ys[-1]], mode="markers+text",
                 marker=dict(size=13, symbol="star", color=color, line=dict(color="#000000", width=1)),
                 text=[ticker], textposition="middle right",
-                textfont=dict(size=13, color=color),
+                textfont=dict(size=18 if (xs[-1] >= 100 and ys[-1] >= 100) else 13, color=color),  # larger in Leading quadrant
                 showlegend=False,
                 hovertemplate=f"<b>{ticker}</b><br>RS-Ratio: %{{x:.2f}}<br>RS-Momentum: %{{y:.2f}}<extra></extra>",
             ))
