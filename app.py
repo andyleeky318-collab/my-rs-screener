@@ -22243,3 +22243,63 @@ try:
         st.info("None")
 except Exception as _fpb_e:
     st.warning(f"First Pullback After New High unavailable right now: {_fpb_e}")
+
+
+# ==============================================================================
+# 21EMA / 50MA CONFLUENCE PULLBACK — KNOWN_STOCKS that already qualify for the
+# 21ema_cloud setup (the normal 21ema pullback, cloud21ema_all), PLUS one more
+# condition: the 21 EMA sits near the 50 SMA so the two act as one support
+# zone (confluence). "Near" = |EMA21 - SMA50| <= CONFLUENCE_MAX_ATR x ATR(14),
+# using the same EMA21 (close), SMA50 (close) and ATR(14) definitions as the
+# 21ema_cloud / buyable logic. Read-only: no other section's lists change.
+# ==============================================================================
+CONFLUENCE_MAX_ATR = 1.0
+
+
+def _compute_ema21_ma50_confluence(ticker_dfs, tickers, max_atr):
+    """Return [(ticker, gap_in_ATR)] where the 21 EMA is within max_atr x
+    ATR(14) of the 50 SMA on the latest bar, tightest confluence first."""
+    hits = []
+    for t in tickers:
+        df = ticker_dfs.get(t)
+        if df is None or len(df) < 50 or not {"High", "Low", "Close"} <= set(df.columns):
+            continue
+        close, high, low = df["Close"], df["High"], df["Low"]
+        ema21 = close.ewm(span=21, adjust=False).mean().iloc[-1]
+        sma50 = close.rolling(50).mean().iloc[-1]
+        tr = pd.concat([
+            high - low,
+            (high - close.shift(1)).abs(),
+            (low - close.shift(1)).abs()
+        ], axis=1).max(axis=1)
+        atr14 = tr.rolling(14).mean().iloc[-1]
+        if pd.isna(ema21) or pd.isna(sma50) or pd.isna(atr14) or atr14 <= 0:
+            continue
+        gap_atr = abs(ema21 - sma50) / atr14
+        if gap_atr <= max_atr:
+            hits.append((t, float(gap_atr)))
+    return sorted(hits, key=lambda x: (x[1], x[0]))
+
+
+st.markdown("---")
+st.markdown(
+    "<h3 style='margin-bottom:0;'>21EMA + 50MA Confluence Pullback "
+    "<span style='font-size:12px;font-weight:normal;color:#888;'>"
+    f"(21ema_cloud pullback, 21 EMA within {CONFLUENCE_MAX_ATR:g} ATR of 50 MA)</span></h3>",
+    unsafe_allow_html=True,
+)
+try:
+    _conf_universe = sorted(set(cloud21ema_all) & set(KNOWN_STOCKS))
+    _conf_hits = _compute_ema21_ma50_confluence(
+        ticker_dfs_shared, _conf_universe, CONFLUENCE_MAX_ATR
+    )
+    st.markdown(f"**Matches ({len(_conf_hits)})**")
+    if _conf_hits:
+        st.markdown(
+            "".join(setup_badge(_t) for _t, _gap in _conf_hits),
+            unsafe_allow_html=True,
+        )
+    else:
+        st.info("None")
+except Exception as _conf_e:
+    st.warning(f"21EMA + 50MA Confluence Pullback unavailable right now: {_conf_e}")
