@@ -391,7 +391,7 @@ INDUSTRIES = {
     'PRECIOUS METAL': ['GLD', 'SLV', 'PPLT', 'GDX', 'SIL', 'RGLD', 'PLTM', 'PALL'],
 }
 
-# Cleaned Known Stocks List Reference Array
+# ANT, XTN, JBHT
 KNOWN_STOCKS = [
     'KBWB', 'ICHR', 'RBRK', 'LYTE', 'LEN', 'PEJ', 'SOLT', 'ETHA', 'XXRP', 'BMNR', 'TWST', 'TEM', 'SMR', 'USAR', 'QBTS', 'QUBT', 'RGTI', 'FN', 'ZETA', 'ONON', 'TQQQ', 'RSP', 'BBY', 'AMPX', 'CBRS',
     'CME', 'ICE', 'NCLD', 'PALL', 'PLTM', 'IHF', 'ESTC', 'PRU', 'RGEN', 'UBS', 'TRV', 'WEN', 'OKLO', 'IBB', 'Q', 'OUST', 'VPG', 'WOLF', 'NOK', 'HSBC', 'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
@@ -5996,7 +5996,9 @@ def _stage_num_latest(df, benchmark_df_input):
             return 4
 
         else:
-            return 0
+            # Unclassified (no stage rule matched, e.g. RS above its 126 EMA
+            # while price is below its own 126 EMA) -> treat as Stage 1
+            return 1
 
     except Exception:
         return 0
@@ -13350,7 +13352,7 @@ st.markdown("---")
 comparison_label = comparison_date.isoformat() if comparison_date else "no prior data"
 st.markdown(
     f"#### 📡 Quant Sentiment "
-    f"<span style='color:#888; font-size:12px;'>(Gold = Breaking News or Earnings,vs {comparison_label})</span>",
+    f"<span style='color:#888; font-size:12px;'>(Circle = Add to Stock Universe in Tradingview, Gold = Breaking News or Earnings, vs {comparison_label})</span>",
     unsafe_allow_html=True,
 )
 
@@ -22115,7 +22117,10 @@ def _compute_secular_bull_bear(ticker_dfs, tickers, ref_date):
 
 
 st.markdown("---")
-st.subheader("Secular Bull Bear")
+st.markdown(
+    f"### Secular Bull Bear <span style='color:#888; font-size:12px;'>({SECULAR_BB_REF_DATE.strftime('%d %b %Y')}, subject to change)</span>",
+    unsafe_allow_html=True
+)
 try:
     _sbb_above, _sbb_below, _sbb_skipped, _sbb_latest = _compute_secular_bull_bear(
         ticker_dfs_shared, sorted(set(KNOWN_STOCKS)), SECULAR_BB_REF_DATE
