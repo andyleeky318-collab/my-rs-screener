@@ -15165,17 +15165,24 @@ rank_df, ret_df = timed(
 def compute_market_stalling_days(ticker, max_gain=0.4):
     """
     IBD-style Stalling Day detector:
-      1. Small gain: 0% < close-to-close change <= max_gain%
+      1. Small gain: 0% < close-to-close change <= gain cap, where the cap
+         is max(max_gain%, 0.3 x ATR14%) so high-beta tickers (e.g. SMH)
+         get a proportionally wider "small gain" band
       2. Intraday reversal: close sits in the LOWER half of the day's
          High-Low range (gave up most of the day's gains)
       3. Heavy volume: today's volume >= 95% of prior day's volume
          (i.e. volume didn't meaningfully dry up, even if not higher)
+         OR today's volume >= its 50-day average volume (the prior day
+         is often a heavy selloff, which makes the day-over-day test
+         too strict on its own)
+    Both loosenings are OR-ed onto the original rule, so every day the
+    original rule counted is still counted.
     Mirrors the same 25-trading-day "still active" window and 5%+ cancel
     rule used for distribution days, for consistency.
     """
     df = yf.download(
         ticker,
-        period="2mo",
+        period="6mo",   # enough history for the 50-day avg volume / ATR14
         interval="1d",
         progress=False,
         auto_adjust=True
@@ -15192,6 +15199,16 @@ def compute_market_stalling_days(ticker, max_gain=0.4):
 
     df["Pct_Chg"] = df["Close"].pct_change() * 100
     df["Vol_Ratio"] = df["Volume"] / df["Volume"].shift(1)
+    df["Vol_Avg50"] = df["Volume"].rolling(50).mean()
+
+    true_range = pd.concat([
+        df["High"] - df["Low"],
+        (df["High"] - df["Close"].shift(1)).abs(),
+        (df["Low"] - df["Close"].shift(1)).abs()
+    ], axis=1).max(axis=1)
+    atr_pct = (true_range.rolling(14).mean() / df["Close"]) * 100
+    # NaN ATR (first 14 bars) falls back to the original fixed max_gain
+    df["Gain_Cap"] = (atr_pct * 0.3).fillna(max_gain).clip(lower=max_gain)
 
     day_range = df["High"] - df["Low"]
     midpoint = df["Low"] + (day_range / 2)
@@ -15199,9 +15216,12 @@ def compute_market_stalling_days(ticker, max_gain=0.4):
 
     df["Is_Stall_Day"] = (
         (df["Pct_Chg"] > 0)
-        & (df["Pct_Chg"] <= max_gain)
+        & (df["Pct_Chg"] <= df["Gain_Cap"])
         & df["Lower_Half_Close"]
-        & (df["Vol_Ratio"] >= 0.95)
+        & (
+            (df["Vol_Ratio"] >= 0.95)
+            | (df["Volume"] >= df["Vol_Avg50"])
+        )
     )
 
     active_stalling_days = []
