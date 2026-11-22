@@ -142,6 +142,33 @@ def render_section_header_with_copy(render_title, tickers):
     else:
         render_title()
 
+def _chart_latest_is_extreme(hist_df, col):
+    """True if the chart's latest value is the window's max or min, or a
+    z-score >= 2 outlier (same z-score test the section charts use)."""
+    try:
+        if hist_df is None or hist_df.empty or col not in hist_df.columns:
+            return False
+        s = pd.to_numeric(hist_df[col], errors="coerce").dropna()
+        if s.empty:
+            return False
+        today = s.iloc[-1]
+        if today == s.max() or today == s.min():
+            return True
+        std = s.std(ddof=1)
+        return bool(std and std > 0 and (today - s.mean()) / std >= 2)
+    except Exception:
+        return False
+
+def _title_count_color(count, hist_df=None, col=None, zero_color="#FF6B6B"):
+    """Section-title count color: zero_color when the count is 0, red when
+    the section chart's latest value is its min/max or a z>=2 outlier,
+    otherwise the normal text color."""
+    if count == 0:
+        return zero_color
+    if _chart_latest_is_extreme(hist_df, col):
+        return "#FF6B6B"
+    return "inherit"
+
 # 1. Setup Streamlit Page
 st.set_page_config(page_title="Chrome Sector RS", page_icon="🐱", layout="wide")
 #st.title("🐱 Theme Tracker")
@@ -8301,8 +8328,12 @@ def compute_quality_filter_pass(stocks_list, ticker_dfs):
 st.markdown("---")
 
 # --- GAPPER SECTION ---
+with st.spinner("Scanning for Gapper History..."):
+    gapper_hist = timed("compute_gapper_history", compute_gapper_history, stocks_tuple, ticker_dfs_shared)
+
+gapper_count_color = _title_count_color(len(gapper_list), gapper_hist, "Gapper Count")
 render_section_header_with_copy(
-    lambda: st.markdown(f"<h4>🚀 Gapper Earning Drift = Opportunity <span style='color:{'#FF6B6B' if len(gapper_list) == 0 else 'inherit'}; font-weight:bold;'>({len(gapper_list)})</span></h4>", unsafe_allow_html=True),
+    lambda: st.markdown(f"<h4>🚀 Gapper Earning Drift = Opportunity <span style='color:{gapper_count_color}; font-weight:bold;'>({len(gapper_list)})</span></h4>", unsafe_allow_html=True),
     gapper_list
 )
 
@@ -8496,9 +8527,6 @@ if (gapBottom !== null && gapTop !== null && {gap_date_js} !== null) {{
 
 else:
     st.info("No active setups discovered.")
-
-with st.spinner("Scanning for Gapper History..."):
-    gapper_hist = timed("compute_gapper_history", compute_gapper_history, stocks_tuple, ticker_dfs_shared)
 
 st.write("")
 if not gapper_hist.empty:
@@ -9010,9 +9038,20 @@ with st.spinner("Scanning Early Bull setups..."):
         stocks_tuple, ticker_dfs_shared, benchmark_df_shared
     )
 
+with st.spinner("Scanning for Early Bull History..."):
+    early_bull_hist = timed(
+        "compute_early_bull_history",
+        compute_early_bull_history,
+        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
+    )
+
+# First number (buyable) has no chart: red only at 0. Last number (ALL,
+# unfiltered) is what the Early Bull chart tracks: red at 0 or chart extreme.
+early_bull_count_color = _title_count_color(len(early_bull_list))
+early_bull_all_count_color = _title_count_color(len(early_bull_no_filter_list), early_bull_hist, "Early Bull Count")
 render_section_header_with_copy(
     lambda: st.markdown(
-        f"""<h4>🐂 Early Bull = buyable + Sector + ALL ({len(early_bull_list)} + ... + {len(early_bull_no_filter_list)})
+        f"""<h4>🐂 Early Bull = buyable + Sector + ALL (<span style='color:{early_bull_count_color}; font-weight:bold;'>{len(early_bull_list)}</span> + ... + <span style='color:{early_bull_all_count_color}; font-weight:bold;'>{len(early_bull_no_filter_list)}</span>)
         <span style="color:#888; font-size:12px;">(stage1 -> 2 after Bear market -> Hold Longer)</span></h4>""",
         unsafe_allow_html=True
     ),
@@ -9050,13 +9089,6 @@ else:
 
 st.write("")
 
-with st.spinner("Scanning for Early Bull History..."):
-    early_bull_hist = timed(
-        "compute_early_bull_history",
-        compute_early_bull_history,
-        stocks_tuple, ticker_dfs_shared, benchmark_df_shared
-    )
-
 if not early_bull_hist.empty:
     chart_df_eb = early_bull_hist.copy()
     today_value_eb = chart_df_eb["Early Bull Count"].iloc[-1]
@@ -9093,7 +9125,7 @@ with st.spinner("Scanning for Two Botak History..."):
 #st.write(f"two_botak_hist shape: {two_botak_hist.shape}")
 
 # --- 1. TWO BOTAK (Full Horizontal Row) ---
-two_botak_count_color = "#FF6B6B" if len(b_list) == 0 else "inherit"
+two_botak_count_color = _title_count_color(len(b_list), two_botak_hist, "Two Botak Count")
 render_section_header_with_copy(
     lambda: st.markdown(
         f"<h4>🧑‍🦲🧑‍🦲 Two Botak = Short term Group burst <span style='color:{two_botak_count_color}; font-weight:bold;'>({len(b_list)})</span></h4>",
@@ -9191,7 +9223,13 @@ with st.spinner("Scanning for Bullish Engulfing History..."):
 
 # --- 3. BULLISH ENGULFING (Full Horizontal Row Below Tight PPP) ---
 total_engulf = len(e2_list) + len(e3_list)
-engulf_count_color = "#FF6B6B" if total_engulf == 0 else "inherit"
+# Title shows 2x + 3x combined, so test the combined daily series
+_engulf_total_hist = (
+    pd.DataFrame({"Engulfing Total": engulf_hist["2x Engulfing Count"] + engulf_hist["3x Engulfing Count"]})
+    if not engulf_hist.empty and {"2x Engulfing Count", "3x Engulfing Count"} <= set(engulf_hist.columns)
+    else pd.DataFrame()
+)
+engulf_count_color = _title_count_color(total_engulf, _engulf_total_hist, "Engulfing Total")
 render_section_header_with_copy(
     lambda: st.markdown(
         f"<h4>🐳 Engulfing = HL <span style='color:{engulf_count_color}; font-weight:bold;'>({total_engulf})</span></h4>",
@@ -9334,7 +9372,7 @@ with st.spinner("Scanning for PowerTrend History..."):
     powertrend_hist=timed("compute_powertrend_history",    compute_powertrend_history,    stocks_tuple, ticker_dfs_shared)
 
 # --- 4. POWERTREND (Full Horizontal Row) ---
-powertrend_count_color = "#FF6B6B" if len(pt_list) == 0 else "inherit"
+powertrend_count_color = _title_count_color(len(pt_list), powertrend_hist, "PowerTrend Count")
 render_section_header_with_copy(
     lambda: st.markdown(
         f"<h4>⚡ PowerTrend = Thematic Parabolic <span style='color:{powertrend_count_color}; font-weight:bold;'>({len(pt_list)})</span></h4>",
@@ -9497,7 +9535,10 @@ with st.spinner("Scanning volatility pickup..."):
     )
 
 #st.markdown("---")
-volatility_count_color = "#FF6B6B" if len(volatility_hits) == 0 else "inherit"
+with st.spinner("Scanning for Volatility History..."):
+    volatility_hist = timed("compute_volatility_history", compute_volatility_history, stocks_tuple, ticker_dfs_shared)
+
+volatility_count_color = _title_count_color(len(volatility_hits), volatility_hist, "Volatility Count")
 volatility_up_count = sum(1 for sym, z, pct in volatility_hits if pct >= 0)
 volatility_down_count = len(volatility_hits) - volatility_up_count
 render_section_header_with_copy(
@@ -9550,9 +9591,6 @@ if volatility_hits:
     )
 else:
     st.info("No tickers with volatility Z-score ≥ 2 today.")
-
-with st.spinner("Scanning for Volatility History..."):
-    volatility_hist = timed("compute_volatility_history", compute_volatility_history, stocks_tuple, ticker_dfs_shared)
 
 st.write("")
 if not volatility_hist.empty:
@@ -9665,7 +9703,11 @@ def fetch_wide_moat_tickers(tickers_tuple):
     return moat_set, diag
 
 # --- 6. VALUE TRAP (Full Horizontal Row Below PowerTrend Not Extended) ---
-value_trap_count_color = "#00FF00" if len(vt_list) == 0 else "inherit"
+with st.spinner("Scanning for Value Trap History..."):
+    value_trap_hist = timed("compute_value_trap_history", compute_value_trap_history, stocks_tuple, ticker_dfs_shared)
+
+# 0 stays green (no value traps = good); otherwise red at chart extreme
+value_trap_count_color = _title_count_color(len(vt_list), value_trap_hist, "Value Trap Count", zero_color="#00FF00")
 render_section_header_with_copy(
     lambda: st.markdown(
         f"<h4>⚠️ Value Trap = MAG7 & MOAT <span style='color:{value_trap_count_color}; font-weight:bold;'>({len(vt_list)})</span> "
@@ -9759,9 +9801,6 @@ if vt_list or vt_yest:
     )
 else:
     st.info("No active setups discovered.")
-
-with st.spinner("Scanning for Value Trap History..."):
-    value_trap_hist = timed("compute_value_trap_history", compute_value_trap_history, stocks_tuple, ticker_dfs_shared)
 
 st.write("")
 if not value_trap_hist.empty:
@@ -9990,10 +10029,11 @@ with st.spinner("Scanning for Change / Breakdown of Character (Score Δ≥20)...
     )
 
 # ═══════════════════ CHANGE OF CHARACTER (Δ ≥ +20) ═══════════════════
+coc_count_color = _title_count_color(len(coc_today), coc_hist, "CoC Count")
 render_section_header_with_copy(
     lambda: st.markdown(
-        f"#### ▲ Breakup of Character ({len(coc_today)}) "
-        f"<span style='color:#888; font-size:12px;'>[Grey out = 2x CoC]</span>",
+        f"<h4>▲ Breakup of Character <span style='color:{coc_count_color}; font-weight:bold;'>({len(coc_today)})</span> "
+        f"<span style='color:#888; font-size:12px; font-weight:normal;'>[Grey out = 2x CoC]</span></h4>",
         unsafe_allow_html=True,
     ),
     coc_today
@@ -10073,8 +10113,12 @@ if not coc_hist.empty:
 st.markdown("---")
 
 # ═══════════════════ BREAKDOWN OF CHARACTER (Δ ≤ -20) ═══════════════════
+boc_count_color = _title_count_color(len(boc_today), boc_hist, "BoC Count")
 render_section_header_with_copy(
-    lambda: st.markdown(f"#### 🔻 Breakdown of Character ({len(boc_today)})"),
+    lambda: st.markdown(
+        f"<h4>🔻 Breakdown of Character <span style='color:{boc_count_color}; font-weight:bold;'>({len(boc_today)})</span></h4>",
+        unsafe_allow_html=True
+    ),
     boc_today
 )
 
@@ -10205,10 +10249,9 @@ with st.spinner("Scanning for biggest up/down day extremes..."):
         stocks_tuple, ticker_dfs_shared
     )
 
-render_section_header_with_copy(
-    lambda: st.markdown(f"#### 📈📉 Biggest Move Today ({len(biggest_up_today)} vs {len(biggest_down_today)})"),
-    [sym for sym, pct in biggest_up_today] + [sym for sym, pct in biggest_down_today]
-)
+# Title slot reserved here; it is filled further down once
+# biggest_move_hist is computed (its count colors depend on that chart).
+_biggest_move_header_slot = st.container()
 
 col_up, col_down = st.columns(2)
 
@@ -10307,6 +10350,19 @@ with st.spinner("Scanning for Biggest Move History..."):
         "compute_biggest_move_history",
         compute_biggest_move_history,
         stocks_tuple, ticker_dfs_shared
+    )
+
+biggest_up_count_color = _title_count_color(len(biggest_up_today), biggest_move_hist, "Biggest Up Count")
+biggest_down_count_color = _title_count_color(len(biggest_down_today), biggest_move_hist, "Biggest Down Count")
+with _biggest_move_header_slot:
+    render_section_header_with_copy(
+        lambda: st.markdown(
+            f"<h4>📈📉 Biggest Move Today ("
+            f"<span style='color:{biggest_up_count_color}; font-weight:bold;'>{len(biggest_up_today)}</span> vs "
+            f"<span style='color:{biggest_down_count_color}; font-weight:bold;'>{len(biggest_down_today)}</span>)</h4>",
+            unsafe_allow_html=True
+        ),
+        [sym for sym, pct in biggest_up_today] + [sym for sym, pct in biggest_down_today]
     )
 
 if not biggest_move_hist.empty:
@@ -10765,7 +10821,11 @@ with st.spinner("Scanning for Gap Up / Gap Down..."):
     )
 
 # ── GAP UP ────────────────────────────────────────────────────────────────
-st.markdown(f"#### 🔼 Gap Up ({len(gap_up_today)})")
+gap_up_count_color = _title_count_color(len(gap_up_today), gap_up_down_hist, "Gap Up Count")
+st.markdown(
+    f"<h4>🔼 Gap Up <span style='color:{gap_up_count_color}; font-weight:bold;'>({len(gap_up_today)})</span></h4>",
+    unsafe_allow_html=True
+)
 
 if gap_up_today or gap_up_yest:
     gapup_industry_counts, gapup_ticker_industry = build_leader_industry_map(gap_up_today, INDUSTRIES)
@@ -10819,7 +10879,11 @@ if not gap_up_down_hist.empty:
 st.write("")
 
 # ── GAP DOWN ──────────────────────────────────────────────────────────────
-st.markdown(f"#### 🔽 Gap Down ({len(gap_down_today)})")
+gap_down_count_color = _title_count_color(len(gap_down_today), gap_up_down_hist, "Gap Down Count")
+st.markdown(
+    f"<h4>🔽 Gap Down <span style='color:{gap_down_count_color}; font-weight:bold;'>({len(gap_down_today)})</span></h4>",
+    unsafe_allow_html=True
+)
 
 if gap_down_today or gap_down_yest:
     gapdown_industry_counts, gapdown_ticker_industry = build_leader_industry_map(gap_down_today, INDUSTRIES)
@@ -11344,7 +11408,12 @@ else:
             }).to_dict("records"),
         )
 
-st.markdown(f"#### 📐 Pullback Setup Quality ({global_setup_count})")
+# Title value is the setup count, so test the chart's Setup Count line
+pullback_setup_count_color = _title_count_color(global_setup_count, setup_count_hist, "Setup Count")
+st.markdown(
+    f"<h4>📐 Pullback Setup Quality <span style='color:{pullback_setup_count_color}; font-weight:bold;'>({global_setup_count})</span></h4>",
+    unsafe_allow_html=True
+)
 
 if not setup_avgrank_hist.empty:
     chart_df_rank = setup_avgrank_hist.merge(setup_count_hist, on="Date", how="left")
@@ -12359,8 +12428,12 @@ valid_breakout_history_v1, today_breakout_tickers_v1 = timed(
     ticker_dfs_shared,
 )
 
+breakout_count_color = _title_count_color(len(today_breakout_tickers_v1), valid_breakout_history_v1, "Valid Breakout Count")
 render_section_header_with_copy(
-    lambda: st.markdown(f"### 📈 Breakout Count ({len(today_breakout_tickers_v1)})"),
+    lambda: st.markdown(
+        f"<h3>📈 Breakout Count <span style='color:{breakout_count_color}; font-weight:bold;'>({len(today_breakout_tickers_v1)})</span></h3>",
+        unsafe_allow_html=True
+    ),
     today_breakout_tickers_v1
 )
 if today_breakout_tickers_v1:
