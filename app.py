@@ -13073,6 +13073,24 @@ def find_nearest_backward_trending_list_github(start_date, max_lookback_days=30)
     return [], None
 
 
+@st.cache_data(ttl=3600)
+def load_recent_trending_snapshots_github(start_date, needed, max_lookback_days=60):
+    """
+    Walk backward from start_date (exclusive) and collect up to `needed`
+    saved trending snapshots from the GitHub data repo (newest first).
+    Dates with no saved file are skipped, so this counts snapshots, not
+    calendar days. Returns a list of ticker lists.
+    """
+    snapshots = []
+    for i in range(1, max_lookback_days + 1):
+        if len(snapshots) >= needed:
+            break
+        tickers = load_trending_list_github(start_date - datetime.timedelta(days=i))
+        if tickers is not None:
+            snapshots.append(tickers)
+    return snapshots
+
+
 # ── Fetch today's list, persist to GitHub, find comparison baseline ─────────
 today_date = datetime.date.today()
 
@@ -13087,6 +13105,30 @@ trending_yesterday, comparison_date = timed(
     today_date
 )
 yesterday_set = set(trending_yesterday)
+
+# Persistent trenders — tickers in >= 10 of the last 20 trending snapshots
+# (today's live list counts as one; the rest come from GitHub) that are NOT
+# in KNOWN_STOCKS. Marked with a small circle on the Quant Sentiment badge.
+QS_PERSIST_SNAPSHOTS = 20
+QS_PERSIST_MIN_HITS = 10
+try:
+    _qs_snapshots = [trending_today] if trending_today else []
+    _qs_snapshots += timed(
+        "load_recent_trending_snapshots_github",
+        load_recent_trending_snapshots_github,
+        today_date, QS_PERSIST_SNAPSHOTS - len(_qs_snapshots)
+    )
+    _qs_hit_counts = {}
+    for _snap in _qs_snapshots:
+        for _sym in set(_snap):
+            _qs_hit_counts[_sym] = _qs_hit_counts.get(_sym, 0) + 1
+    _known_stocks_set = set(KNOWN_STOCKS)
+    qs_persistent_syms = {
+        _sym for _sym, _hits in _qs_hit_counts.items()
+        if _hits >= QS_PERSIST_MIN_HITS and _sym not in _known_stocks_set
+    }
+except Exception:
+    qs_persistent_syms = set()   # soft-fail: badges render without the circle
 
 @st.cache_data(ttl=3600)
 def fetch_reddit_mentions_apewisdom(stocks_tuple, filter_type="wallstreetbets"):
@@ -13235,7 +13277,7 @@ st.markdown("---")
 comparison_label = comparison_date.isoformat() if comparison_date else "no prior data"
 st.markdown(
     f"#### 📡 Quant Sentiment "
-    f"<span style='color:#888; font-size:12px;'>(vs {comparison_label})</span>",
+    f"<span style='color:#888; font-size:12px;'>(Gold = Breaking News or Earnings,vs {comparison_label})</span>",
     unsafe_allow_html=True,
 )
 
@@ -13273,11 +13315,20 @@ if trending_today:
 
         glow_style = CROSS_SECTION_GLOW_STYLE if sym in cross_section_glow_syms else ""
 
+        # Circle mark: in >= 10 of last 20 snapshots and not in KNOWN_STOCKS
+        persist_circle = (
+            "<span title='Trending in 10+ of last 20 snapshots, not in KNOWN_STOCKS' "
+            "style='display:inline-block; width:8px; height:8px; border-radius:50%; "
+            "background:#FFFFFF; border:1px solid #000000;'></span>"
+            if sym in qs_persistent_syms else ""
+        )
+
         qs_html += (
             f"<div style='display:inline-flex; align-items:center; gap:4px; "
             f"padding:2px 7px; border-radius:3px; font-size:12px; "
             f"white-space:nowrap; {badge_style} {glow_style}'>"
             f"<span style='font-weight:bold; color:inherit;'>{sym}</span>"
+            f"{persist_circle}"
             #f"{'<span style=\"font-size:9px;\">★</span>' if is_new else ''}"
             f"</div>"
         )
