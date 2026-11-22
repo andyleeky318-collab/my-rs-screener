@@ -8976,7 +8976,7 @@ with st.spinner("Scanning Early Bull setups..."):
 render_section_header_with_copy(
     lambda: st.markdown(
         f"""<h4>🐂 Early Bull = buyable + Sector + ALL ({len(early_bull_list)} + ... + {len(early_bull_no_filter_list)})
-        <span style="color:#888; font-size:12px;">(stage1 -> 2 after Bear market)</span></h4>""",
+        <span style="color:#888; font-size:12px;">(stage1 -> 2 after Bear market -> Hold Longer)</span></h4>""",
         unsafe_allow_html=True
     ),
     early_bull_no_filter_list
@@ -14582,7 +14582,7 @@ if not econ_df.empty and "event" in econ_df.columns:
 
         st.dataframe(styled_df, use_container_width=True, hide_index=True)
 else:
-    st.info("Economic calendar data currently unavailable.")
+    st.info("Unavailable")
 
 # st.markdown("---")
 # st.markdown("#### 🔎 Volatility Explanation Panel (Massive.com)")
@@ -14714,7 +14714,7 @@ render_section_header_with_copy(
 )
 
 if analyst_grades_df.empty:
-    st.info("No recent analyst grade changes found.")
+    st.info("None")
 else:
     html_grades = "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
     for sym, row in top_movers.iterrows():
@@ -15594,6 +15594,91 @@ except Exception:
     pass   # soft-fail: never affect the rest of the page
 
 # ==============================================================================
+# STALL HISTORY — stall_history.txt in the PUBLIC repo root (GITHUB_PUBLIC_REPO),
+# exact same format/pattern as dist_history.txt (never touches that file). One
+# line per trading day: "YYYY-MM-DD,yes" if at least 3 of the 4 indexes (SPY,
+# QQQ, SMH, IWM) have Stalling TRIGGERED (same >= 3 active stall-days rule as
+# the Stalling boxes above), else "YYYY-MM-DD,no". Today's line is upserted;
+# lazy write; soft-fail.
+# ==============================================================================
+STALL_HISTORY_PUBLIC_FILEPATH = "stall_history.txt"
+
+
+@st.cache_resource(show_spinner=False)
+def _stall_history_memo():
+    """Process-wide memo of the last (date, value) successfully saved."""
+    return {}
+
+
+def save_stall_history_to_public_repo(date_str, value):
+    """Upsert 'date_str,value' into stall_history.txt (public repo). Returns True
+    on success (including 'already up to date'), False otherwise."""
+    repo   = st.secrets.get("GITHUB_PUBLIC_REPO")
+    branch = st.secrets.get("GITHUB_PUBLIC_BRANCH", "main")
+    if not repo or not (st.secrets.get("GITHUB_PUBLIC_TOKEN") or st.secrets.get("GITHUB_TOKEN")):
+        return False
+
+    url = f"{GITHUB_API}/repos/{repo}/contents/{STALL_HISTORY_PUBLIC_FILEPATH}"
+    resp = requests.get(url, headers=_github_public_headers(), params={"ref": branch}, timeout=10)
+
+    sha, rows = None, {}
+    if resp.status_code == 200:
+        data = resp.json()
+        sha = data.get("sha")
+        rows = _parse_dist_history_txt(base64.b64decode(data["content"]).decode())   # same line format
+    elif resp.status_code != 404:
+        return False
+
+    if rows.get(date_str) == value:
+        return True                      # lazy: nothing changed, no commit
+
+    rows[date_str] = value
+    content_str = "\n".join(f"{d},{rows[d]}" for d in sorted(rows))   # same format as dist_history.txt
+    payload = {
+        "message": f"Update Stalling history — {date_str},{value}",
+        "content": base64.b64encode(content_str.encode()).decode(),
+        "branch": branch,
+    }
+    if sha:
+        payload["sha"] = sha
+    put_resp = requests.put(url, headers=_github_public_headers(), json=payload, timeout=10)
+    return put_resp.status_code in (200, 201)
+
+
+def _persist_stall_history():
+    _flags = (spy_stall_triggered, qqq_stall_triggered, smh_stall_triggered, iwm_stall_triggered)
+    value = "yes" if sum(bool(f) for f in _flags) >= 3 else "no"
+
+    # Trading date of the data used (latest SPY bar), fallback US/Eastern today
+    # — same date logic as dist_history.txt so both files line up.
+    _spy_df = ticker_dfs_shared.get("SPY") if isinstance(ticker_dfs_shared, dict) else None
+    _spy_close = _spy_df["Close"].dropna() if _spy_df is not None and "Close" in _spy_df else None
+    if _spy_close is not None and len(_spy_close):
+        date_str = pd.Timestamp(_spy_close.index[-1]).date().isoformat()
+    else:
+        date_str = datetime.datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+
+    memo = _stall_history_memo()
+    if memo.get("last") == (date_str, value):
+        return True
+    try:
+        ok = save_stall_history_to_public_repo(date_str, value)
+    except Exception as _exc:
+        notify_github_push_failure("stall_history.txt", _exc)
+        raise
+    if not ok:
+        notify_github_push_failure("stall_history.txt", "GitHub error or config missing")
+    if ok:
+        memo["last"] = (date_str, value)
+    return ok
+
+
+try:
+    timed("save_stall_history_to_public_repo", _persist_stall_history)
+except Exception:
+    pass   # soft-fail: never affect the rest of the page
+
+# ==============================================================================
 # ATR MULTIPLE ABOVE MA50 — SPY / QQQ / SMH / IWM
 # Same visual style as the Distribution/Stalling boxes above.
 # ==============================================================================
@@ -15837,6 +15922,91 @@ with ema21_col3:
     st.markdown(_atr_multiple_box_html("SMH 21EMA Extension", smh_ema21_atr_mult, SMH_EMA21_ATR_THRESHOLD, smh_ema21_atr_triggered), unsafe_allow_html=True)
 with ema21_col4:
     st.markdown(_atr_multiple_box_html("IWM 21EMA Extension", iwm_ema21_atr_mult, IWM_EMA21_ATR_THRESHOLD, iwm_ema21_atr_triggered), unsafe_allow_html=True)
+
+# ==============================================================================
+# EXTENDED 21EMA HISTORY — extended_21.txt in the PUBLIC repo root
+# (GITHUB_PUBLIC_REPO), exact same format/pattern as extended.txt (never touches
+# that file). One line per trading day: "YYYY-MM-DD,yes" if at least 3 of the 4
+# 21EMA Extension boxes (SPY, QQQ, SMH, IWM) are TRIGGERED (same >= threshold
+# rule as the boxes above), else "YYYY-MM-DD,no". Today's line is upserted;
+# lazy write; soft-fail.
+# ==============================================================================
+EXTENDED_21_HISTORY_PUBLIC_FILEPATH = "extended_21.txt"
+
+
+@st.cache_resource(show_spinner=False)
+def _extended_21_history_memo():
+    """Process-wide memo of the last (date, value) successfully saved."""
+    return {}
+
+
+def save_extended_21_history_to_public_repo(date_str, value):
+    """Upsert 'date_str,value' into extended_21.txt (public repo). Returns True
+    on success (including 'already up to date'), False otherwise."""
+    repo   = st.secrets.get("GITHUB_PUBLIC_REPO")
+    branch = st.secrets.get("GITHUB_PUBLIC_BRANCH", "main")
+    if not repo or not (st.secrets.get("GITHUB_PUBLIC_TOKEN") or st.secrets.get("GITHUB_TOKEN")):
+        return False
+
+    url = f"{GITHUB_API}/repos/{repo}/contents/{EXTENDED_21_HISTORY_PUBLIC_FILEPATH}"
+    resp = requests.get(url, headers=_github_public_headers(), params={"ref": branch}, timeout=10)
+
+    sha, rows = None, {}
+    if resp.status_code == 200:
+        data = resp.json()
+        sha = data.get("sha")
+        rows = _parse_dist_history_txt(base64.b64decode(data["content"]).decode())   # same line format
+    elif resp.status_code != 404:
+        return False
+
+    if rows.get(date_str) == value:
+        return True                      # lazy: nothing changed, no commit
+
+    rows[date_str] = value
+    content_str = "\n".join(f"{d},{rows[d]}" for d in sorted(rows))   # same format as extended.txt
+    payload = {
+        "message": f"Update Extended 21EMA history — {date_str},{value}",
+        "content": base64.b64encode(content_str.encode()).decode(),
+        "branch": branch,
+    }
+    if sha:
+        payload["sha"] = sha
+    put_resp = requests.put(url, headers=_github_public_headers(), json=payload, timeout=10)
+    return put_resp.status_code in (200, 201)
+
+
+def _persist_extended_21_history():
+    _flags = (spy_ema21_atr_triggered, qqq_ema21_atr_triggered, smh_ema21_atr_triggered, iwm_ema21_atr_triggered)
+    value = "yes" if sum(bool(f) for f in _flags) >= 3 else "no"
+
+    # Trading date of the data used (latest SPY bar), fallback US/Eastern today
+    # — same date logic as extended.txt so both files line up.
+    _spy_df = ticker_dfs_shared.get("SPY") if isinstance(ticker_dfs_shared, dict) else None
+    _spy_close = _spy_df["Close"].dropna() if _spy_df is not None and "Close" in _spy_df else None
+    if _spy_close is not None and len(_spy_close):
+        date_str = pd.Timestamp(_spy_close.index[-1]).date().isoformat()
+    else:
+        date_str = datetime.datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+
+    memo = _extended_21_history_memo()
+    if memo.get("last") == (date_str, value):
+        return True
+    try:
+        ok = save_extended_21_history_to_public_repo(date_str, value)
+    except Exception as _exc:
+        notify_github_push_failure("extended_21.txt", _exc)
+        raise
+    if not ok:
+        notify_github_push_failure("extended_21.txt", "GitHub error or config missing")
+    if ok:
+        memo["last"] = (date_str, value)
+    return ok
+
+
+try:
+    timed("save_extended_21_history_to_public_repo", _persist_extended_21_history)
+except Exception:
+    pass   # soft-fail: never affect the rest of the page
 
 # ==============================================================================
 # % OF KNOWN_STOCKS BELOW THEIR OWN 50-DAY MOVING AVERAGE — breadth deterioration
@@ -17625,7 +17795,7 @@ def find_nearest_backward_lazy_snapshot_github(start_date, max_lookback_days=14)
 # section or shared variable — all new names are unique.
 # ==============================================================================
 st.markdown("---")
-st.markdown("## 🧭 Lazy Exposure = % Invested.. 21ema/50ma.. 2R/1.5R TP.. Sell 33%/50%.. 2/3-stops")
+st.markdown("## 🧭 Lazy Exposure = % Invested.. 21ema/50ma.. 2R/1.5R TP.. Sell 33%/50%.. 2/3-stops.. Hedge Seagull")
 
 # ── Standalone data fetches used only by the verdict (run first so they're
 # available when compute_market_verdict() executes) ─────────────────────────
@@ -20751,7 +20921,7 @@ if bottom_hunt_list:
         html_bh += setup_badge(sym, extra_style=glow_style)
     st.markdown(html_bh, unsafe_allow_html=True)
 else:
-    st.info("No active setups discovered.")
+    st.info("None")
 
 # ==============================================================================
 # GAP UP 10%+ UNFILLED (LAST 30 DAYS) — ported from Pine v6 indicator.
