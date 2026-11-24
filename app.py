@@ -4735,7 +4735,8 @@ if all_data:
         f'<span style="color: #888888; font-size: 16px; margin-left: 6px;">{setup_rank_str}</span>'
         f'<br>'
         f'<span style="color: #888888; font-size: 16px; margin-left: 14px;">⚠️ NaN-today: '
-        f'<span style="color: #FF4B4B; font-weight: bold;">{len(_latest_nan_tickers)}</span></span>'
+        f'<span style="color: #FF4B4B; font-weight: bold;">{len(_latest_nan_tickers)}</span>'
+        f' / <span style="color: #FF4B4B; font-weight: bold;">{len(_latest_nan_tickers & set(KNOWN_STOCKS))}</span></span>'
         f'</div>',
         unsafe_allow_html=True
     )
@@ -13422,6 +13423,101 @@ else:
 
 
 
+# ── Persistent-mention circles for Reddit and X / Adanos ─────────────────────
+# Same rule as the Quant Sentiment circle: a ticker gets a small white circle
+# if it appears in >= QS_PERSIST_MIN_HITS of the last QS_PERSIST_SNAPSHOTS
+# daily snapshots (today's live list counts as one) and is NOT in
+# KNOWN_STOCKS. Each source saves one snapshot per day to the GitHub data repo
+# (GITHUB_REPO), same pattern as trending_history/:
+#   reddit_history/reddit_YYYY-MM-DD.txt
+#   x_mentions_history/x_mentions_YYYY-MM-DD.txt
+# Circles only start to appear once enough days of history are saved.
+# Soft-fail: badges render without circles if GitHub is unavailable.
+PERSIST_CIRCLE_HTML = (
+    "<span title='Mentioned in {hits}+ of last {snaps} snapshots, not in KNOWN_STOCKS' "
+    "style='display:inline-block; width:8px; height:8px; border-radius:50%; "
+    "background:#FFFFFF; border:1px solid #000000; margin-left:4px; "
+    "vertical-align:middle;'></span>"
+).format(hits=QS_PERSIST_MIN_HITS, snaps=QS_PERSIST_SNAPSHOTS)
+
+
+def _social_snapshot_path(source, date_obj):
+    return f"{source}_history/{source}_{date_obj.isoformat()}.txt"
+
+
+def save_social_snapshot_github(source, date_obj, tickers):
+    """Write today's ticker list for `source` to the GitHub data repo.
+    Skips the commit when the saved file already has the same content."""
+    repo   = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    if not repo or not st.secrets.get("GITHUB_TOKEN") or not tickers:
+        return
+    url = f"{GITHUB_API}/repos/{repo}/contents/{_social_snapshot_path(source, date_obj)}"
+    content_str = "\n".join(tickers)
+    try:
+        sha = None
+        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            sha = data.get("sha")
+            if base64.b64decode(data["content"]).decode() == content_str:
+                return                       # unchanged: no commit
+        payload = {
+            "message": f"{source} snapshot {date_obj.isoformat()}",
+            "content": base64.b64encode(content_str.encode()).decode(),
+            "branch": branch,
+        }
+        if sha:
+            payload["sha"] = sha
+        put_resp = requests.put(url, headers=_github_headers(), json=payload, timeout=10)
+        if put_resp.status_code not in (200, 201):
+            notify_github_push_failure(f"{source} snapshot", f"HTTP {put_resp.status_code}")
+    except Exception as e:
+        notify_github_push_failure(f"{source} snapshot", e)
+
+
+@st.cache_data(ttl=3600)
+def load_social_snapshot_github(source, date_obj):
+    """Tickers saved for `source` on an exact date, or None if not found."""
+    repo   = st.secrets.get("GITHUB_REPO")
+    branch = st.secrets.get("GITHUB_BRANCH", "main")
+    if not repo or not st.secrets.get("GITHUB_TOKEN"):
+        return None
+    url = f"{GITHUB_API}/repos/{repo}/contents/{_social_snapshot_path(source, date_obj)}"
+    try:
+        resp = requests.get(url, headers=_github_headers(), params={"ref": branch}, timeout=10)
+        if resp.status_code != 200:
+            return None
+        decoded = base64.b64decode(resp.json()["content"]).decode()
+        return [line.strip() for line in decoded.splitlines() if line.strip()]
+    except Exception:
+        return None
+
+
+def persistent_social_syms(source, today_tickers, max_lookback_days=60):
+    """Save today's list, then return the tickers (not in KNOWN_STOCKS) seen in
+    >= QS_PERSIST_MIN_HITS of the last QS_PERSIST_SNAPSHOTS snapshots."""
+    try:
+        today_tickers = list(dict.fromkeys(today_tickers))
+        timed(f"save_{source}_snapshot_github", save_social_snapshot_github,
+              source, today_date, today_tickers)
+        snapshots = [today_tickers] if today_tickers else []
+        for i in range(1, max_lookback_days + 1):
+            if len(snapshots) >= QS_PERSIST_SNAPSHOTS:
+                break
+            snap = load_social_snapshot_github(source, today_date - datetime.timedelta(days=i))
+            if snap is not None:
+                snapshots.append(snap)
+        hits = {}
+        for snap in snapshots:
+            for sym in set(snap):
+                hits[sym] = hits.get(sym, 0) + 1
+        known = set(KNOWN_STOCKS)
+        return {s for s, h in hits.items() if h >= QS_PERSIST_MIN_HITS and s not in known}
+    except Exception:
+        return set()
+
+
 with st.spinner("Fetching Reddit sentiment..."):
     reddit_df = timed(
         "fetch_reddit_mentions_apewisdom",
@@ -13447,6 +13543,9 @@ if reddit_df.empty:
     st.info("No mentions found on Reddit right now.")
 else:
     reddit_df_display = reddit_df[~reddit_df["Ticker"].isin(["SPY", "QQQ", "VOO"])]
+    reddit_persistent_syms = persistent_social_syms(
+        "reddit", reddit_df_display.head(30)["Ticker"].tolist()
+    )
     html_reddit = ""
     for _, row in reddit_df_display.head(30).iterrows():
         sym = row["Ticker"]
@@ -13469,6 +13568,7 @@ else:
         html_reddit += (
             f'<div class="ticker-badge" style="{badge_style}{glow_style}">'
             f'<span class="ticker-name" style="color:{text_color};">{sym}</span>'
+            f'{PERSIST_CIRCLE_HTML if sym in reddit_persistent_syms else ""}'
             f'<span class="ticker-rs" style="color:#378ADD;">{row["Mentions"]} </span>'
             f'<span style="color:{delta_color}; margin-left:5px; font-size:12px;">({delta_str})</span>'
             f'</div>'
@@ -13576,6 +13676,10 @@ if trending_mentions_data:
     html_mentions = (
         "<div style='display:flex;flex-wrap:wrap;gap:4px;padding:6px 0;'>"
     )
+    x_mentions_persistent_syms = persistent_social_syms(
+        "x_mentions",
+        [str(it.get("ticker", "")).upper() for it in trending_mentions_data if it.get("ticker")],
+    )
 
     for item in trending_mentions_data:
         sym = str(item.get("ticker", "?")).upper()
@@ -13606,6 +13710,7 @@ if trending_mentions_data:
         html_mentions += (
             f'<div class="ticker-badge" style="{glow_style}">'
             f'<span class="ticker-name">${sym}</span>'
+            f'{PERSIST_CIRCLE_HTML if sym in x_mentions_persistent_syms else ""}'
             f'<span class="ticker-rs" '
             f'style="color:{trend_color};margin-left:5px;">'
             f'{trend_icon} {mentions} mentions'
@@ -21089,7 +21194,7 @@ with st.spinner("Scanning for Bottom Hunt setups..."):
     )
 
 render_section_header_with_copy(
-    lambda: st.markdown(f"#### 🎯 Bottom Hunt Shooting Star ({len(bottom_hunt_list)})"),
+    lambda: st.markdown(f"<h4>🎯 Bottom Hunt Shooting Star <span style='color:{'#FF6B6B' if len(bottom_hunt_list) == 0 else 'inherit'}; font-weight:bold;'>({len(bottom_hunt_list)})</span></h4>", unsafe_allow_html=True),
     bottom_hunt_list
 )
 
@@ -21187,7 +21292,7 @@ with st.spinner("Scanning for Gap Up Unfilled setups..."):
     )
 
 render_section_header_with_copy(
-    lambda: st.markdown(f"#### 🧡 Gap Up Unfilled (Risk/Reward, EP/PEAD/DEP) ({len(gap_up_unfilled_list)})"),
+    lambda: st.markdown(f"<h4>🧡 Gap Up Unfilled (Risk/Reward, EP/PEAD/DEP) <span style='color:{'#FF6B6B' if len(gap_up_unfilled_list) == 0 else 'inherit'}; font-weight:bold;'>({len(gap_up_unfilled_list)})</span></h4>", unsafe_allow_html=True),
     gap_up_unfilled_list
 )
 
@@ -22227,7 +22332,7 @@ try:
         ticker_dfs_shared, sorted(set(KNOWN_STOCKS))
     )
     st.markdown(
-        f"<h3 style='margin-bottom:0;'>First Pullback After New High ({len(_fpb_hits)}) "
+        f"<h3 style='margin-bottom:0;'>First Pullback After New High <span style='color:{'#FF6B6B' if len(_fpb_hits) == 0 else 'inherit'}; font-weight:bold;'>({len(_fpb_hits)})</span> "
         "<span style='font-size:12px;font-weight:normal;color:#888;'>if market permitted</span></h3>",
         unsafe_allow_html=True,
     )
@@ -22291,7 +22396,7 @@ try:
         ticker_dfs_shared, _conf_universe, CONFLUENCE_MAX_ATR
     )
     st.markdown(
-        f"<h3 style='margin-bottom:0;'>21EMA + 50MA Confluence Pullback ({len(_conf_hits)}) "
+        f"<h3 style='margin-bottom:0;'>21EMA + 50MA Confluence Pullback <span style='color:{'#FF6B6B' if len(_conf_hits) == 0 else 'inherit'}; font-weight:bold;'>({len(_conf_hits)})</span> "
         "<span style='font-size:12px;font-weight:normal;color:#888;'>"
         f"(21ema_cloud pullback, 21 EMA within {CONFLUENCE_MAX_ATR:g} ATR of 50 MA)</span></h3>",
         unsafe_allow_html=True,
@@ -22329,9 +22434,13 @@ except Exception as _conf_e:
 # since the most recent FTD.
 #
 # ftd_history.txt in the PUBLIC repo: same format/pattern as dist_history.txt.
-# One line per trading day: "YYYY-MM-DD,yes" if at least FTD_MIN_INDEXES of
-# FTD_FILE_TICKERS (SPY, QQQ) made an FTD that day, else "YYYY-MM-DD,no".
-# SMH / IWM boxes are display only and never affect the file.
+# One line per trading day, "YYYY-MM-DD,<value>", from FTD_FILE_TICKERS
+# (SPY, QQQ) only — SMH / IWM boxes are display only:
+#   yes = FTD today, or the trading day right after an FTD
+#   no  = in correction (no rally attempt yet, or attempt with no FTD today)
+#   na  = rest of the uptrend (not searching for an FTD)
+# SPY + QQQ combined: yes if at least FTD_MIN_INDEXES say yes, else no if
+# either is in correction, else na.
 # Lazy write, soft-fail.
 # ==============================================================================
 FTD_TICKERS = ["SPY", "QQQ", "SMH", "IWM"]
@@ -22395,7 +22504,21 @@ def _ftd_scan(df):
         "state": state,
         "rally_day": rally_day,
         "last_date": dates[-1] if dates else None,
+        # trading days since the last FTD (0 = today), None if no FTD found
+        "bars_since_ftd": (n - 1 - last_ftd_i) if ftd_dates else None,
     }
+
+
+def _ftd_file_status(res):
+    """yes / no / na for one ticker on its latest bar:
+    yes = FTD today, or the trading day right after an FTD (still in uptrend)
+    no  = in correction (with or without a rally attempt running)
+    na  = rest of the uptrend (not searching for an FTD)"""
+    if res["state"] == "correction":
+        return "no"
+    if res["bars_since_ftd"] in (0, 1):
+        return "yes"
+    return "na"
 
 
 @st.cache_data(ttl=3600)
@@ -22449,6 +22572,19 @@ def _ftd_history_memo():
     return {}
 
 
+_FTD_HISTORY_LINE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}),(yes|no|na)$")
+
+
+def _parse_ftd_history_txt(text):
+    """Like _parse_dist_history_txt, but also keeps 'na' lines."""
+    rows = {}
+    for line in text.splitlines():
+        m = _FTD_HISTORY_LINE_RE.match(line.strip())
+        if m:
+            rows[m.group(1)] = m.group(2)
+    return rows
+
+
 def save_ftd_history_to_public_repo(date_str, value):
     """Upsert 'date_str,value' into ftd_history.txt (public repo). Same pattern
     as save_dist_history_to_public_repo."""
@@ -22464,7 +22600,7 @@ def save_ftd_history_to_public_repo(date_str, value):
     if resp.status_code == 200:
         data = resp.json()
         sha = data.get("sha")
-        rows = _parse_dist_history_txt(base64.b64decode(data["content"]).decode())   # same line format
+        rows = _parse_ftd_history_txt(base64.b64decode(data["content"]).decode())
     elif resp.status_code != 404:
         return False
 
@@ -22489,7 +22625,13 @@ def _persist_ftd_history(ftd_results):
     valid = [ftd_results.get(t) for t in FTD_FILE_TICKERS if ftd_results.get(t) is not None]
     if not valid:
         return False
-    value = "yes" if sum(r["today_ftd"] for r in valid) >= FTD_MIN_INDEXES else "no"
+    statuses = [_ftd_file_status(r) for r in valid]
+    if statuses.count("yes") >= FTD_MIN_INDEXES:
+        value = "yes"
+    elif "no" in statuses:
+        value = "no"
+    else:
+        value = "na"
     spy = ftd_results.get("SPY")
     date_str = (spy or valid[0])["last_date"]
 
