@@ -6529,7 +6529,7 @@ if email_content_stocks or email_content_removed:
 
     st.markdown(minervini_html, unsafe_allow_html=True)
 else:
-    st.info("No active setups discovered.")
+    st.info("None")
 
 #st.markdown("---")
 st.write("")
@@ -6569,7 +6569,7 @@ st.write("")
         
 #     st.markdown(extra_html, unsafe_allow_html=True)
 # else:
-#     st.info("No active setups discovered.")
+#     st.info("None")
 
 #st.markdown("---")
 st.write("")
@@ -6589,7 +6589,7 @@ st.write("")
 
 #     st.markdown(html_ath, unsafe_allow_html=True)
 # else:
-#     st.info("No active setups discovered.")
+#     st.info("None")
 
 # st.write("")
 
@@ -6858,7 +6858,7 @@ if leader_list or leader_yest:
     st.markdown(html_leader, unsafe_allow_html=True)
 
 else:
-    st.info("No active setups discovered.")
+    st.info("None")
 
 st.write("")
 if not leader_hist.empty:
@@ -7921,7 +7921,7 @@ if ppp_list or ppp_yest:
                     components.html(chart_html, height=CHART_SIZE + 32, scrolling=False)
 
 else:
-    st.info("No active setups discovered.")
+    st.info("None")
 
 #st.markdown("<br>", unsafe_allow_html=True) # Spacer
 st.markdown("---")
@@ -8043,7 +8043,7 @@ if rs_nh_b4_today or rs_nh_b4_yest:
         extra_note="the stock's relative strength vs the S&P 500 just hit a 20-day high, but the stock's own price high has not yet reached its 20-day high — RS is leading price, often an early breakout precursor"
     )
 else:
-    st.info("No active setups discovered.")
+    st.info("None")
 
 # ==============================================================================
 # 28. DOWNTREND LINE BREAKOUT — dynamic descending-resistance trendline breakout
@@ -8277,7 +8277,7 @@ if downtrend_today or downtrend_yest:
 
     st.markdown(html_dt, unsafe_allow_html=True)
 else:
-    st.info("No active setups discovered.")
+    st.info("None")
 
 @st.cache_data(ttl=3600)
 def compute_quality_filter_pass(stocks_list, ticker_dfs):
@@ -8528,7 +8528,7 @@ if (gapBottom !== null && gapTop !== null && {gap_date_js} !== null) {{
     )
 
 else:
-    st.info("No active setups discovered.")
+    st.info("None")
 
 st.write("")
 if not gapper_hist.empty:
@@ -9022,7 +9022,7 @@ st.markdown("---")
 
 #     st.markdown(html_eb, unsafe_allow_html=True)
 # else:
-#     st.info("No active setups discovered.")
+#     st.info("None")
 
 # st.write("")
 
@@ -9087,7 +9087,7 @@ if early_bull_no_filter_list:
         extra_note="stock just transitioned from Stage 1 or Stage 4 into Stage 2 within the last 30 bars and price is holding above the transition-bar high, WITHOUT the ADR%/ATR%/EMA-distance quality filters applied"
     )
 else:
-    st.info("No active setups discovered.")
+    st.info("None")
 
 st.write("")
 
@@ -9279,7 +9279,7 @@ if e2_list or e2_yest:
             
     #     st.markdown(html_e3, unsafe_allow_html=True)
 else:
-    st.info("No active setups discovered.")
+    st.info("None")
 
 #st.write("")
 # if not engulf_hist.empty:
@@ -9421,7 +9421,7 @@ if pt_list or pt_yest:
         extra_note="absolute gradient % of the 50-day EMA is greater than 1, indicating a fast-rising moving average"
     )
 else:
-    st.info("No active setups discovered.")
+    st.info("None")
 
 st.write("")
 # if not powertrend_hist.empty:
@@ -9481,7 +9481,7 @@ st.markdown("---")
 #         html_ptne += setup_badge(sym, is_new=(sym not in ptne_yest_set), extra_suffix=suffix)
 #     st.markdown(html_ptne, unsafe_allow_html=True)
 # else:
-#     st.info("No active setups discovered.")
+#     st.info("None")
 
 # ============================================================
 # VOLATILITY PICKUP — Z-Score of Daily Range >= 2
@@ -9802,7 +9802,7 @@ if vt_list or vt_yest:
         extra_note="price is roughly -4x ATR below its 50-day moving average, suggesting deep extension to the downside rather than genuine value"
     )
 else:
-    st.info("No active setups discovered.")
+    st.info("None")
 
 st.write("")
 if not value_trap_hist.empty:
@@ -10077,7 +10077,7 @@ if coc_today or coc_yest:
         extra_note="the stock's composite health score (RS-vs-benchmark, stage, trend, gap, and drawdown-symmetry checks) jumped by 20+ points day-over-day, signaling a fast-improving technical picture / bullish character change"
     )
 else:
-    st.info("No active setups discovered.")
+    st.info("None")
 
 st.write("")
 if not coc_hist.empty:
@@ -10160,7 +10160,7 @@ if boc_today or boc_yest:
         extra_note="the stock's composite health score (RS-vs-benchmark, stage, trend, gap, and drawdown-symmetry checks) dropped by 20+ points day-over-day, signaling a fast-deteriorating technical picture / bearish character change"
     )
 else:
-    st.info("No active setups discovered.")
+    st.info("None")
 
 st.write("")
 if not boc_hist.empty:
@@ -10849,7 +10849,7 @@ if gap_up_today or gap_up_yest:
 
     st.markdown(html_gapup, unsafe_allow_html=True)
 else:
-    st.info("No active setups discovered.")
+    st.info("None")
 
 st.write("")
 if not gap_up_down_hist.empty:
@@ -10907,7 +10907,7 @@ if gap_down_today or gap_down_yest:
 
     st.markdown(html_gapdown, unsafe_allow_html=True)
 else:
-    st.info("No active setups discovered.")
+    st.info("None")
 
 st.write("")
 if not gap_up_down_hist.empty:
@@ -21202,7 +21202,7 @@ if gap_up_unfilled_list:
         html_gu += setup_badge(sym, extra_style=glow_style)
     st.markdown(html_gu, unsafe_allow_html=True)
 else:
-    st.info("No active setups discovered.")
+    st.info("None")
 # ==============================================================================
 # FUNDAMENTAL — William O'Neil EPS & Sales filter, ported from Pine v6
 # "EPS & Sales (O'Neil Filter)". Latest reported quarter vs same quarter a
@@ -22219,14 +22219,14 @@ def _compute_first_pullback_after_high(ticker_dfs, tickers, lookback=FPB_LOOKBAC
 
 
 st.markdown("---")
-st.markdown(
-    "<h3 style='margin-bottom:0;'>First Pullback After New High "
-    "<span style='font-size:12px;font-weight:normal;color:#888;'>if market permitted</span></h3>",
-    unsafe_allow_html=True,
-)
 try:
     _fpb_hits = _compute_first_pullback_after_high(
         ticker_dfs_shared, sorted(set(KNOWN_STOCKS))
+    )
+    st.markdown(
+        f"<h3 style='margin-bottom:0;'>First Pullback After New High ({len(_fpb_hits)}) "
+        "<span style='font-size:12px;font-weight:normal;color:#888;'>if market permitted</span></h3>",
+        unsafe_allow_html=True,
     )
     st.caption(
         f"New 52-week high breakout within last {FPB_LOOKBACK} bars; today is the first "
@@ -22282,16 +22282,16 @@ def _compute_ema21_ma50_confluence(ticker_dfs, tickers, max_atr):
 
 
 st.markdown("---")
-st.markdown(
-    "<h3 style='margin-bottom:0;'>21EMA + 50MA Confluence Pullback "
-    "<span style='font-size:12px;font-weight:normal;color:#888;'>"
-    f"(21ema_cloud pullback, 21 EMA within {CONFLUENCE_MAX_ATR:g} ATR of 50 MA)</span></h3>",
-    unsafe_allow_html=True,
-)
 try:
     _conf_universe = sorted(set(cloud21ema_all) & set(KNOWN_STOCKS))
     _conf_hits = _compute_ema21_ma50_confluence(
         ticker_dfs_shared, _conf_universe, CONFLUENCE_MAX_ATR
+    )
+    st.markdown(
+        f"<h3 style='margin-bottom:0;'>21EMA + 50MA Confluence Pullback ({len(_conf_hits)}) "
+        "<span style='font-size:12px;font-weight:normal;color:#888;'>"
+        f"(21ema_cloud pullback, 21 EMA within {CONFLUENCE_MAX_ATR:g} ATR of 50 MA)</span></h3>",
+        unsafe_allow_html=True,
     )
     st.markdown(f"**Matches ({len(_conf_hits)})**")
     if _conf_hits:
