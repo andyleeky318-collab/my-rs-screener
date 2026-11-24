@@ -18,6 +18,17 @@ from plotly.subplots import make_subplots
 
 GITHUB_API = "https://api.github.com"
 
+# Defined up here (not next to the trending-history helpers) because Streamlit
+# runs this file top to bottom, and sections like Breakout Health call it
+# before that point. Calling it there used to raise a NameError that their
+# try/except hid, so nothing was saved or loaded.
+def _github_headers():
+    token = st.secrets.get("GITHUB_TOKEN")
+    return {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+    }
+
 def format_unavailable_reasons(failures):
     if not failures:
         return "previous provider unavailable"
@@ -305,7 +316,7 @@ INDUSTRIES = {
     'DVRSIFIED OPRTIONS': ['MMM', 'RLX', 'WMS', 'AWI', 'BRC', 'YETI', 'LCII'],
     'MCHNRY-GEN INDSTRL': ['GE', 'TT', 'CARR', 'JCI', 'IR', 'XYL', 'DOV', 'LII', 'PNR', 'IEX', 'GGG', 'NDSN', 'LECO', 'WWD', 'AAON', 'FLS', 'MIDD', 'MOD', 'WTS', 'BMI', 'ZWS', 'ESAB', 'TKR', 'GTES', 'FELE', 'KAI', 'MWA', 'NPO', 'CXT', 'OII', 'SYM'],
     'CHEMICALS-PAINTS': ['SHW', 'PPG', 'RPM', 'AXTA'],
-    'COMPTER SFTWR-SCRITY': ['CIBR', 'BUG', 'FTNT', 'PANW', 'CRWD', 'CHKP', 'RBRK', 'RPD', 'OKTA', 'ZS', 'TENB', 'S', 'QLYS'],
+    'COMPTER SFTWR-SCRITY': ['CIBR', 'BUG', 'FTNT', 'PANW', 'CRWD', 'CHKP', 'RBRK', 'RPD', 'OKTA', 'ZS', 'TENB', 'S', 'QLYS', 'NTSK'],
     'COMPTER SFTWR-ENTR': ['IGV', 'FROG', 'TWLO', 'MSFT', 'ORCL', 'CRM', 'IBM', 'NOW', 'ADP', 'DOCN', 'PLTR', 'ADSK', 'ROP', 'TEAM', 'SNOW', 'VEEV', 'HUBS', 'PTC', 'MANH', 'TOST', 'MNDY', 'WDAY', 'SSNC', 'GWRE', 'BSY', 'PEGA', 'QTWO', 'APPF', 'BOX', 'WK', 'U', 'RNG', 'DOCU', 'ZETA', 'PAYC'],
     'COMPTER SFTWR-DSGN': ['ADBE', 'INTU', 'SNPS', 'CDNS', 'IOT', 'DT', 'TRMB', 'WIX'],
     'CMPTER SFTWR-FINCL': ['FICO', 'FIS', 'NU', 'SHOP'],
@@ -391,9 +402,8 @@ INDUSTRIES = {
     'PRECIOUS METAL': ['GLD', 'SLV', 'PPLT', 'GDX', 'SIL', 'RGLD', 'PLTM', 'PALL'],
 }
 
-# ANT, XTN, JBHT
 KNOWN_STOCKS = [
-    'KBWB', 'ICHR', 'RBRK', 'LYTE', 'LEN', 'PEJ', 'SOLT', 'ETHA', 'XXRP', 'BMNR', 'TWST', 'TEM', 'SMR', 'USAR', 'QBTS', 'QUBT', 'RGTI', 'FN', 'ZETA', 'ONON', 'TQQQ', 'RSP', 'BBY', 'AMPX', 'CBRS',
+    'SN', 'NTSK', 'ANT', 'XTN', 'JBHT', 'KBWB', 'ICHR', 'RBRK', 'LYTE', 'LEN', 'PEJ', 'SOLT', 'ETHA', 'XXRP', 'BMNR', 'TWST', 'TEM', 'SMR', 'USAR', 'QBTS', 'QUBT', 'RGTI', 'FN', 'ZETA', 'ONON', 'TQQQ', 'RSP', 'BBY', 'AMPX', 'CBRS',
     'CME', 'ICE', 'NCLD', 'PALL', 'PLTM', 'IHF', 'ESTC', 'PRU', 'RGEN', 'UBS', 'TRV', 'WEN', 'OKLO', 'IBB', 'Q', 'OUST', 'VPG', 'WOLF', 'NOK', 'HSBC', 'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
     'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EWY', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'OR', 
@@ -13062,13 +13072,6 @@ def fetch_trending_stocks_today():
         st.warning(f"Quant Sentiment: could not fetch trending stocks — {e}")
         return []
 
-def _github_headers():
-    token = st.secrets.get("GITHUB_TOKEN")
-    return {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-    }
-
 def _github_filepath(date_obj):
     return f"trending_history/trending_{date_obj.isoformat()}.txt"
 
@@ -15522,7 +15525,7 @@ else:
         body_rows += f"<tr>{cells}</tr>"
 
     heatmap_html = f"""
-    <div style="max-height:600px; overflow-y:auto; overflow-x:auto; border-radius:6px;">
+    <div style="max-height:450px; overflow-y:auto; overflow-x:auto; border-radius:6px;">
     <table style="border-collapse:collapse; width:100%;">
     <thead><tr>{header_cells}</tr></thead>
     <tbody>{body_rows}</tbody>
@@ -22303,3 +22306,229 @@ try:
         st.info("None")
 except Exception as _conf_e:
     st.warning(f"21EMA + 50MA Confluence Pullback unavailable right now: {_conf_e}")
+
+# ==============================================================================
+# FOLLOW-THROUGH DAY (IBD) — SPY / QQQ / SMH / IWM
+#
+# IBD rules ("What Is A Follow-Through Day?", investors.com, 03/23/2026):
+#   * Only looked for DURING A MARKET CORRECTION. In a confirmed uptrend there
+#     is nothing to "follow through" from, so no FTD is checked.
+#   * Rally attempt Day 1 = the index closes up from the previous session.
+#     Neither volume nor the size of the gain matters.
+#   * The attempt stays alive only while the index does not undercut the low
+#     of Day 1; if it does, the count restarts at the next up close.
+#   * FTD = on Day 4 or later of the attempt (no upper limit; IBD's examples
+#     are Day 8 and Day 16), a strong gain on volume higher than the previous
+#     day. The article doesn't put a number on "strong", so FTD_MIN_GAIN_PCT
+#     is a setting. The market is then back in a "confirmed uptrend".
+#   * Treated here as failed if the index later undercuts that Day-1 low,
+#     which puts it back in correction (a new rally attempt is needed).
+# The article doesn't define when a correction begins, so the objective
+# proxy used here is: close falls FTD_CORRECTION_PCT or more below its
+# highest close of the last FTD_PEAK_LOOKBACK sessions, counting only closes
+# since the most recent FTD.
+#
+# ftd_history.txt in the PUBLIC repo: same format/pattern as dist_history.txt.
+# One line per trading day: "YYYY-MM-DD,yes" if at least FTD_MIN_INDEXES of
+# FTD_FILE_TICKERS (SPY, QQQ) made an FTD that day, else "YYYY-MM-DD,no".
+# SMH / IWM boxes are display only and never affect the file.
+# Lazy write, soft-fail.
+# ==============================================================================
+FTD_TICKERS = ["SPY", "QQQ", "SMH", "IWM"]
+FTD_MIN_GAIN_PCT = 1.2       # "strong gain" (article gives no number; 1.2% is IBD's usual floor)
+FTD_MIN_DAY = 4              # earliest rally-attempt day that can be an FTD
+FTD_CORRECTION_PCT = 10.0    # drawdown from the peak that counts as a correction
+FTD_PEAK_LOOKBACK = 252      # ~1 year of sessions for the peak
+FTD_FILE_TICKERS = ["SPY", "QQQ"]   # only these decide ftd_history.txt yes/no
+FTD_MIN_INDEXES = 1          # IBD: one major index's FTD (S&P or Nasdaq) is enough
+FTD_HISTORY_PUBLIC_FILEPATH = "ftd_history.txt"
+
+
+def _ftd_scan(df):
+    """Run the IBD follow-through-day state machine over a daily OHLCV frame.
+    Returns dict: ftd_dates (list of 'YYYY-MM-DD'), today_ftd (bool),
+    state ('uptrend' / 'correction'), rally_day (int, 0 = no attempt yet)."""
+    close = df["Close"].to_numpy(dtype=float)
+    high = df["High"].to_numpy(dtype=float)
+    low = df["Low"].to_numpy(dtype=float)
+    vol = df["Volume"].to_numpy(dtype=float)
+    dates = [pd.Timestamp(d).date().isoformat() for d in df.index]
+    n = len(df)
+
+    state = "uptrend"
+    day1_low = None       # low of Day 1 of the current / last rally attempt
+    rally_day = 0         # 0 = no rally attempt running
+    last_ftd_i = 0        # bar index of the most recent FTD
+    ftd_dates = []
+
+    for i in range(1, n):
+        up_close = close[i] > close[i - 1]
+
+        if state == "uptrend":
+            # FTD failure: undercutting the rally's Day-1 low = back in correction.
+            failed = day1_low is not None and low[i] < day1_low
+            # Peak = highest close of the last FTD_PEAK_LOOKBACK sessions, but
+            # never older than the last FTD: a new correction needs a fresh
+            # drop from the new rally's high, not from the pre-correction high.
+            start = max(0, i - FTD_PEAK_LOOKBACK + 1, last_ftd_i)
+            peak = close[start:i + 1].max()
+            if failed or close[i] <= peak * (1 - FTD_CORRECTION_PCT / 100):
+                state, rally_day, day1_low = "correction", 0, None
+            continue
+
+        # state == "correction"
+        if rally_day > 0 and low[i] < day1_low:
+            rally_day, day1_low = 0, None    # attempt undercut Day 1's low: void
+        if rally_day == 0:
+            if up_close:                     # Day 1: any up close, size/volume irrelevant
+                rally_day, day1_low = 1, low[i]
+            continue
+        rally_day += 1
+        gain_pct = (close[i] / close[i - 1] - 1) * 100
+        if rally_day >= FTD_MIN_DAY and gain_pct >= FTD_MIN_GAIN_PCT and vol[i] > vol[i - 1]:
+            ftd_dates.append(dates[i])
+            state, rally_day, last_ftd_i = "uptrend", 0, i
+
+    return {
+        "ftd_dates": ftd_dates,
+        "today_ftd": bool(ftd_dates) and ftd_dates[-1] == dates[-1],
+        "state": state,
+        "rally_day": rally_day,
+        "last_date": dates[-1] if dates else None,
+    }
+
+
+@st.cache_data(ttl=3600)
+def compute_follow_through_day(ticker):
+    df = yf.download(ticker, period="2y", interval="1d", progress=False, auto_adjust=True)
+    df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
+    df = df[["Open", "High", "Low", "Close", "Volume"]].dropna()
+    df = df[df["Volume"] > 0]
+    if len(df) < FTD_PEAK_LOOKBACK + 5:
+        return None
+    return _ftd_scan(df)
+
+
+def _ftd_box_html(ticker, res):
+    if res is None:
+        bg, border, text_color = "#1e1e1e", "#333", "#888"
+        big, sub = "--", "data unavailable"
+    else:
+        if res["today_ftd"]:
+            bg, border, text_color = "#0d2818", "#1a4a2e", "#00e676"
+        else:
+            bg, border, text_color = "#1e1e1e", "#333", "#888"
+        big = res["ftd_dates"][-1] if res["ftd_dates"] else "--"
+        if res["today_ftd"]:
+            sub = "Follow-through day TODAY"
+        elif res["state"] == "uptrend":
+            sub = "Uptrend · not looking for an FTD"
+        elif res["rally_day"] > 0:
+            sub = f"Correction · rally attempt day {res['rally_day']}"
+        else:
+            sub = "Correction · no rally attempt yet"
+    return f"""
+    <div style="background:{bg}; border:2px solid {border}; border-radius:8px;
+                padding:12px; min-height:102px;">
+        <div style="font-size:14px; font-weight:bold; color:{text_color}; margin-bottom:6px;">
+            {ticker} Follow-Through Day
+        </div>
+        <div style="font-size:22px; font-weight:900; color:{text_color}; margin-bottom:6px;">
+            {big}
+        </div>
+        <div style="font-size:11px; color:#ccc; line-height:1.4; word-wrap:break-word;">
+            last FTD · {sub}
+        </div>
+    </div>
+    """
+
+
+@st.cache_resource(show_spinner=False)
+def _ftd_history_memo():
+    """Process-wide memo of the last (date, value) successfully saved."""
+    return {}
+
+
+def save_ftd_history_to_public_repo(date_str, value):
+    """Upsert 'date_str,value' into ftd_history.txt (public repo). Same pattern
+    as save_dist_history_to_public_repo."""
+    repo   = st.secrets.get("GITHUB_PUBLIC_REPO")
+    branch = st.secrets.get("GITHUB_PUBLIC_BRANCH", "main")
+    if not repo or not (st.secrets.get("GITHUB_PUBLIC_TOKEN") or st.secrets.get("GITHUB_TOKEN")):
+        return False
+
+    url = f"{GITHUB_API}/repos/{repo}/contents/{FTD_HISTORY_PUBLIC_FILEPATH}"
+    resp = requests.get(url, headers=_github_public_headers(), params={"ref": branch}, timeout=10)
+
+    sha, rows = None, {}
+    if resp.status_code == 200:
+        data = resp.json()
+        sha = data.get("sha")
+        rows = _parse_dist_history_txt(base64.b64decode(data["content"]).decode())   # same line format
+    elif resp.status_code != 404:
+        return False
+
+    if rows.get(date_str) == value:
+        return True                      # lazy: nothing changed, no commit
+
+    rows[date_str] = value
+    content_str = "\n".join(f"{d},{rows[d]}" for d in sorted(rows))   # same format as dist_history.txt
+    payload = {
+        "message": f"Update Follow-Through Day history — {date_str},{value}",
+        "content": base64.b64encode(content_str.encode()).decode(),
+        "branch": branch,
+    }
+    if sha:
+        payload["sha"] = sha
+    put_resp = requests.put(url, headers=_github_public_headers(), json=payload, timeout=10)
+    return put_resp.status_code in (200, 201)
+
+
+def _persist_ftd_history(ftd_results):
+    # Only SPY / QQQ decide the file's yes/no; SMH / IWM boxes are display only.
+    valid = [ftd_results.get(t) for t in FTD_FILE_TICKERS if ftd_results.get(t) is not None]
+    if not valid:
+        return False
+    value = "yes" if sum(r["today_ftd"] for r in valid) >= FTD_MIN_INDEXES else "no"
+    spy = ftd_results.get("SPY")
+    date_str = (spy or valid[0])["last_date"]
+
+    memo = _ftd_history_memo()
+    if memo.get("last") == (date_str, value):
+        return True
+    try:
+        ok = save_ftd_history_to_public_repo(date_str, value)
+    except Exception as _exc:
+        notify_github_push_failure("ftd_history.txt", _exc)
+        raise
+    if not ok:
+        notify_github_push_failure("ftd_history.txt", "GitHub error or config missing")
+    if ok:
+        memo["last"] = (date_str, value)
+    return ok
+
+
+st.markdown("---")
+st.markdown(
+    "#### 📈 Follow-Through Day (IBD) "
+    "<span style='font-size:12px;font-weight:normal;color:#888;'>"
+    f"(rally day {FTD_MIN_DAY}+, up ≥{FTD_MIN_GAIN_PCT:g}% on higher volume, "
+    f"only while in correction: ≥{FTD_CORRECTION_PCT:g}% off {FTD_PEAK_LOOKBACK}-day high)</span>",
+    unsafe_allow_html=True,
+)
+try:
+    _ftd_results = {}
+    for _t in FTD_TICKERS:
+        try:
+            _ftd_results[_t] = timed(f"compute_ftd_{_t}", compute_follow_through_day, _t)
+        except Exception:
+            _ftd_results[_t] = None
+    for _col, _t in zip(st.columns(4), FTD_TICKERS):
+        with _col:
+            st.markdown(_ftd_box_html(_t, _ftd_results[_t]), unsafe_allow_html=True)
+    try:
+        timed("save_ftd_history_to_public_repo", _persist_ftd_history, _ftd_results)
+    except Exception:
+        pass   # soft-fail: never affect the rest of the page
+except Exception as _ftd_e:
+    st.warning(f"Follow-Through Day unavailable right now: {_ftd_e}")
