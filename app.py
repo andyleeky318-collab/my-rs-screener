@@ -22224,6 +22224,39 @@ def _compute_secular_bull_bear(ticker_dfs, tickers, ref_date):
     return sorted(above), sorted(below), sorted(skipped), latest_date
 
 
+# Table under the Secular Bull Bear badges: for each date below, % of
+# KNOWN_STOCKS whose LATEST CLOSE is above that date's High, and % whose
+# latest close is below that date's Low. Denominator = stocks with a bar on
+# that date. Read-only, same ticker_dfs_shared data, own soft-fail.
+SECULAR_BB_TABLE_DATES = [datetime.date(2026, 11, 20), datetime.date(2026, 11, 23)]
+
+
+def _secular_bb_high_low_pcts(ticker_dfs, tickers, ref_date):
+    """Returns (pct_above_high, pct_below_low, n_counted) for ref_date."""
+    n_above = n_below = n_counted = 0
+    for t in tickers:
+        df = ticker_dfs.get(t) if isinstance(ticker_dfs, dict) else None
+        if df is None or not {"High", "Low", "Close"}.issubset(df.columns):
+            continue
+        bars = df[["High", "Low", "Close"]].dropna()
+        if bars.empty:
+            continue
+        ref_mask = bars.index.date == ref_date
+        if not ref_mask.any():
+            continue
+        ref_high = float(bars["High"][ref_mask].iloc[-1])
+        ref_low = float(bars["Low"][ref_mask].iloc[-1])
+        last_close = float(bars["Close"].iloc[-1])
+        n_counted += 1
+        if last_close > ref_high:
+            n_above += 1
+        elif last_close < ref_low:
+            n_below += 1
+    if n_counted == 0:
+        return None, None, 0
+    return n_above / n_counted * 100, n_below / n_counted * 100, n_counted
+
+
 st.markdown("---")
 st.markdown(
     f"### Secular Bull Bear <span style='color:#888; font-size:12px;'>({SECULAR_BB_REF_DATE.strftime('%d %b %Y')}, subject to change)</span>",
@@ -22256,6 +22289,33 @@ try:
             )
         else:
             st.write("None")
+        try:
+            _sbb_tbl_rows = ""
+            for _d in SECULAR_BB_TABLE_DATES:
+                _pa, _pb, _n = _secular_bb_high_low_pcts(
+                    ticker_dfs_shared, sorted(set(KNOWN_STOCKS)), _d
+                )
+                _pa_s = f"{_pa:.1f}%" if _pa is not None else "--"
+                _pb_s = f"{_pb:.1f}%" if _pb is not None else "--"
+                _sbb_tbl_rows += (
+                    "<tr>"
+                    f"<td style='padding:5px 12px;border:1px solid #333;color:#eee;'>{_d.strftime('%d %b %Y')}</td>"
+                    f"<td style='padding:5px 12px;border:1px solid #333;color:#00e676;text-align:center;font-weight:bold;'>{_pa_s}</td>"
+                    f"<td style='padding:5px 12px;border:1px solid #333;color:#ff5252;text-align:center;font-weight:bold;'>{_pb_s}</td>"
+                    "</tr>"
+                )
+            st.markdown(
+                "<table style='border-collapse:collapse;margin-top:10px;font-size:13px;'>"
+                "<thead><tr>"
+                "<th style='padding:5px 12px;border:1px solid #333;background:#111;color:#eee;'>Date</th>"
+                "<th style='padding:5px 12px;border:1px solid #333;background:#111;color:#eee;'>% above that day's high</th>"
+                "<th style='padding:5px 12px;border:1px solid #333;background:#111;color:#eee;'>% below that day's low</th>"
+                "</tr></thead>"
+                f"<tbody>{_sbb_tbl_rows}</tbody></table>",
+                unsafe_allow_html=True,
+            )
+        except Exception:
+            pass   # soft-fail: table only, never affects the section above
         if _sbb_skipped:
             st.caption(
                 f"Excluded (no bar on {SECULAR_BB_REF_DATE.isoformat()}): {', '.join(_sbb_skipped)}"
