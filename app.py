@@ -22280,7 +22280,6 @@ try:
             f"{' (latest bar ' + _sbb_latest.isoformat() + ')' if _sbb_latest else ''}</div>",
             unsafe_allow_html=True,
         )
-        st.markdown(f"**Above ({len(_sbb_above)})**")
         if _sbb_above:
             # Same setup color-coding as other sections (orange/aqua/purple/blue ring etc.)
             st.markdown(
@@ -22393,14 +22392,11 @@ try:
     )
     st.markdown(
         f"<h3 style='margin-bottom:0;'>First Pullback After New High <span style='color:{'#FF6B6B' if len(_fpb_hits) == 0 else 'inherit'}; font-weight:bold;'>({len(_fpb_hits)})</span> "
-        "<span style='font-size:12px;font-weight:normal;color:#888;'>if market permitted</span></h3>",
+        "<span style='font-size:12px;font-weight:normal;color:#888;'>if market permitted "
+        f"(New 52-week high breakout within last {FPB_LOOKBACK} bars; today is the first "
+        f"pullback to the breakout pivot area (±{FPB_PIVOT_TOL * 100:.0f}%) with the breakout still holding.)</span></h3>",
         unsafe_allow_html=True,
     )
-    st.caption(
-        f"New 52-week high breakout within last {FPB_LOOKBACK} bars; today is the first "
-        f"pullback to the breakout pivot area (±{FPB_PIVOT_TOL * 100:.0f}%) with the breakout still holding."
-    )
-    st.markdown(f"**Matches ({len(_fpb_hits)})**")
     if _fpb_hits:
         st.markdown(
             "".join(setup_badge(_t) for _t in _fpb_hits),
@@ -22461,7 +22457,6 @@ try:
         f"(21ema_cloud pullback, 21 EMA within {CONFLUENCE_MAX_ATR:g} ATR of 50 MA)</span></h3>",
         unsafe_allow_html=True,
     )
-    st.markdown(f"**Matches ({len(_conf_hits)})**")
     if _conf_hits:
         st.markdown(
             "".join(setup_badge(_t) for _t, _gap in _conf_hits),
