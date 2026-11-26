@@ -58,6 +58,49 @@ def timed(label, fn, *args, **kwargs):
     _timing_log[label] = elapsed
     return result
 
+LLM_TIMEOUT_SECONDS = 120  # give up on an AI analysis after 2 minutes of no response
+
+def timed_llm(label, fn, *args, timeout=LLM_TIMEOUT_SECONDS, **kwargs):
+    """Like timed(), but abandons fn if it hasn't returned within `timeout` seconds.
+
+    The provider SDKs (Gemini / OpenAI-compatible) can hang for a long time
+    on a stalled connection. fn runs in a daemon thread; if it doesn't finish
+    in time we stop waiting and return a "skipped" message so the page keeps
+    rendering. The abandoned thread finishes (or dies) on its own in the
+    background — its late result is discarded.
+    """
+    import threading
+
+    box = {}
+
+    def _runner():
+        try:
+            box["result"] = fn(*args, **kwargs)
+        except Exception as e:  # surface errors instead of losing them in the thread
+            box["error"] = e
+
+    worker = threading.Thread(target=_runner, name=f"llm:{label}", daemon=True)
+    try:
+        # Let the worker thread use st.* (e.g. st.secrets) without
+        # "missing ScriptRunContext" warnings.
+        from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+        add_script_run_ctx(worker, get_script_run_ctx())
+    except Exception:
+        pass
+
+    t0 = time.perf_counter()
+    worker.start()
+    worker.join(timeout)
+    _timing_log[label] = (time.perf_counter() - t0) * 1000
+
+    if worker.is_alive():
+        return (f"⏱️ **AI analysis skipped** — no response from Gemini or the "
+                f"fallback providers within {int(timeout)}s. Use the refresh/retry "
+                f"button to try again.")
+    if "error" in box:
+        return f"🔴 **AI analysis error**\n\n{str(box['error'])[:300]}"
+    return box.get("result")
+
 def yf_download_batched(symbols, batch_size=25, **kwargs):
     """Drop-in replacement for yf.download() over a list of tickers.
 
@@ -4428,7 +4471,7 @@ if all_data:
 
     if force_theme or st.session_state.get("top20_theme_key") != top20_sig:
         with st.spinner("Analyzing top 20 industry theme..."):
-            theme_result = timed(
+            theme_result = timed_llm(
                 "generate_top_industries_theme_insight",
                 generate_top_industries_theme_insight,
                 df_main, all_data, 20,
@@ -7278,7 +7321,7 @@ def render_group_ai_insight(tickers, section_title, session_key, extra_note="", 
 
     if force or st.session_state.get(ticker_key) != current_sig:
         with st.spinner(f"Analyzing {section_title} theme..."):
-            result = timed(
+            result = timed_llm(
                 f"generate_group_theme_insight[{section_title}]",
                 generate_group_theme_insight,
                 tickers, section_title, session_key, extra_note, industries_dict
@@ -7349,7 +7392,7 @@ else:
 
     if force_rerun or st.session_state.get("leader_ai_key") != leader_list_key:
         with st.spinner("Analyzing RS leader concentration via Gemini..."):
-            analysis_result = timed(
+            analysis_result = timed_llm(
                 "generate_leader_ai_analysis",
                 generate_leader_ai_analysis,
                 leader_list,
@@ -17109,7 +17152,7 @@ Keep it tight, data-driven, cite the actual % numbers, no fluff, no disclaimers.
     _force_finviz = st.button("🔄 Refresh Rotation Report", key="retry_finviz_rotation")
     if _force_finviz or st.session_state.get("finviz_rotation_sig") != _finviz_sig:
         with st.spinner("Generating industry rotation report..."):
-            _finviz_result = timed("generate_finviz_rotation_report", generate_finviz_rotation_report, finviz_prompt)
+            _finviz_result = timed_llm("generate_finviz_rotation_report", generate_finviz_rotation_report, finviz_prompt)
         if _finviz_result:
             st.session_state["finviz_rotation_result"] = _finviz_result
             st.session_state["finviz_rotation_sig"] = _finviz_sig
