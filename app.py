@@ -23118,3 +23118,336 @@ try:
                 st.dataframe(_nrs_breakdown, use_container_width=True)
 except Exception as _nrs_e:
     st.warning(f"Rank-Then-Blend RS table unavailable right now: {_nrs_e}")
+
+
+# ==============================================================================
+# LEVERAGED ETF HEAT GAUGE (bottom of page) — daily $ volume of the tickers in
+# the Leveraged ETF Bull / Bear Table. Total $ volume = how hot trading is;
+# bear share of that volume = anxiety (high) vs euphoria (low).
+# History is kept in leveraged_etf_volume_history.txt in the PUBLIC repo
+# (GITHUB_PUBLIC_REPO), one line per trading day:
+# "YYYY-MM-DD,bull_usd,bear_usd,bull_count,bear_count" followed by
+# "bull_usd,bear_usd" for each VOL_TIERS tier of the table, in table order
+# (an ETF's tier on a day = its 20-day avg $ volume as of that day).
+# Additive only: LEVERAGED_ETF_MAP is read, never changed; own download, own
+# file, and everything is wrapped so it can't break the sections above.
+# ==============================================================================
+LEV_VOL_HISTORY_PUBLIC_FILEPATH = "leveraged_etf_volume_history.txt"
+LEV_HEAT_AVG_DAYS = 20        # moving average of total $ volume
+LEV_HEAT_SHARE_DAYS = 5       # smoothing of the bear share
+LEV_HEAT_RANK_DAYS = 252      # window for the anxiety / euphoria bands
+LEV_HEAT_EXTREME_PCT = 20     # bear share in top 20% = anxiety, bottom 20% = euphoria
+LEV_HEAT_MIN_COVERAGE = 0.85  # a day needs 85% of the usual ticker count to be used
+LEV_HEAT_MIN_RESOLVED = 0.70  # a download needs 70% of all tickers to be used
+# Long-volatility ETFs sit on the table's "bull" side (bull VIXY), but buying
+# them is a fear trade, so the gauge counts them as bear.
+LEV_HEAT_FEAR_TICKERS = {"UVIX"}
+# HIMZ is a 2x LONG HIMS ETF although the table lists it under "bear".
+LEV_HEAT_GREED_TICKERS = {"HIMZ"}
+# date, 4 totals, then bull + bear for each volume tier
+_LEV_VOL_LINE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}),((?:\d+,){%d}\d+)$" % (3 + 2 * len(VOL_TIERS)))
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def compute_lev_volume_history(ticker_sides):
+    """ticker_sides: tuple of (ticker, "bull" | "bear"). Returns
+    {date: (bull_usd, bear_usd, bull_count, bear_count, then bull_usd,
+    bear_usd per VOL_TIERS tier)} for finished sessions over the past year,
+    or {} if the download is too incomplete to trust."""
+    tickers = [t for t, _ in ticker_sides]
+    raw = yf_download_batched(tickers, period="1y", interval="1d",
+                              progress=False, auto_adjust=False)
+    if raw is None or raw.empty:
+        return {}
+    dollar = raw["Close"] * raw["Volume"]
+    dollar = dollar.where(dollar > 0)
+
+    # Today's bar only counts after the close, otherwise partial volume would
+    # look like a collapse (and would be saved to history).
+    now_et = datetime.datetime.now(ZoneInfo("America/New_York"))
+    last_done = now_et.date()
+    if now_et.time() < datetime.time(16, 30):
+        last_done -= datetime.timedelta(days=1)
+    dollar = dollar[[d <= last_done for d in pd.DatetimeIndex(dollar.index).date]].sort_index()
+
+    bull_cols = [t for t, side in ticker_sides if side == "bull" and t in dollar.columns]
+    bear_cols = [t for t, side in ticker_sides if side == "bear" and t in dollar.columns]
+    out = pd.DataFrame({
+        "bull": dollar[bull_cols].sum(axis=1),
+        "bear": dollar[bear_cols].sum(axis=1),
+        "bull_n": dollar[bull_cols].count(axis=1),
+        "bear_n": dollar[bear_cols].count(axis=1),
+    })
+    # Same measure the table tiers on (20-day avg $ volume), taken day by day.
+    avg20 = dollar.rolling(20, min_periods=1).mean()
+    for i, (_, tier_fn) in enumerate(VOL_TIERS):
+        in_tier = dollar.where(avg20.apply(lambda col: col.map(tier_fn)))
+        out[f"bull_t{i}"] = in_tier[bull_cols].sum(axis=1)
+        out[f"bear_t{i}"] = in_tier[bear_cols].sum(axis=1)
+    count = out["bull_n"] + out["bear_n"]
+    if out.empty or count.max() < LEV_HEAT_MIN_RESOLVED * len(tickers):
+        return {}
+    out = out[count >= LEV_HEAT_MIN_COVERAGE * count.rolling(10, min_periods=1).median()]
+    return {
+        pd.Timestamp(d).date().isoformat(): tuple(int(round(v)) for v in r)
+        for d, r in zip(out.index, out.itertuples(index=False))
+    }
+
+
+def _parse_lev_volume_history_txt(text):
+    rows = {}
+    for line in text.splitlines():
+        m = _LEV_VOL_LINE_RE.match(line.strip())
+        if m:
+            rows[m.group(1)] = tuple(int(x) for x in m.group(2).split(","))
+    return rows
+
+
+def _merge_lev_volume_rows(stored, fresh, recent_days=5):
+    """Saved history wins, so it doesn't shift when ETFs delist or the table
+    changes. New dates are added; only the latest few sessions can be revised,
+    and only by a row covering at least as many tickers (volume moved > 0.5%)."""
+    merged = dict(stored)
+    usual = [r[2] + r[3] for _, r in sorted(stored.items())[-20:]]
+    floor = LEV_HEAT_MIN_COVERAGE * float(np.median(usual)) if usual else 0
+    recent = set(sorted(fresh)[-recent_days:])
+    for date_str, row in fresh.items():
+        old = stored.get(date_str)
+        if old is None:
+            if row[2] + row[3] >= floor:
+                merged[date_str] = row
+        elif (date_str in recent and row[2] + row[3] >= old[2] + old[3]
+              and any(abs(new - prev) > 0.005 * max(prev, 1) for new, prev in zip(row[:2], old[:2]))):
+            merged[date_str] = row
+    return merged
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def sync_lev_volume_history(fresh_items):
+    """Merge fresh rows into the public-repo history file and return the full
+    history. Commits only when something changed. Raises on any GitHub problem
+    (so a failure is never cached)."""
+    repo   = st.secrets.get("GITHUB_PUBLIC_REPO")
+    branch = st.secrets.get("GITHUB_PUBLIC_BRANCH", "main")
+    url = f"{GITHUB_API}/repos/{repo}/contents/{LEV_VOL_HISTORY_PUBLIC_FILEPATH}"
+    resp = requests.get(url, headers=_github_public_headers(), params={"ref": branch}, timeout=10)
+
+    sha, stored = None, {}
+    if resp.status_code == 200:
+        data = resp.json()
+        sha = data.get("sha")
+        text = base64.b64decode(data["content"]).decode()
+        stored = _parse_lev_volume_history_txt(text)
+        if not stored and (text.strip() or data.get("size")):
+            raise RuntimeError("history file exists but could not be read; not overwriting it")
+    elif resp.status_code != 404:
+        raise RuntimeError(f"GitHub read failed ({resp.status_code})")
+
+    merged = _merge_lev_volume_rows(stored, dict(fresh_items))
+    if merged != stored:
+        content_str = "\n".join(f"{d},{','.join(str(x) for x in merged[d])}" for d in sorted(merged))
+        payload = {
+            "message": f"Update Leveraged ETF volume history — {max(merged)}",
+            "content": base64.b64encode(content_str.encode()).decode(),
+            "branch": branch,
+        }
+        if sha:
+            payload["sha"] = sha
+        put_resp = requests.put(url, headers=_github_public_headers(), json=payload, timeout=10)
+        if put_resp.status_code not in (200, 201):
+            raise RuntimeError(f"GitHub write failed ({put_resp.status_code})")
+    return merged
+
+
+def _lev_heat_box_html(title, big, sub, color):
+    return f"""
+    <div style="background:#1e1e1e; border:2px solid {color}; border-radius:8px;
+                padding:12px; min-height:102px;">
+        <div style="font-size:14px; font-weight:bold; color:#ccc; margin-bottom:6px;">{title}</div>
+        <div style="font-size:22px; font-weight:900; color:{color}; margin-bottom:6px;">{big}</div>
+        <div style="font-size:11px; color:#ccc; line-height:1.4;">{sub}</div>
+    </div>
+    """
+
+
+st.markdown("---")
+st.markdown(
+    "#### 🌡️ Leveraged ETF Heat Gauge "
+    "<span style='font-size:12px;font-weight:normal;color:#888;'>"
+    "(daily $ volume of the Leveraged ETF Bull / Bear Table tickers · "
+    "high bear share = anxiety, low bear share = euphoria)</span>",
+    unsafe_allow_html=True,
+)
+try:
+    _lh_sides = tuple(sorted(
+        (t, "bear" if t in LEV_HEAT_FEAR_TICKERS
+            else "bull" if t in LEV_HEAT_GREED_TICKERS else side)
+        for t, (_, side) in LEVERAGED_ETF_MAP.items()
+    ))
+    try:
+        _lh_fresh = timed("compute_lev_volume_history", compute_lev_volume_history, _lh_sides)
+    except Exception:
+        _lh_fresh = {}   # still show the saved history
+
+    _lh_rows, _lh_save_note = _lh_fresh, "history not saved (GitHub public repo not configured)"
+    try:
+        _lh_github_ready = bool(
+            st.secrets.get("GITHUB_PUBLIC_REPO")
+            and (st.secrets.get("GITHUB_PUBLIC_TOKEN") or st.secrets.get("GITHUB_TOKEN"))
+        )
+    except Exception:
+        _lh_github_ready = False
+    if _lh_github_ready:
+        try:
+            _lh_rows = timed("sync_lev_volume_history", sync_lev_volume_history,
+                             tuple(sorted(_lh_fresh.items())))
+            _lh_save_note = f"history saved in {LEV_VOL_HISTORY_PUBLIC_FILEPATH}"
+        except Exception as _lh_gh_e:
+            notify_github_push_failure(LEV_VOL_HISTORY_PUBLIC_FILEPATH, _lh_gh_e)
+            _lh_save_note = f"history sync failed this run ({str(_lh_gh_e)[:80]})"
+
+    if not _lh_rows:
+        st.info("Leveraged ETF volume data not available right now.")
+    else:
+        _lh_df = pd.DataFrame.from_dict(
+            _lh_rows, orient="index",
+            columns=["Bull", "Bear", "Bull count", "Bear count"]
+                    + [f"{side} {label}" for label, _ in VOL_TIERS for side in ("Bull", "Bear")],
+        ).sort_index()
+        _lh_df.index = pd.to_datetime(_lh_df.index)
+        _lh_total = _lh_df["Bull"] + _lh_df["Bear"]
+        _lh_avg = _lh_total.rolling(LEV_HEAT_AVG_DAYS, min_periods=5).mean()
+        _lh_share = 100 * (_lh_df["Bear"].rolling(LEV_HEAT_SHARE_DAYS, min_periods=1).sum()
+                           / _lh_total.rolling(LEV_HEAT_SHARE_DAYS, min_periods=1).sum())
+
+        _lh_window = _lh_share.tail(LEV_HEAT_RANK_DAYS).dropna()
+        _lh_low = _lh_window.quantile(LEV_HEAT_EXTREME_PCT / 100)
+        _lh_high = _lh_window.quantile(1 - LEV_HEAT_EXTREME_PCT / 100)
+        _lh_share_now = _lh_share.iloc[-1]
+        _lh_rank = 100 * (_lh_window <= _lh_share_now).mean()
+        if len(_lh_window) < 60:
+            _lh_mood, _lh_mood_color = "Building history", "#888888"
+        elif _lh_share_now >= _lh_high:
+            _lh_mood, _lh_mood_color = "😰 Anxiety", "#FF4B4B"
+        elif _lh_share_now <= _lh_low:
+            _lh_mood, _lh_mood_color = "🤑 Euphoria", "#00e676"
+        else:
+            _lh_mood, _lh_mood_color = "😐 Neutral", "#cccccc"
+
+        _lh_ratio = _lh_total.iloc[-1] / _lh_avg.iloc[-1] if pd.notna(_lh_avg.iloc[-1]) else float("nan")
+        if pd.isna(_lh_ratio):
+            _lh_heat, _lh_heat_color = "--", "#888888"
+        elif _lh_ratio >= 1.3:
+            _lh_heat, _lh_heat_color = f"🔥 Hot · {_lh_ratio:.2f}x", "#FFA500"
+        elif _lh_ratio <= 0.7:
+            _lh_heat, _lh_heat_color = f"🧊 Quiet · {_lh_ratio:.2f}x", "#4FC3F7"
+        else:
+            _lh_heat, _lh_heat_color = f"Normal · {_lh_ratio:.2f}x", "#cccccc"
+
+        _lh_last = _lh_df.index[-1].strftime("%d %b %Y")
+        _lh_cols = st.columns(3)
+        _lh_cols[0].markdown(_lev_heat_box_html(
+            "Total $ Volume", f"${_lh_total.iloc[-1] / 1e9:,.1f}B",
+            f"{_lh_last} · bull ${_lh_df['Bull'].iloc[-1] / 1e9:,.1f}B · "
+            f"bear ${_lh_df['Bear'].iloc[-1] / 1e9:,.1f}B", "#3987e5"), unsafe_allow_html=True)
+        _lh_cols[1].markdown(_lev_heat_box_html(
+            "Activity Heat", _lh_heat,
+            f"latest day vs {LEV_HEAT_AVG_DAYS}-day average (hot ≥ 1.3x, quiet ≤ 0.7x)",
+            _lh_heat_color), unsafe_allow_html=True)
+        _lh_cols[2].markdown(_lev_heat_box_html(
+            "Mood", _lh_mood,
+            f"bear share {_lh_share_now:.1f}% ({LEV_HEAT_SHARE_DAYS}D) · higher than or equal to "
+            f"{_lh_rank:.0f}% of the last {len(_lh_window)} sessions", _lh_mood_color),
+            unsafe_allow_html=True)
+
+        _lh_share_title = f"Bear share of $ volume ({LEV_HEAT_SHARE_DAYS}-day)"
+        if len(_lh_window) >= 60:
+            _lh_share_title += (f" · red dashes: anxiety above {_lh_high:.1f}%"
+                                f" · green dashes: euphoria below {_lh_low:.1f}%")
+        _lh_fig = make_subplots(
+            rows=2, cols=1, shared_xaxes=True, row_heights=[0.6, 0.4], vertical_spacing=0.1,
+            subplot_titles=("Total $ volume (bull + bear)", _lh_share_title),
+        )
+        _lh_fig.add_trace(go.Scatter(
+            x=_lh_df.index, y=_lh_total / 1e9, mode="lines", name="Daily total",
+            line=dict(color="#3987e5", width=2),
+            customdata=np.column_stack([_lh_df["Bull"] / 1e9, _lh_df["Bear"] / 1e9]),
+            hovertemplate="$%{y:,.1f}B (bull $%{customdata[0]:,.1f}B · bear $%{customdata[1]:,.1f}B)",
+        ), row=1, col=1)
+        _lh_fig.add_trace(go.Scatter(
+            x=_lh_df.index, y=_lh_avg / 1e9, mode="lines", name=f"{LEV_HEAT_AVG_DAYS}-day average",
+            line=dict(color="#c98500", width=2), hovertemplate="$%{y:,.1f}B",
+        ), row=1, col=1)
+        _lh_fig.add_trace(go.Scatter(
+            x=_lh_df.index, y=_lh_share, mode="lines", name="Bear share",
+            line=dict(color="#9085e9", width=2), hovertemplate="%{y:.1f}%",
+        ), row=2, col=1)
+        if len(_lh_window) >= 60:
+            for _lh_level, _lh_color in ((_lh_high, "#FF4B4B"), (_lh_low, "#00e676")):
+                _lh_fig.add_hline(y=_lh_level, row=2, col=1,
+                                  line=dict(color=_lh_color, width=1, dash="dash"))
+        _lh_fig.update_layout(
+            template="plotly_dark", paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
+            height=560, margin=dict(l=10, r=10, t=70, b=10), hovermode="x unified",
+            legend=dict(orientation="h", yanchor="bottom", y=1.07, xanchor="right", x=1),
+        )
+        _lh_fig.update_xaxes(gridcolor="#262730")
+        _lh_fig.update_yaxes(gridcolor="#262730")
+        _lh_fig.update_yaxes(tickprefix="$", ticksuffix="B", rangemode="tozero", row=1, col=1)
+        _lh_fig.update_yaxes(ticksuffix="%", row=2, col=1)
+        st.plotly_chart(_lh_fig, use_container_width=True, theme=None, key="lev_heat_chart")
+
+        # ── Bull vs bear within each volume tier of the table (one panel each) ──
+        _lh_tier_titles = []
+        for _lh_label, _ in VOL_TIERS:
+            _lh_bull = _lh_df[f"Bull {_lh_label}"]
+            _lh_bear = _lh_df[f"Bear {_lh_label}"]
+            _lh_recent = (_lh_bull + _lh_bear).tail(LEV_HEAT_SHARE_DAYS).sum()
+            _lh_tier_share = (f"{100 * _lh_bear.tail(LEV_HEAT_SHARE_DAYS).sum() / _lh_recent:.1f}%"
+                              if _lh_recent else "--")
+            _lh_tier_titles.append(
+                f"{_lh_label} avg volume · latest bull ${_lh_bull.iloc[-1] / 1e9:,.2f}B, "
+                f"bear ${_lh_bear.iloc[-1] / 1e9:,.2f}B · "
+                f"bear share {_lh_tier_share} ({LEV_HEAT_SHARE_DAYS}-day)"
+            )
+        _lh_tier_fig = make_subplots(
+            rows=len(VOL_TIERS), cols=1, shared_xaxes=True, vertical_spacing=0.08,
+            subplot_titles=_lh_tier_titles,
+        )
+        for _lh_row, (_lh_label, _) in enumerate(VOL_TIERS, start=1):
+            for _lh_side, _lh_color in (("Bull", "#1baf7a"), ("Bear", "#d03b3b")):
+                _lh_tier_fig.add_trace(go.Scatter(
+                    x=_lh_df.index, y=_lh_df[f"{_lh_side} {_lh_label}"] / 1e9, mode="lines",
+                    name=_lh_side, legendgroup=_lh_side, showlegend=_lh_row == 1,
+                    line=dict(color=_lh_color, width=2), hovertemplate="$%{y:,.2f}B",
+                ), row=_lh_row, col=1)
+        _lh_tier_fig.update_layout(
+            template="plotly_dark", paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
+            height=720, margin=dict(l=10, r=10, t=70, b=10), hovermode="x unified",
+            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1),
+        )
+        _lh_tier_fig.update_xaxes(gridcolor="#262730")
+        _lh_tier_fig.update_yaxes(gridcolor="#262730", tickprefix="$", ticksuffix="B",
+                                  rangemode="tozero")
+        st.markdown("##### Bull vs Bear by Avg $ Volume tier")
+        st.plotly_chart(_lh_tier_fig, use_container_width=True, theme=None, key="lev_heat_tier_chart")
+
+        st.caption(
+            f"Latest day covers {_lh_df['Bull count'].iloc[-1]} bull and "
+            f"{_lh_df['Bear count'].iloc[-1]} bear ETFs (UVIX counted as bear, HIMZ as bull). "
+            f"Each day, an ETF sits in the tier matching its 20-day average \\$ volume at that time. Past days were "
+            f"first filled in using today's ticker list, and newly listed ETFs lift the total over "
+            f"time. Today is added after 16:30 New York time · {_lh_save_note}."
+        )
+        with st.expander("Leveraged ETF daily $ volume table", expanded=False):
+            st.dataframe(pd.DataFrame({
+                "Date": _lh_df.index.date,
+                "Total $B": (_lh_total / 1e9).round(2).values,
+                "Bull $B": (_lh_df["Bull"] / 1e9).round(2).values,
+                "Bear $B": (_lh_df["Bear"] / 1e9).round(2).values,
+                f"Bear share % ({LEV_HEAT_SHARE_DAYS}D)": _lh_share.round(1).values,
+                **{f"{side} {label} ($B)": (_lh_df[f"{side} {label}"] / 1e9).round(2).values
+                   for label, _ in VOL_TIERS for side in ("Bull", "Bear")},
+            }).iloc[::-1], use_container_width=True, hide_index=True)
+except Exception as _lh_e:
+    st.warning(f"Leveraged ETF Heat Gauge unavailable right now: {_lh_e}")
