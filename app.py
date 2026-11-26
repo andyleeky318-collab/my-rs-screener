@@ -13028,12 +13028,12 @@ if bh_rows:
         f"{len(bh_df)} tickers with a 2nd-Pivot-Break in the last {BH_LOOKBACK_DAYS} trading days "
         f"· weights: {', '.join(f'{k}={v}' for k, v in BH_WEIGHTS.items())}"
     )
-    # Fixed height = 10 data rows + header; st.dataframe adds its own native
+    # Fixed height = 5 data rows + header; st.dataframe adds its own native
     # vertical scrollbar (right side) automatically once content exceeds this,
-    # so anything past the top 10 (already sorted by Score) scrolls instead
+    # so anything past the top 5 (already sorted by Score) scrolls instead
     # of pushing the page taller.
     st.dataframe(bh_df, use_container_width=True, hide_index=True,
-                 height=(10 + 1) * 35 + 3,
+                 height=(5 + 1) * 35 + 3,
                  column_config={"#": st.column_config.NumberColumn(width=45)})
 
     timed("save_breakout_health_snapshot_github", save_breakout_health_snapshot_github,
