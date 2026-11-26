@@ -1772,6 +1772,14 @@ st.markdown(
 
 st.markdown("---")
 
+# Per-industry 2y OHLCV download, split out of get_rs_and_cloud_data_cached so
+# the "Rank-Then-Blend RS" table at the bottom of the page can reuse the SAME
+# already-downloaded prices (cache hit, no second network fetch). Same call,
+# same arguments as before, so the industry table's numbers are unchanged.
+@st.cache_data(ttl=3600, show_spinner=False)
+def download_industry_ohlc(tickers_tuple):
+    return yf_download_batched(list(tickers_tuple), period="2y", interval="1d", progress=False, auto_adjust=True)
+
 # 4. IMPLEMENTATION OF NEW NORMALIZED RS METHOD AND EMA CLOUD
 @st.cache_data(ttl=3600)
 def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, _benchmark_df):
@@ -1780,7 +1788,7 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, _bench
     try:
         #all_tickers = tickers + [benchmark_ticker]
         #data = yf.download(all_tickers, period="2y", interval="1d", progress=False, auto_adjust=True)
-        data = yf_download_batched(tickers, period="2y", interval="1d", progress=False, auto_adjust=True)
+        data = download_industry_ohlc(tuple(tickers_tuple))
 
         close_data = data['Close']
         high_data = data['High']
@@ -2180,9 +2188,99 @@ def get_rs_and_cloud_data_cached(tickers_tuple, benchmark_ticker, length, _bench
         st.error(f"Error: {e}")
         return None, None, None, {}, None, None, None, None, None, None
 
+# ==========================================================================
+# RANK-THEN-BLEND COMP RS (IBD-style, recent-weighted)
+# --------------------------------------------------------------------------
+# 1. Cumulative 3M / 6M / 9M / 12M return for every stock in the universe
+#    (63 / 126 / 189 / 252 trading days).
+# 2. Percentile-rank EACH period across the whole universe (1..99).
+# 3. Blend the four RANKS 40/20/20/20 (not the raw returns), so a huge old
+#    gain is capped at ~99 and can't hide a recent crash.
+# 4. Percentile-rank the blended score again across the universe -> Comp RS.
+# Universe = every ticker in INDUSTRIES (all prices, incl. ETFs). A ticker
+# with < 12M of history uses the periods it has (weights renormalised); it
+# needs at least the 3M window to get a score.
+# Done for every date in the last `history_days` bars so 1W / 1M / 3D values
+# and the Trend column come from the same method.
+# ==========================================================================
+RTB_RS_PERIODS = ((63, 0.4), (126, 0.2), (189, 0.2), (252, 0.2))
+
+def _rtb_pct_rank(df):
+    """Per-row (per-date) percentile rank across columns, scaled to 1..99.
+    NaN stays NaN; a row with < 2 values gives NaN."""
+    ranks = df.rank(axis=1, method="average")
+    n = df.notna().sum(axis=1)
+    denom = (n - 1).where(n > 1)
+    return 1 + 98 * ranks.sub(1).div(denom, axis=0)
+
+def _rtb_blend(rank_frames):
+    """rank_frames: list of (pct_rank_df, weight) in RTB_RS_PERIODS order.
+    Weighted mean of the available period ranks; requires the 3M rank."""
+    num, wsum = None, None
+    for pct, w in rank_frames:
+        part = pct.mul(w).fillna(0)
+        wpart = pct.notna().astype(float) * w
+        num = part if num is None else num + part
+        wsum = wpart if wsum is None else wsum + wpart
+    return (num / wsum).where(rank_frames[0][0].notna())
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def compute_rank_then_blend_rs(industry_tickers_tuple, history_days=130):
+    """Returns (comp_rs_df, today_breakdown_df) or (None, None).
+    comp_rs_df: last `history_days` dates x tickers, Comp RS 1..99.
+    today_breakdown_df: per ticker 3M/6M/9M/12M return % and rank, blended
+    score and Comp RS for the latest bar (for verification)."""
+    series = {}
+    for tickers in industry_tickers_tuple:
+        try:
+            # Cache hit: same key the industry RS table used to download.
+            data = download_industry_ohlc(tuple(tickers))
+            close = data["Close"]
+        except Exception:
+            continue
+        if isinstance(close, pd.Series):
+            close = close.to_frame(name=tickers[0])
+        for t in tickers:
+            if t in series or t not in close.columns:
+                continue
+            s = pd.to_numeric(close[t], errors="coerce")
+            if s.notna().sum() > 0:
+                series[t] = s
+    if not series:
+        return None, None
+
+    closes = pd.DataFrame(series).sort_index()
+    closes = closes[~closes.index.duplicated(keep="last")]
+    # Bridge short gaps (e.g. a ticker missing today's bar -> yesterday's
+    # close, same idea as the industry table's last-row fill). limit=5 so a
+    # delisted ticker doesn't keep a stale price forever.
+    closes = closes.ffill(limit=5)
+
+    start = max(0, len(closes) - int(history_days))
+    rank_frames, returns_today = [], {}
+    for n_days, weight in RTB_RS_PERIODS:
+        ret = closes / closes.shift(n_days) - 1
+        ret = ret.replace([np.inf, -np.inf], np.nan)
+        returns_today[n_days] = ret.iloc[-1]
+        rank_frames.append((_rtb_pct_rank(ret.iloc[start:]), weight))
+
+    blended = _rtb_blend(rank_frames)
+    comp = _rtb_pct_rank(blended).round().clip(1, 99)
+
+    labels = {63: "3M", 126: "6M", 189: "9M", 252: "12M"}
+    breakdown = pd.DataFrame({"Comp RS": comp.iloc[-1], "Blended": blended.iloc[-1].round(1)})
+    for (n_days, _), (pct, _) in zip(RTB_RS_PERIODS, rank_frames):
+        breakdown[f"{labels[n_days]} %"] = (returns_today[n_days] * 100).round(1)
+        breakdown[f"{labels[n_days]} Rank"] = pct.iloc[-1].round(0)
+    breakdown = breakdown.dropna(subset=["Comp RS"]).sort_values("Comp RS", ascending=False)
+    breakdown.index.name = "Ticker"
+    return comp, breakdown
+
 with st.sidebar:
     if st.button("Refresh Table", use_container_width=True):
         get_rs_and_cloud_data_cached.clear()
+        download_industry_ohlc.clear()
+        compute_rank_then_blend_rs.clear()
         st.toast("Industry RS cache cleared! Reloading table...", icon="📊")
 
 # Reference Scanner Logic Functions
@@ -22772,3 +22870,251 @@ try:
         pass   # soft-fail: never affect the rest of the page
 except Exception as _ftd_e:
     st.warning(f"Follow-Through Day unavailable right now: {_ftd_e}")
+
+
+# ==========================================================================
+# INDUSTRY RS TABLE — RANK-THEN-BLEND COMP RS (bottom of page)
+# Same columns as the main industry table; only the RS numbers differ (see
+# compute_rank_then_blend_rs). Setup columns (21ema_Valid / Cloud / Wick /
+# 50ma_Bounce) reuse the lists already computed for the main table, and the
+# prices come from the main table's cached download — nothing is re-fetched.
+# Everything here is read-only w.r.t. the rest of the page and wrapped in a
+# try/except so it can never break the sections above.
+# ==========================================================================
+st.markdown("---")
+st.markdown(
+    "#### 🧮 Industry RS — Rank-Then-Blend Comp RS "
+    "<span style='font-size:12px;font-weight:normal;color:#888;'>"
+    "(rank 3M / 6M / 9M / 12M returns across the universe, blend the ranks 40/20/20/20, re-rank)</span>",
+    unsafe_allow_html=True,
+)
+try:
+    if not all_data:
+        st.info("Industry data not available.")
+    else:
+        _nrs_comp, _nrs_breakdown = timed(
+            "compute_rank_then_blend_rs",
+            compute_rank_then_blend_rs,
+            tuple(tuple(INDUSTRIES[_it["Industry"]]) for _it in all_data if _it["Industry"] in INDUSTRIES),
+        )
+        if _nrs_comp is None or len(_nrs_comp) < 22:
+            st.info("Not enough price history to compute Rank-Then-Blend RS.")
+        else:
+            _nrs_top_n = int(top_n)
+
+            def _nrs_top_n_mean(values):
+                vals = sorted((v for v in values if pd.notna(v)), reverse=True)[:_nrs_top_n]
+                return sum(vals) / len(vals) if vals else float("nan")
+
+            _nrs_rows = []
+            _nrs_item_map = {}
+            _nrs_trend_map = {}
+            for _it in all_data:
+                _ind = _it["Industry"]
+                # Same ticker set as the main table: tickers that had valid
+                # data there, priced > $20.
+                _valid = [t for t, p in (_it.get("Prices") or {}).items()
+                          if pd.notna(p) and p > 20 and t in _nrs_comp.columns]
+                _sub = _nrs_comp[_valid]
+                _today = _sub.iloc[-1].dropna()
+                _df_t = (pd.DataFrame({"Ticker": list(_today.index), "RS Score": [int(v) for v in _today.values]})
+                         .sort_values("RS Score", ascending=False))
+                _nrs_item_map[_ind] = _df_t
+
+                def _grp_at(pos, _s=_sub):
+                    return _nrs_top_n_mean(_s.iloc[pos].values)
+
+                _g, _g_1w, _g_1m, _g_3d = _grp_at(-1), _grp_at(-6), _grp_at(-22), _grp_at(-4)
+                _nrs_rows.append({
+                    "Industry": _ind,
+                    "Group RS": _g,
+                    "Group RS Prev": _g if pd.isna(_g_1w) else _g_1w,
+                    "Group RS 1M": _g if pd.isna(_g_1m) else _g_1m,
+                    "Group RS 3D": _g if pd.isna(_g_3d) else _g_3d,
+                })
+
+                # Trend: EMA21 of the daily group RS sampled 20/15/10/5/0 bars
+                # ago — same rule as the main table's Trend column.
+                if _valid:
+                    _grp_series = pd.Series(
+                        [_nrs_top_n_mean(r) for r in _sub.values], index=_sub.index
+                    ).dropna()
+                    if len(_grp_series) >= 21:
+                        _ema = _grp_series.ewm(span=21, adjust=False).mean()
+                        _v20, _v15, _v10, _v5, _v0 = (_ema.iloc[-21], _ema.iloc[-16], _ema.iloc[-11],
+                                                      _ema.iloc[-6], _ema.iloc[-1])
+                        _nrs_trend_map[_ind] = "".join("🟢" if b > a else "🔴" for a, b in
+                                                       ((_v20, _v15), (_v15, _v10), (_v10, _v5), (_v5, _v0)))
+
+            _nrs_df = pd.DataFrame(_nrs_rows).sort_values("Group RS", ascending=False, na_position="last")
+            _nrs_df["Current Rank"] = range(1, len(_nrs_df) + 1)
+            _nrs_prev_rank = dict(zip(
+                _nrs_df.sort_values("Group RS Prev", ascending=False, na_position="last")["Industry"],
+                range(1, len(_nrs_df) + 1)))
+            _nrs_1m_rank = dict(zip(
+                _nrs_df.sort_values("Group RS 1M", ascending=False, na_position="last")["Industry"],
+                range(1, len(_nrs_df) + 1)))
+            _nrs_df["Prev Rank"] = _nrs_df["Industry"].map(_nrs_prev_rank)
+            _nrs_df["1M Rank"] = _nrs_df["Industry"].map(_nrs_1m_rank)
+            _nrs_df["ROC"] = (0.6 * _nrs_df["Group RS"] + 0.4 * _nrs_df["Group RS 1M"]
+                              + 0.1 * (_nrs_df["Group RS"] - _nrs_df["Group RS 3D"]))
+
+            # Highlight sets built by the main table (read-only reuse).
+            _nrs_engulf_set = globals().get("_engulf_today_set", set())
+            _nrs_botak_set = globals().get("_botak_today_set", set())
+            _nrs_vol_flag = set(globals().get("vol_flagged_industries", set()) or set())
+            _nrs_vol_tickers = globals().get("industry_vol_tickers", {}) or {}
+            _nrs_volume_tickers = globals().get("industry_volume_tickers", {}) or {}
+
+            # Known-stock badge look per column, mirroring the main table:
+            # (opening div attributes, ticker-name color, rs-number color)
+            _NRS_KNOWN_STYLE = {
+                "tickers": ('class="ticker-badge new-pattern-badge" style="{glow}"', "#111111", "#004d26"),
+                "valid":   ('class="ticker-badge" style="background-color:#FF69B4; border:1px solid #C71585;{glow}"', "#111111", "#4B0026"),
+                "cloud":   ('class="ticker-badge purple-badge" style="{glow}"', "#000000", "#7e22ce"),
+                "wick":    ('class="ticker-badge aqua-badge" style="{glow}"', "#000000", "#0f766e"),
+                "bounce":  ('class="ticker-badge orange-badge" style="{glow}"', "#111111", "#004d26"),
+            }
+
+            def _nrs_badge(sym, score, col, glow=""):
+                if sym in LIME_STOCKS1:
+                    return (f'<div class="ticker-badge lime-badge" style="{glow}">'
+                            f'<span class="ticker-name" style="color: #000000; font-weight: bold;">{sym}</span>'
+                            f'<span class="ticker-rs" style="color: #000000; font-weight: bold; margin-left: 5px;">{score:.0f}</span></div>')
+                # Main table: the Tickers column only uses the gold known-stock
+                # badge in old style; setup columns always color known stocks.
+                if sym in KNOWN_STOCKS and not (col == "tickers" and new_style_industry_table):
+                    attrs, name_c, rs_c = _NRS_KNOWN_STYLE[col]
+                    return (f'<div {attrs.format(glow=glow)}>'
+                            f'<span class="ticker-name" style="color: {name_c}; font-weight: bold;">{sym}</span>'
+                            f'<span class="ticker-rs" style="color: {rs_c}; font-weight: bold;">{score:.0f}</span></div>')
+                return (f'<div class="ticker-badge" style="{glow}"><span class="ticker-name">{sym}</span>'
+                        f'<span class="ticker-rs">{score:.0f}</span></div>')
+
+            def _nrs_shift_html(shift, circle=False):
+                if shift > 0:
+                    if circle:
+                        return (f'<span style="color: #00FF00; font-weight: bold; border: 2px solid #00FF00; '
+                                f'border-radius: 50%; display: inline-flex; align-items: center; '
+                                f'justify-content: center; width: 32px; height: 32px;">+{shift}</span>')
+                    return f'<span style="color: #00FF00; font-weight: bold;">+{shift}</span>'
+                if shift < 0:
+                    return f'<span style="color: #FF7F7F; font-weight: bold;">{shift}</span>'
+                return '<span style="color: #aaaaaa;">0</span>'
+
+            if traffic_light_mode:
+                _nrs_metric_headers = ('<th style="text-align: center; width: 40px;">△T</th>'
+                                       '<th style="text-align: center; width: 60px;">Trend</th>')
+            else:
+                _nrs_metric_headers = ('<th style="text-align: center; width: 40px;">1W</th>'
+                                       '<th style="text-align: center; width: 40px;">1M</th>'
+                                       '<th style="text-align: center; width: 40px;">△T</th>')
+
+            _nrs_html = f"""<table>
+            <thead><tr>
+            <th style="text-align: center; width: 30px;">#</th>
+            <th style="text-align: center;">Industry</th>
+            <th style="text-align: center; width: 40px;">RS</th>
+            {_nrs_metric_headers}
+            <th style="text-align: center; width: 400px;">Tickers (RS > 80)</th>
+            <th style="text-align: center; width: 250px;">21ema_Valid</th>
+            <th style="text-align: center; width: 170px;">21ema_Cloud</th>
+            <th style="text-align: center; width: 170px;">21ema_Wick</th>
+            <th style="text-align: center; width: 170px;">50ma_Bounce</th>
+            </tr></thead><tbody>"""
+
+            _nrs_all_items = {d["Industry"]: d for d in all_data}
+            for _row_num, (_, _row) in enumerate(_nrs_df.iterrows(), start=1):
+                _ind = _row["Industry"]
+                _it = _nrs_all_items[_ind]
+                _df_t = _nrs_item_map[_ind]
+                _rs_lookup = dict(zip(_df_t["Ticker"], _df_t["RS Score"]))
+                _cur_r = int(_row["Current Rank"])
+                _rank_str = _nrs_shift_html(int(_row["Prev Rank"]) - _cur_r)
+                _shift_1m = int(_row["1M Rank"]) - _cur_r
+                _rank_str_1m = _nrs_shift_html(_shift_1m, circle=(_shift_1m >= 20 and _row_num <= 20))
+                _roc = _row["ROC"]
+                if pd.isna(_roc):
+                    _roc_str = "–"
+                elif _roc > 90:
+                    _roc_str = (f'<span style="border: 2px solid #32CD32; color: inherit; font-weight: bold; '
+                                f'padding: 1px 6px; border-radius: 3px; display: inline-block;">{_roc:.1f}</span>')
+                else:
+                    _roc_str = f"{_roc:.1f}"
+
+                _engulf_cnt = sum(1 for t in _df_t["Ticker"] if t in _nrs_engulf_set)
+                _botak_cnt = sum(1 for t in _df_t["Ticker"] if t in _nrs_botak_set)
+
+                _ticker_html = ""
+                for _sym, _score in zip(_df_t["Ticker"], _df_t["RS Score"]):
+                    if new_style_industry_table and _sym not in KNOWN_STOCKS:
+                        continue
+                    if _sym in _nrs_vol_tickers.get(_ind, []):
+                        _glow = "box-shadow:0 0 6px 2px #FF4B4B;"
+                    elif _engulf_cnt > 1 and _sym in _nrs_engulf_set:
+                        _glow = "box-shadow:0 0 6px 2px #FFFF00;"
+                    elif _botak_cnt > 2 and _sym in _nrs_botak_set:
+                        _glow = "box-shadow:0 0 6px 2px #00FF00;"
+                    else:
+                        _glow = ""
+                    _thr = 70 if _sym in LIME_STOCKS1 else 80
+                    if show_all_rs or _score >= _thr:   # _df_t already holds only > $20 tickers
+                        _ticker_html += _nrs_badge(_sym, _score, "tickers", _glow)
+
+                def _nrs_setup_html(syms, col, _lk=_rs_lookup):
+                    syms = sorted(syms or [], key=lambda s: _lk.get(s, 0), reverse=True)
+                    if new_style_industry_table:
+                        syms = [s for s in syms if s in KNOWN_STOCKS]
+                    if not show_all_setups:
+                        syms = syms[:5]
+                    return "".join(_nrs_badge(s, _lk.get(s, 0), col) for s in syms)
+
+                _valid_html = _nrs_setup_html(_it.get("Cloud"), "valid")
+                _cloud_html = _nrs_setup_html(_it.get("Cloud21EMA"), "cloud")
+                _wick_html = _nrs_setup_html(_it.get("CloudWick"), "wick")
+                _bounce_html = _nrs_setup_html(_it.get("MA50Bounce"), "bounce")
+
+                _trend_html = _nrs_trend_map.get(_ind, "")
+                if _trend_html == "🟢🟢🟢🟢":
+                    _trend_html = (f'<span style="border: 2px solid #32CD32; color: inherit; font-weight: bold; '
+                                   f'padding: 1px 6px; border-radius: 3px; display: inline-block;">{_trend_html}</span>')
+
+                _bg = "#262730" if _row_num % 2 == 0 else "#0e1117"
+                _num_color = "#FF4B4B" if _ind in _nrs_vol_flag else "#888888"
+                _name_color = (
+                    "#FF4B4B" if _ind in _nrs_vol_flag
+                    else "#FFFF00" if _engulf_cnt > 1
+                    else "#00FF00" if _botak_cnt > 2
+                    else "#B266FF" if len(_nrs_volume_tickers.get(_ind, [])) > 2
+                    else "#ffffff"
+                )
+                if traffic_light_mode:
+                    _metric_cells = (f'<td style="text-align: center; vertical-align: middle;">{_roc_str}</td>'
+                                     f'<td style="text-align: center; white-space:nowrap;">{_trend_html}</td>')
+                else:
+                    _metric_cells = (f'<td style="text-align: center; vertical-align: middle;">{_rank_str}</td>'
+                                     f'<td style="text-align: center; vertical-align: middle;">{_rank_str_1m}</td>'
+                                     f'<td style="text-align: center; vertical-align: middle;">{_roc_str}</td>')
+                _grs = _row["Group RS"]
+                _grs_str = "–" if pd.isna(_grs) else f"{_grs:.1f}"
+
+                _nrs_html += f"""<tr style="background-color: {_bg};">
+                <td style="text-align: center; color: {_num_color}; font-weight: bold;">{_row_num}</td>
+                <td style="font-weight: bold; color: {_name_color};">{_ind}</td>
+                <td style="text-align: center; color: #4ecdc4; font-weight: bold;">{_grs_str}</td>
+                {_metric_cells}
+                <td>{_ticker_html}</td>
+                <td>{_valid_html}</td>
+                <td>{_cloud_html}</td>
+                <td>{_wick_html}</td>
+                <td>{_bounce_html}</td></tr>"""
+
+            _nrs_html += "</tbody></table>"
+            st.markdown(_nrs_html, unsafe_allow_html=True)
+
+            with st.expander(f"🔍 Rank-Then-Blend breakdown per ticker ({len(_nrs_breakdown)} tickers)", expanded=False):
+                st.caption("Return % and universe percentile rank (1–99) for each window on the latest bar; "
+                           "Blended = 40/20/20/20 of the ranks; Comp RS = Blended re-ranked across the universe.")
+                st.dataframe(_nrs_breakdown, use_container_width=True)
+except Exception as _nrs_e:
+    st.warning(f"Rank-Then-Blend RS table unavailable right now: {_nrs_e}")

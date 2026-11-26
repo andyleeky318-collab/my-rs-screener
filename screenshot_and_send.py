@@ -181,6 +181,7 @@ SECTION_KEYWORDS = [
     "Breadth & Industry Momentum",
     "Statistically strong",
     "Secular Bull Bear",
+    "Rank-Then-Blend Comp RS",
 ]
 
 # The very last section to appear on the page. Its presence anywhere in the
