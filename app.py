@@ -2276,11 +2276,118 @@ def compute_rank_then_blend_rs(industry_tickers_tuple, history_days=130):
     breakdown.index.name = "Ticker"
     return comp, breakdown
 
+# ==========================================================================
+# GROUP STAGE (mirrors f_stage() + group average in the "KY Sector RS" Pine
+# indicator). Per member stock on the latest bar:
+#   rsme = close / SPX, rsNN = EMA(rsme, NN), ema126 = EMA(close, 126)
+#   1) rsme >= rs84 and rsme < rs126                                -> 1
+#   2) rsme < rs42 and rsme >= rs72/rs84/rs126 and (rs42 > rs63 or
+#      rsme < rs63) and rs63 > rs126 and close >= ema126            -> 3
+#   3) rsme >= rs168/rs147/rs126 and close >= ema126 and
+#      (rs21 >= rs42 or rs42 >= rs63)                               -> 2
+#   4) rsme >= rs126 and close >= ema126 and (rs21>=rs42 or rs42>=rs63) -> 2
+#   5) (rsme < rs63 and rsme < rs126) or (rs63 < rs126 and rsme < rs126) -> 4
+#   6) (open >= ema126 or close >= ema126) and rsme >= rs72 and rsme < rs126 -> 1
+#   7) rsme >= rs84 and rsme >= rs72 and (open or close >= ema126)  -> 1
+#   else                                                            -> 0
+# Group stage = round(mean of ALL member stages incl. 0), clamped to 1..4.
+# Only members priced above $20 on the latest bar count (same filter as the
+# industry tables; the Pine stage average has no price filter). A member with
+# too little history for an EMA gets NaN comparisons (False) and usually 0.
+# Prices come from download_industry_ohlc (cache hit, no extra fetch).
+# ==========================================================================
+_GROUP_STAGE_SPANS = (21, 42, 63, 72, 84, 126, 147, 168)
+
+def _naive_index(obj):
+    idx = pd.DatetimeIndex(obj.index)
+    if idx.tz is not None:
+        idx = idx.tz_localize(None)
+    obj = obj.copy()
+    obj.index = idx.normalize()
+    return obj[~obj.index.duplicated(keep="last")]
+
+def _stage_from_latest(rsme, r, c, o, e126):
+    """One stock's stage from its latest-bar values (r = {span: rs EMA})."""
+    def ge(a, b): return pd.notna(a) and pd.notna(b) and a >= b
+    def lt(a, b): return pd.notna(a) and pd.notna(b) and a < b
+    def gt(a, b): return pd.notna(a) and pd.notna(b) and a > b
+    above_ema = ge(o, e126) or ge(c, e126)
+    trend_ok = ge(r[21], r[42]) or ge(r[42], r[63])
+    if ge(rsme, r[84]) and lt(rsme, r[126]):
+        return 1
+    if (lt(rsme, r[42]) and ge(rsme, r[72]) and ge(rsme, r[84]) and ge(rsme, r[126])
+            and (gt(r[42], r[63]) or lt(rsme, r[63])) and gt(r[63], r[126]) and ge(c, e126)):
+        return 3
+    if ge(rsme, r[168]) and ge(rsme, r[147]) and ge(rsme, r[126]) and ge(c, e126) and trend_ok:
+        return 2
+    if ge(rsme, r[126]) and ge(c, e126) and trend_ok:
+        return 2
+    if (lt(rsme, r[63]) and lt(rsme, r[126])) or (lt(r[63], r[126]) and lt(rsme, r[126])):
+        return 4
+    if above_ema and ge(rsme, r[72]) and lt(rsme, r[126]):
+        return 1
+    if ge(rsme, r[84]) and ge(rsme, r[72]) and above_ema:
+        return 1
+    return 0
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def compute_industry_group_stage(industry_items_tuple, benchmark_ticker, _benchmark_df):
+    """industry_items_tuple: ((industry_name, (tickers...)), ...).
+    Returns {industry_name: group stage 1..4} (industries with no usable
+    member data are left out). benchmark_ticker is only part of the cache key."""
+    if _benchmark_df is None or len(_benchmark_df) == 0:
+        return {}
+    bench = pd.to_numeric(_naive_index(_benchmark_df)["Close"], errors="coerce")
+    out = {}
+    for industry_name, tickers in industry_items_tuple:
+        try:
+            data = download_industry_ohlc(tuple(tickers))
+            close, open_ = data["Close"], data["Open"]
+        except Exception:
+            continue
+        if isinstance(close, pd.Series):
+            close = close.to_frame(name=tickers[0])
+            open_ = open_.to_frame(name=tickers[0])
+        cols = [t for t in tickers if t in close.columns and close[t].notna().any()]
+        if not cols:
+            continue
+        # Bridge a missing latest bar with the prior one (same idea as the
+        # industry table's last-row fill); limit so dead tickers go stale.
+        close = _naive_index(close[cols]).apply(pd.to_numeric, errors="coerce").ffill(limit=5)
+        open_ = _naive_index(open_[cols]).apply(pd.to_numeric, errors="coerce").reindex(close.index)
+        b = bench.reindex(close.index).ffill()
+        rs = close.div(b, axis=0)
+        rs_ema = {s: rs.ewm(span=s, adjust=False, min_periods=s).mean().iloc[-1] for s in _GROUP_STAGE_SPANS}
+        ema126 = close.ewm(span=126, adjust=False, min_periods=126).mean().iloc[-1]
+        rs_last, c_last, o_last = rs.iloc[-1], close.iloc[-1], open_.iloc[-1]
+
+        stages = []
+        for t in cols:
+            if pd.isna(rs_last[t]):
+                continue   # no data on the latest bar -> excluded (Pine: na)
+            if not (c_last[t] > 20):
+                continue   # price filter: only stocks priced above $20 count
+            stages.append(_stage_from_latest(
+                rs_last[t], {s: rs_ema[s][t] for s in _GROUP_STAGE_SPANS},
+                c_last[t], o_last[t], ema126[t]))
+        if stages:
+            avg = sum(stages) / len(stages)
+            out[industry_name] = int(max(1, min(4, np.floor(avg + 0.5))))  # Pine math.round
+    return out
+
+def group_stage_cell_html(stage):
+    """Table cell content for the Stage column."""
+    if stage is None or pd.isna(stage):
+        return '<span style="color: #888888;">–</span>'
+    color = {1: "#FFD700", 2: "#00FF00", 3: "#FFA500", 4: "#FF4B4B"}.get(int(stage), "#aaaaaa")
+    return f'<span style="color: {color}; font-weight: bold;">{int(stage)}</span>'
+
 with st.sidebar:
     if st.button("Refresh Table", use_container_width=True):
         get_rs_and_cloud_data_cached.clear()
         download_industry_ohlc.clear()
         compute_rank_then_blend_rs.clear()
+        compute_industry_group_stage.clear()
         st.toast("Industry RS cache cleared! Reloading table...", icon="📊")
 
 # Reference Scanner Logic Functions
@@ -4147,6 +4254,17 @@ if all_data:
             all_data, ticker_dfs_shared, benchmark_df_shared, rs_length
         )
 
+    with st.spinner("Computing group stages..."):
+        try:
+            industry_stage_map = timed(
+                "compute_industry_group_stage",
+                compute_industry_group_stage,
+                tuple((d["Industry"], tuple(INDUSTRIES[d["Industry"]])) for d in all_data if d["Industry"] in INDUSTRIES),
+                benchmark, benchmark_df_shared,
+            )
+        except Exception:
+            industry_stage_map = {}
+
     if traffic_light_mode:
         delta_t_col, tickers_col = 5, 6
     else:
@@ -4203,6 +4321,7 @@ if all_data:
     <th style="text-align: center; width: 170px;">21ema_Cloud</th>
     <th style="text-align: center; width: 170px;">21ema_Wick</th>
     <th style="text-align: center; width: 170px;">50ma_Bounce</th>
+    <th style="text-align: center; width: 50px;">Stage</th>
     </tr></thead><tbody>"""
 
     # Quick bullish-engulfing-today set (for industry-name lime highlight)
@@ -4555,7 +4674,8 @@ if all_data:
         <td>{cloud_html}</td>
         <td>{cloud_21ema_html}</td>
         <td>{cloud_wick_html}</td>
-        <td>{ma50_bounce_html}</td></tr>"""
+        <td>{ma50_bounce_html}</td>
+        <td style="text-align: center; vertical-align: middle;">{group_stage_cell_html(industry_stage_map.get(row['Industry']))}</td></tr>"""
 
     table_html += "</tbody></table>"
 
@@ -23059,7 +23179,17 @@ try:
             <th style="text-align: center; width: 170px;">21ema_Cloud</th>
             <th style="text-align: center; width: 170px;">21ema_Wick</th>
             <th style="text-align: center; width: 170px;">50ma_Bounce</th>
+            <th style="text-align: center; width: 50px;">Stage</th>
             </tr></thead><tbody>"""
+
+            # Same cached result the main industry table used (no recompute).
+            try:
+                _nrs_stage_map = compute_industry_group_stage(
+                    tuple((d["Industry"], tuple(INDUSTRIES[d["Industry"]])) for d in all_data if d["Industry"] in INDUSTRIES),
+                    benchmark, benchmark_df_shared,
+                )
+            except Exception:
+                _nrs_stage_map = {}
 
             _nrs_all_items = {d["Industry"]: d for d in all_data}
             for _row_num, (_, _row) in enumerate(_nrs_df.iterrows(), start=1):
@@ -23145,7 +23275,8 @@ try:
                 <td>{_valid_html}</td>
                 <td>{_cloud_html}</td>
                 <td>{_wick_html}</td>
-                <td>{_bounce_html}</td></tr>"""
+                <td>{_bounce_html}</td>
+                <td style="text-align: center; vertical-align: middle;">{group_stage_cell_html(_nrs_stage_map.get(_ind))}</td></tr>"""
 
             _nrs_html += "</tbody></table>"
             st.markdown(_nrs_html, unsafe_allow_html=True)
