@@ -446,7 +446,7 @@ INDUSTRIES = {
 }
 
 KNOWN_STOCKS = [
-    'SN', 'NTSK', 'ANT', 'XTN', 'JBHT', 'KBWB', 'ICHR', 'RBRK', 'LYTE', 'LEN', 'PEJ', 'SOLT', 'ETHA', 'XXRP', 'BMNR', 'TWST', 'TEM', 'SMR', 'USAR', 'QBTS', 'QUBT', 'RGTI', 'FN', 'ZETA', 'ONON', 'TQQQ', 'RSP', 'BBY', 'AMPX', 'CBRS',
+    'H', 'SN', 'NTSK', 'ANT', 'XTN', 'JBHT', 'KBWB', 'ICHR', 'RBRK', 'LYTE', 'LEN', 'PEJ', 'SOLT', 'ETHA', 'XXRP', 'BMNR', 'TWST', 'TEM', 'SMR', 'USAR', 'QBTS', 'QUBT', 'RGTI', 'FN', 'ZETA', 'ONON', 'TQQQ', 'RSP', 'BBY', 'AMPX', 'CBRS',
     'CME', 'ICE', 'NCLD', 'PALL', 'PLTM', 'IHF', 'ESTC', 'PRU', 'RGEN', 'UBS', 'TRV', 'WEN', 'OKLO', 'IBB', 'Q', 'OUST', 'VPG', 'WOLF', 'NOK', 'HSBC', 'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
     'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EWY', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'OR', 
@@ -14735,7 +14735,45 @@ def fetch_known_stocks_earnings_next_7_days(stocks_tuple):
         st.warning(f"Finnhub 7-day earnings fetch error: {e}")
         return []
 
-    return sorted({r.get("symbol") for r in rows if r.get("symbol") in known_set})
+    # Finnhub can keep a stale *projected* date (e.g. based on last year's
+    # schedule) after a company has already reported on a different, earlier
+    # date. Look back 10 days and drop any ticker that already has an actual
+    # EPS / revenue print, so it doesn't show up as "upcoming".
+    already_reported = set()
+    try:
+        lookback_resp = requests.get(
+            "https://finnhub.io/api/v1/calendar/earnings",
+            params={
+                "from": str(today - datetime.timedelta(days=10)),
+                "to": str(today - datetime.timedelta(days=1)),
+                "token": finnhub_key,
+            },
+            timeout=15,
+        )
+        lookback_resp.raise_for_status()
+        for r in lookback_resp.json().get("earningsCalendar", []) or []:
+            sym = r.get("symbol")
+            if sym in known_set and (
+                r.get("epsActual") is not None or r.get("revenueActual") is not None
+            ):
+                already_reported.add(sym)
+    except Exception as e:
+        st.warning(f"Finnhub earnings look-back fetch error: {e}")
+
+    start_s, end_s = str(today), str(end_date)
+    upcoming = set()
+    for r in rows:
+        sym = r.get("symbol")
+        if sym not in known_set or sym in already_reported:
+            continue
+        d = r.get("date")
+        if d and not (start_s <= d <= end_s):
+            continue
+        if r.get("epsActual") is not None or r.get("revenueActual") is not None:
+            continue
+        upcoming.add(sym)
+
+    return sorted(upcoming)
 
 
 def save_earnings_7day_snapshot_github(tickers):
