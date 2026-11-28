@@ -23306,6 +23306,265 @@ except Exception as _nrs_e:
 
 
 # ==============================================================================
+# RS GROUP RANK EXPORT (added 28 Nov 2026) — two JSON files in the PUBLIC repo
+# root (GITHUB_PUBLIC_REPO), read by the TradingBot bots:
+#   rs_group_rank.json      = the main Industry RS table (df_main, the table
+#                             above the RS Quadrant Map). The bots stamp every
+#                             entry with the ticker's group rank and, ONLY when
+#                             their switch is on, allow groups 1..N only.
+#   rs_group_rank_rtb.json  = the Rank-Then-Blend Comp RS table above
+#                             (display / post-trade analysis only).
+# Layout (one group per line so the file stays readable and diff-friendly):
+#   {"schema":1,"table":..,"source":..,"top_n":5,"updated_at":..,"latest":"YYYY-MM-DD",
+#    "days":{"YYYY-MM-DD":{"groups_total":165,"groups":[
+#      {"rank":1,"name":"Nuclear","rs":94.6,"tickers":[["OKLO",98],["SMR",null]]}, ...]}}}
+#   rank = the table's Current Rank; rs = Group RS; tickers = EVERY INDUSTRIES
+#   member of the group with the stock RS the table shows (null when the table
+#   did not score it, e.g. price <= $20 or no data), strongest first.
+# Rules:
+# - date = latest SPY bar (same as the other public files); a bar dated today is
+#   saved only after 16:30 New York time (never a half-finished session).
+# - today's day is upserted, the history is trimmed to RS_RANK_KEEP_DAYS dates,
+#   and a commit happens only when that day's content (or top_n) changed.
+# - a snapshot that fails the sanity check (>= RS_RANK_MIN_GROUPS groups,
+#   >= RS_RANK_MIN_TICKERS tickers, >= RS_RANK_MIN_SCORED scored tickers, ranks
+#   exactly 1..n) is NOT written.
+# - read-only for the rest of the page (reads df_main / all_data / _nrs_df /
+#   _nrs_item_map); soft-fail; one Telegram per file per New York day on failure.
+# ==============================================================================
+import json as _rs_json
+import hashlib as _rs_hashlib
+
+RS_RANK_T1_PUBLIC_FILEPATH = "rs_group_rank.json"
+RS_RANK_RTB_PUBLIC_FILEPATH = "rs_group_rank_rtb.json"
+RS_RANK_SCHEMA = 1
+RS_RANK_KEEP_DAYS = 40          # ~2 months of trading days; keeps the file well under GitHub's 1 MB contents-API limit
+RS_RANK_MIN_GROUPS = 100
+RS_RANK_MIN_TICKERS = 300
+RS_RANK_MIN_SCORED = 100
+_RS_RANK_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+@st.cache_resource(show_spinner=False)
+def _rs_rank_memo():
+    """Process-wide memo: {filepath: (date_str, digest)} of the last successful save."""
+    return {}
+
+
+def _rs_rank_num(v, ndigits):
+    """Finite number rounded (int when ndigits == 0), else None."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(f):
+        return None
+    return int(round(f)) if ndigits == 0 else round(f, ndigits)
+
+
+def _rs_rank_day(rows, scores):
+    """rows: [(rank, industry, group_rs)], scores: {industry: {ticker: stock_rs}} -> one day's snapshot."""
+    groups = []
+    for rank, ind, grs in rows:
+        sc = scores.get(ind) or {}
+        seen, members = set(), []
+        for t in list(INDUSTRIES.get(ind, [])) + list(sc.keys()):
+            t = str(t).strip().upper()
+            if not t or t in seen:
+                continue
+            seen.add(t)
+            members.append([t, _rs_rank_num(sc.get(t), 0)])
+        members.sort(key=lambda p: (p[1] is None, -(p[1] or 0)))
+        groups.append({"rank": int(rank), "name": str(ind), "rs": _rs_rank_num(grs, 1), "tickers": members})
+    groups.sort(key=lambda g: g["rank"])
+    return {"groups_total": len(groups), "groups": groups}
+
+
+def _rs_rank_scores_from(item_map):
+    """{industry: DataFrame(Ticker, RS Score)} -> {industry: {TICKER: score}}."""
+    out = {}
+    for ind, tdf in (item_map or {}).items():
+        m = {}
+        if tdf is not None and len(tdf):
+            for t, v in zip(tdf["Ticker"], tdf["RS Score"]):
+                m[str(t).strip().upper()] = v
+        out[ind] = m
+    return out
+
+
+def _rs_rank_build_t1():
+    """Snapshot of the main Industry RS table (df_main + all_data), or None if not built this run."""
+    _df = globals().get("df_main")
+    if not all_data or _df is None or not len(_df):
+        return None
+    scores = _rs_rank_scores_from({it["Industry"]: it.get("Tickers") for it in all_data})
+    rows = [(r["Current Rank"], r["Industry"], r["Group RS"]) for _, r in _df.iterrows()]
+    return _rs_rank_day(rows, scores)
+
+
+def _rs_rank_build_rtb():
+    """Snapshot of the Rank-Then-Blend table (_nrs_df + _nrs_item_map), or None if not built this run."""
+    _df = globals().get("_nrs_df")
+    if _df is None or not len(_df):
+        return None
+    scores = _rs_rank_scores_from(globals().get("_nrs_item_map") or {})
+    rows = [(r["Current Rank"], r["Industry"], r["Group RS"]) for _, r in _df.iterrows()]
+    return _rs_rank_day(rows, scores)
+
+
+def _rs_rank_day_problem(day):
+    """None when the snapshot is usable, else a short reason (then nothing is written)."""
+    groups = (day or {}).get("groups") or []
+    tickers = {t for g in groups for t, _ in g["tickers"]}
+    scored = {t for g in groups for t, v in g["tickers"] if v is not None}
+    if len(groups) < RS_RANK_MIN_GROUPS:
+        return f"only {len(groups)} groups (< {RS_RANK_MIN_GROUPS})"
+    if len(tickers) < RS_RANK_MIN_TICKERS:
+        return f"only {len(tickers)} tickers (< {RS_RANK_MIN_TICKERS})"
+    if len(scored) < RS_RANK_MIN_SCORED:
+        return f"only {len(scored)} scored tickers (< {RS_RANK_MIN_SCORED})"
+    if [g["rank"] for g in groups] != list(range(1, len(groups) + 1)):
+        return "ranks are not exactly 1..n"
+    return None
+
+
+def _rs_rank_dumps(doc):
+    """JSON text with one group per line (valid JSON; json.loads gives doc back)."""
+    d = lambda v: _rs_json.dumps(v, ensure_ascii=False, separators=(",", ":"))
+    head = {k: doc[k] for k in doc if k != "days"}
+    out = [d(head)[:-1] + ',"days":{']
+    dates = list(doc["days"].keys())
+    for i, ds in enumerate(dates):
+        day = doc["days"][ds]
+        out.append(d(ds) + ':{"groups_total":' + d(day["groups_total"]) + ',"groups":[')
+        gs = day["groups"]
+        for j, g in enumerate(gs):
+            out.append(d(g) + ("," if j < len(gs) - 1 else ""))
+        out.append("]}" + ("," if i < len(dates) - 1 else ""))
+    out.append("}}")
+    return "\n".join(out) + "\n"
+
+
+def _rs_rank_read_existing(url, branch):
+    """(sha, doc) of the file in the public repo: (None, None) when missing; raises on other HTTP errors."""
+    resp = requests.get(url, headers=_github_public_headers(), params={"ref": branch}, timeout=10)
+    if resp.status_code == 404:
+        return None, None
+    resp.raise_for_status()
+    data = resp.json()
+    sha = data.get("sha")
+    text = None
+    if data.get("content") and data.get("encoding") == "base64":
+        text = base64.b64decode(data["content"]).decode("utf-8")
+    elif data.get("download_url"):            # > 1 MB: the contents API sends no content -> raw download
+        raw = requests.get(data["download_url"], headers=_github_public_headers(), timeout=15)
+        raw.raise_for_status()
+        text = raw.text
+    try:
+        doc = _rs_json.loads(text) if text else None
+    except ValueError:
+        doc = None                            # unreadable -> rebuilt from today's snapshot
+    if not isinstance(doc, dict) or doc.get("schema") != RS_RANK_SCHEMA or not isinstance(doc.get("days"), dict):
+        doc = None
+    return sha, doc
+
+
+def save_rs_group_rank_to_public_repo(filepath, table_key, source, date_str, day, top_n_value):
+    """Upsert one day's snapshot into filepath (public repo). True on success (including
+    'already up to date'), False when the repo / token is not configured or the PUT failed."""
+    repo   = st.secrets.get("GITHUB_PUBLIC_REPO")
+    branch = st.secrets.get("GITHUB_PUBLIC_BRANCH", "main")
+    if not repo or not (st.secrets.get("GITHUB_PUBLIC_TOKEN") or st.secrets.get("GITHUB_TOKEN")):
+        return False
+
+    url = f"{GITHUB_API}/repos/{repo}/contents/{filepath}"
+    sha, doc = _rs_rank_read_existing(url, branch)
+    days = {}
+    if doc:
+        days = {k: v for k, v in doc["days"].items() if isinstance(k, str) and _RS_RANK_DATE_RE.match(k) and isinstance(v, dict)}
+        if days.get(date_str) == day and doc.get("top_n") == top_n_value and doc.get("table") == table_key:
+            return True                       # lazy: nothing changed, no commit
+
+    days[date_str] = day
+    keep = sorted(days, reverse=True)[:RS_RANK_KEEP_DAYS]    # newest first in the file
+    new_doc = {
+        "schema": RS_RANK_SCHEMA,
+        "table": table_key,
+        "source": source,
+        "top_n": top_n_value,
+        "updated_at": datetime.datetime.now(ZoneInfo("Asia/Singapore")).isoformat(timespec="seconds"),
+        "latest": keep[0],
+        "days": {k: days[k] for k in keep},
+    }
+    text = _rs_rank_dumps(new_doc)
+    if _rs_json.loads(text) != new_doc:      # self-check of the line layout; never push a broken file
+        raise ValueError("rs_group_rank layout self-check failed")
+    payload = {
+        "message": f"Update {filepath} — {date_str} ({day['groups_total']} groups)",
+        "content": base64.b64encode(text.encode("utf-8")).decode(),
+        "branch": branch,
+    }
+    if sha:
+        payload["sha"] = sha
+    put_resp = requests.put(url, headers=_github_public_headers(), json=payload, timeout=15)
+    return put_resp.status_code in (200, 201)
+
+
+def _rs_rank_trading_date():
+    """(date_str, saveable): latest SPY bar date (fallback New York today); saveable False while today's bar is not finished."""
+    now_et = datetime.datetime.now(ZoneInfo("America/New_York"))
+    _spy_df = ticker_dfs_shared.get("SPY") if isinstance(ticker_dfs_shared, dict) else None
+    _spy_close = _spy_df["Close"].dropna() if _spy_df is not None and "Close" in _spy_df else None
+    if _spy_close is not None and len(_spy_close):
+        bar_date = pd.Timestamp(_spy_close.index[-1]).date()
+    else:
+        bar_date = now_et.date()
+    saveable = not (bar_date >= now_et.date() and now_et.time() < datetime.time(16, 30))
+    return bar_date.isoformat(), saveable
+
+
+def _persist_rs_group_rank():
+    date_str, saveable = _rs_rank_trading_date()
+    if not saveable:
+        return "intraday"                     # today's session not finished: nothing written
+    try:
+        top_n_value = int(top_n)
+    except Exception:
+        top_n_value = None
+    memo = _rs_rank_memo()
+    jobs = (
+        (RS_RANK_T1_PUBLIC_FILEPATH, "industry_rs", "my-rs-screener main Industry RS table (above the RS Quadrant Map)", _rs_rank_build_t1),
+        (RS_RANK_RTB_PUBLIC_FILEPATH, "rank_then_blend", "my-rs-screener Industry RS - Rank-Then-Blend Comp RS table", _rs_rank_build_rtb),
+    )
+    for filepath, table_key, source, build in jobs:
+        try:
+            day = build()
+            if day is None:
+                continue                      # that table was not built this run: nothing to save
+            problem = _rs_rank_day_problem(day)
+            if problem:
+                notify_github_push_failure(filepath, f"snapshot not saved: {problem}")
+                continue
+            digest = _rs_hashlib.sha1(_rs_json.dumps([day, top_n_value], sort_keys=True).encode()).hexdigest()
+            if memo.get(filepath) == (date_str, digest):
+                continue                      # this process already saved exactly this
+            ok = save_rs_group_rank_to_public_repo(filepath, table_key, source, date_str, day, top_n_value)
+            if ok:
+                memo[filepath] = (date_str, digest)
+            else:
+                notify_github_push_failure(filepath, "GitHub error or config missing")
+        except Exception as _exc:
+            notify_github_push_failure(filepath, _exc)
+    return "done"
+
+
+try:
+    timed("save_rs_group_rank_to_public_repo", _persist_rs_group_rank)
+except Exception:
+    pass   # soft-fail: never affect the rest of the page
+
+
+# ==============================================================================
 # LEVERAGED ETF HEAT GAUGE (bottom of page) — daily $ volume of the tickers in
 # the Leveraged ETF Bull / Bear Table. Total $ volume = how hot trading is;
 # bear share of that volume = anxiety (high) vs euphoria (low).
