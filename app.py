@@ -23465,8 +23465,11 @@ def _rs_rank_read_existing(url, branch):
     text = None
     if data.get("content") and data.get("encoding") == "base64":
         text = base64.b64decode(data["content"]).decode("utf-8")
-    elif data.get("download_url"):            # > 1 MB: the contents API sends no content -> raw download
-        raw = requests.get(data["download_url"], headers=_github_public_headers(), timeout=15)
+    else:
+        # > 1 MB: the JSON reply carries no content. Ask the SAME contents API for the raw file (current, up to 100 MB) -
+        # never raw.githubusercontent.com, whose CDN copy can be minutes old (a save then would drop a newer day).
+        raw = requests.get(url, headers={**_github_public_headers(), "Accept": "application/vnd.github.raw+json"},
+                           params={"ref": branch}, timeout=15)
         raw.raise_for_status()
         text = raw.text
     try:
