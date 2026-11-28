@@ -123,7 +123,10 @@ def yf_download_batched(symbols, batch_size=25, **kwargs):
     keeps working unchanged. Verified byte-for-byte identical output vs an
     unbatched call, and >2x lower peak thread count, before shipping this.
     """
-    symbols = list(symbols)
+    # Each symbol only once (first occurrence kept, order unchanged; added 28 Nov 2026): a ticker listed twice in
+    # one list (e.g. 'OWL' in FNCE-INVSMNT MGT, 'GEV' / 'Q' / 'TSEM' in KNOWN_STOCKS) can land in two batches and give
+    # two columns with the same name, which broke the whole group's RS.  Every Yahoo download goes through here.
+    symbols = list(dict.fromkeys(symbols))
     if len(symbols) <= batch_size:
         return yf.download(symbols, **kwargs)
     chunks = [symbols[i:i + batch_size] for i in range(0, len(symbols), batch_size)]
@@ -23316,11 +23319,14 @@ except Exception as _nrs_e:
 #                             (display / post-trade analysis only).
 # Layout (one group per line so the file stays readable and diff-friendly):
 #   {"schema":1,"table":..,"source":..,"top_n":5,"updated_at":..,"latest":"YYYY-MM-DD",
-#    "days":{"YYYY-MM-DD":{"groups_total":165,"groups":[
-#      {"rank":1,"name":"Nuclear","rs":94.6,"tickers":[["OKLO",98],["SMR",null]]}, ...]}}}
-#   rank = the table's Current Rank; rs = Group RS; tickers = EVERY INDUSTRIES
-#   member of the group with the stock RS the table shows (null when the table
-#   did not score it, e.g. price <= $20 or no data), strongest first.
+#    "days":{"YYYY-MM-DD":{"groups_total":165,"quality":{...},"groups":[
+#      {"rank":1,"name":"Nuclear","rs":94.6,"stage":2,"tickers":[["OKLO",98],["SMR",null]]}, ...]}}}
+#   rank = the table's Current Rank; rs = Group RS; stage = the table's group
+#   Stage 1..4 (null = unknown); tickers = EVERY INDUSTRIES member of the group
+#   with the stock RS the table shows (null when the table did not score it,
+#   e.g. price <= $20 or no data), strongest first.  quality = the Yahoo-data
+#   check of that day (nan_today, tickers, nan_pct, benchmark_ok,
+#   groups_missing, missing_groups).  RS_RANK_KEEP_DAYS (10) days kept.
 # Rules:
 # - date = the last bar of the prices each table was RANKED ON (main table: the
 #   download_industry_ohlc data, >= 90 % of industries must end on that day;
@@ -23333,6 +23339,11 @@ except Exception as _nrs_e:
 # - a snapshot that fails the sanity check (>= RS_RANK_MIN_GROUPS groups,
 #   >= RS_RANK_MIN_TICKERS tickers, >= RS_RANK_MIN_SCORED scored tickers, ranks
 #   exactly 1..n) is NOT written.
+# - Yahoo-data check (added 28 Nov 2026): more than RS_RANK_MAX_NAN_PCT (5) % of
+#   the tickers without a price that day, no S&P 500 bar that day, or more than
+#   RS_RANK_MAX_GROUPS_MISSING (10) groups missing -> that day is NOT published
+#   (the previous days stay, so the bots keep using yesterday) + one Telegram.
+#   Uses the cached downloads only (nothing is downloaded again).
 # - read-only for the rest of the page (reads df_main / all_data / _nrs_df /
 #   _nrs_item_map); soft-fail; one Telegram per file per New York day on failure.
 # ==============================================================================
@@ -23342,7 +23353,13 @@ import hashlib as _rs_hashlib
 RS_RANK_T1_PUBLIC_FILEPATH = "rs_group_rank.json"
 RS_RANK_RTB_PUBLIC_FILEPATH = "rs_group_rank_rtb.json"
 RS_RANK_SCHEMA = 1
-RS_RANK_KEEP_DAYS = 40          # ~2 months of trading days; keeps the file well under GitHub's 1 MB contents-API limit
+RS_RANK_KEEP_DAYS = 10          # trading days kept (the bots only use the newest day before today; ~0.3 MB)
+# Yahoo-data quality check (28 Nov 2026): a day is NOT published (the previous days stay, one Telegram) when more than
+# RS_RANK_MAX_NAN_PCT % of the INDUSTRIES tickers have no price on the snapshot day ("NaN-today"), when the benchmark
+# (S&P 500) has no bar that day, or when more than RS_RANK_MAX_GROUPS_MISSING INDUSTRIES groups are missing from the
+# table (a failed download drops a group and moves every group below it up a rank).
+RS_RANK_MAX_NAN_PCT = 5.0
+RS_RANK_MAX_GROUPS_MISSING = 10
 RS_RANK_MIN_GROUPS = 100
 RS_RANK_MIN_TICKERS = 300
 RS_RANK_MIN_SCORED = 100
@@ -23371,8 +23388,19 @@ def _rs_rank_num(v, ndigits):
     return int(round(f)) if ndigits == 0 else round(f, ndigits)
 
 
-def _rs_rank_day(rows, scores):
-    """rows: [(rank, industry, group_rs)], scores: {industry: {ticker: stock_rs}} -> one day's snapshot."""
+def _rs_rank_stage(v):
+    """Group stage 1..4 as int, else None (not computed / no member above $20)."""
+    try:
+        s = int(v)
+    except (TypeError, ValueError):
+        return None
+    return s if 1 <= s <= 4 else None
+
+
+def _rs_rank_day(rows, scores, stage_map=None):
+    """rows: [(rank, industry, group_rs)], scores: {industry: {ticker: stock_rs}}, stage_map: {industry: stage 1..4}
+    -> one day's snapshot.  Every group carries "stage" (the table's Stage column; null = unknown)."""
+    stage_map = stage_map or {}
     groups = []
     for rank, ind, grs in rows:
         sc = scores.get(ind) or {}
@@ -23384,7 +23412,8 @@ def _rs_rank_day(rows, scores):
             seen.add(t)
             members.append([t, _rs_rank_num(sc.get(t), 0)])
         members.sort(key=lambda p: (p[1] is None, -(p[1] or 0)))
-        groups.append({"rank": int(rank), "name": str(ind), "rs": _rs_rank_num(grs, 1), "tickers": members})
+        groups.append({"rank": int(rank), "name": str(ind), "rs": _rs_rank_num(grs, 1), "stage": _rs_rank_stage(stage_map.get(ind)),
+                       "tickers": members})
     groups.sort(key=lambda g: g["rank"])
     return {"groups_total": len(groups), "groups": groups}
 
@@ -23408,7 +23437,7 @@ def _rs_rank_build_t1():
         return None
     scores = _rs_rank_scores_from({it["Industry"]: it.get("Tickers") for it in all_data})
     rows = [(r["Current Rank"], r["Industry"], r["Group RS"]) for _, r in _df.iterrows()]
-    return _rs_rank_day(rows, scores)
+    return _rs_rank_day(rows, scores, globals().get("industry_stage_map") or {})      # the table's Stage column
 
 
 def _rs_rank_build_rtb():
@@ -23418,7 +23447,8 @@ def _rs_rank_build_rtb():
         return None
     scores = _rs_rank_scores_from(globals().get("_nrs_item_map") or {})
     rows = [(r["Current Rank"], r["Industry"], r["Group RS"]) for _, r in _df.iterrows()]
-    return _rs_rank_day(rows, scores)
+    # the Rank-Then-Blend table shows the same stage map as the main table (compute_industry_group_stage)
+    return _rs_rank_day(rows, scores, globals().get("_nrs_stage_map") or globals().get("industry_stage_map") or {})
 
 
 def _rs_rank_day_problem(day):
@@ -23445,7 +23475,8 @@ def _rs_rank_dumps(doc):
     dates = list(doc["days"].keys())
     for i, ds in enumerate(dates):
         day = doc["days"][ds]
-        out.append(d(ds) + ':{"groups_total":' + d(day["groups_total"]) + ',"groups":[')
+        day_head = {k: v for k, v in day.items() if k != "groups"}        # groups_total, quality, ...
+        out.append(d(ds) + ":" + d(day_head)[:-1] + ',"groups":[')
         gs = day["groups"]
         for j, g in enumerate(gs):
             out.append(d(g) + ("," if j < len(gs) - 1 else ""))
@@ -23557,6 +23588,87 @@ def _rs_rank_rtb_date():
     return pd.Timestamp(max(comp.index)).date(), None
 
 
+_rs_rank_nan_cache = {}             # {date: (nan ticker set, tickers seen)} for THIS run (both files use the same downloads)
+
+
+def _rs_rank_nan_scan(bar_date):
+    """(set of INDUSTRIES tickers with no close on bar_date, number of INDUSTRIES tickers checked).  Reads the raw
+    download_industry_ohlc data of the industries the table built (cache hits, nothing is downloaded again); a ticker
+    whose download has no row for bar_date counts as missing.  Industries that failed completely are not here - they are
+    counted as missing groups instead."""
+    if bar_date in _rs_rank_nan_cache:
+        return _rs_rank_nan_cache[bar_date]
+    missing, seen = set(), set()
+    for it in all_data or []:
+        tickers = INDUSTRIES.get(it["Industry"])
+        if not tickers:
+            continue
+        try:
+            data = download_industry_ohlc(tuple(tickers))
+            close = data["Close"]
+        except Exception:
+            continue
+        if isinstance(close, pd.Series):
+            close = close.to_frame(name=tickers[0])
+        days = [pd.Timestamp(x).date() for x in close.index]
+        row = close.iloc[days.index(bar_date)] if bar_date in days else None
+        for t in tickers:
+            t_up = str(t).strip().upper()
+            seen.add(t_up)
+            if row is None or t not in close.columns or pd.isna(row[t]):
+                missing.add(t_up)
+    _rs_rank_nan_cache[bar_date] = (missing, len(seen))
+    return missing, len(seen)
+
+
+def _rs_rank_benchmark_ok(bar_date):
+    """True when the benchmark (S&P 500, benchmark_df_shared) has a close on bar_date."""
+    try:
+        bclose = benchmark_df_shared["Close"]
+        if isinstance(bclose, pd.DataFrame):
+            bclose = bclose.iloc[:, 0]
+        return any(pd.Timestamp(x).date() == bar_date and pd.notna(v) for x, v in bclose.items())
+    except Exception:
+        return False
+
+
+def _rs_rank_quality(day, bar_date):
+    """(quality dict stored in the day, problem or None).  problem = Yahoo data too incomplete to publish."""
+    missing, seen = _rs_rank_nan_scan(bar_date)
+    names = {g["name"] for g in day.get("groups") or []}
+    gone = sorted(set(INDUSTRIES) - names)
+    nan_pct = round(100.0 * len(missing) / seen, 2) if seen else 100.0
+    bench = _rs_rank_benchmark_ok(bar_date)
+    q = {"nan_today": len(missing), "tickers": seen, "nan_pct": nan_pct, "benchmark_ok": bench,
+         "groups_missing": len(gone), "missing_groups": gone[:20]}
+    if nan_pct > RS_RANK_MAX_NAN_PCT:
+        return q, f"Yahoo data incomplete: {len(missing)} of {seen} tickers ({nan_pct:g} %) have no price on {bar_date} (limit {RS_RANK_MAX_NAN_PCT:g} %)"
+    if not bench:
+        return q, f"Yahoo data incomplete: the benchmark (S&P 500) has no bar on {bar_date}"
+    if len(gone) > RS_RANK_MAX_GROUPS_MISSING:
+        return q, (f"Yahoo data incomplete: {len(gone)} groups missing from the table (limit {RS_RANK_MAX_GROUPS_MISSING}), e.g. "
+                   + ", ".join(gone[:5]))
+    return q, None
+
+
+def _rs_rank_notify(label, detail):
+    """One Telegram 'RS rank not published' per file per New York day (same memo as notify_github_push_failure).  Never raises."""
+    try:
+        tg_token = st.secrets.get("TELEGRAM_BOT_TOKEN")
+        tg_chat = st.secrets.get("TELEGRAM_CHAT_ID")
+        if not (tg_token and tg_chat):
+            return
+        key = (f"{label} not published", datetime.datetime.now(ZoneInfo("America/New_York")).date().isoformat())
+        memo = _gh_push_alert_memo()
+        if key in memo:
+            return
+        memo[key] = True
+        detail = str(detail)[:300].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        send_telegram_text(f"⚠️ RS rank NOT published: {label}\n{detail}\nThe trading bots keep using the previous day.", tg_token, tg_chat)
+    except Exception:
+        pass
+
+
 def _rs_rank_saveable(bar_date):
     """False while bar_date is New York today and it is before 16:30 ET (the session is not finished)."""
     now_et = datetime.datetime.now(ZoneInfo("America/New_York"))
@@ -23591,6 +23703,11 @@ def _persist_rs_group_rank():
             if problem:
                 notify_github_push_failure(filepath, f"snapshot not saved: {problem}")
                 continue
+            quality, q_problem = _rs_rank_quality(day, bar_date)
+            if q_problem:
+                _rs_rank_notify(filepath, q_problem)
+                continue                      # Yahoo data too incomplete: the previous days stay, nothing written
+            day["quality"] = quality
             digest = _rs_hashlib.sha1(_rs_json.dumps([day, top_n_value, list(RS_RANK_PURGE_DAYS)], sort_keys=True).encode()).hexdigest()
             if memo.get(filepath) == (date_str, digest):
                 continue                      # this process already saved exactly this
