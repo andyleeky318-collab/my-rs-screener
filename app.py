@@ -446,7 +446,7 @@ INDUSTRIES = {
 }
 
 KNOWN_STOCKS = [
-    'H', 'SN', 'NTSK', 'ANT', 'XTN', 'JBHT', 'KBWB', 'ICHR', 'RBRK', 'LYTE', 'LEN', 'PEJ', 'SOLT', 'ETHA', 'XXRP', 'BMNR', 'TWST', 'TEM', 'SMR', 'USAR', 'QBTS', 'QUBT', 'RGTI', 'FN', 'ZETA', 'ONON', 'TQQQ', 'RSP', 'BBY', 'AMPX', 'CBRS',
+    'FIG', 'HUBS', 'TLN', 'H', 'SN', 'NTSK', 'ANT', 'XTN', 'JBHT', 'KBWB', 'ICHR', 'RBRK', 'LYTE', 'LEN', 'PEJ', 'SOLT', 'ETHA', 'XXRP', 'BMNR', 'TWST', 'TEM', 'SMR', 'USAR', 'QBTS', 'QUBT', 'RGTI', 'FN', 'ZETA', 'ONON', 'TQQQ', 'RSP', 'BBY', 'AMPX', 'CBRS',
     'CME', 'ICE', 'NCLD', 'PALL', 'PLTM', 'IHF', 'ESTC', 'PRU', 'RGEN', 'UBS', 'TRV', 'WEN', 'OKLO', 'IBB', 'Q', 'OUST', 'VPG', 'WOLF', 'NOK', 'HSBC', 'DLTR', 'SKHY', 'RDDT', 'RL', 'CROX', 'LEVI', 'FOTO', 'GNRC', 'KLIC', 'IWM', 'HBMX', 'PWR', 'EUV', 'GRID', 'MAGS', 'SPCX', 'IBM', 'ELV', 'OSCR', 'QNT', 'HYDR', 'ALGM', 'LGN', 'IESC', 'AEHR', 'ACLS', 'MKSI', 'SMTC', 'AMKR', 
     'LSCC', 'DIOD', 'POWI', 'AA', 'ABBV', 'ALAB', 'AMGN', 'APO', 'BOTZ', 'CRCL', 'CRWV', 'D', 'DRAM', 'DUK', 'EEM', 'EWJ', 'EWY', 'EXC', 'FIGR', 
     'GEV', 'GILD', 'GXC', 'JEF', 'KMI', 'KRMN', 'LIN', 'MNST', 'NASA', 'NEM', 'NTR', 'OR', 
@@ -6470,7 +6470,7 @@ if breadth_total > 0:
 
         st.markdown(
             f"<div style='padding:8px 0 4px; width:100%;'>"
-            f"<div style='text-align: center; font-size: 30px; font-weight: bold; color: #ffffff; margin-bottom: 18px;'>Stage</div>"
+            f"<div style='text-align: center; font-size: 30px; font-weight: bold; color: #ffffff; margin-bottom: 18px;'>Stages</div>"
             f"<div style='width:100%;height:12px;display:flex;"
             f"overflow:hidden;border-radius:999px;'>{bar_segs}</div>"
             f"<div style='display:flex; width:100%; margin-top:10px;'>"
@@ -14892,6 +14892,22 @@ def fetch_known_stocks_earnings_next_7_days(stocks_tuple):
         if r.get("epsActual") is not None or r.get("revenueActual") is not None:
             continue
         upcoming.add(sym)
+
+    # Cross-check with Yahoo (yfinance): Finnhub sometimes only has a stale
+    # projected date and never records the real (earlier) report. If Yahoo
+    # shows a reported EPS within the last 30 days, this quarter is already
+    # out -> drop it. If the Yahoo lookup fails, keep Finnhub's answer.
+    recent_cutoff = today - datetime.timedelta(days=30)
+    for sym in sorted(upcoming):
+        try:
+            ed = yf.Ticker(sym).get_earnings_dates(limit=4)
+            if ed is None or ed.empty or "Reported EPS" not in ed.columns:
+                continue
+            reported = ed["Reported EPS"].dropna()
+            if any(recent_cutoff <= pd.Timestamp(ts).date() <= today for ts in reported.index):
+                upcoming.discard(sym)
+        except Exception:
+            continue
 
     return sorted(upcoming)
 

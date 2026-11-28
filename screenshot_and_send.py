@@ -136,7 +136,7 @@ SECTION_KEYWORDS = [
     #"Setup =",
     "Distribution Cluster [",
     "Weekly vs Monthly",
-    "Stage",
+    "Stages",
     #"Market Regime",
     "Minervini (Positive Pct",
     "RS Leader = Long term",
