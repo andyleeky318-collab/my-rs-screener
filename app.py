@@ -23322,8 +23322,12 @@ except Exception as _nrs_e:
 #   member of the group with the stock RS the table shows (null when the table
 #   did not score it, e.g. price <= $20 or no data), strongest first.
 # Rules:
-# - date = latest SPY bar (same as the other public files); a bar dated today is
+# - date = the last bar of the prices each table was RANKED ON (main table: the
+#   download_industry_ohlc data, >= 90 % of industries must end on that day;
+#   Rank-Then-Blend: the _nrs_comp frame) - NOT the SPY download, which can lag
+#   (28 Nov 2026: 27 Nov ranks were written as 2026-11-25). A bar dated today is
 #   saved only after 16:30 New York time (never a half-finished session).
+#   RS_RANK_PURGE_DAYS lists mislabelled days removed on the next save.
 # - today's day is upserted, the history is trimmed to RS_RANK_KEEP_DAYS dates,
 #   and a commit happens only when that day's content (or top_n) changed.
 # - a snapshot that fails the sanity check (>= RS_RANK_MIN_GROUPS groups,
@@ -23342,7 +23346,12 @@ RS_RANK_KEEP_DAYS = 40          # ~2 months of trading days; keeps the file well
 RS_RANK_MIN_GROUPS = 100
 RS_RANK_MIN_TICKERS = 300
 RS_RANK_MIN_SCORED = 100
+RS_RANK_MIN_DATE_AGREE = 0.9    # main table: share of industry downloads that must end on the same day, else nothing is saved
+# Days removed from both files on the next save. 2026-11-25 was written on 28 Nov 2026 with 27 Nov prices (the
+# date then came from the SPY download, which lagged the industry prices); the real 27 Nov day is kept.
+RS_RANK_PURGE_DAYS = ("2026-11-25",)
 _RS_RANK_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+from collections import Counter as _rs_Counter
 
 
 @st.cache_resource(show_spinner=False)
@@ -23482,8 +23491,12 @@ def save_rs_group_rank_to_public_repo(filepath, table_key, source, date_str, day
     days = {}
     if doc:
         days = {k: v for k, v in doc["days"].items() if isinstance(k, str) and _RS_RANK_DATE_RE.match(k) and isinstance(v, dict)}
-        if days.get(date_str) == day and doc.get("top_n") == top_n_value and doc.get("table") == table_key:
+        purge_needed = any(k in days for k in RS_RANK_PURGE_DAYS)
+        if (not purge_needed and days.get(date_str) == day and doc.get("top_n") == top_n_value
+                and doc.get("table") == table_key):
             return True                       # lazy: nothing changed, no commit
+    for k in RS_RANK_PURGE_DAYS:
+        days.pop(k, None)                     # mislabelled days (see RS_RANK_PURGE_DAYS) never stay in the file
 
     days[date_str] = day
     keep = sorted(days, reverse=True)[:RS_RANK_KEEP_DAYS]    # newest first in the file
@@ -23510,42 +23523,72 @@ def save_rs_group_rank_to_public_repo(filepath, table_key, source, date_str, day
     return put_resp.status_code in (200, 201)
 
 
-def _rs_rank_trading_date():
-    """(date_str, saveable): latest SPY bar date (fallback New York today); saveable False while today's bar is not finished."""
+def _rs_rank_t1_date():
+    """(date, problem): the last bar of the industry prices the main table ranked on. Reads download_industry_ohlc with
+    the same arguments the table used (cache hits; the Rank-Then-Blend table above makes the same calls). problem is set
+    (date None) when there is no data or fewer than RS_RANK_MIN_DATE_AGREE of the industries end on the same day."""
+    counts = _rs_Counter()
+    for it in all_data or []:
+        tickers = INDUSTRIES.get(it["Industry"])
+        if not tickers:
+            continue
+        data = download_industry_ohlc(tuple(tickers))
+        if data is None or not len(data):
+            continue
+        counts[pd.Timestamp(max(data.index)).date()] += 1
+    if not counts:
+        return None, "no industry price data to date the snapshot"
+    day, n = counts.most_common(1)[0]
+    total = sum(counts.values())
+    if n < RS_RANK_MIN_DATE_AGREE * total:
+        spread = ", ".join(f"{d.isoformat()} x{c}" for d, c in sorted(counts.items()))
+        return None, f"industry prices end on different days ({spread})"
+    return day, None
+
+
+def _rs_rank_rtb_date():
+    """(date, problem): the last bar of the Rank-Then-Blend Comp RS frame (_nrs_comp) the table was built from."""
+    comp = globals().get("_nrs_comp")
+    if comp is None or not len(comp):
+        return None, "no Rank-Then-Blend data to date the snapshot"
+    return pd.Timestamp(max(comp.index)).date(), None
+
+
+def _rs_rank_saveable(bar_date):
+    """False while bar_date is New York today and it is before 16:30 ET (the session is not finished)."""
     now_et = datetime.datetime.now(ZoneInfo("America/New_York"))
-    _spy_df = ticker_dfs_shared.get("SPY") if isinstance(ticker_dfs_shared, dict) else None
-    _spy_close = _spy_df["Close"].dropna() if _spy_df is not None and "Close" in _spy_df else None
-    if _spy_close is not None and len(_spy_close):
-        bar_date = pd.Timestamp(_spy_close.index[-1]).date()
-    else:
-        bar_date = now_et.date()
-    saveable = not (bar_date >= now_et.date() and now_et.time() < datetime.time(16, 30))
-    return bar_date.isoformat(), saveable
+    return not (bar_date >= now_et.date() and now_et.time() < datetime.time(16, 30))
 
 
 def _persist_rs_group_rank():
-    date_str, saveable = _rs_rank_trading_date()
-    if not saveable:
-        return "intraday"                     # today's session not finished: nothing written
     try:
         top_n_value = int(top_n)
     except Exception:
         top_n_value = None
     memo = _rs_rank_memo()
     jobs = (
-        (RS_RANK_T1_PUBLIC_FILEPATH, "industry_rs", "my-rs-screener main Industry RS table (above the RS Quadrant Map)", _rs_rank_build_t1),
-        (RS_RANK_RTB_PUBLIC_FILEPATH, "rank_then_blend", "my-rs-screener Industry RS - Rank-Then-Blend Comp RS table", _rs_rank_build_rtb),
+        (RS_RANK_T1_PUBLIC_FILEPATH, "industry_rs", "my-rs-screener main Industry RS table (above the RS Quadrant Map)",
+         _rs_rank_build_t1, _rs_rank_t1_date),
+        (RS_RANK_RTB_PUBLIC_FILEPATH, "rank_then_blend", "my-rs-screener Industry RS - Rank-Then-Blend Comp RS table",
+         _rs_rank_build_rtb, _rs_rank_rtb_date),
     )
-    for filepath, table_key, source, build in jobs:
+    for filepath, table_key, source, build, date_of in jobs:
         try:
             day = build()
             if day is None:
                 continue                      # that table was not built this run: nothing to save
+            bar_date, date_problem = date_of()
+            if date_problem:
+                notify_github_push_failure(filepath, f"snapshot not saved: {date_problem}")
+                continue
+            if not _rs_rank_saveable(bar_date):
+                continue                      # today's session not finished: nothing written
+            date_str = bar_date.isoformat()
             problem = _rs_rank_day_problem(day)
             if problem:
                 notify_github_push_failure(filepath, f"snapshot not saved: {problem}")
                 continue
-            digest = _rs_hashlib.sha1(_rs_json.dumps([day, top_n_value], sort_keys=True).encode()).hexdigest()
+            digest = _rs_hashlib.sha1(_rs_json.dumps([day, top_n_value, list(RS_RANK_PURGE_DAYS)], sort_keys=True).encode()).hexdigest()
             if memo.get(filepath) == (date_str, digest):
                 continue                      # this process already saved exactly this
             ok = save_rs_group_rank_to_public_repo(filepath, table_key, source, date_str, day, top_n_value)
